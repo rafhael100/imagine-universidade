@@ -16,7 +16,8 @@
 | [Contratos técnicos candidatos](docs/08-fechamento-candidato/03-CONTRATOS-TECNICOS-CANDIDATOS.md) | Acesso, eventos, IA, mídias e contingência |
 | [Decisões P0 ainda abertas](docs/08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) | O que falta aprovar para encerrar o planejamento |
 | [Proposta consolidada de fechamento P0](docs/00-governanca/PROPOSTA-FECHAMENTO-P0-v0.1.md) | Demais parâmetros candidatos **não ratificados** (sessões, retenção, infraestrutura e orçamento); P0-02 foi resolvido pela opção B |
-| [Contrato candidato de elegibilidade P0-03](docs/00-governanca/P0-03-CONTRATO-ELEGIBILIDADE-v0.1-PROPOSTA.md) | Matriz de estados e critérios de aceite preparada para ratificação; ainda não homologada |
+| [Contrato funcional de elegibilidade P0-03](docs/00-governanca/P0-03-CONTRATO-ELEGIBILIDADE-v0.1-PROPOSTA.md) | **Matriz funcional aprovada**; protocolos ainda não homologados |
+| [Decisão de aprovação P0-03](docs/00-governanca/DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md) | Ratificação expressa do direito de acesso e das exceções |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 

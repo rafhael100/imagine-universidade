@@ -1,6 +1,6 @@
 # P0-03 — Contrato de elegibilidade e revogação de benefício (v0.1)
 
-**Estado:** PROPOSTA TÉCNICA PARA RATIFICAÇÃO. A regra comercial de exclusividade já está funcionalmente aprovada; este documento detalha sua implementação contratual candidata.  
+**Estado:** **MATRIZ FUNCIONAL APROVADA em 03/11/2026**, conforme [DEC-UNI-P0-03](DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md). Os protocolos, nomes dos estados oficiais e parâmetros técnicos continuam **candidatos** e dependem de P0-04/P0-06.  
 **Data:** 03/11/2026.  
 **Autoridade:** Portal Imagine + sistemas oficiais de contratação/identidade. A Universidade é consumidora de direitos, nunca fonte oficial de contratos.  
 **Dependências:** UNI-R03-DEC01; GOV-01–06; CT-UNI-01; UNI-R06; P0-04 sessões, P0-06 eventos, P0-05 privacidade e P0-12 critérios de aceite.  
@@ -88,6 +88,6 @@ A nomenclatura exata dos estados comerciais e períodos de tolerância deve ser 
 4. Política de retenção e possibilidade de recuperação de dados pessoais após recontratação (`P0-05`).
 5. Testes de integração e verificação formal de critérios de aceite antes do lançamento.
 
-**Proposta para aprovação:** ratificar esta matriz como **contrato funcional de elegibilidade**, mantendo detalhes de protocolo e tempo de revogação em P0-04/P0-06.
+**Ratificação:** a matriz foi aprovada como **contrato funcional de elegibilidade**. O fechamento de P0-03 é **funcional**, não homologação de APIs ou de protocolos, cuja definição permanece em P0-04/P0-06.
 
-**Esta minuta não resolve sozinha P0-03 e não autoriza programação.**
+**Este documento não autoriza programação.**

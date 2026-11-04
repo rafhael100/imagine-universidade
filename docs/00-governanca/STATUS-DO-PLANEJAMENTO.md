@@ -2,6 +2,8 @@
 
 **Atualização:** 03/11/2026. **Repositório:** `rafhael100/imagine-universidade` (privado).
 
+> **Atualização de prevalência em 04/11/2026:** decisões P0-01 a P0-12 foram ratificadas **em seus respectivos escopos**. A base v5 e os 84 critérios estão aprovados funcionalmente; a matriz registra `APROVADO_BASE_FUNCIONAL` / `NAO_EXECUTADO`. A metodologia do P0-10 foi aprovada, mas **orçamento integral/tetos ainda não**. A metodologia do P0-12 foi aprovada, mas **Gate D permanece aberto**. Os trechos históricos abaixo que falam em ratificar todos os P0, ordem Portal→CRM→Universidade obrigatória ou prazos de retenção ainda não decididos estão superados pelas decisões posteriores. Consulte [controle vigente](CONTROLE-DECISOES-P0-2026-11-03.md), [riscos e dependências](RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) e [auditoria documental](AUDITORIA-DOCUMENTAL-GATE-D-v0.2.md). **Programação não autorizada.**
+
 ## Situação das aprovações
 
 - Módulos funcionais UNI-01 a UNI-14: aprovados funcionalmente em conversa; não recuperados integralmente nos documentos originais.

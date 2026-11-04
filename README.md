@@ -14,6 +14,7 @@
 | [Módulos individuais](docs/10-modulos/) | UNI-01 a UNI-14 extraídos da base v5 para consulta |
 | [Contratos técnicos candidatos](docs/08-fechamento-candidato/03-CONTRATOS-TECNICOS-CANDIDATOS.md) | Acesso, eventos, IA, mídias e contingência |
 | [Decisões P0 ainda abertas](docs/08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) | O que falta aprovar para encerrar o planejamento |
+| [Proposta consolidada de fechamento P0](docs/00-governanca/PROPOSTA-FECHAMENTO-P0-v0.1.md) | Alternativas e parâmetros candidatos **não ratificados** (sessões, retenção, infraestrutura, ordem histórica e orçamento) |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 

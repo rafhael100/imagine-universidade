@@ -15,7 +15,7 @@
 | P0-08 — Mídias e materiais protegidos | **APROVADO como arquitetura-base; fornecedores ainda candidatos** | [Decisão P0-08](DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md) e [especificação](P0-08-MIDIAS-MATERIAIS-PROTEGIDOS-v0.1-PROPOSTA.md) |
 | P0-09 — Infraestrutura, backups e recuperação | **APROVADO como desenho inicial**: RPO 4h e RTO 8h (metas) | [Decisão P0-09](DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md) e [especificação](P0-09-INFRAESTRUTURA-BACKUP-RECUPERACAO-v0.1-PROPOSTA.md) |
 | P0-10 — Orçamento e escalabilidade | **METODOLOGIA APROVADA**; orçamento integral, tetos e despesas pendentes | [Decisão P0-10](DECISAO-UNI-P0-10-2026-11-04.md) e [análise](P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) |
-| P0-11 — Responsáveis e alçadas | **PROPOSTA PARA APROVAÇÃO**; nomes e substitutos pendentes | [Matriz RACI P0-11](P0-11-RESPONSAVEIS-ALCADAS-RACI-v0.1-PROPOSTA.md) |
+| P0-11 — Responsáveis e alçadas | **APROVADO como matriz funcional**; nomes e limites financeiros pendentes | [Decisão P0-11](DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md) e [matriz RACI](P0-11-RESPONSAVEIS-ALCADAS-RACI-v0.1-PROPOSTA.md) |
 | P0-12 — Prontidão | Em aberto | [Pendências](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) |
 
 ## Nota de precedência

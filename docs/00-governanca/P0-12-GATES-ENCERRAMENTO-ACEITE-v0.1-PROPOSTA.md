@@ -37,17 +37,17 @@ Para declarar o planejamento **concluído**, exigir evidência documental e deci
 | D10 | Arquitetura, isolamento, monitoramento, recuperação e metas RPO/RTO | **Aprovado como base** | [P0-09](DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md); metas não verificadas |
 | D11 | Metodologia financeira e **envelope de custos para a fase pretendida**, com custos obrigatórios, teto e critério de autorização de despesas | **ALTERNATIVA A APROVADA PARA A FASE DOCUMENTAL** | [Decisão D11](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md): R$ 0 em novas despesas da documentação; orçamento e teto de desenvolvimento devem ser aprovados antes do Gate C. Não equivale a custo interno zero |
 | D12 | Matriz RACI, classes de risco, responsáveis por decisão e exigências de designação nominal | **Aprovado como base** | [P0-11](DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md); pessoas e substitutos ainda a designar antes do piloto |
-| D13 | Planos de teste futuros escritos e critérios objetivos de aprovação por módulo e integração | **Parcial** | Matriz de 84 capacidades em `06-MATRIZ-DE-ACEITE.csv`, critérios P0 e casos transversais; auditar cobertura e duplicidade |
+| D13 | Planos de teste futuros escritos e critérios objetivos de aprovação por módulo e integração | **APROVADO DOCUMENTALMENTE** | [Decisão D13](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md): 84 capacidades únicas, 109 casos transversais por famílias; testes não executados e rastreabilidade caso a caso exigida no Gate H |
 | D14 | Lista final de dependências, riscos residuais, responsabilidades, prazos e portas que bloqueiam programação ou somente piloto | **PENDENTE** | Elaborar quadro de pendências com status e dono antes de solicitar encerramento |
 | D15 | Termo formal final de encerramento, referências e **aceite expresso** do responsável, após conferência dos anteriores | **PENDENTE** | Termo histórico candidato não está assinado; redigir termo novo sem afirmações obsoletas |
 
-**Atenção:** os estados acima são revisão inicial de documentos. “Aprovado como base” não significa que testes foram executados nem que uma API externa já está pronta. Não usar “100% concluído” enquanto D11, D13–D15 estiverem abertos.
+**Atenção:** os estados acima são revisão inicial de documentos. “Aprovado como base” não significa que testes foram executados nem que uma API externa já está pronta. Não usar “100% concluído”: D11 foi decidido pela alternativa A e D13 foi aprovado documentalmente, mas D14 e D15 seguem abertos, assim como o Gate D.
 
 ## 3. Pendências organizadas por momento
 
 ### 3.1 Impeditivas de encerramento do planejamento (Gate D)
 - **Alternativa A aprovada:** novas despesas autorizadas no Gate D = **R$ 0**; registrar alocação interna, sem prometer que pessoal/recursos atuais não geram custo. Orçamento e teto monetário de desenvolvimento **pendentes e obrigatórios antes do Gate C**; não confundir subtotal público de VPS/Stream com orçamento operacional.
-- Revisar os **84 critérios BASE** e documentos dos 14 módulos contra regras vigentes; corrigir links e conflitos normativos sem inventar o conteúdo dos 666 IDs históricos.
+- **Revisão documental concluída em D13:** preservar os 84 critérios da base v5, sem inventar os 666 textos históricos. Rastreabilidade teste a teste e evidências serão obrigações posteriores do Gate H.
 - Consolidar o **mapa de dependências, riscos e responsabilidades**, incluindo enumerações oficiais que podem ficar condicionadas à futura entrega do Portal/CRM, com uma regra explicitada de não integração até homologação.
 - Concluir o **termo final de encerramento e sua aprovação**, em momento separado desta proposta.
 

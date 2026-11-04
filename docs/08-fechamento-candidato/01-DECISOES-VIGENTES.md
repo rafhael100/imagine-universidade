@@ -37,6 +37,8 @@
 
 | GOV-27 | **P0-11 aprovado em 04/11/2026:** matriz de papéis RACI, segregação de aprovações e acúmulo controlado em equipe enxuta | [DEC-UNI-P0-11](../00-governanca/DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md). Responsáveis nominais antes do piloto; limiares monetários dependem de P0-10 |
 
+| GOV-28 | **P0-12 aprovado em 04/11/2026 como método:** quatro gates D/C/H/L distintos, checklist documental D01–D15 e evidência separada de testes futuros | [DEC-UNI-P0-12](../00-governanca/DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md). Gate D não concluído; programação e lançamento não autorizados |
+
 ## Autoridade de estado
 Portal e sistemas comerciais: identidade, vínculos, contrato, elegibilidade. Universidade: catálogo, conteúdo, estados pedagógicos. CRM/Sites/Performance AI: ações operacionais. Motor de IA central: catálogo e governança de modelos. Suporte oficial: chamados técnicos. A ação de n8n não equivale a confirmação oficial de estado.
 

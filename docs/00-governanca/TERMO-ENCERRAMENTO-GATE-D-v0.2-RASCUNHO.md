@@ -21,18 +21,18 @@ Proposta de termo para que a direção da Imagine, após conferência e decisão
 | Item | Estado na elaboração da minuta |
 |---|---|
 | D01–D10 e D12: decisões-base e conferência documental | Aprovados em sua dimensão de planejamento; dependências técnicas posteriores preservadas |
-| D11: envelope financeiro da fase e critérios de autorização | **PENDENTE DE DECISÃO**; metodologia P0-10 aprovada não equivale a teto |
+| D11: envelope financeiro da fase e critérios de autorização | **ALTERNATIVA A APROVADA**: R$ 0 em novas despesas documentais; orçamento e teto de desenvolvimento seguem para aprovação separada antes do Gate C |
 | D13: consistência da matriz de critérios | 84/84 IDs, títulos e critérios conciliados; revisão transversal final a formalizar |
 | D14: riscos, dependências e responsáveis | Registro v0.1 criado; **pendente de revisão/aceite institucional** |
 | D15: aceite expresso de encerramento documental | **NÃO CONCEDIDO** |
 
-## 4. Escolha financeira a submeter à direção antes do fechamento
+## 4. Escolha financeira ratificada para a fase documental (D11)
 
-**Alternativa A (lançamento financeiramente conservador):** registrar **R$ 0 em novas contratações e despesas autorizadas na fase documental**. O Gate D poderá ser analisado quanto à suficiência do planejamento, mas a programação (Gate C) permanecerá vedada até existir **orçamento da fase de desenvolvimento, teto e autorização expressa**. Os custos de pessoas/recursos existentes devem ser identificados como alocação interna, não apresentados como custo inexistente.
+**Alternativa A (APROVADA expressamente em 04/11/2026):** registrar **R$ 0 em novas contratações e despesas autorizadas na fase documental**. O Gate D poderá ser analisado quanto à suficiência do planejamento, mas a programação (Gate C) permanecerá vedada até existir **orçamento da fase de desenvolvimento, teto e autorização expressa**. Os custos de pessoas/recursos existentes devem ser identificados como alocação interna, não apresentados como custo inexistente.
 
-**Alternativa B:** exigir a finalização de cotações completas e limite monetário da fase de desenvolvimento **antes** de encerrar Gate D. Não há teto ou orçamento consolidado para ratificar nesta minuta.
+**Alternativa B (NÃO ADOTADA):** exigir a finalização de cotações completas e limite monetário da fase de desenvolvimento **antes** de encerrar Gate D. Não há teto ou orçamento consolidado para ratificar nesta minuta.
 
-**Nenhuma alternativa foi aprovada por este documento.** A direção deverá registrar uma decisão específica, sem pressupor que a aprovação da metodologia financeira P0-10 resolveu D11.
+**A escolha A foi ratificada pelo responsável em [DEC-UNI-D11](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md).** O teto R$ 0 refere-se exclusivamente a **novas despesas da fase documental**, não equivale a operação sem custos internos, não autoriza novas contratações, **não aprova orçamento/teto de desenvolvimento** nem conclui o Gate D.
 
 ## 5. Futuro aceite — texto condicionado
 
@@ -47,4 +47,4 @@ Proposta de termo para que a direção da Imagine, após conferência e decisão
 - Gate H: **NÃO INICIADO**
 - Gate L: **NÃO AUTORIZADO**
 
-Próxima ação: decidir D11, revisar registro de riscos D14 e emitir termo definitivo para aceite expressamente separado.
+Próxima ação: finalizar auditoria transversal D13, revisar e aceitar o registro de riscos D14 e obter aceite **separado e explícito** do termo final D15. O orçamento/teto de desenvolvimento permanece obrigatório antes de autorizar Gate C.

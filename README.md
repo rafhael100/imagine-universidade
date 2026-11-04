@@ -2,7 +2,7 @@
 
 > **Repositório privado de documentação.** Não contém implementação da plataforma, vídeos publicados, contratos de fornecedores ou homologação de ambiente.
 
-**Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. O **D13 está aprovado documentalmente**, porém o **Gate D segue aberto (D14/D15)**; orçamento/teto do desenvolvimento e programação **não foram autorizados**.
+**Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. O **D13 está aprovado documentalmente**, porém o **Gate D segue aberto (D15)**; orçamento/teto do desenvolvimento e programação **não foram autorizados**.
 
 ## Por onde começar
 
@@ -32,7 +32,7 @@
 | [Registro dos riscos e dependências](docs/00-governanca/RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) | Pendências para documentação, programação, piloto e lançamento |
 | [Auditoria final documental v0.3](docs/00-governanca/AUDITORIA-FINAL-DOCUMENTAL-GATE-D-v0.3-2026-11-04.md) | 84 requisitos, 109 critérios transversais futuros, inventário histórico e bloqueios D13–D15 |
 | [D13 — Cobertura documental](docs/00-governanca/DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md) | **APROVADO**; 109 casos futuros relacionados aos módulos, sem testes executados |
-| [D14 — Classificação de riscos](docs/00-governanca/D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md) | **Proposta para ratificação**, preservando bloqueios nos Gates C/H/L |
+| [D14 — Classificação dos riscos](docs/00-governanca/DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md) | **APROVADO DOCUMENTALMENTE**; mantém os bloqueios de segurança, custo e homologação |
 | [Termo de encerramento futuro (rascunho)](docs/00-governanca/TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md) | Sem aceite final; nenhum gate automaticamente liberado |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |

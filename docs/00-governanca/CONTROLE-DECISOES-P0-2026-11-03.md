@@ -1,6 +1,6 @@
 # Controle de decisões P0 — Universidade Imagine
 
-**Atualização:** 03/11/2026  
+**Atualização:** 04/11/2026  
 **Finalidade:** índice cronológico das decisões mais recentes. Este documento prevalece sobre estados antigos das minutas não atualizadas, sem substituir seu conteúdo histórico.
 
 | Tema | Estado atual | Registro |

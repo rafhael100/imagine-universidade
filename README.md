@@ -33,6 +33,7 @@
 | [Auditoria final documental v0.3](docs/00-governanca/AUDITORIA-FINAL-DOCUMENTAL-GATE-D-v0.3-2026-11-04.md) | 84 requisitos, 109 critérios transversais futuros, inventário histórico e bloqueios D13–D15 |
 | [D13 — Cobertura documental](docs/00-governanca/DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md) | **APROVADO**; 109 casos futuros relacionados aos módulos, sem testes executados |
 | [D14 — Classificação dos riscos](docs/00-governanca/DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md) | **APROVADO DOCUMENTALMENTE**; mantém os bloqueios de segurança, custo e homologação |
+| [D15 — Termo final para aprovação](docs/00-governanca/D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md) | **Proposta não aprovada**; possível encerramento exclusivamente documental, sem liberar programação |
 | [Termo de encerramento futuro (rascunho)](docs/00-governanca/TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md) | Sem aceite final; nenhum gate automaticamente liberado |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |

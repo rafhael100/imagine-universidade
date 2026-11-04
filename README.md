@@ -24,7 +24,9 @@
 | [Decisão P0-07 — Tutor IA e segurança](docs/00-governanca/DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md) | Política-base ratificada, homologação posterior |
 | [P0-08 — Mídias protegidas](docs/00-governanca/DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md) | **Arquitetura-base aprovada**; fornecedores candidatos sem contrato |
 | [P0-09 — Infraestrutura e recuperação](docs/00-governanca/DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md) | **Arquitetura-base aprovada**, sem implantação nem homologação |
-| [Proposta P0-10 — Custos e cenários](docs/00-governanca/P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) | Preços públicos e simulações, **sem orçamento final ou aprovação de compra** |
+| [P0-10 — Metodologia orçamentária](docs/00-governanca/DECISAO-UNI-P0-10-2026-11-04.md) | **Metodologia aprovada**; orçamento integral e compras ainda não aprovados |
+| [Cenários e referências de preços](docs/00-governanca/P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) | Simulações, não cotação ou teto autorizado |
+| [Proposta P0-11 — Responsáveis e alçadas](docs/00-governanca/P0-11-RESPONSAVEIS-ALCADAS-RACI-v0.1-PROPOSTA.md) | Matriz RACI e governança de equipe enxuta para ratificação |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 

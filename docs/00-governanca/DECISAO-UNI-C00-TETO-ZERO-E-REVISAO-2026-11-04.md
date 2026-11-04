@@ -33,7 +33,7 @@ O período de vigência exato e a distribuição por fornecedor serão especific
 | Blocos A e B, preferência B-M | **APROVADOS DOCUMENTALMENTE** |
 | Teto incremental R$ 0 na fase LOCAL | **APROVADO NESTA DECISÃO** |
 | Exigência de revisão humana técnica e de segurança | **APROVADA COMO CONDIÇÃO** |
-| Identidade/aceite do executor e do revisor independente | **PENDENTE** |
+| Executor da programação e independência efetiva da revisão | **Executor pendente; revisor técnico/segurança autoindicado pelo solicitante** em [DEC-UNI-C00-REVISAO](DECISAO-UNI-C00-RESPONSAVEL-REVISAO-2026-11-04.md); independência/controle compensatório a demonstrar |
 | Identificação e aceite do ambiente local/sandbox | **PENDENTE** |
 | Horas reais, disponibilidade e custo econômico total do trabalho | **PENDENTE** |
 | Duração da autorização, alçadas e exceções | **PENDENTE** |

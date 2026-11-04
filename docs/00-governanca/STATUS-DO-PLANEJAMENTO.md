@@ -19,7 +19,7 @@
 5. Portal é autoridade de identidade, contratos e elegibilidade; n8n é orquestrador, não fonte de verdade.
 6. Tutoriais técnicos devem acompanhar funcionalidades realmente homologadas e disponíveis.
 7. Infraestrutura enxuta (Leaseweb/Cloudflare/IA API) é **candidata**, não contratada/homologada.
-8. A decisão histórica **Portal → CRM → Universidade** para ordem de desenvolvimento continua registrada até revogação expressa.
+8. **Opção B aprovada expressamente em 03/11/2026:** desenvolvimento paralelo da Universidade é permitido **somente após fechamento documental e autorização específica de programação**. A obrigação antiga de aguardar conclusão integral de Portal e CRM foi substituída; os requisitos de integração homologada permanecem. [Decisão formal](DECISAO-UNI-SEQ-2026-11-03.md).
 
 ## Restrições de estágio
 
@@ -27,7 +27,7 @@
 
 ## Pendências de planejamento prioritárias
 
-Consultar [`04-DECISOES-P0-PARA-RATIFICAR.md`](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md). Em especial: regra de precedência da ordem de implementação; prazos de retenção; contrato oficial de elegibilidade; sessões e mídias; orçamento integral; arquitetura/backup; responsabilidades por alçada; e definição dos critérios de aceite finais.
+Consultar [`04-DECISOES-P0-PARA-RATIFICAR.md`](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md). A decisão sobre a ordem de implementação foi encerrada pela opção B. Ainda faltam: prazos de retenção; contrato oficial de elegibilidade; sessões e mídias; orçamento integral; arquitetura/backup; responsabilidades por alçada; e definição dos critérios de aceite finais.
 
 ## Materiais de origem e confiança
 

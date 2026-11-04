@@ -3,7 +3,7 @@
 Critérios: pacote-base ratificado, 12 P0 resolvidos em sua dimensão decisória, contratos e comportamentos esperados definidos, custos estimados e aprovados, sequência histórica esclarecida, artefatos versionados no repositório autorizado.
 
 ## Gate C — Autorização de programação (AINDA NÃO CONCEDIDA)
-Decisão expressa do usuário e preservação dos cronogramas oficiais do Portal e CRM. A existência deste roteiro não substitui autorização de código. Se a ordem histórica Portal → CRM → Universidade permanecer, este gate só pode abrir após os critérios de conclusão desses dois produtos.
+Decisão expressa do responsável após fechamento documental, com escopo, recursos e dependências definidos. A **opção B** foi aprovada expressamente em 03/11/2026: permite programação da Universidade **em paralelo** ao Portal e CRM, sem exigir a conclusão integral anterior de ambos. Isso **não** autoriza iniciar código agora nem antecipar integrações ou tutoriais de funcionalidades não homologadas. A programação exige autorização específica separada.
 
 ## Fases candidatas após Gate C
 

@@ -35,6 +35,8 @@
 
 | GOV-26 | **P0-10 aprovado em 04/11/2026 quanto à metodologia de orçamento:** lançar enxuto, simular 0/100/500/1.000 empresas, calcular consumo efetivo e custos completos | [DEC-UNI-P0-10](../00-governanca/DECISAO-UNI-P0-10-2026-11-04.md). Cotações, tetos, compras, custos editoriais e orçamento integral permanecem pendentes |
 
+| GOV-27 | **P0-11 aprovado em 04/11/2026:** matriz de papéis RACI, segregação de aprovações e acúmulo controlado em equipe enxuta | [DEC-UNI-P0-11](../00-governanca/DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md). Responsáveis nominais antes do piloto; limiares monetários dependem de P0-10 |
+
 ## Autoridade de estado
 Portal e sistemas comerciais: identidade, vínculos, contrato, elegibilidade. Universidade: catálogo, conteúdo, estados pedagógicos. CRM/Sites/Performance AI: ações operacionais. Motor de IA central: catálogo e governança de modelos. Suporte oficial: chamados técnicos. A ação de n8n não equivale a confirmação oficial de estado.
 

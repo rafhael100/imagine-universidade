@@ -2,7 +2,7 @@
 
 **Data:** 04/11/2026  
 **Escopo:** conferência dos documentos de planejamento no repositório privado `rafhael100/imagine-universidade`, sem executar software, testes de sistema ou contratação.  
-**Estado:** **AUDITORIA DE CONFERÊNCIA REALIZADA; GATE D AINDA ABERTO**.  
+**Estado na data da auditoria:** conferência realizada com Gate D ainda aberto naquele momento. **Atualização posterior em 04/11/2026:** [D15 expressamente aprovado](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md), encerrando **somente o Gate D documental**. A análise abaixo é preservada como histórico pré-D15. Programação, contratações e Gates C/H/L continuam não autorizados.  
 **Precedência:** decisões vigentes P0-01 a P0-12 em seus escopos específicos e [alternativa financeira A](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md).
 
 ## 1. Verificações reproduzidas

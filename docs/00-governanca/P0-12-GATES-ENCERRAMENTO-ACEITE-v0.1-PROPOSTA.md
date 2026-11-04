@@ -1,7 +1,7 @@
 # P0-12 — Encerramento documental, prontidão, critérios de aceite e gates
 
 **Data:** 04/11/2026.  
-**Status:** **PROPOSTA PARA RATIFICAÇÃO — NÃO APROVADA**. Nenhum gate foi declarado cumprido.  
+**Status:** **METODOLOGIA APROVADA EM 04/11/2026** pela [DEC-UNI-P0-12](DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md). **Nenhum gate foi declarado cumprido** e nenhum orçamento, código ou lançamento autorizado.  
 **Escopo:** encerrar o planejamento da Universidade Imagine sem exigir testes de software inexistente e sem confundir aprovação de especificações com liberação de programação, contratação, implantação ou lançamento.  
 **Fontes:** versão-base substitutiva v5 (84 capacidades em 14 módulos), histórico de 986 identificadores previstos (320 descrições recuperadas e 666 textos individuais ausentes), decisões P0-01 a P0-11, matriz de aceite candidata e roteiro de implementação futuro.  
 **Precedência:** opção B aprovada expressamente: programação paralela com Portal/CRM pode ser permitida **apenas após o encerramento documental e autorização específica de programação**. A obrigação histórica de concluir Portal e CRM primeiro foi substituída, mas as integrações e os tutoriais de funcionalidades não homologadas continuam bloqueados.

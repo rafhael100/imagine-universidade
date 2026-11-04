@@ -1,7 +1,7 @@
 # P0-11 — Governança de responsáveis, alçadas, permissões e matriz RACI
 
 **Data:** 04/11/2026.  
-**Estado:** PROPOSTA PARA RATIFICAÇÃO — NÃO APROVADA, NÃO IMPLEMENTADA.  
+**Estado:** **APROVADA COMO MATRIZ FUNCIONAL DE PLANEJAMENTO EM 04/11/2026**, conforme [DEC-UNI-P0-11](DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md). Atribuições nominais, valores financeiros e implementação permanecem pendentes.  
 **Produto:** Universidade Imagine, parte do ecossistema Imagine.  
 **Objetivo:** definir quem pode preparar, revisar, autorizar, executar, suspender e auditar ações, respeitando uma operação inicial enxuta e isolada dos dados de outras empresas.  
 **Referências vigentes:** P0-03 a P0-09 aprovados como bases; P0-10 aprovado **somente como metodologia financeira** (orçamento definitivo pendente). Opção B permite programação paralela apenas depois do encerramento documental e autorização específica.
@@ -122,6 +122,6 @@ A designação final poderá usar prestação de serviços ou acúmulo controlad
 
 ## 9. Pedido de aprovação
 
-Ratificar o P0-11 como **matriz funcional de papéis, responsabilidades, classificação de riscos, alçadas e segregação de funções**, permitindo equipe inicial enxuta com acúmulo controlado. **Nomes e suplentes reais serão definidos antes do piloto**; tetos financeiros dependem da conclusão específica do P0-10.
+O P0-11 foi ratificado como **matriz funcional de papéis, responsabilidades, classificação de riscos, alçadas e segregação de funções**, permitindo equipe inicial enxuta com acúmulo controlado. **Nomes e suplentes reais serão definidos antes do piloto**; tetos financeiros dependem da conclusão específica do P0-10.
 
-**Esta ratificação não seria autorização para programar, contratar ou publicar.** Após P0-11, avançar ao P0-12 — critérios documentais de encerramento, evidências e gate de prontidão, distinguindo planejamento da futura homologação de sistema.
+**Esta ratificação não autoriza programar, contratar ou publicar.** Após P0-11, avançar ao P0-12 — critérios documentais de encerramento, evidências e gate de prontidão, distinguindo planejamento da futura homologação de sistema.

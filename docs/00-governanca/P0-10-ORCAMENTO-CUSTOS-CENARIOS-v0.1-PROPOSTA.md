@@ -1,7 +1,7 @@
 # P0-10 — Orçamento, preços públicos e cenários de escala
 
 **Data de referência:** 04/11/2026.  
-**Status:** **PROPOSTA PARA RATIFICAÇÃO**, não aprovada e sem autorização de despesas, fornecedores ou programação.  
+**Status vigente:** **METODOLOGIA APROVADA EM 04/11/2026**, conforme [DEC-UNI-P0-10](DECISAO-UNI-P0-10-2026-11-04.md). Em [DEC-UNI-D11](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md), foi adotada a **alternativa A: R$ 0,00 de novas despesas autorizadas na fase documental**. Preços públicos são referências; orçamento integral/teto do desenvolvimento e toda contratação permanecem pendentes. Sem autorização de programação.  
 **Escopo:** Universidade Imagine; benefício gratuito para clientes com serviço Imagine elegível ativo, não vendido separadamente.  
 **Objetivo:** viabilizar qualidade e segurança com baixo investimento inicial, incluindo custos humanos e operacionais que uma calculadora de VPS isolada não cobre.  
 **Precedências:** P0-03 a P0-09 aprovados como bases funcionais/técnicas; Stream, R2, Workers e Leaseweb ainda dependem de orçamento, contratos e homologação; P0-11/P0-12 permanecem pendentes.

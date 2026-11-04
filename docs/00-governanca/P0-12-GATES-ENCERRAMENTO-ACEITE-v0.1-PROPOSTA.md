@@ -35,7 +35,7 @@ Para declarar o planejamento **concluído**, exigir evidência documental e deci
 | D08 | Governança de IA, ferramentas permitidas, riscos e aprovação editorial | **Aprovado como base** | [P0-07](DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md); modelos e fornecedores específicos ainda sujeitos a homologação |
 | D09 | Proteção de mídias, URLs assinadas, acesso por recurso e política editorial | **Aprovado como base** | [P0-08](DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md); Stream/R2 ainda candidatos |
 | D10 | Arquitetura, isolamento, monitoramento, recuperação e metas RPO/RTO | **Aprovado como base** | [P0-09](DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md); metas não verificadas |
-| D11 | Metodologia financeira e **envelope de custos para a fase pretendida**, com custos obrigatórios, teto e critério de autorização de despesas | **PENDENTE** | [P0-10](DECISAO-UNI-P0-10-2026-11-04.md) aprovou somente a metodologia; faltam orçamento integral e teto monetário. Sem despesa, registrar formalmente envelope zero e condições para gasto futuro |
+| D11 | Metodologia financeira e **envelope de custos para a fase pretendida**, com custos obrigatórios, teto e critério de autorização de despesas | **ALTERNATIVA A APROVADA PARA A FASE DOCUMENTAL** | [Decisão D11](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md): R$ 0 em novas despesas da documentação; orçamento e teto de desenvolvimento devem ser aprovados antes do Gate C. Não equivale a custo interno zero |
 | D12 | Matriz RACI, classes de risco, responsáveis por decisão e exigências de designação nominal | **Aprovado como base** | [P0-11](DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md); pessoas e substitutos ainda a designar antes do piloto |
 | D13 | Planos de teste futuros escritos e critérios objetivos de aprovação por módulo e integração | **Parcial** | Matriz de 84 capacidades em `06-MATRIZ-DE-ACEITE.csv`, critérios P0 e casos transversais; auditar cobertura e duplicidade |
 | D14 | Lista final de dependências, riscos residuais, responsabilidades, prazos e portas que bloqueiam programação ou somente piloto | **PENDENTE** | Elaborar quadro de pendências com status e dono antes de solicitar encerramento |
@@ -46,7 +46,7 @@ Para declarar o planejamento **concluído**, exigir evidência documental e deci
 ## 3. Pendências organizadas por momento
 
 ### 3.1 Impeditivas de encerramento do planejamento (Gate D)
-- Confirmar **orçamento de planejamento e envelope da fase de desenvolvimento** e condições de gastos, mesmo que a execução imediata seja zero; não confundir subtotal público de VPS/Stream com orçamento operacional.
+- **Alternativa A aprovada:** novas despesas autorizadas no Gate D = **R$ 0**; registrar alocação interna, sem prometer que pessoal/recursos atuais não geram custo. Orçamento e teto monetário de desenvolvimento **pendentes e obrigatórios antes do Gate C**; não confundir subtotal público de VPS/Stream com orçamento operacional.
 - Revisar os **84 critérios BASE** e documentos dos 14 módulos contra regras vigentes; corrigir links e conflitos normativos sem inventar o conteúdo dos 666 IDs históricos.
 - Consolidar o **mapa de dependências, riscos e responsabilidades**, incluindo enumerações oficiais que podem ficar condicionadas à futura entrega do Portal/CRM, com uma regra explicitada de não integração até homologação.
 - Concluir o **termo final de encerramento e sua aprovação**, em momento separado desta proposta.

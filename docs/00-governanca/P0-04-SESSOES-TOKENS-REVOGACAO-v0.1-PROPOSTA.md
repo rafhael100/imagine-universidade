@@ -1,6 +1,6 @@
 # P0-04 — Sessões, tokens e revogação de acesso (v0.1)
 
-**Situação:** **PROPOSTA PARA RATIFICAÇÃO**; não aprovada, não implementada e não homologada.  
+**Situação:** **PARÂMETROS E REGRAS APROVADOS COMO BASE TÉCNICA DE PROJETO EM 03/11/2026** por [DEC-UNI-P0-04](DECISAO-UNI-P0-04-SESSOES-REVOGACAO-2026-11-03.md). **Não implementados nem homologados**; inviabilidade técnica exige nova aprovação.  
 **Data:** 03/11/2026.  
 **Base vinculante:** [DEC-UNI-P0-03](DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md) — direito de acesso funcional ratificado; [opção B](DECISAO-UNI-SEQ-2026-11-03.md) — programação paralela apenas após fechamento documental e autorização própria.  
 **Dependências:** P0-06 (identidade, API, eventos), P0-08 (mídia privada), P0-05 (privacidade), P0-09 (arquitetura), P0-12 (critérios de aceite).  
@@ -17,7 +17,7 @@ Separar quatro conceitos independentes:
 
 **A presença do menu, a posse de um JWT, o conhecimento de uma URL, o cache de borda e a existência de sessão antiga NÃO constituem direito educacional.**
 
-## 2. Parâmetros iniciais recomendados — para decisão
+## 2. Parâmetros iniciais aprovados como base de projeto (sujeitos à homologação)
 
 | Parâmetro | Proposta inicial | Observação |
 |---|---:|---|
@@ -31,7 +31,7 @@ Separar quatro conceitos independentes:
 | Link de arquivo/objeto protegido | **até 5 minutos** | Escopo de um recurso e download proibido por padrão onde aplicável |
 | Reautorização em renovação/nova aula/Tutor | **obrigatória** | Perda de direito bloqueia nova credencial mesmo se sessão principal ainda existir |
 
-**Os tempos acima não foram aprovados.** Recomenda-se ajustar parâmetros por ameaça, custo, experiência do usuário, protocolos e teste de fornecedor. Nunca prometer que uma credencial já emitida pelo CDN será revogada em 60 segundos sem mecanismo comprovado.
+**Os tempos acima foram aprovados como base de projeto, não como SLA ou homologação.** Caso testes e fornecedores indiquem inviabilidade, propor alteração para aprovação expressa considerando ameaça, custo e experiência. Nunca prometer que uma credencial já emitida pelo CDN será revogada em 60 segundos sem mecanismo comprovado.
 
 ## 3. Regras de segurança da sessão
 
@@ -108,9 +108,9 @@ Registrar somente identificadores minimizados: decisão, recurso, vínculo, revi
 | HT-UNI-SESS11 | Logout remoto, troca de senha e elevação de privilégio renovam/invalida sessões conforme política central |
 | HT-UNI-SESS12 | Logout não deixa recursos pessoais sensíveis acessíveis por cache indevido |
 
-## 9. Escopo proposto para aprovação desta decisão
+## 9. Escopo da ratificação de 03/11/2026
 
-Aprovar **as regras e parâmetros iniciais da Seção 2 como base de projeto**, com obrigação de homologar conformidade técnica dos fornecedores antes do lançamento e documentar exceções. Caso algum limite seja tecnicamente inviável, propor nova decisão expressa antes de alterar o requisito.
+**Aprovadas** as regras e parâmetros iniciais da Seção 2 como base de projeto, com obrigação de homologar conformidade técnica dos fornecedores antes do lançamento e documentar exceções. Caso algum limite seja tecnicamente inviável, propor nova decisão expressa antes de alterar o requisito.
 
 **Não** aprova fornecedor, infraestrutura, compras, alteração de contrato comercial, custos adicionais, procedimentos de produção ou início da programação.
 

@@ -28,6 +28,8 @@
 
 **Planejamento:** fase de fechamento de pendências. **Programação:** não autorizada. **Contratação, infraestrutura, publicação de cursos e homologação técnica:** não autorizadas. O registro deste conteúdo no GitHub atende ao pedido específico de salvar a documentação, e não é autorização de desenvolvimento.
 
+**P0-05:** [proposta de privacidade, LGPD e retenção](P0-05-PRIVACIDADE-LGPD-RETENCAO-v0.1-PROPOSTA.md) publicada para análise; prazos numéricos ainda não ratificados e demandam revisão jurídica. O prazo regulatório de registros de incidentes de segurança com dados pessoais é distinto do prazo candidato de logs técnicos ordinários.
+
 ## Pendências de planejamento prioritárias
 
 Consultar [`04-DECISOES-P0-PARA-RATIFICAR.md`](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md). A decisão sobre a ordem de implementação foi encerrada pela opção B. Ainda faltam: prazos de retenção; contrato oficial de elegibilidade; sessões e mídias; orçamento integral; arquitetura/backup; responsabilidades por alçada; e definição dos critérios de aceite finais.

@@ -24,6 +24,8 @@
 
 **Condição financeira e revisão C-00 (04/11/2026):** [DEC-UNI-C00 — teto R$ 0 e revisão obrigatória](docs/00-governanca/DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md). **Aprovado R$ 0,00 de novas despesas de fornecedores para a fase local**, sem presumir custo humano zero. Revisão técnica/segurança humana exigida; responsáveis, sandbox local, esforço, vigência e autorização formal Gate C continuam pendentes. PR #1 permanece draft e não executada.
 
+**Revisão técnica e segurança C-00 (04/11/2026):** o solicitante assumiu pessoalmente esta função, conforme [DEC-UNI-C00-REVISAO](docs/00-governanca/DECISAO-UNI-C00-RESPONSAVEL-REVISAO-2026-11-04.md). A designação não é uma revisão concluída da [PR #1](https://github.com/rafhael100/imagine-universidade/pull/1); executor, ambiente local, independência/controle compensatório, custos humanos e Gate C continuam pendentes.
+
 ## Por onde começar
 
 | Documento | Finalidade |

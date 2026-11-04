@@ -38,6 +38,6 @@ P0-06 foi aprovado como base técnica em 03/11/2026; os oito contratos lógicos 
 
 **Preparação do Gate C, ainda não autorizado:** [checklist de escopo, ambiente, responsáveis e orçamento/teto](PRE-GATE-C-CHECKLIST-ORCAMENTO-E-AUTORIZACAO-v0.1-2026-11-04.md). Trata-se de roteiro documental, não início de programação ou aprovação financeira.
 
-**Pré-Gate C — propostas, ainda NÃO aprovadas:** [C01 Fundação Segura C-00](PRE-GATE-C-01-ESCOPO-FUNDACAO-SEGURA-v0.1-PROPOSTA.md) e [C02 Modelo financeiro C-00](PRE-GATE-C-02-ORCAMENTO-FUNDACAO-v0.1-PROPOSTA.md). Reutilizar o ambiente de desenvolvimento existente é preferência **condicionada à avaliação de capacidade e isolamento**, não constatação de disponibilidade nem autorização financeira. Escopo final, equipe, orçamento/teto e Gate C continuam pendentes.
+**Pré-Gate C — escopo C-00 APROVADO SOMENTE PARA PLANEJAMENTO:** [decisão C-00](DECISAO-UNI-PRE-GATE-C01-ESCOPO-C00-2026-11-04.md), [especificação](PRE-GATE-C-01-ESCOPO-FUNDACAO-SEGURA-v0.1-PROPOSTA.md). Foram publicados [C03 avaliação documental de infraestrutura](PRE-GATE-C-03-AVALIACAO-INFRAESTRUTURA-C00-v0.1-2026-11-04.md) e [C04 cenários de custo/esforço](PRE-GATE-C-04-ORCAMENTO-TRABALHO-E-CENARIOS-C00-v0.1-2026-11-04.md). **A infraestrutura real não foi auditada ao vivo; valores e teto monetário ainda não estão definidos. Gate C não autorizado; nenhuma programação ou compra.**
 
 A publicação da documentação **não autoriza programação, contratação de infraestrutura nem publicação de cursos**.

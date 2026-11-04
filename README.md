@@ -26,7 +26,8 @@
 | [P0-09 — Infraestrutura e recuperação](docs/00-governanca/DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md) | **Arquitetura-base aprovada**, sem implantação nem homologação |
 | [P0-10 — Metodologia orçamentária](docs/00-governanca/DECISAO-UNI-P0-10-2026-11-04.md) | **Metodologia aprovada**; orçamento integral e compras ainda não aprovados |
 | [Cenários e referências de preços](docs/00-governanca/P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) | Simulações, não cotação ou teto autorizado |
-| [Proposta P0-11 — Responsáveis e alçadas](docs/00-governanca/P0-11-RESPONSAVEIS-ALCADAS-RACI-v0.1-PROPOSTA.md) | Matriz RACI e governança de equipe enxuta para ratificação |
+| [Decisão P0-11 — Governança](docs/00-governanca/DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md) | **Matriz aprovada**; responsáveis nominais pendentes |
+| [P0-12 — Encerramento e prontidão](docs/00-governanca/P0-12-GATES-ENCERRAMENTO-ACEITE-v0.1-PROPOSTA.md) | **Proposta ainda não aprovada** de Gates D/C/H/L e checklist D01–D15 |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 

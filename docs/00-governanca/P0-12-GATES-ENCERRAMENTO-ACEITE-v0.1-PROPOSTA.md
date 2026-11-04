@@ -1,7 +1,7 @@
 # P0-12 — Encerramento documental, prontidão, critérios de aceite e gates
 
 **Data:** 04/11/2026.  
-**Status:** **METODOLOGIA APROVADA EM 04/11/2026** pela [DEC-UNI-P0-12](DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md). **Nenhum gate foi declarado cumprido** e nenhum orçamento, código ou lançamento autorizado.  
+**Status:** **METODOLOGIA APROVADA EM 04/11/2026** pela [DEC-UNI-P0-12](DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md). **Gate D foi posteriormente encerrado exclusivamente como documentação por [decisão D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md)**. Os Gates C/H/L continuam não autorizados ou não iniciados; nenhum orçamento, código ou lançamento autorizado.  
 **Escopo:** encerrar o planejamento da Universidade Imagine sem exigir testes de software inexistente e sem confundir aprovação de especificações com liberação de programação, contratação, implantação ou lançamento.  
 **Fontes:** versão-base substitutiva v5 (84 capacidades em 14 módulos), histórico de 986 identificadores previstos (320 descrições recuperadas e 666 textos individuais ausentes), decisões P0-01 a P0-11, matriz de aceite candidata e roteiro de implementação futuro.  
 **Precedência:** opção B aprovada expressamente: programação paralela com Portal/CRM pode ser permitida **apenas após o encerramento documental e autorização específica de programação**. A obrigação histórica de concluir Portal e CRM primeiro foi substituída, mas as integrações e os tutoriais de funcionalidades não homologadas continuam bloqueados.
@@ -10,7 +10,7 @@
 
 | Gate | Marco e finalidade | O que autoriza | Situação em 04/11/2026 |
 |---|---|---|---|
-| **D — Documentação concluída** | Critérios funcionais e técnicos, decisões, arquitetura, riscos, dependências, responsabilidades e orçamento de planejamento suficientes, validados e assinados | Solicitar **autorização separada** para desenvolver; não executa código automaticamente | **NÃO CONCLUÍDO**; esta proposta P0-12 está aberta e P0-10 ainda não tem envelope financeiro completo aprovado |
+| **D — Documentação concluída** | Critérios funcionais e técnicos, decisões, arquitetura, riscos, dependências e orçamento de planejamento suficientes, com aceite documental expresso | Solicitar **autorização separada** para desenvolver; não executa código automaticamente | **ENCERRADO DOCUMENTALMENTE** em 04/11/2026 ([D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md)); orçamento/teto de desenvolvimento pendente para Gate C |
 | **C — Autorização expressa de programação** | Decisão posterior do responsável com escopo, fase, ambiente, orçamento e dependências | Iniciar somente o desenvolvimento expressamente autorizado, inclusive paralelo quando cabível | **NÃO CONCEDIDA** |
 | **H — Homologação/piloto** | Produto implementado e verificações reais aprovadas de segurança, elegibilidade, IA, privacidade, mídia, recuperação, qualidade editorial, acessibilidade e custos | Realizar piloto real nos limites aprovados; não é publicação geral automática | **NÃO INICIADO** |
 | **L — Lançamento** | Resultado Go/No-Go, operação, equipe, fornecedores, suporte e continuidade aprovados | Liberar a Universidade aos clientes elegíveis no escopo homologado | **NÃO AUTORIZADO** |
@@ -39,9 +39,9 @@ Para declarar o planejamento **concluído**, exigir evidência documental e deci
 | D12 | Matriz RACI, classes de risco, responsáveis por decisão e exigências de designação nominal | **Aprovado como base** | [P0-11](DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md); pessoas e substitutos ainda a designar antes do piloto |
 | D13 | Planos de teste futuros escritos e critérios objetivos de aprovação por módulo e integração | **APROVADO DOCUMENTALMENTE** | [Decisão D13](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md): 84 capacidades únicas, 109 casos transversais por famílias; testes não executados e rastreabilidade caso a caso exigida no Gate H |
 | D14 | Lista final de dependências, riscos residuais, responsabilidades, prazos e portas que bloqueiam programação ou somente piloto | **APROVADO DOCUMENTALMENTE** | [Decisão D14](DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md): 15 riscos classificados com bloqueios D/C/H/L; mitigação técnica e nomes funcionais em etapas posteriores |
-| D15 | Termo formal final de encerramento, referências e **aceite expresso** do responsável, após conferência dos anteriores | **PENDENTE DE APROVAÇÃO EXPRESSA** | [Termo final v1.0 proposto](D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md), não assinado. Gate D ainda aberto, programação bloqueada |
+| D15 | Termo formal final de encerramento, referências e **aceite expresso** do responsável, após conferência dos anteriores | **APROVADO — GATE D ENCERRADO DOCUMENTALMENTE** | [Decisão D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md), com aceite expresso via conversa; programação e contratações bloqueadas |
 
-**Atenção:** os estados acima são revisão inicial de documentos. “Aprovado como base” não significa que testes foram executados nem que uma API externa já está pronta. Não usar “100% concluído”: D11 foi decidido pela alternativa A e D13 foi aprovado documentalmente, mas D15 segue aberto, assim como o Gate D.
+**Atenção:** os estados acima são revisão inicial de documentos. “Aprovado como base” não significa que testes foram executados nem que uma API externa já está pronta. **O planejamento DOCUMENTAL foi concluído exclusivamente no Gate D após a decisão D15**. Isso não significa 100% de implementação, contratação, operação, LGPD, testes ou homologação.
 
 ## 3. Pendências organizadas por momento
 
@@ -104,4 +104,4 @@ Este texto é apenas **modelo**, não foi ratificado nem assinado. Não emitir t
 
 Após essa ratificação, o passo correto será a **auditoria final de cobertura dos 84 critérios e das dependências** e a consolidação das pendências financeiras D11, sem iniciar programação nem gastos.
 
-**Situação presente:** Gate D aberto; Gate C não autorizado; Gate H não iniciado; Gate L não autorizado.
+**Situação vigente após D15 (04/11/2026):** Gate D encerrado documentalmente; Gate C não autorizado; Gate H não iniciado; Gate L não autorizado.

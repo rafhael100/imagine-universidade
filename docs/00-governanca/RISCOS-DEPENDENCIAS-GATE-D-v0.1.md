@@ -1,7 +1,7 @@
 # Registro de riscos, dependências e decisões residuais — Gate D
 
 **Data:** 04/11/2026  
-**Estado:** **DOCUMENTO PARA REVISÃO E RATIFICAÇÃO** dos responsáveis. Não declara gates, infraestrutura ou contratos concluídos.  
+**Estado vigente:** **CLASSIFICAÇÃO E TRATAMENTO DOCUMENTAL APROVADOS em 04/11/2026** ([DEC-UNI-D14](DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md)). Os 15 riscos mantêm seus bloqueios de gate e exigências de evidência; aprovação documental não equivale a mitigação ou homologação.  
 **Convenção:** P0 = bloqueio para avançar ao gate indicado; P1 = condição de etapa posterior a acompanhar. `A` designa papel responsável segundo o P0-11, **não uma pessoa já contratada ou designada**.
 
 | ID | Risco/dependência e impacto | Gate limitante | Severidade | Papel A | Controle e evidência para encerramento |

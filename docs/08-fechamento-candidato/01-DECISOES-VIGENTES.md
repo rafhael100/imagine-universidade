@@ -31,6 +31,8 @@
 
 | GOV-24 | **P0-08 aprovado em 04/11/2026**: mídias privadas, autorização no backend, tokens temporários, aprovação editorial e Cloudflare Stream/R2 como fornecedores candidatos | [DEC-UNI-P0-08](../00-governanca/DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md). Homologação de provedores, comportamento de revogação e custos ainda pendentes |
 
+| GOV-25 | **P0-09 aprovado em 04/11/2026**: arquitetura inicial enxuta, API/banco educacional isolados do CRM, VPS específica quando necessária, backups externos e metas RPO 4h/RTO 8h | [DEC-UNI-P0-09](../00-governanca/DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md). Metas não são SLA, contratação depende de P0-10 e testes de P0-12 |
+
 ## Autoridade de estado
 Portal e sistemas comerciais: identidade, vínculos, contrato, elegibilidade. Universidade: catálogo, conteúdo, estados pedagógicos. CRM/Sites/Performance AI: ações operacionais. Motor de IA central: catálogo e governança de modelos. Suporte oficial: chamados técnicos. A ação de n8n não equivale a confirmação oficial de estado.
 

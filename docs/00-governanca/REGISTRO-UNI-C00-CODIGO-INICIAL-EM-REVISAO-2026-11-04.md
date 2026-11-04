@@ -35,7 +35,7 @@
 | Responsável técnico que executará e revisor independente/controle compensatório | **PENDENTE de identificação/aceite** |
 | Ambiente local/sandbox autorizado e possibilidade de executar testes | **PENDENTE de identificação/validação** |
 | Orçamento econômico e horas efetivas | **PENDENTE** |
-| Teto monetário de novos desembolsos por período em R$ (inclusive R$ 0 se essa for a decisão) | **PENDENTE** |
+| Teto de novas despesas de fornecedores nesta primeira etapa local C-00 | **R$ 0,00 APROVADO DOCUMENTALMENTE**, conforme [DEC-UNI-C00](DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md); não libera execução |
 | Gate C — autorização específica para programar/testar e executar | **NÃO FORMALIZADA** |
 | VPS Leaseweb e R2 de desenvolvimento | **NÃO CONTRATADOS/NÃO ATIVADOS por esta etapa** |
 | Gate H/L | **NÃO AUTORIZADOS** |

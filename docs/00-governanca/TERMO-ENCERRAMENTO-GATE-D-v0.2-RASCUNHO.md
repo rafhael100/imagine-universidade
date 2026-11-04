@@ -22,7 +22,7 @@ Proposta de termo para que a direção da Imagine, após conferência e decisão
 |---|---|
 | D01–D10 e D12: decisões-base e conferência documental | Aprovados em sua dimensão de planejamento; dependências técnicas posteriores preservadas |
 | D11: envelope financeiro da fase e critérios de autorização | **ALTERNATIVA A APROVADA**: R$ 0 em novas despesas documentais; orçamento e teto de desenvolvimento seguem para aprovação separada antes do Gate C |
-| D13: consistência da matriz de critérios | 84/84 IDs, títulos e critérios conciliados; [cruzamento temático dos 109 casos futuros](D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md) preparado, **aguardando aceite** |
+| D13: consistência da matriz de critérios | 84/84 IDs, títulos e critérios conciliados; [cruzamento temático dos 109 casos futuros](D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md) preparado, **D13 aprovado documentalmente conforme DEC-UNI-D13 de 04/11/2026; testes futuros não executados** |
 | D14: riscos, dependências e responsáveis | Registro v0.1 criado e [matriz de tratamento proposta](D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md), **aguardando aceite institucional** |
 | D15: aceite expresso de encerramento documental | **NÃO CONCEDIDO** |
 

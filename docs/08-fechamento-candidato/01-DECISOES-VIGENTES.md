@@ -20,11 +20,11 @@
 | GOV-15 | Produção com IA e homologação editorial controlada; auditoria, versões, fontes e licenças | Aprovação humana nos riscos e publicações críticas |
 | GOV-16 | Catálogo de 60 cursos (seis escolas) e ondas 12+24+24 é referência editorial, não obrigação de publicar todos no lançamento | Cursos ainda não foram produzidos |
 | GOV-17 | Operação inicial de baixo custo, candidatos Leaseweb + Cloudflare + IA sob demanda | Não é compra ou homologação de preços/fornecedores |
-| GOV-18 | **Decisão histórica** UNI-001: desenvolvimento Portal → CRM → Universidade, após conclusão de ambos | Não foi comprovada decisão explícita posterior que a revogue; planejamento em paralelo não a revoga |
-| GOV-19 | Não iniciar programação antes de finalizar planejamento e autorização expressa | GitHub não foi editado neste trabalho |
+| GOV-18 | **Decisão vigente — opção B aprovada expressamente em 03/11/2026:** desenvolvimento paralelo da Universidade é permitido após fechamento documental e autorização específica de programação | **Substitui** a obrigação histórica do UNI-001 de aguardar a conclusão integral do Portal e do CRM; não antecipa integração nem funcionalidades não homologadas. Ver [DEC-UNI-SEQ-2026-11-03](../00-governanca/DECISAO-UNI-SEQ-2026-11-03.md) |
+| GOV-19 | Não iniciar programação antes de finalizar planejamento e autorização expressa | A autorização de publicar documentação e a aprovação da opção B não autorizam desenvolver software |
 
 ## Autoridade de estado
 Portal e sistemas comerciais: identidade, vínculos, contrato, elegibilidade. Universidade: catálogo, conteúdo, estados pedagógicos. CRM/Sites/Performance AI: ações operacionais. Motor de IA central: catálogo e governança de modelos. Suporte oficial: chamados técnicos. A ação de n8n não equivale a confirmação oficial de estado.
 
 ## Decisões ainda não ratificadas
-Prazos de retenção por classe, sessão e revogação de links, esquemas finais de API, limites de orçamento, topo de infraestrutura, metas de disponibilidade e recuperação, responsáveis nominais, ordem histórica de execução e adoção da nova versão-base em substituição aos textos antigos ausentes.
+Prazos de retenção por classe, sessão e revogação de links, esquemas finais de API, limites de orçamento, topologia de infraestrutura, metas de disponibilidade e recuperação e responsáveis nominais. A opção B de sequência e a adoção funcional da versão-base v5 já foram aprovadas; isso não encerra os P0 técnicos e financeiros.

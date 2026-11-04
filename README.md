@@ -18,7 +18,8 @@
 | [Proposta consolidada de fechamento P0](docs/00-governanca/PROPOSTA-FECHAMENTO-P0-v0.1.md) | Demais parâmetros candidatos **não ratificados** (sessões, retenção, infraestrutura e orçamento); P0-02 foi resolvido pela opção B |
 | [Contrato funcional de elegibilidade P0-03](docs/00-governanca/P0-03-CONTRATO-ELEGIBILIDADE-v0.1-PROPOSTA.md) | **Matriz funcional aprovada**; protocolos ainda não homologados |
 | [Decisão de aprovação P0-03](docs/00-governanca/DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md) | Ratificação expressa do direito de acesso e das exceções |
-| [Proposta P0-04 — Sessões, tokens e revogação](docs/00-governanca/P0-04-SESSOES-TOKENS-REVOGACAO-v0.1-PROPOSTA.md) | Prazos e mecanismos técnicos **ainda não aprovados** |
+| [P0-04 — Sessões, tokens e revogação](docs/00-governanca/P0-04-SESSOES-TOKENS-REVOGACAO-v0.1-PROPOSTA.md) | **Base de projeto aprovada**, homologação técnica pendente |
+| [Decisão de aprovação P0-04](docs/00-governanca/DECISAO-UNI-P0-04-SESSOES-REVOGACAO-2026-11-03.md) | Ratificação dos limites e da distinção entre novas concessões e reprodução já autorizada |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 

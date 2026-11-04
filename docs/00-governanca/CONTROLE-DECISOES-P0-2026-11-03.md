@@ -16,7 +16,7 @@
 | P0-09 — Infraestrutura, backups e recuperação | **APROVADO como desenho inicial**: RPO 4h e RTO 8h (metas) | [Decisão P0-09](DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md) e [especificação](P0-09-INFRAESTRUTURA-BACKUP-RECUPERACAO-v0.1-PROPOSTA.md) |
 | P0-10 — Orçamento e escalabilidade | **METODOLOGIA APROVADA**; orçamento integral, tetos e despesas pendentes | [Decisão P0-10](DECISAO-UNI-P0-10-2026-11-04.md) e [análise](P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) |
 | P0-11 — Responsáveis e alçadas | **APROVADO como matriz funcional**; nomes e limites financeiros pendentes | [Decisão P0-11](DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md) e [matriz RACI](P0-11-RESPONSAVEIS-ALCADAS-RACI-v0.1-PROPOSTA.md) |
-| P0-12 — Encerramento e prontidão | **PROPOSTA publicada; ainda não aprovada**. Gates D/C/H/L separados; Gate D pendente | [Proposta P0-12](P0-12-GATES-ENCERRAMENTO-ACEITE-v0.1-PROPOSTA.md) |
+| P0-12 — Encerramento e prontidão | **METODOLOGIA APROVADA**; Gate D aberto, Gate C não autorizado, Gate H e L não iniciados/autorizados | [Decisão P0-12](DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md) e [checklist D01–D15](P0-12-GATES-ENCERRAMENTO-ACEITE-v0.1-PROPOSTA.md) |
 
 ## Nota de precedência
 

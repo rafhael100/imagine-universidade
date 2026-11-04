@@ -1,3 +1,5 @@
+> **ARQUIVO HISTÓRICO — MINUTA SUPERADA, NÃO ASSINADA.** A base v5 foi aprovada funcionalmente, e a ordem Portal → CRM → Universidade foi substituída pela opção B em 03/11/2026. **Este checklist de 2026-11-03 não representa a situação vigente.** Consulte [controle de decisões](../00-governanca/CONTROLE-DECISOES-P0-2026-11-03.md), [P0-12](../00-governanca/DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md) e [nova minuta de termo](../00-governanca/TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md). Nenhum termo foi assinado, e Gate D permanece aberto.
+
 # Termo de ratificação e encerramento documental — PROPOSTA, NÃO ASSINADA
 
 ## Escopo de aprovação futura

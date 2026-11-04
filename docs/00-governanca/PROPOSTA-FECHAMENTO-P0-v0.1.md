@@ -5,6 +5,8 @@
 **Origem:** `docs/08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md`, `docs/04-pendencias/BLOQUEIOS-P0-matriz-unificada.csv`, base v5 já aprovada funcionalmente.  
 **Objetivo:** resolver com decisões expressas os bloqueios reais de planejamento, sem abrir novos módulos e sem confundir documentação com execução de testes.
 
+> **Atualização de precedência — 03/11/2026:** o responsável **aprovou expressamente a opção B**; a obrigação histórica de concluir Portal e CRM antes de programar Universidade foi substituída. A programação paralela fica condicionada a **fechamento documental e autorização específica**, sem integração ou conteúdo técnico de produtos não homologados. Ver [DEC-UNI-SEQ-2026-11-03](DECISAO-UNI-SEQ-2026-11-03.md). **P0-02 resolvido**; as demais propostas deste documento continuam pendentes. O texto original abaixo é preservado como histórico da proposta anterior.
+
 ## Situação anterior preservada
 
 - A **versão-base v5** está aprovada como documento substitutivo prospectivo: 84 capacidades, 14 módulos; os 986 IDs antigos são **históricos**, 320 descrições recuperadas e 666 textos integrais não recuperados.

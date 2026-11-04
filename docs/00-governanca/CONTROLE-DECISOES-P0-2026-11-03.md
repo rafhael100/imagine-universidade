@@ -12,7 +12,7 @@
 | P0-05 — Privacidade e retenção | Política-base aprovada, condicionada à revisão jurídica | [Decisão](DECISAO-UNI-P0-05-2026-11-03.md) |
 | P0-06 — Integrações, APIs e eventos | **APROVADO como base técnica**; protocolos reais e homologação pendentes | [Decisão](DECISAO-UNI-P0-06-INTEGRACOES-2026-11-03.md) e [especificação](P0-06-INTEGRACOES-APIS-EVENTOS-v0.1-PROPOSTA.md) |
 | P0-07 — Tutor IA e agentes | **APROVADO como política-base de governança e segurança** | [Decisão](DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md) e [especificação](P0-07-TUTOR-IA-AGENTES-SEGURANCA-v0.1-PROPOSTA.md) |
-| P0-08 — Mídias e materiais protegidos | **PROPOSTA publicada — não aprovada** | [Especificação P0-08](P0-08-MIDIAS-MATERIAIS-PROTEGIDOS-v0.1-PROPOSTA.md) |
+| P0-08 — Mídias e materiais protegidos | **APROVADO como arquitetura-base; fornecedores ainda candidatos** | [Decisão P0-08](DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md) e [especificação](P0-08-MIDIAS-MATERIAIS-PROTEGIDOS-v0.1-PROPOSTA.md) |
 | P0-09–P0-12 | Em aberto conforme documentação | [Lista de pendências](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) |
 
 ## Nota de precedência

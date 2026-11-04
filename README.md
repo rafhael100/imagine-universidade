@@ -31,6 +31,8 @@
 | [P0-12 — Encerramento e prontidão](docs/00-governanca/DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md) | **Metodologia aprovada**; Gate D em aberto e programação não autorizada |
 | [Registro dos riscos e dependências](docs/00-governanca/RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) | Pendências para documentação, programação, piloto e lançamento |
 | [Auditoria final documental v0.3](docs/00-governanca/AUDITORIA-FINAL-DOCUMENTAL-GATE-D-v0.3-2026-11-04.md) | 84 requisitos, 109 critérios transversais futuros, inventário histórico e bloqueios D13–D15 |
+| [D13 — Cruzamento de cobertura](docs/00-governanca/D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md) | **Documento para aceite**, mapeia 109 casos futuros às áreas funcionais, sem testá-los |
+| [D14 — Classificação de riscos](docs/00-governanca/D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md) | **Proposta para ratificação**, preservando bloqueios nos Gates C/H/L |
 | [Termo de encerramento futuro (rascunho)](docs/00-governanca/TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md) | Sem aceite final; nenhum gate automaticamente liberado |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |

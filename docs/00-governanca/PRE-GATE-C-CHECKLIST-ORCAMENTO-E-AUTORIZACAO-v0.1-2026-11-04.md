@@ -6,7 +6,7 @@
 
 > **Atualização documental de 04/11/2026:** o [Bloco A — arquitetura e ambiente C-00](PRE-GATE-C-BLOCO-A-ARQUITETURA-E-AMBIENTE-C00-v0.1-2026-11-04.md) foi **APROVADO COMO BASE TÉCNICA DOCUMENTAL** em [DEC-UNI-BA](DECISAO-UNI-PRE-GATE-C-BLOCO-A-APROVADO-2026-11-04.md), incorporando a direção mais recente de VPS Leaseweb **compartilhada exclusivamente para DEV**, Laravel/PHP candidato, PostgreSQL educacional isolado, mocks e Docker Compose. Isso **não comprova capacidade do servidor** nem altera C02/C03/C04/C05/C06/C08/C09/C10 enquanto não houver ratificação, orçamento e autorização. Não houve programação, testes ou contratação.
 
-> **Bloco B elaborado para revisão (04/11/2026):** [responsáveis, esforço e opções B-L/B-V/B-M, custo econômico e teto](PRE-GATE-C-BLOCO-B-RESPONSAVEIS-ORCAMENTO-E-TETO-C00-v0.1-2026-11-04.md). **Ainda não aprovado**; sem pessoas designadas, custo real ou teto financeiro definido. **C02/C05/C06/C07 seguem abertos e Gate C não autorizado.**
+> **Bloco B elaborado para revisão (04/11/2026):** [responsáveis, esforço e opções B-L/B-V/B-M, custo econômico e teto](PRE-GATE-C-BLOCO-B-RESPONSAVEIS-ORCAMENTO-E-TETO-C00-v0.1-2026-11-04.md). **APROVADO COMO MÉTODO DOCUMENTAL** em [DEC-UNI-BB](DECISAO-UNI-PRE-GATE-C-BLOCO-B-BASE-APROVADA-BM-2026-11-04.md), com **B-M preferencial**, mas sem pessoas designadas, custo real ou teto financeiro definido. **C02/C05/C06/C07 seguem abertos**. [Bloco C — minuta Gate C](PRE-GATE-C-BLOCO-C-MINUTA-AUTORIZACAO-C00-v0.1-2026-11-04.md) foi apenas preparado, **Gate C não autorizado**.
 
 ## 1. Informações e decisões que deverão ser submetidas separadamente
 

@@ -10,11 +10,12 @@
 |---|---|
 | [Status, aprovações e limites](docs/00-governanca/STATUS-DO-PLANEJAMENTO.md) | O que está decidido e o que permanece pendente |
 | [Decisões funcionais vigentes](docs/08-fechamento-candidato/01-DECISOES-VIGENTES.md) | Regras obrigatórias da Universidade |
+| [Decisão expressa de desenvolvimento paralelo (opção B)](docs/00-governanca/DECISAO-UNI-SEQ-2026-11-03.md) | Substitui a ordem histórica e preserva o bloqueio de programação até autorização específica |
 | [Base funcional consolidada (14 módulos)](docs/08-fechamento-candidato/02-BASE-FUNCIONAL-14-MODULOS.md) | 84 capacidades da versão substitutiva aprovada |
 | [Módulos individuais](docs/10-modulos/) | UNI-01 a UNI-14 extraídos da base v5 para consulta |
 | [Contratos técnicos candidatos](docs/08-fechamento-candidato/03-CONTRATOS-TECNICOS-CANDIDATOS.md) | Acesso, eventos, IA, mídias e contingência |
 | [Decisões P0 ainda abertas](docs/08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) | O que falta aprovar para encerrar o planejamento |
-| [Proposta consolidada de fechamento P0](docs/00-governanca/PROPOSTA-FECHAMENTO-P0-v0.1.md) | Alternativas e parâmetros candidatos **não ratificados** (sessões, retenção, infraestrutura, ordem histórica e orçamento) |
+| [Proposta consolidada de fechamento P0](docs/00-governanca/PROPOSTA-FECHAMENTO-P0-v0.1.md) | Demais parâmetros candidatos **não ratificados** (sessões, retenção, infraestrutura e orçamento); P0-02 foi resolvido pela opção B |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 
@@ -28,7 +29,7 @@ A aprendizagem é **livre e voluntária, sem provas, notas, classificação acad
 
 O inventário anterior registra **986 identificadores previstos**, dos quais **320 têm descrições recuperadas de aprovações nas conversas** e **666 não tiveram os textos integrais recuperados**. Esses 986 IDs ficam preservados como histórico e referência, **não como 986 requisitos canônicos integralmente verificados**. A versão-base v5 traz **84 capacidades novas** para representar prospectivamente os 14 módulos, sem alegar equivalência literal aos textos faltantes.
 
-O documento [UNI-001 original](docs/09-fontes-historicas/UNI-001-original-imagine-crm.md) é histórico, parcialmente substituído pelas decisões posteriores. Sua diretriz original de sequência de desenvolvimento **Portal → CRM → Universidade** permanece registrada até decisão expressa em contrário.
+O documento [UNI-001 original](docs/09-fontes-historicas/UNI-001-original-imagine-crm.md) é histórico, parcialmente substituído pelas decisões posteriores. Sua diretriz original **Portal → CRM → Universidade** foi **expressamente substituída em 03/11/2026 pela opção B**: desenvolvimento paralelo condicionado ao fechamento documental e à autorização específica; o texto original é preservado apenas como histórico.
 
 ## Estrutura
 

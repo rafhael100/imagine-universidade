@@ -34,6 +34,7 @@
 | [D13 — Cobertura documental](docs/00-governanca/DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md) | **APROVADO**; 109 casos futuros relacionados aos módulos, sem testes executados |
 | [D14 — Classificação dos riscos](docs/00-governanca/DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md) | **APROVADO DOCUMENTALMENTE**; mantém os bloqueios de segurança, custo e homologação |
 | [D15 — Decisão de encerramento documental](docs/00-governanca/DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md) | **APROVADO; GATE D ENCERRADO DOCUMENTALMENTE**; Gate C e despesas não autorizados |
+| [Pré-Gate C — Checklist de orçamento e autorização](docs/00-governanca/PRE-GATE-C-CHECKLIST-ORCAMENTO-E-AUTORIZACAO-v0.1-2026-11-04.md) | **Preparação, não autorização de programação**; escopo, custos, teto e responsáveis a decidir |
 | [Termo de encerramento futuro (rascunho)](docs/00-governanca/TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md) | Sem aceite final; nenhum gate automaticamente liberado |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |

@@ -34,4 +34,6 @@ P0-06 foi aprovado como base técnica em 03/11/2026; os oito contratos lógicos 
 
 **D13 APROVADO documentalmente:** [decisão oficial](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md) e [mapa de cobertura](D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md). **D14 APROVADO DOCUMENTALMENTE:** [decisão](DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md) e [matriz de riscos](D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md). **D15 NÃO ASSINADO**, Gate D aberto e programação não autorizada.
 
+**D15 — PROPOSTA, NÃO APROVADA:** [termo de encerramento documental v1.0](D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md). D11 (alternativa A), D13 e D14 estão aprovados **em escopos documentais**. Somente a futura decisão expressa sobre D15 poderá encerrar o Gate D; isso **não autorizará** o Gate C, nem orçamento/contratação ou programação.
+
 A publicação da documentação **não autoriza programação, contratação de infraestrutura nem publicação de cursos**.

@@ -26,6 +26,8 @@ P0-05 aprovou prazos como **base de projeto**, não como parecer jurídico ou co
 
 P0-06 foi aprovado como base técnica em 03/11/2026; os oito contratos lógicos são referência de planejamento e ainda precisam ser compatibilizados com APIs oficiais e homologados antes de entrar em operação.
 
-**Auditoria inicial P0-12:** [verificação dos 84 critérios da matriz](AUDITORIA-INICIAL-P0-12-2026-11-04.md) — 84 IDs únicos, seis por módulo, testes não executados; status documental do CSV precisa de conciliação. O Gate D permanece pendente.
+**Auditoria documental atualizada:** [auditoria v0.2](AUDITORIA-DOCUMENTAL-GATE-D-v0.2.md) confirmou 84 requisitos únicos, alinhados textualmente aos 14 módulos e à base funcional. Todos seguem `APROVADO_BASE_FUNCIONAL` / `NAO_EXECUTADO`. Há [registro de riscos e dependências](RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) e [minuta de termo futuro](TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md). **Gate D continua aberto** por decisão financeira D11, revisão dos riscos e aceite formal D15. Nenhuma programação autorizada.
+
+**Auditoria inicial P0-12 (histórico):** [verificação dos 84 critérios da matriz](AUDITORIA-INICIAL-P0-12-2026-11-04.md) — 84 IDs únicos, seis por módulo, testes não executados; status documental do CSV precisa de conciliação. O Gate D permanece pendente.
 
 A publicação da documentação **não autoriza programação, contratação de infraestrutura nem publicação de cursos**.

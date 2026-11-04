@@ -1,7 +1,7 @@
 # P0-09 — Infraestrutura, isolamento, backups, recuperação e observabilidade
 
 **Data:** 04/11/2026  
-**Estado:** PROPOSTA PARA RATIFICAÇÃO — **NÃO APROVADA**, não implementada e sem contratação autorizada.  
+**Estado:** **APROVADA COMO ARQUITETURA-BASE EM 04/11/2026**, conforme [DEC-UNI-P0-09](DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md). **Não implementada, homologada nem contratada.**  
 **Objetivo:** arquitetura econômica para o estágio inicial (inclusive zero clientes), sem eliminar controles essenciais de segurança, recuperação ou privacidade.  
 **Decisões vinculantes:** desenvolvimento paralelo condicionado (opção B); P0-03 direito de acesso; P0-04 segurança de sessão; P0-05 retenção/LGPD; P0-06 contratos e eventos; P0-07 agentes/IA; P0-08 mídia protegida.  
 **Dependências:** P0-10 para preços, orçamentos e escolha de fornecedor; P0-11 para responsáveis e alçadas; P0-12 para testes e aprovação de prontidão.  
@@ -62,7 +62,7 @@ Referências oficiais sobre opções tecnológicas: [Workers Static Assets](http
 
 ## 5. Backups, objetivos e restauração
 
-**Metas candidatas de lançamento, a ratificar:**
+**Metas-base de lançamento ratificadas para o desenho, ainda não testadas:**
 - **RPO-alvo de até 4 horas** para registros educacionais estruturados; perda máxima desejada desde o último ponto recuperável.
 - **RTO-alvo de até 8 horas** para restaurar serviço educacional central em incidente grave, desde o acionamento do plano de recuperação.
 - **Retenção inicial de 30 dias** de backups rotativos educacionais, alinhada à política-base P0-05, ressalvadas obrigações legais e classes de dados específicas.
@@ -135,6 +135,6 @@ Orçar por mês com cenários de **0 / 100 / 500 / 1.000 empresas elegíveis**, 
 
 ## 10. Itens submetidos à aprovação
 
-Propõe-se ratificar a arquitetura de **lançamento sem contratação antecipada**, **VPS de produção exclusiva quando necessária**, **Cloudflare Workers + Stream/R2 candidatos**, **PostgreSQL educacional privado**, **n8n/IA central segregado**, **backup criptografado externo**, **RPO até 4h / RTO até 8h como metas iniciais sujeitas à prova**, **retenção-base de 30 dias** e **teste de restauração ao menos trimestral antes/depois da implantação conforme política final**.
+Foi ratificada a arquitetura de **lançamento sem contratação antecipada**, **VPS de produção exclusiva quando necessária**, **Cloudflare Workers + Stream/R2 candidatos**, **PostgreSQL educacional privado**, **n8n/IA central segregado**, **backup criptografado externo**, **RPO até 4h / RTO até 8h como metas iniciais sujeitas à prova**, **retenção-base de 30 dias** e **teste de restauração ao menos trimestral antes/depois da implantação conforme política final**.
 
 **A ratificação desta arquitetura-base NÃO autoriza compras, provisionamento, novos servidores, código, reconfiguração do CRM ou publicação de curso.** A cotação real, região, definição de responsabilidades e autorização de execução continuarão em P0-10/P0-11/P0-12.

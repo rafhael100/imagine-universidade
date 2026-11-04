@@ -36,4 +36,6 @@ P0-06 foi aprovado como base técnica em 03/11/2026; os oito contratos lógicos 
 
 **D15 — APROVADO:** [decisão oficial](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md) e [termo-base ratificado](D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md). **Gate D ENCERRADO quanto à documentação.** Nenhuma assinatura qualificada foi presumida, e Gate C, orçamento/teto de desenvolvimento, programação, contratação, homologação e lançamento continuam pendentes de atos separados.
 
+**Preparação do Gate C, ainda não autorizado:** [checklist de escopo, ambiente, responsáveis e orçamento/teto](PRE-GATE-C-CHECKLIST-ORCAMENTO-E-AUTORIZACAO-v0.1-2026-11-04.md). Trata-se de roteiro documental, não início de programação ou aprovação financeira.
+
 A publicação da documentação **não autoriza programação, contratação de infraestrutura nem publicação de cursos**.

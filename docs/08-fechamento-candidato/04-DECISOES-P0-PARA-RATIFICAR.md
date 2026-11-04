@@ -1,5 +1,5 @@
 # Decisões impeditivas propostas para ratificação — sem abrir novos módulos
-**Estado:** propostas em sua maioria **não aprovadas**; **P0-02 (opção B)**, **P0-03 (matriz funcional de elegibilidade)** e **P0-04 (base técnica de sessões/revogação)** foram aprovados expressamente em 03/11/2026. Visam fechar escolhas reais de planejamento sem exigir que testes de software inexistente sejam executados agora.
+**Estado vigente em 04/11/2026:** matriz de rastreabilidade originalmente candidata. As decisões P0-01 a P0-12 foram ratificadas **nos escopos especificados**, sem homologação operacional. [Alternativa A D11](../00-governanca/DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md) aprovada para R$ 0 em novas despesas documentais; orçamento/teto do desenvolvimento exigidos antes do Gate C. [Auditoria v0.3](../00-governanca/AUDITORIA-FINAL-DOCUMENTAL-GATE-D-v0.3-2026-11-04.md) indica D13–D15 ainda pendentes e **Gate D aberto**; nenhuma programação autorizada.
 
 | P0 | Proposta objetiva a ratificar | O que ainda requer trabalho técnico/externo |
 |---|---|---|

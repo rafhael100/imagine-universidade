@@ -32,4 +32,6 @@ P0-06 foi aprovado como base técnica em 03/11/2026; os oito contratos lógicos 
 
 **Auditoria inicial P0-12 (histórico):** [verificação dos 84 critérios da matriz](AUDITORIA-INICIAL-P0-12-2026-11-04.md) — 84 IDs únicos, seis por módulo, testes não executados; status documental do CSV precisa de conciliação. O Gate D permanece pendente.
 
+**D13 e D14, ainda aguardando decisão específica:** [cruzamento transversal dos 109 casos de teste](D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md) e [proposta de aceite documental dos 15 riscos](D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md). Ambas preservam o bloqueio de programação e não significam aceites já concedidos; o termo D15 continua não assinado.
+
 A publicação da documentação **não autoriza programação, contratação de infraestrutura nem publicação de cursos**.

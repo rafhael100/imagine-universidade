@@ -1,0 +1,18 @@
+﻿id,tema,diretriz,autoridade_documental_ou_historica,status,pendencia
+GOV-01,Elegibilidade exclusiva,Cliente deve manter ao menos um serviço Imagine contratado e elegível ativo; usuário precisa de vínculo e permissão,UNI-R03-DEC01 / UNI-R03-RF / R06.01–05,VIGENTE_NO_PLANEJAMENTO,CT-UNI-01 estados e revogação
+GOV-02,Sem venda independente,Universidade não comercializada avulsamente nem acessível ao público,UNI-R03-DEC01 / R04.17,VIGENTE_NO_PLANEJAMENTO,Conferir textos contraditórios
+GOV-03,Múltiplos contratos,Benefício é único; cancelar um contrato preserva acesso se outro serviço elegível seguir ativo,UNI-R03/A / R06.03,VIGENTE_NO_PLANEJAMENTO,Reconciliar contratos concorrentes
+GOV-04,Cancelamento do último serviço,"Revogar acesso efetivo à Universidade, vídeos, APIs, Tutor e demais recursos restritos",UNI-R03-DEC01 / R06.04,VIGENTE_NO_PLANEJAMENTO,Janelas de sessão e mídia a especificar
+GOV-05,Trial CRM,Teste gratuito isolado não concede Universidade sem serviço contratado elegível,UNI-R03-DEC01 / R04.16–17,VIGENTE_NO_PLANEJAMENTO,Contratos e elegibilidade
+GOV-06,Metodologia MIA,"Ensino de adultos, sete etapas adaptáveis, aplicação voluntária",UNI-02 / UNI-001 histórico / UNI-R04-N02,VIGENTE_NO_PLANEJAMENTO,Texto do UNI-02 a recuperar
+GOV-07,Sem controle acadêmico,"Sem provas, notas, reprovação, certificados ou mecanismos classificatórios",UNI-07/08 revisados / UNI-R03-RF / R08.09,VIGENTE_NO_PLANEJAMENTO,Correções UNI-001 e UNI-02..08
+GOV-08,Cursos empresariais gerais,"Acesso aos cursos gerais e de produtos para todos os clientes elegíveis, sem venda adicional",UNI-08.37–48 / UNI-R03/E,VIGENTE_NO_PLANEJAMENTO,Textos UNI-08.37–48 a recuperar
+GOV-09,Catálogo editorial,"60 cursos em seis escolas, três ondas (12+24+24), como hipótese de planejamento",UNI-R03/E / UNI-R03/D,META_PRELIMINAR,Custos e conteúdos individuais a homologar
+GOV-10,Tutor educativo,"Tutor orienta; não executa operações reais em CRM, Sites, campanhas ou contratos",UNI-05 / UNI-R03/C / R04.24,VIGENTE_NO_PLANEJAMENTO,Ferramentas e permissões pendentes
+GOV-11,Autoridade dos sistemas,Portal detém identidade e elegibilidade derivada de contratos; produtos detêm seus estados operacionais; n8n orquestra,UNI-13 / UNI-R03/C / UNI-R06,VIGENTE_NO_PLANEJAMENTO,Contratos oficiais a especificar
+GOV-12,Privacidade e isolamento,Histórico pessoal educacional distinto dos contextos empresariais; minimizar uso de dados dos produtos,UNI-R03/B / R06.16–20,VIGENTE_NO_PLANEJAMENTO,Retenção e fornecedores pendentes
+GOV-13,Retenção após término,"Cancelamento do serviço encerra acesso, não significa eliminação imediata automática de registros",UNI-R03/B / UNI-R04-N04,VIGENTE_NO_PLANEJAMENTO,Prazos específicos pendentes
+GOV-14,Disponibilidade dos tutoriais,Só ensinar funcionalidades oficialmente homologadas e disponíveis no produto,UNI-001 histórico / UNI-R03/E / R08.22,VIGENTE_NO_PLANEJAMENTO,Revisão técnica por release
+GOV-15,Arquitetura candidata,Cloudflare para interface/mídias e Leaseweb VPS candidata para aplicação; serviços centrais compartilhados,UNI-R07,HIPOTESE_NAO_HOMOLOGADA,"Cotação, banco e arquitetura física pendentes"
+GOV-16,Ordem histórica de desenvolvimento,"UNI-001 de 02/11 registra Portal → CRM → Universidade, após conclusão integral dos dois primeiros","UNI-001 seção 2 e seção 10, SHA 3138b291cf6cabca4c7f3a6dcaf47dc589d83c92",FONTE_HISTORICA_VERIFICADA,Conferir precedência e significado de conclusão; não inferir revogação
+GOV-17,Sem programação antecipada,"Somente planejamento, sem contratação, programação ou publicação de curso; autorização separada após pacote final",UNI-001 histórico / UNI-R08,VIGENTE_NO_PLANEJAMENTO,Registro final no GitHub depende de autorização

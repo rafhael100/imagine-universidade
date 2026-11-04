@@ -1,0 +1,15 @@
+﻿correcao_id,local_original,texto_original_resumido,diretriz_saneada_proposta,autoridade_posterior_a_conferir,estado
+UNI001-C01,§1 Objetivo,comprovem domínio das funcionalidades,aprendizagem útil sem comprovação acadêmica,UNI-07 revisado / UNI-R03-RF,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C02,§2 Sequência,Portal depois CRM depois Universidade,preservar como decisão histórica até verificar eventuais decisões supervenientes,UNI-001 §2 / histórico 02-11-2026,PENDENTE_PRECEDENCIA
+UNI001-C03,§3 etapa 5,Avaliação de domínio,"verificação opcional de compreensão, sem notas/provas",UNI-02 / UNI-07 revisado,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C04,§3 pendências,"pesos, notas mínimas, certificações",rejeitar notas/certificação; preservar método 7 etapas adaptado,UNI-R03-RF / UNI-R04-N02,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C05,§4 itens 8 e 11,rubrica de avaliação e evidências de aprendizagem,"reflexão e acompanhamento não classificatório, minimizado",UNI-07 revisado / UNI-R03/B,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C06,§5 Trilhas,foco Portal e CRM,"incluir Sites, Performance AI, IA/Automação e cursos gerais empresariais",UNI-08.37–48 / UNI-R03/E,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C07,§7 Exemplo A,Avaliação de lead/contato,prática facultativa com dados fictícios e feedback,UNI-R03/E / UNI-R04-N02,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C08,§7 Exemplo B,Avaliação de acompanhamento de site,"exemplo seguro, sem prova, verificar aceite explícito",UNI-R03/E / UNI-R04-N02,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C09,§8 Formatos,conquistas e certificados como possibilidades,"retirar certificação, ranking e avaliação acadêmica",UNI-07/08 revisados,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C10,§8 Tutor IA,tutor como possibilidade futura,"tutor educacional aprovado funcionalmente, sem ação operacional",UNI-05 / UNI-R03/C,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C11,§9 Governança,domínio prático como indicador,"indicadores de utilidade e dúvidas, sem vigilância invasiva",UNI-11 / UNI-R03/B,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C12,§10 Pendências,"certificação, pontuação ainda abertas",registrar decisões posteriores que vedam ambas,UNI-R03-RF / UNI-R04,CONFIRMADO_NO_ORIGINAL; CORREÇÃO_PROPOSTA
+UNI001-C13,documento inteiro,não disciplina exclusividade de acesso,serviço Imagine contratado elegível ativo e vínculo autorizado; sem acesso público/venda avulsa,UNI-R03-DEC01,OMISSÃO_ORIGINAL; INCLUSÃO_PROPOSTA
+UNI001-C14,documento inteiro,retenção pessoal e revogação não detalhadas,"separar fim do acesso da retenção, sujeita a política",UNI-R03/B,OMISSÃO_ORIGINAL; INCLUSÃO_PROPOSTA

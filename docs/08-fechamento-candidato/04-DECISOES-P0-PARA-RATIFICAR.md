@@ -1,0 +1,26 @@
+# Decisões impeditivas propostas para ratificação — sem abrir novos módulos
+**Estado:** alternativas/recomendações, **não aprovadas**. Visam fechar escolhas reais de planejamento sem exigir que testes de software inexistente sejam executados agora.
+
+| P0 | Proposta objetiva a ratificar | O que ainda requer trabalho técnico/externo |
+|---|---|---|
+| P0-01 — Fonte-base | Adotar a versão-base nova deste pacote como texto consolidado **prospectivo**, arquivando os 986 IDs antigos como histórico sem reivindicar correspondência literal; preservar decisões antigas verificadas | Revisão da base, ratificação expressa e recuperação complementar quando possível |
+| P0-02 — Ordem histórica | **Manter** Portal → CRM → Universidade como ordem de programação até decisão expressa em contrário; permitir documentar e arquitetar integração antes, sem produzir Universidade | Confirmar se o usuário deseja expressamente alterar a sequência histórica |
+| P0-03 — Elegibilidade | Conceder benefício apenas se fonte oficial confirmar serviço contratado, elegível e ativo; tolerância não suspensa mantém acesso; suspensão efetiva nega aquele serviço; múltiplos serviços dão direito único | Contratos e estados exatos no Portal; testes futuros |
+| P0-04 — Sessões/revogação | Autorizar no backend e não só no menu; emitir tokens curtos; invalidar elegibilidade diante de alteração oficial; negar novas concessões em dúvida | Fixar TTL, tempos, mecanismos de revogação e testes |
+| P0-05 — Retenção e LGPD | Separar histórico educacional, Tutor, auditoria, mídias temporárias e backups; não copiar prazos do CRM automaticamente; eliminar/anonimizar por finalidade, com canal pós-cancelamento | Definir prazos e base legal junto a responsáveis de privacidade (ainda aberto) |
+| P0-06 — Interfaces | Portal autoridade de direito; Universidade autoridade pedagógica; eventos versionados/idempotentes; n8n apenas orquestra | Schemas definitivos, retries, reconciliação e alçadas de alterações |
+| P0-07 — Tutor IA | Somente consulta e orientação, sem ferramentas operacionais; modelo/catálogo governados centralmente; conteúdo aprovado e segregação de contexto | Homologar modelos, políticas de egress, custo, prompt injection e observabilidade |
+| P0-08 — Mídias | Armazenamento privado; autorização vigente por recurso; URLs/credenciais breves, revogação, sem prometer anticópia absoluta | Homologar provedor e tempos/limites |
+| P0-09 — Infraestrutura | Aplicação e banco logicamente separados de CRM; VPS Leaseweb e Cloudflare como candidatos, sem compra antecipada; backup externo e monitoramento | Escolha técnica, região, SLA, RPO, RTO e custos |
+| P0-10 — Orçamento | Lançamento enxuto com primeira onda de 12 cursos condicionais; custos fixos e variáveis separados; nenhuma despesa sem aprovação | Cotações reais de compute, pessoal, conteúdo, IA, vídeos, tributos e suporte |
+| P0-11 — Responsáveis | Nomear alçadas institucionais por papel (produto, pedagogia, segurança, privacidade, financeiro e aprovação final) antes do piloto | Titulares/substitutos reais e matriz RACI nominal |
+| P0-12 — Prontidão | Encerrar planejamento somente após textos ratificados, decisões críticas fechadas e critérios de teste documentados; programação exige autorização distinta | Registro formal de ratificação, verificação dos artefatos e plano de testes |
+
+## Decisões específicas ainda não tomadas
+- Política numérica de retenção: prazos não podem ser estimados sem finalidade e obrigações aplicáveis.
+- Janela máxima de revogação de mídia/sessões: precisa de compromisso técnico ratificado.
+- Região e provedor de banco/dados e transferências internacionais: precisam de homologação de segurança e privacidade.
+- Meta de recuperação/backup e orçamento de produção de cursos: precisa de validação financeira.
+- **Sequência histórica** de programação da Universidade: a decisão do UNI-001 continua registrada até revogação explícita.
+
+**Não confundir:** teste de implantação futuro NÃO é impedimento para finalizar o desenho técnico, mas a ausência de definição do comportamento aceito É impedimento documental.

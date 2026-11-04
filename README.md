@@ -2,7 +2,7 @@
 
 > **Repositório privado de documentação.** Não contém implementação da plataforma, vídeos publicados, contratos de fornecedores ou homologação de ambiente.
 
-**Situação em 03/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. O planejamento **não está encerrado tecnicamente**: as decisões P0 e o orçamento de implantação permanecem para ratificação, e a programação não foi autorizada.
+**Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. O planejamento **não está encerrado tecnicamente**: as decisões P0 e o orçamento de implantação permanecem para ratificação, e a programação não foi autorizada.
 
 ## Por onde começar
 
@@ -20,7 +20,7 @@
 | [Decisão de aprovação P0-03](docs/00-governanca/DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md) | Ratificação expressa do direito de acesso e das exceções |
 | [P0-04 — Sessões, tokens e revogação](docs/00-governanca/P0-04-SESSOES-TOKENS-REVOGACAO-v0.1-PROPOSTA.md) | **Base de projeto aprovada**, homologação técnica pendente |
 | [Decisão de aprovação P0-04](docs/00-governanca/DECISAO-UNI-P0-04-SESSOES-REVOGACAO-2026-11-03.md) | Ratificação dos limites e da distinção entre novas concessões e reprodução já autorizada |
-| [Proposta P0-05 — Privacidade, LGPD e retenção](docs/00-governanca/P0-05-PRIVACIDADE-LGPD-RETENCAO-v0.1-PROPOSTA.md) | Matriz de categorias e prazos **ainda pendente de ratificação jurídica e funcional** |
+| [P0-05 — Política-base de privacidade](docs/00-governanca/DECISAO-UNI-P0-05-2026-11-03.md) | Política-base **aprovada**, dependente de revisão jurídica e homologação dos fornecedores |
 | [Decisão P0-07 — Tutor IA e segurança](docs/00-governanca/DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md) | Política-base ratificada, homologação posterior |
 | [P0-08 — Mídias protegidas](docs/00-governanca/DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md) | **Arquitetura-base aprovada**; fornecedores candidatos sem contrato |
 | [P0-09 — Infraestrutura e recuperação](docs/00-governanca/DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md) | **Arquitetura-base aprovada**, sem implantação nem homologação |
@@ -28,6 +28,9 @@
 | [Cenários e referências de preços](docs/00-governanca/P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) | Simulações, não cotação ou teto autorizado |
 | [Decisão P0-11 — Governança](docs/00-governanca/DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md) | **Matriz aprovada**; responsáveis nominais pendentes |
 | [P0-12 — Encerramento e prontidão](docs/00-governanca/DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md) | **Metodologia aprovada**; Gate D em aberto e programação não autorizada |
+| [Registro dos riscos e dependências](docs/00-governanca/RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) | Pendências para documentação, programação, piloto e lançamento |
+| [Conferência documental e status](docs/00-governanca/AUDITORIA-DOCUMENTAL-GATE-D-v0.2.md) | Conciliação de 84 requisitos; testes ainda não executados |
+| [Termo de encerramento futuro (rascunho)](docs/00-governanca/TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md) | Sem aceite final; nenhum gate automaticamente liberado |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 

@@ -1,5 +1,5 @@
 # Roteiro de implementação futura — sem autorização de programação
-## Gate D — Encerramento do planejamento (AINDA NÃO ATINGIDO)
+## Gate D — Encerramento documental (**CONCLUÍDO EM 04/11/2026**, exclusivamente documental — [D15](../00-governanca/DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md))
 Critérios: pacote-base ratificado, 12 P0 resolvidos em sua dimensão decisória, contratos e comportamentos esperados definidos, custos estimados e aprovados, sequência histórica esclarecida, artefatos versionados no repositório autorizado.
 
 ## Gate C — Autorização de programação (AINDA NÃO CONCEDIDA)

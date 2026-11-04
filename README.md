@@ -4,6 +4,8 @@
 
 **Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. **O Gate D foi encerrado documentalmente em 04/11/2026 por aprovação expressa do D15**; orçamento/teto do desenvolvimento, contratações e programação **não foram autorizados**.
 
+**Backup externo de desenvolvimento (04/11/2026):** o destino principal **Cloudflare R2 Standard com jurisdição UE** foi [ratificado apenas arquiteturalmente](https://github.com/rafhael100/imagine-portal/blob/main/docs/infraestrutura/DEC-INF-DEV-02-DESTINO-R2-EU-APROVADO-2026-11-04.md). Não substitui backups próprios previstos para produção da Universidade; nenhuma configuração, compra ou abertura do Gate C foi aprovada.
+
 **Nova diretriz de desenvolvimento compartilhado (04/11/2026):** [Leaseweb escolhida em princípio para VPS central de desenvolvimento da Imagine](https://github.com/rafhael100/imagine-portal/blob/main/docs/infraestrutura/INF-DEV-01-VPS-CENTRAL-LEASEWEB-2026-11-04.md). A recomendação atual é VPS 3 (8 vCPU, 24 GB RAM, 300 GB NVMe), **pendente de contrato, preço, disponibilidade e autorização financeira**. A escolha não altera o bloqueio do Gate C da Universidade.
 
 ## Por onde começar

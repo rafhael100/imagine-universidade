@@ -1,7 +1,7 @@
 # D14 — Proposta de aceite documental de riscos e dependências
 
 **Data:** 04/11/2026
-**Estado:** **PROPOSTA NÃO APROVADA — ACEITE DO RESPONSÁVEL PENDENTE**
+**Estado vigente:** **D14 APROVADO DOCUMENTALMENTE EM 04/11/2026** conforme [DEC-UNI-D14](DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md). A classificação foi ratificada; os riscos continuam condicionados à mitigação em seus gates. Gate D segue aberto até D15.
 **Base:** [registro de 15 riscos e dependências](RISCOS-DEPENDENCIAS-GATE-D-v0.1.md), [auditoria final v0.3](AUDITORIA-FINAL-DOCUMENTAL-GATE-D-v0.3-2026-11-04.md), [alternativa financeira A](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md), P0-11 e P0-12.
 
 ## 1. O que significa aceitar D14
@@ -44,4 +44,4 @@ Se ratificada, esta matriz permite considerar **documentalmente tratados e class
 
 **Proposta para futura ratificação expressa:** aceitar a **classificação e o tratamento documental** de RD-01 a RD-15 conforme esta matriz, preservando os bloqueios dos Gates C/H/L e sem aceitar riscos inaceitáveis como resolvidos.
 
-**Estado atual:** D13 **APROVADO DOCUMENTALMENTE**; D14 **PENDENTE** de ratificação; D15 **NÃO ASSINADO**. Gate D aberto; Gate C não autorizado; Gate H e L não iniciados/autorizados; nenhuma nova despesa autorizada.
+**Estado atual:** D13 e D14 **APROVADOS DOCUMENTALMENTE**; D15 **NÃO ASSINADO**. Gate D aberto; Gate C não autorizado; Gate H e L não iniciados/autorizados; nenhuma nova despesa autorizada.

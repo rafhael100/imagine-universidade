@@ -2,7 +2,7 @@
 
 > **Repositório privado de documentação.** Não contém implementação da plataforma, vídeos publicados, contratos de fornecedores ou homologação de ambiente.
 
-**Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. O planejamento **não está encerrado tecnicamente**: as decisões P0 e o orçamento de implantação permanecem para ratificação, e a programação não foi autorizada.
+**Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. O **Gate D segue aberto (D13/D14/D15)**; orçamento/teto do desenvolvimento e programação **não foram autorizados**.
 
 ## Por onde começar
 
@@ -25,11 +25,12 @@
 | [P0-08 — Mídias protegidas](docs/00-governanca/DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md) | **Arquitetura-base aprovada**; fornecedores candidatos sem contrato |
 | [P0-09 — Infraestrutura e recuperação](docs/00-governanca/DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md) | **Arquitetura-base aprovada**, sem implantação nem homologação |
 | [P0-10 — Metodologia orçamentária](docs/00-governanca/DECISAO-UNI-P0-10-2026-11-04.md) | **Metodologia aprovada**; orçamento integral e compras ainda não aprovados |
+| [Alternativa A — decisão D11](docs/00-governanca/DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md) | **R$ 0 em novas despesas documentais**; orçamento de programação sujeito à aprovação separada |
 | [Cenários e referências de preços](docs/00-governanca/P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) | Simulações, não cotação ou teto autorizado |
 | [Decisão P0-11 — Governança](docs/00-governanca/DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md) | **Matriz aprovada**; responsáveis nominais pendentes |
 | [P0-12 — Encerramento e prontidão](docs/00-governanca/DECISAO-UNI-P0-12-METODOLOGIA-GATES-2026-11-04.md) | **Metodologia aprovada**; Gate D em aberto e programação não autorizada |
 | [Registro dos riscos e dependências](docs/00-governanca/RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) | Pendências para documentação, programação, piloto e lançamento |
-| [Conferência documental e status](docs/00-governanca/AUDITORIA-DOCUMENTAL-GATE-D-v0.2.md) | Conciliação de 84 requisitos; testes ainda não executados |
+| [Auditoria final documental v0.3](docs/00-governanca/AUDITORIA-FINAL-DOCUMENTAL-GATE-D-v0.3-2026-11-04.md) | 84 requisitos, 109 critérios transversais futuros, inventário histórico e bloqueios D13–D15 |
 | [Termo de encerramento futuro (rascunho)](docs/00-governanca/TERMO-ENCERRAMENTO-GATE-D-v0.2-RASCUNHO.md) | Sem aceite final; nenhum gate automaticamente liberado |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |

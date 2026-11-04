@@ -9,6 +9,8 @@
 
 > **Decisão de infraestrutura posterior (04/11/2026):** a direção escolheu **em princípio uma nova VPS Leaseweb compartilhada entre os ambientes de desenvolvimento Imagine** ([INF-DEV-01](https://github.com/rafhael100/imagine-portal/blob/main/docs/infraestrutura/INF-DEV-01-VPS-CENTRAL-LEASEWEB-2026-11-04.md)). O plano VPS 3 de 8 vCPU/24 GB/300 GB NVMe é **recomendado, não aprovado ou contratado**. As linhas de custo A0/A1 de reutilização ficam registradas como comparativos anteriores, não como estratégia escolhida. Após confirmar o checkout, atualizar o orçamento da VPS central com **rateio entre projetos** e seu custo incremental real. **Gate C ainda não autorizado.**
 
+> **Bloco B Pré-Gate C preparado (04/11/2026):** [proposta de responsáveis, orçamento integral e modalidades B-L (local), B-V (VPS) ou B-M (gradual)](PRE-GATE-C-BLOCO-B-RESPONSAVEIS-ORCAMENTO-E-TETO-C00-v0.1-2026-11-04.md), **ainda não ratificada**. O Bloco A foi [aprovado documentalmente](DECISAO-UNI-PRE-GATE-C-BLOCO-A-APROVADO-2026-11-04.md), mas os números de esforço abaixo continuam hipóteses, sem custo/teto nem Gate C autorizado.
+
 ## 1. Estimativa de esforço não vinculante
 
 Para tornar o futuro orçamento calculável, estimar um **intervalo inicial puramente técnico** para seis entregáveis de C-00. **Não é medição de produtividade, proposta de fornecedor, prazo ou preço fechado**. Deverá ser revisado após escolher stack, ambiente, equipe, escopo exato e eventual uso assistido de IA.

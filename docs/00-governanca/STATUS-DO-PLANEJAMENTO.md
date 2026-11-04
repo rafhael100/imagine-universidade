@@ -8,6 +8,7 @@
 - Revisões UNI-R01 a UNI-R08: aprovadas funcionalmente, com propostas de políticas e contratos; critérios de teste ainda não executados.
 - O responsável **aprovou expressamente a utilização da versão-base substitutiva v5** para substituir documentalmente as especificações antigas não recuperadas. Esta adoção NÃO confirma que os textos históricos faltantes foram restaurados, nem ratifica todas as propostas P0 técnicas, financeiras e jurídicas.
 - A nova base v5 contém **84 capacidades**, organizadas em 14 módulos e documentadas com critérios de aceite candidatos.
+- **P0-03 aprovado funcionalmente em 03/11/2026**: matriz de elegibilidade, continuidade em múltiplos serviços, suspensão efetiva, trial sem direito, vínculo autorizado e falta de fonte oficial. [Decisão](DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md). Protocolos e tempos de revogação continuam em P0-04/P0-06.
 - O histórico preserva **986 IDs previstos**, dos quais **320 descrições foram recuperadas** de mensagens aprovadas e **666 não tiveram seus textos individuais recuperados**. Os IDs não equivalem a 986 funcionalidades independentes.
 
 ## Decisões vinculantes

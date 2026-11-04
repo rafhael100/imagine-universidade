@@ -1,10 +1,10 @@
 # Decisões impeditivas propostas para ratificação — sem abrir novos módulos
-**Estado:** alternativas/recomendações, **não aprovadas**. Visam fechar escolhas reais de planejamento sem exigir que testes de software inexistente sejam executados agora.
+**Estado:** propostas em sua maioria **não aprovadas**; a decisão **P0-02 (opção B)** foi aprovada expressamente em 03/11/2026. Visam fechar escolhas reais de planejamento sem exigir que testes de software inexistente sejam executados agora.
 
 | P0 | Proposta objetiva a ratificar | O que ainda requer trabalho técnico/externo |
 |---|---|---|
 | P0-01 — Fonte-base | Adotar a versão-base nova deste pacote como texto consolidado **prospectivo**, arquivando os 986 IDs antigos como histórico sem reivindicar correspondência literal; preservar decisões antigas verificadas | Revisão da base, ratificação expressa e recuperação complementar quando possível |
-| P0-02 — Ordem histórica | **Manter** Portal → CRM → Universidade como ordem de programação até decisão expressa em contrário; permitir documentar e arquitetar integração antes, sem produzir Universidade | Confirmar se o usuário deseja expressamente alterar a sequência histórica |
+| P0-02 — Ordem histórica | **RESOLVIDO: opção B expressamente aprovada em 03/11/2026**. A Universidade pode ser desenvolvida em paralelo após fechamento documental e autorização específica de programação | A regra original foi substituída; manter separação dos sistemas e não antecipar funcionalidades ou integrações não homologadas. [Decisão](../00-governanca/DECISAO-UNI-SEQ-2026-11-03.md) |
 | P0-03 — Elegibilidade | Conceder benefício apenas se fonte oficial confirmar serviço contratado, elegível e ativo; tolerância não suspensa mantém acesso; suspensão efetiva nega aquele serviço; múltiplos serviços dão direito único | Contratos e estados exatos no Portal; testes futuros |
 | P0-04 — Sessões/revogação | Autorizar no backend e não só no menu; emitir tokens curtos; invalidar elegibilidade diante de alteração oficial; negar novas concessões em dúvida | Fixar TTL, tempos, mecanismos de revogação e testes |
 | P0-05 — Retenção e LGPD | Separar histórico educacional, Tutor, auditoria, mídias temporárias e backups; não copiar prazos do CRM automaticamente; eliminar/anonimizar por finalidade, com canal pós-cancelamento | Definir prazos e base legal junto a responsáveis de privacidade (ainda aberto) |
@@ -21,6 +21,6 @@
 - Janela máxima de revogação de mídia/sessões: precisa de compromisso técnico ratificado.
 - Região e provedor de banco/dados e transferências internacionais: precisam de homologação de segurança e privacidade.
 - Meta de recuperação/backup e orçamento de produção de cursos: precisa de validação financeira.
-- **Sequência histórica** de programação da Universidade: a decisão do UNI-001 continua registrada até revogação explícita.
+- **Sequência de programação:** decisão **resolvida em 03/11/2026 (opção B)**; o UNI-001 continua preservado apenas como fonte histórica. A autorização de programação permanece **pendente e separada**.
 
 **Não confundir:** teste de implantação futuro NÃO é impedimento para finalizar o desenho técnico, mas a ausência de definição do comportamento aceito É impedimento documental.

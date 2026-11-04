@@ -22,7 +22,8 @@
 | [Decisão de aprovação P0-04](docs/00-governanca/DECISAO-UNI-P0-04-SESSOES-REVOGACAO-2026-11-03.md) | Ratificação dos limites e da distinção entre novas concessões e reprodução já autorizada |
 | [Proposta P0-05 — Privacidade, LGPD e retenção](docs/00-governanca/P0-05-PRIVACIDADE-LGPD-RETENCAO-v0.1-PROPOSTA.md) | Matriz de categorias e prazos **ainda pendente de ratificação jurídica e funcional** |
 | [Decisão P0-07 — Tutor IA e segurança](docs/00-governanca/DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md) | Política-base ratificada, homologação posterior |
-| [Proposta P0-08 — Mídias e materiais protegidos](docs/00-governanca/P0-08-MIDIAS-MATERIAIS-PROTEGIDOS-v0.1-PROPOSTA.md) | Arquitetura candidata, não aprovada nem contratada |
+| [P0-08 — Mídias protegidas](docs/00-governanca/DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md) | **Arquitetura-base aprovada**; fornecedores candidatos sem contrato |
+| [Proposta P0-09 — Infraestrutura e recuperação](docs/00-governanca/P0-09-INFRAESTRUTURA-BACKUP-RECUPERACAO-v0.1-PROPOSTA.md) | Arquitetura enxuta, VPS condicionada, RPO/RTO e backups **a ratificar** |
 | [Catálogo editorial de 60 cursos](docs/03-rastreabilidade/catalogo-editorial-60-cursos-propostos.csv) | Meta curricular, **não cursos já produzidos** |
 | [Inventário histórico de 986 IDs](docs/03-rastreabilidade/inventario-986-identificadores-previstos.csv) | Proveniência e lacunas; **não** equivale à conferência original |
 

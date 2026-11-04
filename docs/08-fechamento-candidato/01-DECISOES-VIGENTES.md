@@ -25,6 +25,8 @@
 | GOV-20 | **P0-03 aprovado em 03/11/2026**: matriz funcional de elegibilidade, estados oficiais, múltiplos contratos, tolerância ativa, suspensão/cancelamento e vínculo autorizador | [DEC-UNI-P0-03](../00-governanca/DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md). Mapeamento de estados e APIs em P0-06 |
 | GOV-21 | **P0-04 aprovado em 03/11/2026 como base técnica**: sessão inativa 30 min, absoluta 8 h, API 15 min, cache 60 s, propagação alvo 60 s, acesso mídia temporário e escopos protegidos | [DEC-UNI-P0-04](../00-governanca/DECISAO-UNI-P0-04-SESSOES-REVOGACAO-2026-11-03.md). Homologação futura; não confundir novas concessões com revogação instantânea de reprodução emitida |
 
+| GOV-22 | **P0-05 aprovado em 03/11/2026 como política-base:** prazos iniciais por classe; conversas privadas; canal pós-cancelamento; retenção distinta do acesso | [DEC-UNI-P0-05](../00-governanca/DECISAO-UNI-P0-05-2026-11-03.md). Revisão jurídica, fornecedores e bases legais permanecem condicionantes |
+
 ## Autoridade de estado
 Portal e sistemas comerciais: identidade, vínculos, contrato, elegibilidade. Universidade: catálogo, conteúdo, estados pedagógicos. CRM/Sites/Performance AI: ações operacionais. Motor de IA central: catálogo e governança de modelos. Suporte oficial: chamados técnicos. A ação de n8n não equivale a confirmação oficial de estado.
 

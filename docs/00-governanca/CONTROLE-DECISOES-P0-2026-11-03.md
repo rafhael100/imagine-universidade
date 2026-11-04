@@ -26,4 +26,6 @@ P0-05 aprovou prazos como **base de projeto**, não como parecer jurídico ou co
 
 P0-06 foi aprovado como base técnica em 03/11/2026; os oito contratos lógicos são referência de planejamento e ainda precisam ser compatibilizados com APIs oficiais e homologados antes de entrar em operação.
 
+**Auditoria inicial P0-12:** [verificação dos 84 critérios da matriz](AUDITORIA-INICIAL-P0-12-2026-11-04.md) — 84 IDs únicos, seis por módulo, testes não executados; status documental do CSV precisa de conciliação. O Gate D permanece pendente.
+
 A publicação da documentação **não autoriza programação, contratação de infraestrutura nem publicação de cursos**.

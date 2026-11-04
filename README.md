@@ -14,7 +14,9 @@
 
 **Nova diretriz de desenvolvimento compartilhado (04/11/2026):** [Leaseweb escolhida em princípio para VPS central de desenvolvimento da Imagine](https://github.com/rafhael100/imagine-portal/blob/main/docs/infraestrutura/INF-DEV-01-VPS-CENTRAL-LEASEWEB-2026-11-04.md). A recomendação atual é VPS 3 (8 vCPU, 24 GB RAM, 300 GB NVMe), **pendente de contrato, preço, disponibilidade e autorização financeira**. A escolha não altera o bloqueio do Gate C da Universidade.
 
-**Bloco A do Pré-Gate C (04/11/2026):** [proposta de arquitetura e ambiente C-00 na VPS Leaseweb compartilhada](docs/00-governanca/PRE-GATE-C-BLOCO-A-ARQUITETURA-E-AMBIENTE-C00-v0.1-2026-11-04.md), com Laravel/PHP como backend **proposto**, PostgreSQL isolado, mocks de identidade/elegibilidade, Docker Compose e cópias de desenvolvimento R2 EU. **Bloco A preparado para aprovação, não ratificado; Bloco B orçamento/equipe e Bloco C termo Gate C ainda pendentes. Não autoriza programação ou contratação.**
+**Bloco B do Pré-Gate C (04/11/2026):** [proposta documental sobre responsáveis, esforço, custo e orçamento C-00](docs/00-governanca/PRE-GATE-C-BLOCO-B-RESPONSAVEIS-ORCAMENTO-E-TETO-C00-v0.1-2026-11-04.md), inclui alternativas de código local, VPS compartilhada ou sequência gradual, com **estimativas não vinculantes e sem teto aprovado**. **Ainda não ratificado; Gate C permanece fechado.**
+
+**Bloco A do Pré-Gate C (04/11/2026):** [proposta de arquitetura e ambiente C-00 na VPS Leaseweb compartilhada](docs/00-governanca/PRE-GATE-C-BLOCO-A-ARQUITETURA-E-AMBIENTE-C00-v0.1-2026-11-04.md), com Laravel/PHP como backend **proposto**, PostgreSQL isolado, mocks de identidade/elegibilidade, Docker Compose e cópias de desenvolvimento R2 EU. **Bloco A APROVADO como base técnica documental** por [DEC-UNI-BA](docs/00-governanca/DECISAO-UNI-PRE-GATE-C-BLOCO-A-APROVADO-2026-11-04.md); Laravel/PHP, PostgreSQL, Compose e mocks definidos como diretrizes, com versões e capacidade a validar. **Bloco B orçamento/equipe proposto, Bloco C termo Gate C pendente. Não autoriza programação ou contratação.**
 
 ## Por onde começar
 

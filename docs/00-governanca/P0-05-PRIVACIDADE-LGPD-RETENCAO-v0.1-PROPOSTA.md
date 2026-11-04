@@ -1,6 +1,6 @@
 # P0-05 — Privacidade, LGPD, direitos dos titulares e retenção (v0.1)
 
-**Estado:** PROPOSTA PARA RATIFICAÇÃO, NÃO APROVADA.  
+**Estado vigente:** **POLÍTICA-BASE APROVADA EM 03/11/2026**, conforme [decisão P0-05](DECISAO-UNI-P0-05-2026-11-03.md). Revisão jurídica, bases legais, fornecedores e conformidade operacional continuam pendentes; nenhum tratamento real ou programação autorizado.  
 **Data:** 03/11/2026.  
 **Projeto:** Universidade Imagine, benefício educacional exclusivo para clientes com serviços Imagine elegíveis ativos e usuários vinculados.  
 **Decisões prévias vinculantes:** GOV-01–13, P0-03 (elegibilidade), P0-04 (sessões/revogação); não vender cursos separadamente, não dar acesso público, não permitir ao gestor acessar automaticamente conversas pessoais do Tutor IA.  

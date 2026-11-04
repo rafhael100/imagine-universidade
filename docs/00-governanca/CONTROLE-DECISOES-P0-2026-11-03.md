@@ -11,7 +11,7 @@
 | P0-04 — Sessões e revogação | Parâmetros-base aprovados, homologação futura | [Decisão](DECISAO-UNI-P0-04-SESSOES-REVOGACAO-2026-11-03.md) |
 | P0-05 — Privacidade e retenção | Política-base aprovada, condicionada à revisão jurídica | [Decisão](DECISAO-UNI-P0-05-2026-11-03.md) |
 | P0-06 — Integrações, APIs e eventos | **APROVADO como base técnica**; protocolos reais e homologação pendentes | [Decisão](DECISAO-UNI-P0-06-INTEGRACOES-2026-11-03.md) e [especificação](P0-06-INTEGRACOES-APIS-EVENTOS-v0.1-PROPOSTA.md) |
-| P0-07 — Tutor IA e agentes | **Em preparação para ratificação** | [Lista de pendências](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) |
+| P0-07 — Tutor IA e agentes | **APROVADO como política-base de governança e segurança** | [Decisão](DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md) e [especificação](P0-07-TUTOR-IA-AGENTES-SEGURANCA-v0.1-PROPOSTA.md) |
 | P0-08–P0-12 | Em aberto conforme sua documentação | [Lista de pendências](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) |
 
 ## Nota de precedência

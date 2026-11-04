@@ -1,7 +1,7 @@
 # Termo de encerramento documental — Universidade Imagine, v0.2
 
 **Data da minuta:** 04/11/2026  
-**Status:** **RASCUNHO PARA REVISÃO — NÃO APROVADO, NÃO ASSINADO**.  
+**Status:** **MINUTA v0.2 HISTÓRICA — NÃO APROVADA, NÃO ASSINADA**. A [proposta v1.0 de D15](D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md) foi publicada para aprovação expressa futura; ela também não foi assinada.  
 **Não é autorização de programação, contratação, implantação, acesso a dados reais ou lançamento.**
 
 ## 1. Objeto

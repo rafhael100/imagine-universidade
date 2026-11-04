@@ -27,6 +27,8 @@
 
 | GOV-22 | **P0-05 aprovado em 03/11/2026 como política-base:** prazos iniciais por classe; conversas privadas; canal pós-cancelamento; retenção distinta do acesso | [DEC-UNI-P0-05](../00-governanca/DECISAO-UNI-P0-05-2026-11-03.md). Revisão jurídica, fornecedores e bases legais permanecem condicionantes |
 
+| GOV-23 | **P0-07 aprovado em 04/11/2026:** Tutor estritamente educacional sem ferramentas operacionais, agentes editoriais supervisionados, fontes homologadas, proteção de dados, controles de consumo e isolamento entre empresas | [DEC-UNI-P0-07](../00-governanca/DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md). Modelos, custos e testes de segurança requerem homologação posterior |
+
 ## Autoridade de estado
 Portal e sistemas comerciais: identidade, vínculos, contrato, elegibilidade. Universidade: catálogo, conteúdo, estados pedagógicos. CRM/Sites/Performance AI: ações operacionais. Motor de IA central: catálogo e governança de modelos. Suporte oficial: chamados técnicos. A ação de n8n não equivale a confirmação oficial de estado.
 

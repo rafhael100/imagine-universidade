@@ -7,6 +7,8 @@
 
 > **Atualização de precedência — 03/11/2026:** o responsável **aprovou expressamente a opção B**; a obrigação histórica de concluir Portal e CRM antes de programar Universidade foi substituída. A programação paralela fica condicionada a **fechamento documental e autorização específica**, sem integração ou conteúdo técnico de produtos não homologados. Ver [DEC-UNI-SEQ-2026-11-03](DECISAO-UNI-SEQ-2026-11-03.md). **P0-02 resolvido**; as demais propostas deste documento continuam pendentes. O texto original abaixo é preservado como histórico da proposta anterior.
 
+> **Atualização de 03/11/2026 — P0-03:** o responsável ratificou **a matriz funcional** da elegibilidade (não a API nem os TTL). [Decisão P0-03](DECISAO-UNI-P0-03-ELEGIBILIDADE-2026-11-03.md). As antigas expressões “proposta” abaixo descrevem o estado histórico da v0.1.
+
 ## Situação anterior preservada
 
 - A **versão-base v5** está aprovada como documento substitutivo prospectivo: 84 capacidades, 14 módulos; os 986 IDs antigos são **históricos**, 320 descrições recuperadas e 666 textos integrais não recuperados.

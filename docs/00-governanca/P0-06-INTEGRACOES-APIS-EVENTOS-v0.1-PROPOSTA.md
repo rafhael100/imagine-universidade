@@ -1,6 +1,6 @@
 # P0-06 — Contratos de integração, identidade, APIs e eventos (v0.1)
 
-**Estado:** PROPOSTA PARA RATIFICAÇÃO — **NÃO APROVADA**, não implementada nem homologada.  
+**Estado vigente:** **DESENHO-BASE APROVADO EM 03/11/2026**, conforme [decisão P0-06](DECISAO-UNI-P0-06-INTEGRACOES-2026-11-03.md). Interfaces e provedores reais não foram implementados nem homologados; integração depende dos sistemas oficiais e autorização de programação separada.  
 **Data:** 03/11/2026.  
 **Autoridade e dependências:** decisões funcionais P0-03 (elegibilidade), base técnica P0-04 (sessões/revogação) e política-base P0-05 (privacidade); contratos e estados oficiais existentes do Portal/CRM prevalecem.  
 **Escopo:** interfaces lógicas entre Universidade, Portal/identidade, comercial, serviços compartilhados e mídia. Não cria endpoints, credenciais ou eventos reais em produção.

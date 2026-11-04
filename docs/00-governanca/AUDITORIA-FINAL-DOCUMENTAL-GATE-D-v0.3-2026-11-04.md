@@ -73,7 +73,7 @@ O registro [riscos e dependências](RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) foi atua
 | D12 | **RACI funcional aprovado** | Nomear responsáveis antes do piloto |
 | D13 | **APROVADO DOCUMENTALMENTE** ([decisão](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md)): 84 capacidades conferidas e 109 casos transversais mapeados por família | Rastreabilidade caso a caso e execução dos testes serão obrigatórias no Gate H; nenhuma execução presumida |
 | D14 | **APROVADO DOCUMENTALMENTE** ([decisão](DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md)) — classificação de 15 riscos e dependências | Os bloqueios dos Gates C/H/L permanecem e exigirão evidências futuras |
-| D15 | **Minuta preparada** | **Termo final de Gate D ainda não aprovado nem assinado** |
+| D15 | **Termo final v1.0 publicado para decisão** ([proposta](D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md)) | **Gate D ainda não aprovado nem encerrado**; autorização de programação exige Gate C separado |
 
 ## 5. Bloqueios atuais de encerramento
 

@@ -43,6 +43,8 @@ Não autorizar por esta fase integração de produção com Portal/CRM, Tutor IA
 
 A VPS Leaseweb compartilhada de desenvolvimento escolhida em princípio pela Imagine não é necessária para o ato de **programar localmente** se o ambiente local for validado. **A migração do C-00 para a VPS, o provisionamento, a instalação e os backups R2 exigirão aprovações operacionais e financeiras separadas**, mantendo as políticas aprovadas INF-DEV-01 a INF-DEV-06 da arquitetura transversal. Não pressupor que a preferência B-M equivale a liberação de custos.
 
+> **Atualização 04/11/2026:** o solicitante indicou **a si próprio** para a revisão técnica e de segurança ([DEC-UNI-C00-REVISAO](DECISAO-UNI-C00-RESPONSAVEL-REVISAO-2026-11-04.md)). Isso não identifica o executor, não demonstra independência quando o revisor também for autor e não abre o Gate C.
+
 ## 3. Responsáveis e segregação de funções (a preencher)
 
 | Função decisória ou operacional | Titular | Revisor/substituto | Estado |
@@ -50,7 +52,7 @@ A VPS Leaseweb compartilhada de desenvolvimento escolhida em princípio pela Ima
 | Direção e autorização Gate C | **PENDENTE DE IDENTIFICAÇÃO DOCUMENTAL** | A definir | Não formalizado neste termo |
 | Responsável técnico/engenharia | **PENDENTE** | **PENDENTE** | Sem atribuição |
 | Produto/aceite funcional | **PENDENTE** | A definir | Sem atribuição |
-| Segurança/revisão de riscos | **PENDENTE** | Independência/controle compensatório a documentar | Sem atribuição |
+| Segurança/revisão de riscos | **Próprio solicitante / direção Imagine**, conforme [DEC-UNI-C00-REVISAO](DECISAO-UNI-C00-RESPONSAVEL-REVISAO-2026-11-04.md) | Confirmar identidade formal e independência de autoria; se houver auto-revisão, segundo humano ou controle compensatório aprovado | **Titular indicado; revisão não realizada** |
 | Financeiro/teto e exceções | **PENDENTE** | A definir | Sem atribuição |
 | Ambiente DEV/operador | **PENDENTE** | A definir | Sem atribuição |
 | Qualidade/aceite de testes | **PENDENTE** | A definir | Sem atribuição |

@@ -2,10 +2,10 @@
 
 **Versão:** 1.0 para aprovação  
 **Data da proposta:** 04/11/2026  
-**Estado:** **PROPOSTA — AINDA NÃO APROVADA NEM ASSINADA; GATE D ABERTO**  
+**Estado vigente:** **RATIFICADO EXPRESSAMENTE EM 04/11/2026**, conforme [decisão oficial D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md). **GATE D ENCERRADO EXCLUSIVAMENTE DOCUMENTALMENTE**; Gate C e despesas não autorizados. Este arquivo preserva a minuta originalmente submetida, e o registro de aceite está na decisão.  
 **Repositório:** `rafhael100/imagine-universidade`, documentação na branch principal.
 
-## 1. Objeto do futuro aceite expresso
+## 1. Objeto do aceite documental registrado
 
 O responsável institucional poderá **encerrar exclusivamente o Gate D — planejamento documental da Universidade Imagine**, reconhecendo que os critérios de planejamento foram documentados e que as pendências de implementação, orçamento, testes e homologação estão atribuídas a seus gates apropriados.
 
@@ -41,7 +41,7 @@ O responsável institucional poderá **encerrar exclusivamente o Gate D — plan
 | D12 — RACI/alçadas | **Matriz funcional P0-11 aprovada**; titulares nominais e suplentes antes do piloto |
 | D13 — cobertura transversal | **Aprovado documentalmente em decisão separada**, teste a teste será detalhado antes de H |
 | D14 — riscos e dependências | **Aprovado documentalmente em decisão separada**, mitigação futura exigida |
-| **D15 — termo de encerramento** | **PENDENTE DE DECISÃO EXPRESSA SOBRE ESTE TERMO** |
+| **D15 — termo de encerramento** | **APROVADO EXPRESSAMENTE EM 04/11/2026**, conforme [registro da decisão](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md) |
 
 **Interpretação:** os itens D01–D14 possuem evidência documental/decisória suficiente para **submeter o Gate D a julgamento final**, com ressalvas explícitas e obrigações de gates posteriores. Isso não equivale a afirmar que contratos, fornecedores, segurança, LGPD ou software já estejam homologados.
 
@@ -66,19 +66,19 @@ O responsável institucional poderá **encerrar exclusivamente o Gate D — plan
 - Go/No-Go institucional expresso com pareceres de segurança, operação, pedagogia, privacidade e custos; suporte, manutenção, monitoramento e contingência adequados.
 - Somente cursos e integrações efetivamente homologados podem ser oferecidos a clientes elegíveis; 60 cursos são referência futura, não meta contratual obrigatória de lançamento.
 
-## 5. Texto proposto para o ato D15 — AINDA NÃO ACEITO
+## 5. Texto submetido à ratificação D15 — APROVADO
 
 > Após verificar o checklist D01–D15, reconhecendo os limites e dependências constantes desta documentação e os riscos classificados, **aprovo o encerramento exclusivamente documental do planejamento da Universidade Imagine (Gate D)**. Confirmo que a base v5 com 14 módulos e 84 capacidades permanece como referência funcional, que os 666 textos históricos ausentes não foram recuperados e que os 109 casos de teste transversais são critérios futuros, não ensaios concluídos. Preservo a decisão de **R$ 0 em novas despesas documentais** e determino que a **programação permaneça bloqueada** até aprovação separada do orçamento/teto e do **Gate C**. Os Gates H e L exigirão homologação e autorização próprias. Não autorizo contratação, implantação, publicação nem uso de dados reais por este termo.
 
-**A citação acima é uma proposta de texto para futura decisão, NÃO uma declaração efetuada pelo responsável.** Sua publicação no GitHub não constitui assinatura eletrônica nem autorização automática.
+**Este texto foi ratificado por resposta expressa do responsável em 04/11/2026**, conforme [decisão D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md). O registro é uma aceitação via conversa, **não uma alegação de assinatura eletrônica qualificada** e não autoriza Gate C ou novas despesas.
 
-## 6. Estado atual e próxima decisão
+## 6. Estado após a ratificação
 
-| Gate | Situação antes de deliberação D15 |
+| Gate | Situação após ratificação D15 |
 |---|---|
-| D — Encerramento documental | **ABERTO** |
+| D — Encerramento documental | **ENCERRADO DOCUMENTALMENTE** |
 | C — Programação | **NÃO AUTORIZADA** |
 | H — Homologação/piloto | **NÃO INICIADO** |
 | L — Lançamento | **NÃO AUTORIZADO** |
 
-**Pedido explícito futuro:** o responsável deseja aprovar o D15 conforme este termo **e encerrar somente o Gate D**, preservando todos os bloqueios de programação, orçamento e operação? Até haver resposta clara a essa pergunta, o Gate D permanece aberto.
+**Ratificação expressa recebida e registrada em 04/11/2026.** Próxima decisão, sempre separada: orçamento e teto de desenvolvimento e eventual autorização Gate C. Programação, contratações e lançamento ainda bloqueados.

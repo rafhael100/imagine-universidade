@@ -29,6 +29,8 @@
 
 | GOV-23 | **P0-07 aprovado em 04/11/2026:** Tutor estritamente educacional sem ferramentas operacionais, agentes editoriais supervisionados, fontes homologadas, proteção de dados, controles de consumo e isolamento entre empresas | [DEC-UNI-P0-07](../00-governanca/DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md). Modelos, custos e testes de segurança requerem homologação posterior |
 
+| GOV-24 | **P0-08 aprovado em 04/11/2026**: mídias privadas, autorização no backend, tokens temporários, aprovação editorial e Cloudflare Stream/R2 como fornecedores candidatos | [DEC-UNI-P0-08](../00-governanca/DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md). Homologação de provedores, comportamento de revogação e custos ainda pendentes |
+
 ## Autoridade de estado
 Portal e sistemas comerciais: identidade, vínculos, contrato, elegibilidade. Universidade: catálogo, conteúdo, estados pedagógicos. CRM/Sites/Performance AI: ações operacionais. Motor de IA central: catálogo e governança de modelos. Suporte oficial: chamados técnicos. A ação de n8n não equivale a confirmação oficial de estado.
 

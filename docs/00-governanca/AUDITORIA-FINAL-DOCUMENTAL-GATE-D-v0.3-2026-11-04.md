@@ -71,23 +71,23 @@ O registro [riscos e dependências](RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) foi atua
 | D10 | **Base aprovada — infraestrutura** | Testar RPO/RTO e recuperação |
 | D11 | **ALTERNATIVA A APROVADA PARA FASE DOCUMENTAL** | **R$ 0 em novas despesas agora; orçamento/teto do desenvolvimento obrigatório antes de Gate C** |
 | D12 | **RACI funcional aprovado** | Nomear responsáveis antes do piloto |
-| D13 | **84 critérios funcionais consistentes + 109 casos transversais documentados** | Conferir vínculo/cobertura dos casos transversais e riscos antes do aceite final; nenhuma execução presumida |
+| D13 | **APROVADO DOCUMENTALMENTE** ([decisão](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md)): 84 capacidades conferidas e 109 casos transversais mapeados por família | Rastreabilidade caso a caso e execução dos testes serão obrigatórias no Gate H; nenhuma execução presumida |
 | D14 | **Registro de 15 riscos elaborado e atualizado** | **Revisão e aceitação expressa dos riscos residuais pela direção**; riscos de H/L não viram autorização para uso real |
 | D15 | **Minuta preparada** | **Termo final de Gate D ainda não aprovado nem assinado** |
 
 ## 5. Bloqueios atuais de encerramento
 
-1. **D13 — última revisão de cobertura transversal e aceitação documental**, com anotação de eventuais riscos sem exigir testes de software.
+1. **D13 — RESOLVIDO documentalmente por aprovação expressa em 04/11/2026**; os testes e a rastreabilidade caso a caso ficam para o Gate H.
 2. **D14 — aceitação institucional do registro de riscos e dependências** e distinção de quais bloqueiam Gate C, H ou L.
 3. **D15 — ratificação EXPRESSA, em ato separado, do termo definitivo de encerramento do Gate D** após validação de D01–D14.
 
 **D11 não é mais decisão pendente do Gate D**, pois foi escolhida a alternativa A. O orçamento/teto para a **fase de desenvolvimento continua obrigatório antes do Gate C**. Se recursos pagos ou novos serviços forem necessários até para encerrar a documentação, esta decisão R$ 0 não os autoriza: pedir nova autorização financeira.
 
-> **Complemento documental, sem aceite implícito:** foi preparado o [cruzamento D13 por famílias de testes e módulos](D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md) e a [matriz proposta de tratamento de riscos D14](D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md). **Ambos permanecem pendentes de ratificação expressa** e não autorizam encerramento do Gate D.
+> **Complemento documental, sem aceite implícito:** foi preparado o [cruzamento D13 por famílias de testes e módulos](D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md) e a [matriz proposta de tratamento de riscos D14](D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md). **D13 foi posteriormente ratificado expressamente** pela [decisão D13](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md); **D14 permanece pendente**, e nenhum desses fatos autoriza encerramento do Gate D.
 
 ## 6. Conclusão formal
 
-**A conferência de integridade e rastreabilidade documental foi realizada com resultados satisfatórios para os conjuntos inspecionados.** A aceitação dos riscos, a última validação transversal e o termo final não foram automaticamente concedidos pelo usuário.
+**A conferência de integridade e rastreabilidade documental foi realizada com resultados satisfatórios para os conjuntos inspecionados.** A cobertura documental transversal foi **posteriormente aprovada em D13**, mas a aceitação dos riscos **D14** e o termo formal **D15** não foram concedidos pelo usuário.
 
 | Gate | Estado |
 |---|---|

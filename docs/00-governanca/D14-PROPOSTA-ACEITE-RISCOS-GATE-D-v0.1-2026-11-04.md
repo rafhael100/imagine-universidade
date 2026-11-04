@@ -38,10 +38,10 @@ Se ratificada, esta matriz permite considerar **documentalmente tratados e class
 - Implementação em paralelo a Portal/CRM é possível **somente após Gate D + Gate C expressos**, respeitando integração com funcionalidades homologadas.
 - Dados reais, serviços pagos, contratos com operadores e lançamento ficam bloqueados até seus gates e autorizações.
 - Nenhum parecer jurídico, teste de carga, pentest, teste de restauração ou homologação de IA/Cloudflare está sendo dado como executado.
-- Aprovar D14 não encerra o Gate D: a validação documental D13 e o **termo de encerramento D15** exigem atos distintos.
+- Aprovar D14 não encerra o Gate D: **D13 já foi aprovado documentalmente** ([decisão](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md)); o **termo de encerramento D15 permanece pendente** de aprovação expressa e separada.
 
 ## 4. Pedido de decisão
 
 **Proposta para futura ratificação expressa:** aceitar a **classificação e o tratamento documental** de RD-01 a RD-15 conforme esta matriz, preservando os bloqueios dos Gates C/H/L e sem aceitar riscos inaceitáveis como resolvidos.
 
-**Estado atual:** D14 **PENDENTE**. Gate D aberto; Gate C não autorizado; Gate H e L não iniciados/autorizados; nenhuma nova despesa autorizada.
+**Estado atual:** D13 **APROVADO DOCUMENTALMENTE**; D14 **PENDENTE** de ratificação; D15 **NÃO ASSINADO**. Gate D aberto; Gate C não autorizado; Gate H e L não iniciados/autorizados; nenhuma nova despesa autorizada.

@@ -1,7 +1,7 @@
 # Pré-Gate C — Bloco A: arquitetura e ambiente de desenvolvimento da Universidade Imagine
 
 **Data:** 04/11/2026.
-**Situação:** **PROPOSTA TÉCNICA DOCUMENTAL PARA REVISÃO, NÃO RATIFICADA**.
+**Situação vigente:** **BLOCO A APROVADO COMO BASE TÉCNICA DOCUMENTAL** em [DEC-UNI-BA](DECISAO-UNI-PRE-GATE-C-BLOCO-A-APROVADO-2026-11-04.md). **Gate C continua NÃO AUTORIZADO; VPS, versões, orçamento e testes ainda não homologados.**
 **Origem:** o responsável respondeu “ok” à recomendação de começar pelo **Bloco A — fechamento da arquitetura e do ambiente de desenvolvimento da Universidade**, para então avançar aos blocos B (orçamento/responsáveis) e C (termo de autorização Gate C). Esse “ok” autoriza a **elaboração documental desta proposta**, não a abertura de Gate C ou a aprovação automática de escolhas técnicas não ratificadas.
 
 **Precedências normativas:**
@@ -90,24 +90,24 @@ Política transversal já aprovada **como documentação**: Restic, backup diár
 
 Os testes citados são **critérios para execução futura após Gate C**, não executados agora.
 
-## 7. Decisões Bloco A — aprovação a solicitar, sem antecipar Gate C
+## 7. Decisões Bloco A — aprovadas como diretrizes documentais, sem antecipar Gate C
 
 | ID | Decisão específica | Status |
 |---|---|---|
-| UNI-BA01 | Utilizar a VPS Leaseweb **compartilhada SOMENTE DEV** como arquitetura candidata, não VPS de produção | **DIRETRIZ GERAL APROVADA, INCORPORAÇÃO UNI A RATIFICAR** |
-| UNI-BA02 | Laravel/PHP como backend preferido do C-00; versão definitiva a validar | **PROPOSTO** |
-| UNI-BA03 | PostgreSQL dev **próprio por Universidade**, rede, volume e usuário segregados | **ALINHADO A P0-09/C-00; DETALHE A RATIFICAR** |
-| UNI-BA04 | Shell estático DEV e mocks UNI-C01..C04; sem integração comercial ou mídia | **ESCOPO-BASE C-00 APROVADO, DETALHE A RATIFICAR** |
-| UNI-BA05 | Docker Compose separado, quotas, portas restritas, segredos por stack | **PROPOSTO PARA PADRÃO DEV** |
+| UNI-BA01 | Utilizar a VPS Leaseweb **compartilhada SOMENTE DEV** como arquitetura candidata, não VPS de produção | **RATIFICADA COMO DIRETRIZ UNI; sem compra, capacidade ou isolamento homologados** |
+| UNI-BA02 | Laravel/PHP como backend preferido do C-00; versão definitiva a validar | **APROVADO COMO DIREÇÃO TÉCNICA; versões a validar** |
+| UNI-BA03 | PostgreSQL dev **próprio por Universidade**, rede, volume e usuário segregados | **APROVADO DOCUMENTALMENTE; implantação pendente** |
+| UNI-BA04 | Shell estático DEV e mocks UNI-C01..C04; sem integração comercial ou mídia | **APROVADO DOCUMENTALMENTE; sem código** |
+| UNI-BA05 | Docker Compose separado, quotas, portas restritas, segredos por stack | **APROVADO COMO PADRÃO DOCUMENTAL; sem configuração** |
 | UNI-BA06 | Backup R2 EU por bucket UNI, Restic e custódia externa quando a VPS for ativada | **DIRETRIZ TRANSVERSAL APROVADA DOCUMENTALMENTE; EXECUÇÃO NÃO AUTORIZADA** |
-| UNI-BA07 | Manter n8n/IA fora do C-00 e produção Uni separada | **ALINHADO A P0-09; RATIFICAÇÃO DO BLOCO A PENDENTE** |
+| UNI-BA07 | Manter n8n/IA fora do C-00 e produção Uni separada | **RATIFICADO NO BLOCO A** |
 | UNI-BA08 | Evitar gastos/cloud externa/CI pagável e usar somente dados fictícios no C-00 | **REGRAS ANTERIORES VIGENTES; LIMITES FINANCEIROS PENDENTES** |
 | UNI-BA09 | Registrar critérios de segurança/aceite e não abrir Gate H/L nem produção automaticamente | **REGRAS ANTERIORES VIGENTES; DETALHES A RATIFICAR** |
 | UNI-BA10 | Obter orçamento, equipe, limite financeiro e ato específico Gate C após conclusão dos Blocos A/B | **BLOQUEIO INALTERADO** |
 
 ## 8. O que ainda será exigido antes de liberar a programação
 
-**Bloco A — a ratificar:**
+**Bloco A — ratificado documentalmente; pendem validações de execução:**
 - aceitar ou alterar o stack preferido Laravel, banco dev separado, compose e mocks C-00, mantendo separação de produção;
 - definir se Gate C abrangerá apenas código local/sintético ou exigirá acesso à VPS compartilhada já implantada; o segundo caso requer autorização financeira de infraestrutura, provisionamento e verificações anteriores;
 - aprovar os critérios documentais de segurança/isolamento deste bloco, sem tratá-los como testes já executados.
@@ -125,4 +125,4 @@ Os testes citados são **critérios para execução futura após Gate C**, não 
 
 **Solicitar ratificação da proposta como BLOCO A DOCUMENTAL PRÉ-GATE C**, sem abrir programação. Caso ratificada, consolidar a escolha técnica (BA02, BA03, BA05) e avançar ao **Bloco B — responsáveis e orçamento econômico/teto**. As versões de tecnologias, disponibilidade da VPS, limites reais e segurança continuam sob validação.
 
-**Estado final:** planejamento funcional Gate D concluído; C-00 como escopo candidato já ratificado; **Bloco A preparado e não aprovado**, Blocos B/C pendentes; **Gate C fechado, desenvolvimento não autorizado**.
+**Estado atualizado:** planejamento Gate D concluído; C-00 escopo candidato aprovado; **Bloco A aprovado documentalmente em DEC-UNI-BA**; [Bloco B — responsáveis e orçamento](PRE-GATE-C-BLOCO-B-RESPONSAVEIS-ORCAMENTO-E-TETO-C00-v0.1-2026-11-04.md) preparado para revisão, Bloco C pendente; **Gate C FECHADO, desenvolvimento NÃO autorizado**.

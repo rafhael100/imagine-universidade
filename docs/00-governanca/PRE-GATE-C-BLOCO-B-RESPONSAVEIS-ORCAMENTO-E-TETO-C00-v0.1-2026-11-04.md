@@ -1,7 +1,7 @@
 # Pré-Gate C — Bloco B: responsáveis, esforço, orçamento e limites financeiros da Fundação Segura (C-00)
 
 **Data:** 04/11/2026.
-**Estado vigente:** **APROVADO COMO BASE DOCUMENTAL DE PLANEJAMENTO**, com **B-M como ESTRATÉGIA PREFERENCIAL** pela [Decisão UNI-BB](DECISAO-UNI-PRE-GATE-C-BLOCO-B-BASE-APROVADA-BM-2026-11-04.md). **Valores, pessoas, horas e autorização Gate C NÃO aprovados.**
+**Estado vigente:** **APROVADO COMO BASE DOCUMENTAL DE PLANEJAMENTO**, com **B-M como ESTRATÉGIA PREFERENCIAL** pela [Decisão UNI-BB](DECISAO-UNI-PRE-GATE-C-BLOCO-B-BASE-APROVADA-BM-2026-11-04.md). **Teto incremental R$ 0,00 da fase local aprovado em [DEC-UNI-C00](DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md); pessoas, horas, custo econômico, ambiente e autorização Gate C NÃO aprovados.**
 **Origem:** após aprovação expressa do [Bloco A — Decisão UNI-BA](DECISAO-UNI-PRE-GATE-C-BLOCO-A-APROVADO-2026-11-04.md), iniciar o planejamento do Bloco B, conforme a sequência Bloco A → Bloco B → Bloco C.
 **Precedências:** [D15 — encerramento documental Gate D](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md), [P0-10 — método de orçamento](DECISAO-UNI-P0-10-2026-11-04.md), [P0-11 — RACI/alçadas](DECISAO-UNI-P0-11-GOVERNANCA-2026-11-04.md), [C04 — cenário de esforço C-00](PRE-GATE-C-04-ORCAMENTO-TRABALHO-E-CENARIOS-C00-v0.1-2026-11-04.md), [Checklist pré-Gate C](PRE-GATE-C-CHECKLIST-ORCAMENTO-E-AUTORIZACAO-v0.1-2026-11-04.md).
 **Limites:** **NÃO executar programação, testes, provisionamento da VPS, instalação de ferramentas, contratação, ativação de R2 ou alteração dos projetos existentes**. Gate C da Universidade permanece bloqueado.
@@ -103,7 +103,7 @@ Antes de abrir Gate C, o termo deverá explicitar:
 | UNI-BB02 | Designar responsáveis de produto, TEC, SEG/QA, financeiro e operação | **ABERTO** |
 | UNI-BB03 | Validar esforço e capacidade humana (123–275 h de referência) | **HIPÓTESE, A REVISAR** |
 | UNI-BB04 | Apurar custo econômico integral e desembolso por fase/provedor | **NÃO APURADO** |
-| UNI-BB05 | Estabelecer teto financeiro explícito em R$, período e contingência | **NÃO APROVADO** |
+| UNI-BB05 | Estabelecer teto financeiro explícito em R$, período e contingência | **R$ 0,00 incremental para fase local APROVADO em [DEC-UNI-C00](DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md); duração/custo econômico pendentes** |
 | UNI-BB06 | Definir política e limites de uso de IA e serviços cobrados | **PENDENTE** |
 | UNI-BB07 | Definir alçadas, independência de revisão e mudanças de escopo | **PENDENTE** |
 | UNI-BB08 | Elaborar termo específico **Bloco C — Gate C** com todos os parâmetros | **[MINUTA PREPARADA](PRE-GATE-C-BLOCO-C-MINUTA-AUTORIZACAO-C00-v0.1-2026-11-04.md); CAMPOS PENDENTES, GATE C NÃO AUTORIZADO** |

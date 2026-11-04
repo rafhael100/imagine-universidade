@@ -8,6 +8,8 @@
 
 **D15 preparado para avaliação em 04/11/2026:** [termo final proposto v1.0](D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md). D11, D13 e D14 aprovados documentalmente. **D15 não aprovado e não assinado; Gate D ABERTO; Gate C NÃO AUTORIZADO.** O orçamento e teto financeiro do desenvolvimento continuam sujeitos a aprovação separada.
 
+> **ATUALIZAÇÃO DE ESTADO VIGENTE EM 04/11/2026:** [DEC-UNI-D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md) **encerrou formalmente o Gate D somente quanto à documentação** mediante aprovação expressa no chat. Qualquer trecho anterior desta página que diga que D15 ainda está pendente ou Gate D aberto é histórico e foi superado. **Gate C NÃO AUTORIZADO; nenhum orçamento/teto de desenvolvimento, contratação, programação, piloto ou lançamento aprovado.** A alternativa A de R$ 0 em novas despesas documentais permanece registrada. 
+
 ## Situação das aprovações
 
 - Módulos funcionais UNI-01 a UNI-14: aprovados funcionalmente em conversa; não recuperados integralmente nos documentos originais.

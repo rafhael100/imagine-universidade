@@ -6,6 +6,8 @@
 
 **Atualização de decisão financeira e auditoria:** a [alternativa A D11 foi aprovada](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md): **R$ 0 em novas despesas documentais autorizadas**. O orçamento e teto do desenvolvimento exigem aprovação antes do Gate C. A [auditoria v0.3](AUDITORIA-FINAL-DOCUMENTAL-GATE-D-v0.3-2026-11-04.md) verificou 84 requisitos funcionais, 109 casos transversais futuros e inventário 986/320/666. **D13 aprovado documentalmente** ([decisão](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md)); **D14 aprovado documentalmente** ([decisão](DECISAO-UNI-D14-RISCOS-RESIDUAIS-2026-11-04.md)); **D15 pendente; Gate D aberto; programação não autorizada.**
 
+**D15 preparado para avaliação em 04/11/2026:** [termo final proposto v1.0](D15-TERMO-FINAL-ENCERRAMENTO-GATE-D-v1.0-PARA-APROVACAO-2026-11-04.md). D11, D13 e D14 aprovados documentalmente. **D15 não aprovado e não assinado; Gate D ABERTO; Gate C NÃO AUTORIZADO.** O orçamento e teto financeiro do desenvolvimento continuam sujeitos a aprovação separada.
+
 ## Situação das aprovações
 
 - Módulos funcionais UNI-01 a UNI-14: aprovados funcionalmente em conversa; não recuperados integralmente nos documentos originais.

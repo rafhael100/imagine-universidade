@@ -14,7 +14,8 @@
 | P0-07 — Tutor IA e agentes | **APROVADO como política-base de governança e segurança** | [Decisão](DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md) e [especificação](P0-07-TUTOR-IA-AGENTES-SEGURANCA-v0.1-PROPOSTA.md) |
 | P0-08 — Mídias e materiais protegidos | **APROVADO como arquitetura-base; fornecedores ainda candidatos** | [Decisão P0-08](DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md) e [especificação](P0-08-MIDIAS-MATERIAIS-PROTEGIDOS-v0.1-PROPOSTA.md) |
 | P0-09 — Infraestrutura, backups e recuperação | **APROVADO como desenho inicial**: RPO 4h e RTO 8h (metas) | [Decisão P0-09](DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md) e [especificação](P0-09-INFRAESTRUTURA-BACKUP-RECUPERACAO-v0.1-PROPOSTA.md) |
-| P0-10–P0-12 | Em aberto conforme documentação | [Lista de pendências](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) |
+| P0-10 — Orçamento e escalabilidade | **PROPOSTA publicada — não aprovada**; preços públicos, cenário de vídeo e custos pendentes | [Análise P0-10](P0-10-ORCAMENTO-CUSTOS-CENARIOS-v0.1-PROPOSTA.md) |
+| P0-11–P0-12 | Em aberto conforme documentação | [Lista de pendências](../08-fechamento-candidato/04-DECISOES-P0-PARA-RATIFICAR.md) |
 
 ## Nota de precedência
 

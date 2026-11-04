@@ -6,6 +6,8 @@
 **Base técnica:** [P0-09](DECISAO-UNI-P0-09-INFRA-BACKUP-2026-11-04.md), [P0-06](DECISAO-UNI-P0-06-INTEGRACOES-2026-11-03.md), [D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md).  
 **Autoridade:** documento de avaliação; não habilita VPS, conexão, cobrança nem código.
 
+> **Atualização de arquitetura — 04/11/2026:** a direção decidiu selecionar **uma nova VPS da Leaseweb como ambiente central de desenvolvimento multi-projeto**, em vez de pressupor reutilização da VPS anterior. Ver [INF-DEV-01 — decisão central no Portal Imagine](https://github.com/rafhael100/imagine-portal/blob/main/docs/infraestrutura/INF-DEV-01-VPS-CENTRAL-LEASEWEB-2026-11-04.md). **A Leaseweb está escolhida em princípio; pacote, região, preço final, contratação e provisionamento não foram aprovados/executados.** O VPS 3 (8 vCPU, 24 GB RAM e 300 GB NVMe) é recomendação técnica, não aquisição confirmada. As alternativas abaixo permanecem documentadas como comparação histórica, mas a **preferência A por reaproveitar servidor existente foi superada como direção de compra**. **Gate C da Universidade segue não autorizado.**
+
 ## 1. Evidências verificadas em repositórios privados
 
 Inspeção realizada mediante conexão GitHub com leitura de árvores `main` e README/arquivos não secretos; não inclui acesso ao painel do provedor, servidores, billing, process manager, redes, sistema operacional, consumo histórico, ambientes de desenvolvimento locais, cofres de segredos nem GitHub Actions executadas.

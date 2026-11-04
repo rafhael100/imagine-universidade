@@ -83,6 +83,8 @@ O registro [riscos e dependências](RISCOS-DEPENDENCIAS-GATE-D-v0.1.md) foi atua
 
 **D11 não é mais decisão pendente do Gate D**, pois foi escolhida a alternativa A. O orçamento/teto para a **fase de desenvolvimento continua obrigatório antes do Gate C**. Se recursos pagos ou novos serviços forem necessários até para encerrar a documentação, esta decisão R$ 0 não os autoriza: pedir nova autorização financeira.
 
+> **Complemento documental, sem aceite implícito:** foi preparado o [cruzamento D13 por famílias de testes e módulos](D13-MAPA-COBERTURA-TRANSVERSAL-v0.1-2026-11-04.md) e a [matriz proposta de tratamento de riscos D14](D14-PROPOSTA-ACEITE-RISCOS-GATE-D-v0.1-2026-11-04.md). **Ambos permanecem pendentes de ratificação expressa** e não autorizam encerramento do Gate D.
+
 ## 6. Conclusão formal
 
 **A conferência de integridade e rastreabilidade documental foi realizada com resultados satisfatórios para os conjuntos inspecionados.** A aceitação dos riscos, a última validação transversal e o termo final não foram automaticamente concedidos pelo usuário.

@@ -3,6 +3,7 @@
 **Data de preparação:** 04/11/2026.  
 **Estado:** **MINUTA PARA COMPLEMENTAÇÃO E REVISÃO — NÃO É AUTORIZAÇÃO, NÃO ESTÁ ASSINADA NEM APROVADA PARA EXECUÇÃO**.  
 **Origem:** sequência documental após [Bloco A aprovado](DECISAO-UNI-PRE-GATE-C-BLOCO-A-APROVADO-2026-11-04.md) e [Bloco B aprovado com estratégia B-M preferencial](DECISAO-UNI-PRE-GATE-C-BLOCO-B-BASE-APROVADA-BM-2026-11-04.md).  
+**Decisão financeira superveniente:** [DEC-UNI-C00 — teto incremental R$ 0,00 e revisão obrigatória](DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md) foi aprovada para **novas despesas de fornecedores da fase local C-00**, sem aprovação de custo econômico, identificação de responsáveis ou ambiente nem liberação para executar. Esta decisão prevalece sobre as referências anteriores a teto monetário inteiramente pendente.
 **Precedência:** [D15 — Gate D encerrado documentalmente](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md), [C-00 — escopo inicial](DECISAO-UNI-PRE-GATE-C01-ESCOPO-C00-2026-11-04.md), [checklist para abertura do Gate C](PRE-GATE-C-CHECKLIST-ORCAMENTO-E-AUTORIZACAO-v0.1-2026-11-04.md).
 
 > **PROIBIÇÃO VIGENTE:** redigir e armazenar esta minuta no GitHub é uma atividade documental. Não concede permissão para iniciar programação, rodar testes, usar IDE/servidor em nome da Imagine, gerar comandos e arquivos de aplicação, instalar dependências, consumir serviços cobrados, emitir tokens ou alterar ambientes. Gate C permanece FECHADO. Os campos marcados como PENDENTE devem ser preenchidos ou formalmente resolvidos antes de o texto ser apresentado para autorização.
@@ -69,10 +70,10 @@ Uma pessoa pode acumular funções quando a matriz P0-11 permitir, mas o própri
 | Custos de IA, GitHub Actions/CI, banco e ferramentas | **PENDENTE** |
 | Rateios e eventuais custos da VPS futura | **FORA DA AUTORIZAÇÃO LOCAL; separado** |
 | Reserva de contingência | **PENDENTE** |
-| **Teto máximo de NOVAS despesas em R$**, por período e fornecedor | **PENDENTE — nenhum valor, inclusive R$ 0, presumido** |
+| **Teto máximo de NOVAS despesas em R$**, por período e fornecedor | **R$ 0,00 APROVADO para a primeira fase LOCAL C-00, por [DEC-UNI-C00](DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md); prazo e controles de alçada ainda a detalhar** |
 | Regras de mudança e alçadas em caso de superação | **PENDENTE** |
 
-Se o objetivo for zero novas despesas de fornecedores no C-00 local, registrar **explicitamente teto incremental R$ 0,00** e lista de serviços permitidos, **sem chamar de custo econômico zero**. Só a direção pode aprovar tal teto em decisão financeira própria.
+**A direção aprovou** a restrição de **R$ 0,00 em novas despesas de fornecedores** para a etapa local do C-00 em [DEC-UNI-C00](DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md). **Não é custo econômico zero nem licença para contratar, ativar serviços ou iniciar execução**. A lista de ferramentas/contas existentes permitidas, período, responsáveis e ambiente continuam a definir antes de abrir Gate C.
 
 ## 5. Controles de qualidade e política de segurança
 
@@ -92,7 +93,7 @@ Se o objetivo for zero novas despesas de fornecedores no C-00 local, registrar *
 | C03 Conta, repositório e ambiente | GitHub verificado; host/local e direitos de uso | **PARCIAL; HOST NÃO VALIDADO** |
 | C04 Segurança/segregação do ambiente | Quotas, acessos, dados sintéticos e política de segredos | **DOCUMENTAL; IMPLEMENTAÇÃO NÃO HOMOLOGADA** |
 | C05 Orçamento econômico do C-00 | Horas humanas, ferramentas e operações | **PENDENTE** |
-| C06 Teto de novas despesas e alçada | Valor expresso R$, prazo, fornecedores | **PENDENTE** |
+| C06 Teto de novas despesas e alçada | Teto incremental local R$ 0 aprovado por DEC-UNI-C00; prazo e alçadas a completar | **PARCIAL — valor aprovado; vigência e controles pendentes** |
 | C07 Sem compra automática | Confirmação da modalidade e custo incremental | **B-M PREFERENCIAL, SEM TETO** |
 | C08 Contratos simulados Portal/CRM | Design UNI-C01–C04 aprovado | **BASE APROVADA; detalhes do teste após Gate C** |
 | C09 Aceite/segurança/IA | Revisores, critérios, evidências e limites | **PARCIAL** |

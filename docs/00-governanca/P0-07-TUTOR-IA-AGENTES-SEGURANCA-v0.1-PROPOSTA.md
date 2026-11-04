@@ -1,6 +1,6 @@
 # P0-07 — Tutor IA, agentes educacionais e segurança de IA (v0.1)
 
-**Estado:** PROPOSTA PARA RATIFICAÇÃO — NÃO APROVADA, NÃO IMPLEMENTADA.  
+**Estado:** **APROVADA COMO POLÍTICA-BASE EM 04/11/2026**, conforme [DEC-UNI-P0-07](DECISAO-UNI-P0-07-AGENTES-IA-2026-11-04.md). **NÃO IMPLEMENTADA NEM HOMOLOGADA**; fornecedores, testes e custos ainda dependem de etapas específicas.  
 **Data:** 03/11/2026.  
 **Escopo:** desenho de segurança, governança, autonomia, conteúdo, custos, observabilidade e testes do Tutor IA e dos agentes de produção educacional.  
 **Fontes internas:** versão-base v5, UNI-04/UNI-05/UNI-11/UNI-14, P0-03 (elegibilidade aprovada), P0-04 (sessões aprovadas como base), P0-05 (privacidade aprovada como base), P0-06 (integrações aprovadas como base).  
@@ -115,7 +115,7 @@ Referências OWASP LLM 2025: LLM01 Prompt Injection, LLM02 Sensitive Information
 
 ## 10. Limites desta ratificação e próximas definições
 
-**Pedido de aprovação:** ratificar o P0-07 como **política-base de governança e segurança dos agentes educacionais**, incluindo separação Tutor/produção, catálogo de ferramentas, limites de autonomia, aprovação humana crítica, RAG homologado, isolamento e controles de custo.
+**Aprovação registrada:** o P0-07 foi ratificado como **política-base de governança e segurança dos agentes educacionais**, incluindo separação Tutor/produção, catálogo de ferramentas, limites de autonomia, aprovação humana crítica, RAG homologado, isolamento e controles de custo.
 
 **Continuam para fechar em outros P0:** fornecedores/modelos específicos e testes (P0-10/P0-12), políticas e DPA (P0-05), mídia protegida (P0-08), topologia e recuperação (P0-09), valores de custo e orçamento (P0-10), responsáveis e alçadas (P0-11).
 

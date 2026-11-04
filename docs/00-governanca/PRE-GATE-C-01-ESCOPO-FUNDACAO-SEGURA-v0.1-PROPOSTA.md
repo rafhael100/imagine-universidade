@@ -1,7 +1,7 @@
 # Pré-Gate C / C01 — Escopo recomendado para a primeira etapa de desenvolvimento
 
 **Data:** 04/11/2026  
-**Estado:** **PROPOSTA DE ESCOPO PARA APROVAÇÃO FUTURA — NÃO AUTORIZA PROGRAMAÇÃO, CONTRATAÇÃO OU GASTO**.  
+**Estado vigente:** **C-00 APROVADO EM 04/11/2026 SOMENTE COMO ESCOPO INICIAL DE PLANEJAMENTO**, conforme [decisão UNI-C01](DECISAO-UNI-PRE-GATE-C01-ESCOPO-C00-2026-11-04.md). **Não autoriza programação, contratação ou gasto**. O orçamento, o teto e o Gate C continuam pendentes.  
 **Referências vigentes:** [D15](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md), [checklist pré-C](PRE-GATE-C-CHECKLIST-ORCAMENTO-E-AUTORIZACAO-v0.1-2026-11-04.md), P0-03/P0-04/P0-06/P0-09/P0-10/P0-11, [roteiro](../08-fechamento-candidato/05-ROTEIRO-DE-IMPLEMENTACAO-E-GATES.md).  
 **Objetivo:** preparar uma fundação comprovavelmente isolada para evolução em paralelo ao Portal/CRM, minimizando despesas incrementais sem sacrificar segurança.
 
@@ -58,6 +58,6 @@ Essas fases são **propostas de execução futura**, não autorizações de todo
 
 ## 6. Recomendação e natureza da decisão
 
-**Recomenda-se adotar C-00 como primeira etapa candidata**, por exigir menos custo inicial, reduzir riscos das integrações em paralelo e permitir demonstrar os controles de autorização antes da inclusão de mídias e agentes.
+**Foi aprovado C-00 como primeiro escopo candidato de planejamento**, por exigir menos custo inicial, reduzir riscos das integrações em paralelo e permitir demonstrar os controles de autorização antes da inclusão de mídias e agentes.
 
 **Até que haja aprovação expressa do Gate C:** não escrever código da aplicação, ativar serviços, provisionar servidores, executar testes reais ou alterar qualquer sistema. Este documento é **planejamento pré-execução**.

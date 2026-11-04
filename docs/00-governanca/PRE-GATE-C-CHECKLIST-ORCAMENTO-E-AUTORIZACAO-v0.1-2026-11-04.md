@@ -8,13 +8,13 @@
 
 | ID | Evidência necessária para pedir autorização Gate C | Estado |
 |---|---|---|
-| C01 | Descrever o escopo preciso da primeira fase de programação (ex.: autenticação, elegibilidade simulada, base de cursos e painel editorial) e o que será expressamente excluído | **A definir** |
+| C01 | Descrever o escopo preciso da primeira fase de programação e suas exclusões | **PROPOSTA PARA RATIFICAÇÃO**: [Fundação Segura C-00](PRE-GATE-C-01-ESCOPO-FUNDACAO-SEGURA-v0.1-PROPOSTA.md). Sem programação autorizada |
 | C02 | Nomear responsáveis pela programação, revisão, segurança, documentação e aprovação, incluindo segregação de funções críticas | **A designar** |
 | C03 | Documentar quais contas, repositórios e serviços já existem, sua titularidade e o impacto sobre Portal/CRM | **A verificar** |
 | C04 | Definir ambientes de desenvolvimento isolados, dados fictícios e regras de segredos; proibir modificações em produção sem autorização | **A especificar** |
-| C05 | Preparar **orçamento integral da fase de desenvolvimento**: horas/equipe, VPS e ambiente de testes, ferramentas, IA, armazenamento, backups, segurança, suporte e contingência | **Pendente** |
+| C05 | Preparar **orçamento integral da fase de desenvolvimento**: horas/equipe, VPS e ambiente de testes, ferramentas, IA, armazenamento, backups, segurança, suporte e contingência | **MODELO PROPOSTO**: [C02 Orçamento C-00](PRE-GATE-C-02-ORCAMENTO-FUNDACAO-v0.1-PROPOSTA.md). Valores, totais e cotações pendentes |
 | C06 | Determinar **teto monetário explícito** da fase, limites de consumo por fornecedor, moeda/impostos/câmbio, responsáveis e gatilhos de aprovação | **Pendente** |
-| C07 | Identificar atividades possíveis **sem novas contratações** e distinguir custo incremental zero de custo interno alocado | **A verificar** |
+| C07 | Identificar atividades possíveis **sem novas contratações** e distinguir custo incremental zero de custo interno alocado | **CENÁRIOS PROPOSTOS**: reutilização segura sujeita a inventário, capacidade e autorização. Não houve validação real |
 | C08 | Planejar integrações com Portal/CRM por contratos tipados e **mocks** até serviços oficiais homologados, mantendo a opção B de desenvolvimento paralelo | **Política-base aprovada; plano técnico a fazer** |
 | C09 | Estabelecer entregáveis do primeiro ciclo, critérios de revisão, evidência de testes, limites de autonomia de IA e política de proteção de dados | **A especificar** |
 | C10 | Preparar texto de **autorização Gate C em ato separado**, com escopo, orçamento/teto e responsáveis, sujeito a aceite expresso posterior | **NÃO AUTORIZADO** |

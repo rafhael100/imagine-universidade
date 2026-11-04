@@ -1,6 +1,6 @@
-# Versão-base funcional candidata — Universidade Imagine (14 módulos)
+# Versão-base funcional substitutiva v5 — Universidade Imagine (14 módulos)
 
-**ATENÇÃO:** esta é uma **nova proposta consolidada** escrita com base em escopos e decisões conhecidos. Não afirma reproduzir a redação histórica dos 666 requisitos ausentes. Os novos IDs `BASE-UNIxx-nn` são independentes e precisam de ratificação expressa para se tornar base canônica.
+**VIGÊNCIA:** base **aprovada funcionalmente em 03/11/2026**, conforme [registro da aprovação](../00-governanca/REGISTRO-DA-APROVACAO-BASE-V5.md). Os 84 IDs `BASE-UNI-xx-nn` são novos e representam prospectivamente as 14 áreas. **Não são reprodução literal** dos 666 textos históricos ausentes e sua aprovação funcional não significa implementação, homologação, validação jurídica ou autorização de programação.
 
 **Natureza:** especificação funcional por capacidade com critérios de aceite. Todos os itens respeitam aprendizagem voluntária, exclusividade contratual, não execução operacional pelo Tutor e precedência das autoridades oficiais.
 

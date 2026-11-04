@@ -4,6 +4,8 @@
 **Status:** **ROTEIRO DE PREPARAÇÃO, NÃO APROVADO COMO AUTORIZAÇÃO DE PROGRAMAÇÃO**.  
 **Base:** [D15 — encerramento documental](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md). O **Gate D está encerrado quanto à documentação**; o **Gate C não foi autorizado**.
 
+> **Atualização documental de 04/11/2026:** o [Bloco A — arquitetura e ambiente C-00](PRE-GATE-C-BLOCO-A-ARQUITETURA-E-AMBIENTE-C00-v0.1-2026-11-04.md) foi **preparado para revisão, não ratificado**, incorporando a direção mais recente de VPS Leaseweb **compartilhada exclusivamente para DEV**, Laravel/PHP candidato, PostgreSQL educacional isolado, mocks e Docker Compose. Isso **não comprova capacidade do servidor** nem altera C02/C03/C04/C05/C06/C08/C09/C10 enquanto não houver ratificação, orçamento e autorização. Não houve programação, testes ou contratação.
+
 ## 1. Informações e decisões que deverão ser submetidas separadamente
 
 | ID | Evidência necessária para pedir autorização Gate C | Estado |

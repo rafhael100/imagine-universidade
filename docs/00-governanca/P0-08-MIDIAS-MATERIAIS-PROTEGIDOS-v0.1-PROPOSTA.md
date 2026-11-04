@@ -1,7 +1,7 @@
 # P0-08 — Proteção e distribuição de vídeos e materiais educacionais
 
 **Data:** 04/11/2026
-**Status:** PROPOSTA PARA RATIFICAÇÃO — NÃO APROVADA, NÃO IMPLEMENTADA.
+**Status:** **APROVADA COMO ARQUITETURA-BASE EM 04/11/2026**, conforme [decisão P0-08](DECISAO-UNI-P0-08-MIDIAS-2026-11-04.md). **Não implementada, homologada nem contratada.**
 **Escopo:** vídeo sob demanda, áudio, legendas, transcrições, textos, imagens, documentos, anexos didáticos e mídias auxiliares da Universidade Imagine.
 **Decisões vinculantes:** P0-03 (elegibilidade), P0-04 (sessão/token/revogação), P0-05 (privacidade), P0-06 (contratos/APIs) e P0-07 (IA e agentes).
 **Fornecedores:** Cloudflare Stream e R2 são **candidatos**, não serviços contratados/homologados. A análise de custo permanece em P0-10.
@@ -118,6 +118,6 @@ Fontes oficiais:
 
 ## 10. Pedido de ratificação
 
-**Recomendação:** aprovar o P0-08 como arquitetura-base de proteção e distribuição, priorizando Cloudflare Stream para vídeo e R2 privado para materiais, condicionados a cotação e homologação; obrigar autorização de backend, tokens temporários, separação do início/reprodução, controle editorial, isolamento e testes.
+**Ratificação de 04/11/2026:** P0-08 aprovado como arquitetura-base de proteção e distribuição, priorizando Cloudflare Stream para vídeo e R2 privado para materiais, condicionados a cotação e homologação; obrigar autorização de backend, tokens temporários, separação do início/reprodução, controle editorial, isolamento e testes.
 
 **A aprovação não significa contratação de Cloudflare Stream/R2, garantia de revogação instantânea, ativação de recursos, publicação de aulas ou início da programação.** P0-09 definirá infraestrutura/backup e P0-10 definirá orçamento.

@@ -7,6 +7,8 @@
 **Metodologia aprovada:** [P0-10](DECISAO-UNI-P0-10-2026-11-04.md).  
 **Regra financeira vigente do planejamento encerrado:** [D11](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md): R$ 0,00 em **novas despesas da fase documental**; nada autoriza despesas de desenvolvimento.
 
+> **Decisão de infraestrutura posterior (04/11/2026):** a direção escolheu **em princípio uma nova VPS Leaseweb compartilhada entre os ambientes de desenvolvimento Imagine** ([INF-DEV-01](https://github.com/rafhael100/imagine-portal/blob/main/docs/infraestrutura/INF-DEV-01-VPS-CENTRAL-LEASEWEB-2026-11-04.md)). O plano VPS 3 de 8 vCPU/24 GB/300 GB NVMe é **recomendado, não aprovado ou contratado**. As linhas de custo A0/A1 de reutilização ficam registradas como comparativos anteriores, não como estratégia escolhida. Após confirmar o checkout, atualizar o orçamento da VPS central com **rateio entre projetos** e seu custo incremental real. **Gate C ainda não autorizado.**
+
 ## 1. Estimativa de esforço não vinculante
 
 Para tornar o futuro orçamento calculável, estimar um **intervalo inicial puramente técnico** para seis entregáveis de C-00. **Não é medição de produtividade, proposta de fornecedor, prazo ou preço fechado**. Deverá ser revisado após escolher stack, ambiente, equipe, escopo exato e eventual uso assistido de IA.

@@ -5,6 +5,8 @@
 **Escopo base:** [C01 — primeira etapa candidata C-00](PRE-GATE-C-01-ESCOPO-FUNDACAO-SEGURA-v0.1-PROPOSTA.md); [D15 — Gate D encerrado documentalmente](DECISAO-UNI-D15-ENCERRAMENTO-DOCUMENTAL-GATE-D-2026-11-04.md).  
 **Regra econômica anterior:** [D11 alternativa A](DECISAO-UNI-D11-ALTERNATIVA-A-CUSTO-DOCUMENTAL-ZERO-2026-11-04.md) fixou **R$ 0,00 de novas despesas autorizadas na fase documental**; não é orçamento ou teto de desenvolvimento.
 
+> **Diretriz mais recente (04/11/2026):** a direção escolheu **em princípio uma VPS nova Leaseweb compartilhada entre os projetos Imagine para DEV**, em vez de pressupor uma VPS já existente sem compra. Ver [Bloco A C-00 proposto](PRE-GATE-C-BLOCO-A-ARQUITETURA-E-AMBIENTE-C00-v0.1-2026-11-04.md) e [INF-DEV-01 transversa](https://github.com/rafhael100/imagine-portal/blob/main/docs/infraestrutura/INF-DEV-01-VPS-CENTRAL-LEASEWEB-2026-11-04.md). A alternativa A de reuso **permanece comparativo histórico**; o orçamento deve passar a considerar compra separadamente autorizada e **rateio da VPS central entre os projetos**, após verificar checkout, impostos e capacidade. Sem compra ou teto aprovado.
+
 ## 1. Duas dimensões financeiras — não confundir
 
 - **Desembolso incremental:** o que efetivamente passará a ser cobrado a mais por provedores, profissionais, serviços ou licenças em consequência da fase C-00.

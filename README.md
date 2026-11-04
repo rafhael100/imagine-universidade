@@ -22,6 +22,8 @@
 
 **Início técnico restrito da Fundação Segura C-00 (04/11/2026):** [registro de primeira entrega em revisão](docs/00-governanca/REGISTRO-UNI-C00-CODIGO-INICIAL-EM-REVISAO-2026-11-04.md) e [Pull Request draft #1](https://github.com/rafhael100/imagine-universidade/pull/1). Foram preparados arquivos de Laravel, migração educacional fictícia, política mock de acesso e testes unitários **não executados**, exclusivamente na branch `feat/uni-c00-fundacao-segura`; `main` segue documental. **Gate C formal ainda não aberto**: falta nomear responsáveis, comprovar ambiente local, aprovar horas/custos e teto financeiro específico. Sem merge, contratação, servidor, CI, implantação ou acesso a dados reais.
 
+**Condição financeira e revisão C-00 (04/11/2026):** [DEC-UNI-C00 — teto R$ 0 e revisão obrigatória](docs/00-governanca/DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md). **Aprovado R$ 0,00 de novas despesas de fornecedores para a fase local**, sem presumir custo humano zero. Revisão técnica/segurança humana exigida; responsáveis, sandbox local, esforço, vigência e autorização formal Gate C continuam pendentes. PR #1 permanece draft e não executada.
+
 ## Por onde começar
 
 | Documento | Finalidade |

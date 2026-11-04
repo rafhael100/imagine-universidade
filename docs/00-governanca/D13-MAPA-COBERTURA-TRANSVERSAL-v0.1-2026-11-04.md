@@ -1,7 +1,7 @@
 # D13 — Cruzamento dos critérios funcionais com os casos transversais
 
 **Data:** 04/11/2026  
-**Estado:** **CONFERÊNCIA DOCUMENTAL PREPARADA; ACEITE DE D13 NÃO CONCEDIDO**.  
+**Estado vigente:** **COBERTURA DOCUMENTAL D13 APROVADA EM 04/11/2026**, conforme [DEC-UNI-D13](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md). A rastreabilidade individual, execução e evidências dos testes continuam para o Gate H; D14/D15 e Gate D estão abertos.  
 **Propósito:** demonstrar, sem programar, quais módulos se relacionam com os casos de teste futuros documentados em P0-03 a P0-09 e P0-11, identificando lacunas que deverão ser aprofundadas nos critérios de homologação.
 
 ## 1. Evidências verificadas
@@ -44,6 +44,6 @@
 
 **Resultado da conferência:** o acervo está suficientemente estruturado para demonstrar **84 critérios funcionais e 109 casos transversais candidatos**, preservando distinção entre teste futuro e evidência executada. Não se encontrou duplicidade de IDs nos conjuntos verificados.
 
-**Pendência D13:** confirmar institucionalmente que este cruzamento por família e as ressalvas de planos de teste funcionais futuros são **suficientes para o encerramento documental**, mantendo a matriz de rastreabilidade caso a caso como exigência para o Gate H (antes de uso real). O responsável ainda não concedeu esse aceite.
+**Ratificação D13:** o responsável aprovou expressamente a **suficiência deste cruzamento por famílias para encerramento documental de D13** ([decisão](DECISAO-UNI-D13-COBERTURA-DOCUMENTAL-2026-11-04.md)). A matriz de rastreabilidade **caso a caso** e a execução com evidências continuam exigências para o Gate H, antes de uso real.
 
 **Nenhuma programação, despesa, implantação ou encerramento do Gate D autorizados.**

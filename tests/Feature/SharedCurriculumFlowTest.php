@@ -341,4 +341,74 @@ final class SharedCurriculumFlowTest extends TestCase
         self::assertSame(0, DB::table('educational_lesson_progress')->count());
     }
 
+
+    public function test_published_course_cannot_be_edited_and_preserves_its_title(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-imutavel',
+            'title' => 'Título aprovado',
+            'category' => 'metodologia',
+        ])->assertCreated()->json('id');
+
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-um',
+            'title' => 'Aula única',
+            'body' => 'Conteúdo sintético de teste sem informações de clientes.',
+        ])->assertCreated();
+
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish")->assertOk();
+
+        $this->patchJson("/universidade/private/admin/courses/{$courseId}", [
+            'title' => 'Alteração indevida',
+            'summary' => 'Não pode sobrescrever publicação',
+            'category' => 'metodologia',
+        ])->assertNotFound();
+
+        self::assertSame('Título aprovado', DB::table('educational_courses')
+            ->where('id', $courseId)->value('title'));
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('action', 'course.updated')
+            ->count());
+    }
+
+    public function test_course_version_and_lesson_references_reject_cascading_deletion(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-preservado',
+            'title' => 'Curso histórico',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+
+        $lessonId = $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-historica',
+            'title' => 'Aula histórica',
+            'body' => 'Histórico precisa sobreviver a exclusões acidentais.',
+        ])->assertCreated()->json('id');
+
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish")->assertOk();
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")->assertOk();
+
+        try {
+            DB::table('educational_lessons')->where('id', $lessonId)->delete();
+            self::fail('A exclusão de aula com progresso deveria falhar pela FK RESTRICT.');
+        } catch (\Illuminate\Database\QueryException) {
+            // O progresso histórico continua preservado.
+        }
+
+        try {
+            DB::table('educational_courses')->where('id', $courseId)->delete();
+            self::fail('A exclusão do curso com versão publicada deveria falhar.');
+        } catch (\Illuminate\Database\QueryException) {
+            // O curso histórico não pode sumir em cascata.
+        }
+
+        self::assertSame(1, DB::table('educational_courses')->where('id', $courseId)->count());
+        self::assertSame(1, DB::table('educational_lessons')->where('id', $lessonId)->count());
+        self::assertSame(1, DB::table('educational_lesson_progress')
+            ->where('educational_lesson_id', $lessonId)->count());
+    }
+
 }

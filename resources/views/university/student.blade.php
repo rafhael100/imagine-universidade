@@ -45,6 +45,8 @@
     .lesson-text{white-space:pre-wrap;overflow-wrap:anywhere;color:#4B5769;margin:12px 0 20px}
     .primary{background:var(--orange);border:1px solid var(--orange);padding:11px 16px;border-radius:10px;font-weight:850;color:#3D290F}
     .primary:hover{background:#FFAC48}
+    .secondary{margin-left:9px;background:#fff;color:#70410C;border:1px solid #E5B56D;padding:11px 16px;border-radius:10px;font-weight:750}
+    .secondary:hover{background:#FFF5E8}
     .status{padding:12px 17px;border-radius:10px;background:#FFF6E8;border:1px solid #F0D7AD;color:#75501D;margin:18px 0}
     .status[hidden]{display:none}
     .empty{padding:25px;color:var(--muted)}
@@ -159,7 +161,7 @@ async function selectCourse(id){
     lessonsBox.replaceChildren();content.replaceChildren();
     if(!lessons.length){content.append(el("p","Ainda não existem aulas publicadas neste curso.","empty"));return;}
     for(const item of lessons){
-      const btn=el("button",undefined,"lesson-btn");btn.type="button";btn.dataset.lessonId=String(item.id);
+      const btn=el("button",undefined,"lesson-btn");btn.type="button";btn.dataset.lessonId=String(item.id);btn.dataset.completed=item.completed?"1":"0";
       const statusLabel=el("span",item.completed?"✓ Concluída":"Pendente");
       statusLabel.dataset.lessonStatus="";
       btn.append(el("strong",item.title),statusLabel);
@@ -176,7 +178,29 @@ function markLessonStatus(id,completed){
     if(Number(btn.dataset.lessonId)!==id)return;
     const marker=btn.querySelector("[data-lesson-status]");
     if(marker)marker.textContent=completed?"✓ Concluída":"Pendente";
+    btn.dataset.completed=completed?"1":"0";
   });
+}
+function nextPendingLessonId(currentId){
+  const items=Array.from(lessonsBox.querySelectorAll("[data-lesson-id]"));
+  const currentIndex=items.findIndex(btn=>Number(btn.dataset.lessonId)===currentId);
+  if(currentIndex<0)return null;
+  // Prioriza a aula seguinte e, caso necessário, volta às anteriores.
+  const ordered=items.slice(currentIndex+1).concat(items.slice(0,currentIndex));
+  const next=ordered.find(btn=>btn.dataset.completed==="0");
+  return next?Number(next.dataset.lessonId):null;
+}
+function offerNextLesson(id){
+  if(state.lessonId!==id||content.querySelector("[data-next-lesson]"))return;
+  const nextId=nextPendingLessonId(id);
+  if(nextId===null){
+    content.append(el("p","Você concluiu todas as aulas deste curso. Pode revisá-las quando quiser.","mini"));
+    return;
+  }
+  const advance=el("button","Ir para a próxima aula","secondary");
+  advance.type="button";advance.dataset.nextLesson="";
+  advance.addEventListener("click",()=>{say("");selectLesson(nextId);});
+  content.append(advance);
 }
 async function selectLesson(id){
   state.lessonId=id;
@@ -200,6 +224,7 @@ async function selectLesson(id){
         await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
         action.textContent="✓ Aula concluída";say("Seu progresso foi registrado.");
         markLessonStatus(id,true);
+        offerNextLesson(id);
         // A conclusão já foi confirmada. A falha de atualização da lista
         // não deve tornar o botão ativo nem sugerir conclusão malsucedida.
         try{
@@ -212,6 +237,7 @@ async function selectLesson(id){
       }catch(error){action.disabled=false;say(error.message);}
     });
     content.append(action);
+    if(progressPayload.completed)offerNextLesson(id);
   }catch(error){say(error.message);content.replaceChildren();}
 }
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});

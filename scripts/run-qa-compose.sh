@@ -29,7 +29,9 @@ cleanup() {
   docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa down \
     --volumes --remove-orphans || true
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "QA isolation: project $PROJECT; NO public ports, binds, deploy or real credentials."
 echo "This run downloads disposable images/dependencies and uses local CPU/network."

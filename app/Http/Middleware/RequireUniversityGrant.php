@@ -52,6 +52,11 @@ final class RequireUniversityGrant
         }
 
         $request->attributes->set('university.verified_grant', $grant);
-        return $next($request);
+
+        $response = $next($request);
+        // Conteúdo privado e progresso não devem permanecer em caches compartilhados.
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('Pragma', 'no-cache');
+        return $response;
     }
 }

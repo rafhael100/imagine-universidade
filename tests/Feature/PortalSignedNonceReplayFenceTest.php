@@ -8,6 +8,7 @@ use App\Domain\Access\PortalAccessGate;
 use App\Domain\Access\PortalSignedClaimCandidate;
 use App\Domain\Access\PortalSignedEnvelopeVerifier;
 use App\Domain\Access\PortalSignedNonceReplayFence;
+use App\Domain\Access\PortalNonceReplayRetention;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -125,4 +126,51 @@ final class PortalSignedNonceReplayFenceTest extends TestCase
         self::assertFalse($fence->reserveOnce($candidate, self::NOW));
         self::assertSame(1, DB::table('educational_portal_replay_nonces')->count());
     }
+
+    public function test_nonce_cleanup_never_removes_still_valid_claims(): void
+    {
+        $now = self::NOW;
+        $rows = [
+            ['a', $now - 86402],
+            ['b', $now - 86401],
+            ['c', $now - 86401],
+            ['d', $now - 86400], // Exactly 24h old: preserve.
+            ['e', $now - 60],    // Recently expired: preserve.
+            ['f', $now + 30],    // Still valid: preserve.
+        ];
+        foreach ($rows as [$letter, $expiry]) {
+            DB::table('educational_portal_replay_nonces')->insert([
+                'nonce_sha256' => hash('sha256', str_repeat($letter, 32)),
+                'expires_at_epoch' => $expiry,
+                'consumed_at' => now(),
+            ]);
+        }
+
+        $retention = new PortalNonceReplayRetention();
+        self::assertSame(2, $retention->pruneExpired($now, 2));
+        self::assertSame(4, DB::table('educational_portal_replay_nonces')->count());
+        self::assertSame(1, $retention->pruneExpired($now, 2));
+        self::assertSame(3, DB::table('educational_portal_replay_nonces')->count());
+
+        self::assertTrue(DB::table('educational_portal_replay_nonces')
+            ->where('nonce_sha256', hash('sha256', str_repeat('d', 32)))->exists());
+        self::assertTrue(DB::table('educational_portal_replay_nonces')
+            ->where('nonce_sha256', hash('sha256', str_repeat('e', 32)))->exists());
+        self::assertTrue(DB::table('educational_portal_replay_nonces')
+            ->where('nonce_sha256', hash('sha256', str_repeat('f', 32)))->exists());
+    }
+
+    public function test_cleanup_is_bounded_and_database_failure_is_not_authorization(): void
+    {
+        $retention = new PortalNonceReplayRetention();
+        self::assertSame(0, $retention->pruneExpired(self::NOW, 0));
+        self::assertSame(0, $retention->pruneExpired(self::NOW, 501));
+        self::assertSame(0, $retention->pruneExpired(10, 1));
+
+        Schema::drop('educational_portal_replay_nonces');
+        self::assertSame(0, $retention->pruneExpired(self::NOW, 100));
+        self::assertFalse((new PortalSignedNonceReplayFence())
+            ->reserveOnce($this->candidate(), self::NOW));
+    }
+
 }

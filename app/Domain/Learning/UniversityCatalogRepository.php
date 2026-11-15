@@ -368,15 +368,38 @@ final class UniversityCatalogRepository
         }
 
         return DB::transaction(function () use ($org, $lessonId, $input): bool {
-            $row = DB::table('educational_lessons as l')
+            $courseId = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
                 ->where('l.id', $lessonId)
                 ->where('c.educational_organization_id', $org)
                 ->where('c.is_shared', true)
+                ->value('c.id');
+            if ($courseId === null) {
+                return false;
+            }
+
+            // Mesma ordem do publish/unpublish: trava curso antes da aula.
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_shared', true)
+                ->where('is_published', false)
+                ->lockForUpdate()->first(['id']);
+            if ($course === null) {
+                return false;
+            }
+
+            $row = DB::table('educational_lessons as l')
+                ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+                ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+                ->where('l.id', $lessonId)
+                ->where('c.id', $courseId)
+                ->where('c.educational_organization_id', $org)
+                ->where('c.is_shared', true)
                 ->where('c.is_published', false)
                 ->where('v.status', 'draft')
-                ->select('l.id')->lockForUpdate()->first();
+                ->select('l.id')->first();
             if ($row === null) {
                 return false;
             }

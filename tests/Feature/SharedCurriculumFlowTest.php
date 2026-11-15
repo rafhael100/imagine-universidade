@@ -151,4 +151,28 @@ final class SharedCurriculumFlowTest extends TestCase
         ])->assertForbidden();
         self::assertSame(0, DB::table('educational_courses')->count());
     }
+    public function test_initialization_is_idempotent_and_requires_a_client_grant(): void
+    {
+        // Remover somente o registro sintético para testar provisão inicial.
+        DB::table('educational_organizations')
+            ->where('synthetic_key', 'synthetic-company-a')->delete();
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->postJson('/universidade/private/initialize')->assertForbidden();
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson('/universidade/private/initialize')
+            ->assertOk()->assertJsonPath('ready', true);
+        $this->postJson('/universidade/private/initialize')
+            ->assertOk()->assertJsonPath('ready', true);
+
+        self::assertSame(1, DB::table('educational_organizations')
+            ->where('synthetic_key', 'synthetic-company-a')->count());
+
+        // Falha de sessão não deve liberar cadastro da empresa B.
+        $this->asPortal('not-verified', 'synthetic-company-b');
+        $this->postJson('/universidade/private/initialize')->assertForbidden();
+    }
+
+
 }

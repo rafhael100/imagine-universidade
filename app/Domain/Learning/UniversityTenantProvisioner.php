@@ -35,6 +35,13 @@ final class UniversityTenantProvisioner
         }
 
         return DB::transaction(function () use ($grant): bool {
+            // Pode ter havido espera no banco depois do primeiro check.
+            $nowEpoch = time();
+            if ($grant->expiresAtEpoch <= $nowEpoch ||
+                $grant->expiresAtEpoch > $nowEpoch + 60) {
+                return false;
+            }
+
             $now = now();
 
             // A UNIQUE key de synthetic_key dá idempotência com concorrência.

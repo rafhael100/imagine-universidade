@@ -200,8 +200,10 @@ final class UniversityCatalogRepository
             }
 
             $now = now();
-            // A constraint UNIQUE (empresa,sujeito,aula) resolve repetição.
-            DB::table('educational_lesson_progress')->insertOrIgnore([
+            // A restrição UNIQUE permite repetição idempotente.
+            // Só declarar sucesso depois de confirmar que existe o
+            // registro EXATO deste aluno, nesta empresa e nesta aula.
+            $inserted = DB::table('educational_lesson_progress')->insertOrIgnore([
                 'educational_organization_id' => $org,
                 'subject_key' => $grant->subjectId,
                 'educational_lesson_id' => $lessonId,
@@ -210,7 +212,17 @@ final class UniversityCatalogRepository
                 'updated_at' => $now,
             ]);
 
-            return true;
+            if ($inserted === 1) {
+                return true;
+            }
+
+            // insertOrIgnore também pode retornar 0 por conflitos que não
+            // sejam a duplicidade esperada. Nunca produzir sucesso fictício.
+            return DB::table('educational_lesson_progress')
+                ->where('educational_organization_id', $org)
+                ->where('subject_key', $grant->subjectId)
+                ->where('educational_lesson_id', $lessonId)
+                ->exists();
         });
     }
 

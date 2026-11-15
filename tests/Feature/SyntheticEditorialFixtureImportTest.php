@@ -59,6 +59,20 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
         self::assertStringContainsString('Visitas', $methodology->title);
         self::assertStringContainsString('Leads', $methodology->title);
         self::assertStringContainsString('Clientes', $methodology->title);
+        $systems = DB::table('educational_courses')
+            ->where('slug', 'introducao-ferramentas-imagine')->first();
+        self::assertNotNull($systems);
+        self::assertSame('sistemas', $systems->category);
+        self::assertFalse((bool) $systems->is_published);
+        $systemsLessons = DB::table('educational_lessons as l')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->where('v.educational_course_id', $systems->id)
+            ->count();
+        self::assertSame(3, $systemsLessons);
+        $performanceLesson = DB::table('educational_lessons')
+            ->where('slug', 'performance-ai-acompanhamento-responsavel')->value('body');
+        self::assertIsString($performanceLesson);
+        self::assertStringContainsString('está em desenvolvimento', $performanceLesson);
     }
 
     public function test_repeated_import_does_not_overwrite_edited_content_or_history(): void

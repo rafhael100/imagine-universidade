@@ -31,13 +31,12 @@ php scripts/check-tenant-guard.php
 python3 scripts/check-sqlite-contract.py
 node scripts/check-ui-contract.mjs
 
-echo "[QA] Resolver pacotes somente neste contêiner de laboratório."
-if [[ -f composer.lock ]]; then
-  composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
-else
-  echo "[QA] ATENÇÃO: sem lockfile revisado. A resolução é experimental e será descartada."
-  composer update --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+echo "[QA] Instalar dependências versionadas e compatíveis com PHP 8.3."
+if [[ ! -f composer.lock ]]; then
+  echo "FAIL: composer.lock obrigatório no laboratório de QA." >&2
+  exit 2
 fi
+composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
 composer validate --strict
 
 echo "[QA] Rotas privadas registradas (não implica acesso liberado)."

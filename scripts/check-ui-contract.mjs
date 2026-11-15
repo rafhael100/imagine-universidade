@@ -198,7 +198,7 @@ console.log("PASS resume studies: priorizar curso incompleto, proteger curso con
 const otherCourseFn=studentProgressUI.match(/function nextIncompleteOtherCourseId\(courses,currentCourseId\)\{[\s\S]*?\n\}/)?.[0];
 assert.ok(otherCourseFn,"aluno: próximo curso pendente");
 function otherCourseFixture(courses,currentId){
-  return new Script(progressFn+"\n"+otherCourseFn+"\nnextIncompleteOtherCourseId(courses,currentId)",{
+  return new Script(progressFn+"\n"+otherCourseFn+"\nnextIncompleteOtherCourseId(courses,currentCourseId)",{
     filename:"student-next-course",
   }).runInNewContext({courses,currentCourseId:currentId});
 }

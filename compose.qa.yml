@@ -1,5 +1,6 @@
 # QA local/na VPS de desenvolvimento. Explicitly run; no auto-start.
-# Contains only synthetic data. No host ports, bind mounts, or production secrets.
+# Contains only synthetic data. No host ports/bind mounts or production secrets.
+# The named storage volume is removed at the end of each authorized QA run.
 services:
   db:
     image: postgres:18-alpine
@@ -8,8 +9,11 @@ services:
       POSTGRES_DB: uni_ci
       POSTGRES_USER: uni_ci
       POSTGRES_PASSWORD: synthetic_ci_only
-    tmpfs:
-      - /var/lib/postgresql:size=512m,mode=0700
+    # Volume nomeado efêmero: o entrypoint oficial PostgreSQL18
+    # prepara permissões do diretório antes de criar o cluster.
+    # O script de QA remove este volume com down --volumes ao final.
+    volumes:
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U uni_ci -d uni_ci"]
       interval: 5s
@@ -50,6 +54,9 @@ services:
       - no-new-privileges:true
     mem_limit: 3g
     pids_limit: 160
+
+volumes:
+  pgdata:
 
 networks:
   university_qa:

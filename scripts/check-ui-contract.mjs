@@ -27,7 +27,7 @@ for (const [role, path, prefix] of views) {
   assert.match(html, /name="robots" content="noindex,nofollow,noarchive"/, role + ": robots");
   assert.match(html, /name="csrf-token" content="\{\{ csrf_token\(\) \}\}"/, role + ": CSRF");
   assert.doesNotMatch(html, /<script\b[^>]*\bsrc\s*=/i, role + ": JS externo");
-  assert.doesNotMatch(html, /\b(?:localStorage|sessionStorage|eval)\s*[\[(]/, role + ": armazenamento ou eval");
+  assert.doesNotMatch(html, /\b(?:localStorage|sessionStorage|eval)\b/, role + ": armazenamento ou eval");
   assert.doesNotMatch(match[1], /\b(?:innerHTML|outerHTML)\s*=|\binsertAdjacentHTML\s*\(/, role + ": HTML dinâmico não saneado");
   assert.ok(match[1].includes('credentials:"same-origin"'), role + ": cookies same-origin");
   assert.ok(match[1].includes('"X-CSRF-TOKEN":csrf'), role + ": cabeçalho CSRF");

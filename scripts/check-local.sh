@@ -26,6 +26,13 @@ echo '[PASS] Política de acesso em PHP puro'
 php scripts/check-learning-mock.php
 echo '[PASS] Progresso sintético em PHP puro'
 
+if command -v python3 >/dev/null 2>&1; then
+  python3 scripts/check-sqlite-contract.py
+  echo '[PASS] Restrições SQLite e conflitos de progresso em memória'
+else
+  echo '[PENDENTE] Python3 indisponível para o smoke SQL; seguir apenas com testes PHP.' >&2
+fi
+
 if ! command -v composer >/dev/null 2>&1; then
   echo '[PENDENTE] Composer não instalado; testes Laravel não foram executados.' >&2
   exit 2

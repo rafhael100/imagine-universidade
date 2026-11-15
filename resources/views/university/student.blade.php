@@ -70,6 +70,7 @@
     <p>Aprenda com aulas rápidas, nossa metodologia e orientações práticas para aproveitar melhor os serviços Imagine.</p>
     <p id="overall-progress" class="overall-progress" aria-live="polite">Seu progresso será exibido após autorizar os cursos.</p>
     <button type="button" id="resume-course" class="primary resume-btn" disabled>Retomar meus estudos</button>
+    <button type="button" id="export-progress" class="secondary" disabled>Exportar meu progresso</button>
   </section>
   <div id="status" role="status" aria-live="polite" class="status" hidden></div>
   <nav class="pills" aria-label="Categorias dos cursos">
@@ -126,6 +127,7 @@ function lockAccess(message){
   overall.textContent="Acesso à Universidade encerrado.";
   document.getElementById("course-search").disabled=true;
   document.getElementById("resume-course").disabled=true;
+  document.getElementById("export-progress").disabled=true;
   document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
   say(message);
 }
@@ -191,6 +193,7 @@ function renderCourses(){
     :"Nenhuma aula publicada disponível no momento.";
   const resume=document.getElementById("resume-course");
   resume.disabled=nextPendingCourseId(state.courses,state.courseId)===null;
+  document.getElementById("export-progress").disabled=false;
   const items=coursesFiltered();
   if(!items.length){list.append(el("p","Nenhum curso publicado nesta categoria.","empty"));return;}
   for(const c of items){
@@ -328,6 +331,24 @@ function openCourseWithAllFilters(target){
   say("");
   selectCourse(target);
 }
+document.getElementById("export-progress").addEventListener("click",async()=>{
+  if(state.accessDenied)return;
+  const button=document.getElementById("export-progress");
+  button.disabled=true;
+  try{
+    const progress=await api("/progress/export");
+    if(state.accessDenied)return;
+    const data=new Blob([JSON.stringify(progress,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(data);
+    const link=document.createElement("a");
+    link.href=url;link.download="imagine-universidade-progresso.json";
+    document.body.append(link);
+    link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    say("Arquivo de progresso preparado. Guarde seus dados com segurança.");
+  }catch(error){say(error.message);}
+  finally{if(!state.accessDenied)button.disabled=false;}
+});
 document.getElementById("resume-course").addEventListener("click",()=>{
   const target=nextPendingCourseId(state.courses,state.courseId);
   if(target!==null)openCourseWithAllFilters(target);

@@ -240,6 +240,14 @@ assert.match(adminUI,/\$\("delete-course"\)\.disabled=!c\|\|!!c.is_published/,"a
 assert.match(routes,/Route::delete\('\/courses\/\{courseId\}'/,"backend: rota privada de exclusão");
 console.log("PASS delete draft course: confirmação UI e rota administrativa protegida");
 
+
+assert.match(routes,/Route::get\('\/progress\/export', \[UniversityController::class, 'exportProgress'\]\)/,"backend: export exige permissão view");
+assert.match(studentProgressUI,/id="export-progress" class="secondary" disabled/,"aluno: exportação inicia bloqueada");
+assert.match(studentProgressUI,/document.getElementById\("export-progress"\).disabled=true/,"aluno: revogação desativa export");
+assert.match(studentProgressUI,/await api\("\/progress\/export"\)/,"aluno: export usa API privada");
+assert.match(studentProgressUI,/link.download="imagine-universidade-progresso.json"/,"aluno: arquivo com nome explícito");
+console.log("PASS export progress: download privado, desabilitado na revogação");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

@@ -204,6 +204,57 @@ final class UniversityCatalogRepository
         return $this->grantUsable($grant, PortalAccessGate::VIEW) ? $lessons : [];
     }
 
+    /**
+     * Leitura privada e limitada do histórico do aluno autenticado.
+     * Inclui versões arquivadas para que a retirada de um curso do ar não
+     * destrua seu histórico, mas nunca inclui dados de outra empresa/aluno.
+     * Null = indisponível/negação conservadora, não substitui Portal SSO.
+     *
+     * @return array{schema_version:int,scope:string,completions:list<array<string,int|string>>}|null
+     */
+    public function exportProgress(PortalGrant $grant): ?array
+    {
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return null;
+        }
+
+        $entries = DB::table('educational_lesson_progress as p')
+            ->join('educational_lessons as l', 'l.id', '=', 'p.educational_lesson_id')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->where('p.educational_organization_id', $org)
+            ->where('p.subject_key', $grant->subjectId)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
+            ->whereIn('v.status', ['published', 'archived'])
+            ->orderBy('p.id')
+            ->limit(5001)
+            ->get(['c.slug as course_slug', 'v.version as course_version',
+                'l.slug as lesson_slug', 'p.completed_at'])
+            ->all();
+
+        // Nunca exportar parcialmente como se fosse um histórico completo.
+        if (count($entries) > 5000 || !$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return null;
+        }
+
+        return [
+            'schema_version' => 1,
+            'scope' => 'current_authenticated_student',
+            'completions' => array_map(
+                static fn (stdClass $item): array => [
+                    'course_slug' => (string) $item->course_slug,
+                    'course_version' => (int) $item->course_version,
+                    'lesson_slug' => (string) $item->lesson_slug,
+                    'completed_at' => (string) $item->completed_at,
+                ],
+                $entries,
+            ),
+        ];
+    }
+
     public function isComplete(PortalGrant $grant, int $lessonId): ?bool
     {
         $org = $this->orgId($grant);

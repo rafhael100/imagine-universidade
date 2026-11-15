@@ -447,6 +447,71 @@ final class SharedCurriculumFlowTest extends TestCase
             ->where('action', 'course.deleted')->count());
     }
 
+
+    public function test_student_can_export_only_own_progress_including_archived_versions(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-exportavel',
+            'title' => 'Curso exportável',
+            'category' => 'metodologia',
+        ])->assertCreated()->json('id');
+        $lessonId = $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-historica-exportavel',
+            'title' => 'Aula sobre o funil',
+            'body' => 'Conteúdo sintético para exportação autorizada.',
+        ])->assertCreated()->json('id');
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish")->assertOk();
+
+        $this->asPortal('demo-b', 'synthetic-company-b');
+        $this->getJson('/universidade/private/progress/export')
+            ->assertOk()->assertJsonCount(0, 'completions')
+            ->assertJsonPath('schema_version', 1);
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertOk()->assertJsonPath('completed', true);
+        $export = $this->getJson('/universidade/private/progress/export')
+            ->assertOk()->assertJsonCount(1, 'completions')
+            ->assertJsonPath('scope', 'current_authenticated_student')
+            ->assertJsonPath('completions.0.course_slug', 'curso-exportavel')
+            ->assertJsonPath('completions.0.course_version', 1)
+            ->assertJsonPath('completions.0.lesson_slug', 'aula-historica-exportavel')
+            ->assertHeader('Content-Disposition', 'attachment; filename="imagine-universidade-progresso.json"');
+        $export->assertDontSee('synthetic-person-a')->assertDontSee('synthetic-company-a');
+        self::assertStringNotContainsString('subject_key', $export->getContent());
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/unpublish")
+            ->assertOk();
+        $this->getJson('/universidade/private/progress/export')->assertForbidden();
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->getJson('/universidade/private/progress/export')
+            ->assertOk()->assertJsonCount(1, 'completions')
+            ->assertJsonPath('completions.0.course_version', 1);
+        $this->getJson("/universidade/private/lessons/{$lessonId}")->assertNotFound();
+
+        $this->asPortal('demo-b', 'synthetic-company-b');
+        $this->getJson('/universidade/private/progress/export')
+            ->assertOk()->assertJsonCount(0, 'completions');
+    }
+
+    public function test_export_rejects_forged_session_company_and_unverified_permissions(): void
+    {
+        $this->asPortal('demo-a', 'synthetic-company-b');
+        $this->getJson('/universidade/private/progress/export')->assertForbidden();
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->getJson('/universidade/private/progress/export')->assertForbidden();
+
+        $this->withSession([
+            'portal_server_credential' => 'no-verified-session',
+            'portal_company_id' => 'synthetic-company-a',
+        ]);
+        $this->getJson('/universidade/private/progress/export')->assertForbidden();
+    }
+
     public function test_course_version_and_lesson_references_reject_cascading_deletion(): void
     {
         $this->asPortal('demo-editor', 'imagine-editorial');

@@ -54,6 +54,21 @@ final class UniversityController
         return response()->json(['courses' => $this->catalog->catalog($this->grant($request))]);
     }
 
+    public function exportProgress(Request $request): JsonResponse
+    {
+        try {
+            $progress = $this->catalog->exportProgress($this->grant($request));
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        return $progress === null
+            ? response()->json(['error' => 'temporarily_unavailable'], 503)
+            : response()->json($progress, 200, [
+                'Content-Disposition' => 'attachment; filename="imagine-universidade-progresso.json"',
+            ]);
+    }
+
     public function lessons(Request $request, int $courseId): JsonResponse
     {
         return response()->json(['lessons' => $this->catalog->lessons($this->grant($request), $courseId)]);

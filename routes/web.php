@@ -15,6 +15,7 @@ Route::prefix('universidade/private')->group(function (): void {
         Route::view('/app', 'university.student');
         Route::post('/initialize', [UniversityController::class, 'initialize']);
         Route::get('/courses', [UniversityController::class, 'courses']);
+        Route::get('/progress/export', [UniversityController::class, 'exportProgress']);
         Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'lessons'])
             ->whereNumber('courseId');
         Route::get('/lessons/{lessonId}', [UniversityController::class, 'lesson'])

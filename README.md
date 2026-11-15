@@ -1,5 +1,7 @@
 # Universidade Imagine — Documentação oficial de planejamento
 
+> **Nova diretriz editorial (15/11/2026):** Visitas → Leads → Clientes será a trilha transversal de crescimento do ecossistema Imagine. [Conheça o roteiro v0.1, 6 cursos e 24 aulas propostos](docs/UNI-TRILHA-VISITAS-LEADS-CLIENTES-v0.1-2026-11-15.md). O documento é planejamento curricular; não altera acesso exclusivo dos clientes, o modelo de sete etapas MIA nem a regra sem provas/notas/certificados; nenhuma aula foi publicada por esta PR.
+
 > **Repositório privado de documentação.** Não contém implementação da plataforma, vídeos publicados, contratos de fornecedores ou homologação de ambiente.
 
 **Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. **O Gate D foi encerrado documentalmente em 04/11/2026 por aprovação expressa do D15**; orçamento/teto do desenvolvimento, contratações e programação **não foram autorizados**.

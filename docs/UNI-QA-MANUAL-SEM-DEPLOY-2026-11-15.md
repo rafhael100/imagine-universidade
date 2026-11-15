@@ -14,8 +14,10 @@ A execução prevista inclui:
 6. Confirmação de que o provider do Portal continua negando acesso por padrão.
 
 ## Restrições e como não causar despesas
-- O evento configurado é **somente workflow_dispatch**: não há gatilho por push, pull_request ou agenda.
-- **Importante:** um workflow_dispatch normalmente exige que o arquivo de workflow exista na branch padrão para poder ser iniciado pela interface/endpoint. Como este arquivo está apenas numa branch DRAFT, **não foi executado nem está disponível para disparo manual imediato**. Não copiar para main sem decisão de gate.
+- O workflow foi estendido para evento `pull_request` **somente do tipo `labeled`**, e o job só é executado quando o rótulo exato `uni-qa-approved` é aplicado a uma PR do próprio repositório cuja base é `main`. Eventos de criação, atualização, push ou agenda não executam o job.
+- A opção `workflow_dispatch` continua disponível para quando o workflow for aceito na branch padrão; não é necessária para a PR atual.
+- O rótulo `uni-qa-approved` deve existir no repositório e ser aplicado explicitamente pela equipe autorizada; **nenhum rótulo foi criado/aplicado e nenhum runner foi iniciado nesta entrega**. Antes de aplicar, verificar orçamento de minutos do GitHub Actions para o repositório privado e aprovar consumo dentro da franquia.
+- Se o rótulo tiver sido aplicado anteriormente, removê-lo e reaplicá-lo é uma nova autorização explícita; não usar outros rótulos como substitutos.
 - Quando/SE aprovado para execução, o GitHub Actions pode consumir minutos da franquia da conta e eventualmente gerar cobrança após os limites. Revisar uso/limites antes de acionar.
 - As credenciais de PostgreSQL são sintéticas, restritas ao runner e diferentes das credenciais reais; o workflow não usa secrets do repositório.
 - Permissões do token GitHub limitadas a contents:read; checkout sem persistir credenciais; nenhuma etapa de deploy, upload, release, merge ou SSH.
@@ -27,4 +29,4 @@ A execução prevista inclui:
 - Homologar as permissões do Portal, vínculo do serviço elegível, sessão business/MFA, revogação e consulta de recurso sob mesma fronteira de confiança (Portal issue #848).
 - Revisões SEG/DBA/LGPD, auditoria, retenção, backup, rollback, acessibilidade e aprovações para merge/deploy.
 
-**Estado atual:** infraestrutura de QA documentada como código candidato, nenhum novo workflow disparado, nenhuma mudança na main ou na VPS.
+**Estado atual:** workflow pode ser acionado via rótulo explícito em PR de revisão, mas continua sem execução; nenhum rótulo aplicado, novo workflow disparado, mudança na main ou na VPS.

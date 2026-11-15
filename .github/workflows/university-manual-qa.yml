@@ -139,3 +139,34 @@ jobs:
           grep -Fq "university.grant:view" routes/web.php
           grep -Fq "university.grant:manage" routes/web.php
           echo "Sem deploy, SSO real ou grants operacionais."
+
+
+  isolated-compose:
+    # Runs only after the existing explicitly gated QA job succeeds.
+    needs: [isolated-tests]
+    if: needs.isolated-tests.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout fonte de revisão sem credenciais persistentes
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Confirmar Docker local e ausência de segredos
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "pull_request" || test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$(docker context show)" = "default"
+          test -z "$(printenv DOCKER_HOST || true)"
+          test ! -e .env
+          test ! -e .env.production
+          test ! -e .env.local
+          docker compose version
+          echo "PASS: Docker Compose local, descartável, sem segredos."
+
+      - name: Executar laboratório Docker Compose sem portas públicas
+        shell: bash
+        run: bash scripts/run-qa-compose.sh

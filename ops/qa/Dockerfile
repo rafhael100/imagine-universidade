@@ -23,7 +23,7 @@ WORKDIR /work/universidade
 
 # Allowlist files only: exclude .env, .git, local secrets, production data,
 # preview and files outside the development source/test tree.
-COPY --chown=uniqa:uniqa composer.json phpunit.xml artisan ./
+COPY --chown=uniqa:uniqa composer.* phpunit.xml artisan ./
 COPY --chown=uniqa:uniqa app/ ./app/
 COPY --chown=uniqa:uniqa bootstrap/ ./bootstrap/
 COPY --chown=uniqa:uniqa database/ ./database/

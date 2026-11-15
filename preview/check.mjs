@@ -29,7 +29,7 @@ const catalog = vm.runInNewContext(snippet, Object.create(null), {timeout:1000})
 assert.equal(catalog.length, 6, "seis cursos demonstrativos");
 assert.equal(catalog.reduce((n,c)=>n+c.lessons.length,0), 14, "quatorze microaulas");
 assert.equal(new Set(catalog.map(c=>c.id)).size, catalog.length);
-assert.deepEqual([...new Set(catalog.map(c=>c.area))].sort(), ["metodologia","negocios","sistemas"]);
+assert.equal([...new Set(catalog.map(c=>c.area))].sort().join("|"), "metodologia|negocios|sistemas");
 for (const c of catalog) {
   for (const key of ["id","area","name","description","icon"]) assert.ok(typeof c[key]==="string" && c[key].length>0);
   assert.ok(c.lessons.length>0);

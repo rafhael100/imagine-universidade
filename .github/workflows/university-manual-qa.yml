@@ -164,7 +164,10 @@ jobs:
           test -f scripts/run-qa-compose.sh
           # Sem portas publicadas, volumes/bind mounts ou host remoto.
           ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
-          ! grep -Eq '^[[:space:]]+volumes:' compose.qa.yml
+          grep -Fq 'pgdata:/var/lib/postgresql' compose.qa.yml
+          # Named QA volume is safe; never allow host path bind mounts.
+          ! grep -Eq '^[[:space:]]+-[[:space:]]+(/|[.]|~|\$\{)' compose.qa.yml
+          ! grep -Fq '/var/run/docker.sock' compose.qa.yml
           ! grep -Eq '^[[:space:]]+privileged:' compose.qa.yml
           echo "QA Docker com dados e rede descartáveis autorizado."
 

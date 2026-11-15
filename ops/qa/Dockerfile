@@ -1,5 +1,5 @@
 # Dedicated disposable QA image. Never deploy this image in production.
-FROM php:8.4-cli-bookworm
+FROM php:8.3-cli-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -28,6 +29,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Never discard live replay evidence during an automatic rollback.
+        // The operator must complete an audited retention cleanup first.
+        if (Schema::hasTable('educational_portal_replay_nonces')
+            && DB::table('educational_portal_replay_nonces')->exists()) {
+            throw new \RuntimeException('Nonce ledger rollback requires audited empty-table gate.');
+        }
         Schema::dropIfExists('educational_portal_replay_nonces');
     }
 };

@@ -50,7 +50,6 @@ services:
       - no-new-privileges:true
     mem_limit: 3g
     pids_limit: 160
-    networks: !reset []
 
 networks:
   university_qa:

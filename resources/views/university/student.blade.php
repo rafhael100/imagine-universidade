@@ -160,11 +160,23 @@ async function selectCourse(id){
     if(!lessons.length){content.append(el("p","Ainda não existem aulas publicadas neste curso.","empty"));return;}
     for(const item of lessons){
       const btn=el("button",undefined,"lesson-btn");btn.type="button";btn.dataset.lessonId=String(item.id);
-      btn.append(el("strong",item.title),el("span","Abrir aula"));
+      const statusLabel=el("span",item.completed?"✓ Concluída":"Pendente");
+      statusLabel.dataset.lessonStatus="";
+      btn.append(el("strong",item.title),statusLabel);
       lessonsBox.append(btn);
     }
-    await selectLesson(Number(lessons[0].id));
+    // Retomar pela primeira aula ainda pendente. Se todas estiverem
+    // concluídas, abrir a última para permitir revisar o conteúdo.
+    const next=lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
+    await selectLesson(Number(next.id));
   }catch(error){say(error.message);content.replaceChildren();}
+}
+function markLessonStatus(id,completed){
+  lessonsBox.querySelectorAll("[data-lesson-id]").forEach(btn=>{
+    if(Number(btn.dataset.lessonId)!==id)return;
+    const marker=btn.querySelector("[data-lesson-status]");
+    if(marker)marker.textContent=completed?"✓ Concluída":"Pendente";
+  });
 }
 async function selectLesson(id){
   state.lessonId=id;
@@ -177,6 +189,7 @@ async function selectLesson(id){
     ]);
     if(state.lessonId!==id)return;
     const lesson=lessonPayload.lesson;
+    markLessonStatus(id,!!progressPayload.completed);
     content.replaceChildren();
     content.append(el("h3",lesson.title),el("p",lesson.body,"lesson-text"));
     const action=el("button",progressPayload.completed?"✓ Aula concluída":"Marcar como concluída","primary");
@@ -186,6 +199,7 @@ async function selectLesson(id){
       try{
         await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
         action.textContent="✓ Aula concluída";say("Seu progresso foi registrado.");
+        markLessonStatus(id,true);
         // A conclusão já foi confirmada. A falha de atualização da lista
         // não deve tornar o botão ativo nem sugerir conclusão malsucedida.
         try{

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Route;
  */
 Route::prefix('universidade/private')->group(function (): void {
     Route::middleware('university.grant:view')->group(function (): void {
+        Route::post('/initialize', [UniversityController::class, 'initialize']);
         Route::get('/courses', [UniversityController::class, 'courses']);
         Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'lessons'])
             ->whereNumber('courseId');

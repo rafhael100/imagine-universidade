@@ -71,7 +71,7 @@ jobs:
       - name: PHP 8.4 + extensões de teste
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.4"
+          php-version: "8.3"
           extensions: mbstring, dom, xml, pdo_sqlite, pdo_pgsql, sqlite3, openssl, fileinfo
           tools: composer:v2
           coverage: none
@@ -98,36 +98,13 @@ jobs:
           python3 scripts/check-sqlite-contract.py
           node scripts/check-ui-contract.mjs
 
-      # A resolução é local ao runner: o repositório ainda não possui lockfile.
-      # O arquivo gerado é descartado ao fim deste job; não há release.
-      # O repositório ainda não contém composer.lock. Isto é somente
-      # uma resolução provisória em runner descartável; nunca deployar
-      # dependências não travadas em ambiente compartilhado ou produção.
-      - name: Resolver dependências de laboratório
-        run: composer update --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
-
-      # TEMPORÁRIO: transportar somente o lockfile de bibliotecas públicas
-      # resolvido pelo CI. Remover esta etapa assim que lock estiver versionado.
-      - name: Exportar composer.lock de laboratório para revisão
-        shell: bash
+      - name: Instalar dependências travadas de PHP 8.3
         run: |
           set -euo pipefail
           test -f composer.lock
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64, hashlib
-          payload = Path("composer.lock").read_bytes()
-          if not payload or len(payload) > 2000000:
-              raise SystemExit("composer.lock tamanho inesperado")
-          print("UNI_LOCK_SHA256=" + hashlib.sha256(payload).hexdigest())
-          print("UNI_LOCK_BEGIN")
-          encoded = base64.b64encode(payload).decode("ascii")
-          for offset in range(0, len(encoded), 3000):
-              print("UNI_LOCK_PART:" + encoded[offset:offset + 3000])
-          print("UNI_LOCK_END")
-          PY
+          composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
 
-      - name: Validar dependências após resolução descartável
+      - name: Validar composer.json e composer.lock versionados
         run: composer validate --no-check-publish
 
       - name: PHPUnit Unit e Feature com SQLite em memória

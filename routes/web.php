@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Route;
  */
 Route::prefix('universidade/private')->group(function (): void {
     Route::middleware('university.grant:view')->group(function (): void {
+        Route::view('/app', 'university.student');
         Route::post('/initialize', [UniversityController::class, 'initialize']);
         Route::get('/courses', [UniversityController::class, 'courses']);
         Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'lessons'])
@@ -25,6 +26,7 @@ Route::prefix('universidade/private')->group(function (): void {
     });
 
     Route::middleware('university.grant:manage')->prefix('admin')->group(function (): void {
+        Route::view('/app', 'university.admin');
         Route::get('/courses', [UniversityController::class, 'adminCourses']);
         Route::post('/courses', [UniversityController::class, 'createCourse']);
         Route::patch('/courses/{courseId}', [UniversityController::class, 'updateCourse'])

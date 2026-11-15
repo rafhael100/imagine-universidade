@@ -124,6 +124,7 @@ jobs:
           php artisan migrate:status --database=pgsql
           php scripts/check-pg-schema.php
           php scripts/check-pg-flow.php
+          php scripts/check-pg-nonce.php
           # Carga sintética EXCLUSIVA do PostgreSQL descartável de CI.
           first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
           echo "$first" | grep -Fq '4 courses created; 11 lessons created; 0 courses preserved.'

@@ -281,4 +281,64 @@ final class SharedCurriculumFlowTest extends TestCase
             ->where('action', 'lesson.deleted')->count());
     }
 
+
+    public function test_completion_does_not_claim_success_on_unexpected_unique_conflict(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $course = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-conflito',
+            'title' => 'Curso de integridade',
+            'category' => 'metodologia',
+        ])->assertCreated()->json('id');
+
+        $first = $this->postJson("/universidade/private/admin/courses/{$course}/lessons", [
+            'slug' => 'primeira',
+            'title' => 'Primeira aula',
+            'body' => 'Conteúdo fictício da primeira aula.',
+        ])->assertCreated()->json('id');
+
+        $second = $this->postJson("/universidade/private/admin/courses/{$course}/lessons", [
+            'slug' => 'segunda',
+            'title' => 'Segunda aula',
+            'body' => 'Conteúdo fictício da segunda aula.',
+        ])->assertCreated()->json('id');
+
+        $this->postJson("/universidade/private/admin/courses/{$course}/publish")->assertOk();
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson("/universidade/private/lessons/{$first}/complete")
+            ->assertOk()->assertJsonPath('completed', true);
+
+        // Índice adversarial temporário EXCLUSIVO de teste: força o banco
+        // a ignorar uma inserção por conflito não relacionado à chave
+        // idempotente (empresa + usuário + aula).
+        DB::statement('CREATE UNIQUE INDEX edu_test_unexpected_progress_conflict ON educational_lesson_progress (subject_key)');
+
+        $this->postJson("/universidade/private/lessons/{$second}/complete")->assertNotFound();
+        $this->getJson("/universidade/private/lessons/{$second}/progress")
+            ->assertOk()->assertJsonPath('completed', false);
+        self::assertSame(1, DB::table('educational_lesson_progress')->count());
+    }
+
+    public function test_archived_lesson_cannot_be_completed_again(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $course = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'arquivo-protegido',
+            'title' => 'Curso com arquivo protegido',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+        $lesson = $this->postJson("/universidade/private/admin/courses/{$course}/lessons", [
+            'slug' => 'aula-arquivada',
+            'title' => 'Aula arquivada',
+            'body' => 'Um texto fictício que será arquivado.',
+        ])->assertCreated()->json('id');
+        $this->postJson("/universidade/private/admin/courses/{$course}/publish")->assertOk();
+        $this->postJson("/universidade/private/admin/courses/{$course}/unpublish")->assertOk();
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson("/universidade/private/lessons/{$lesson}/complete")->assertNotFound();
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
 }

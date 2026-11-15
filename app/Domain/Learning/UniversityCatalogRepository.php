@@ -350,21 +350,37 @@ final class UniversityCatalogRepository
         }
 
         return DB::transaction(function () use ($grant, $org, $courseId, $input): bool {
+            // Lock igual ao utilizado por publish/unpublish e operações de aula:
+            // a verificação de rascunho e a edição devem ser atômicas.
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_shared', true)
+                ->where('is_published', false)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($course === null) {
+                return false;
+            }
+
             $changed = DB::table('educational_courses')
-            ->where('id', $courseId)
-            ->where('educational_organization_id', $org)
-            ->where('is_shared', true)
-            ->where('is_published', false)
-            ->update([
-                'title' => $input['title'],
-                'summary' => $input['summary'] ?? null,
-                'category' => $input['category'],
-                'sort_order' => $input['sort_order'] ?? 0,
-                'updated_at' => now(),
-            ]) > 0;
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_shared', true)
+                ->where('is_published', false)
+                ->update([
+                    'title' => $input['title'],
+                    'summary' => $input['summary'] ?? null,
+                    'category' => $input['category'],
+                    'sort_order' => $input['sort_order'] ?? 0,
+                    'updated_at' => now(),
+                ]) > 0;
+
             if ($changed) {
                 $this->audit($grant, $org, 'course.updated', 'course', $courseId);
             }
+
             return $changed;
         });
     }

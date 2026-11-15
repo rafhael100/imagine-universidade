@@ -21,6 +21,25 @@ final class RequireUniversityGrant
     {
     }
 
+    private function protectedHeaders(Response $response): Response
+    {
+        $response->headers->set('Cache-Control', 'private, no-store');
+        $response->headers->set('Pragma', 'no-cache');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        $response->headers->set('Referrer-Policy', 'same-origin');
+
+        return $response;
+    }
+
+    private function deny(): Response
+    {
+        return $this->protectedHeaders(
+            response()->json(['error' => 'access_denied'], 403)
+        );
+    }
+
     public function handle(Request $request, Closure $next, string $capability): Response
     {
         $permission = match ($capability) {
@@ -30,7 +49,7 @@ final class RequireUniversityGrant
         };
 
         if ($permission === null) {
-            return response()->json(['error' => 'access_denied'], 403);
+            return $this->deny();
         }
 
         try {
@@ -39,24 +58,20 @@ final class RequireUniversityGrant
             $company = $request->session()->get('portal_company_id');
 
             if (!is_string($credential) || !is_string($company)) {
-                return response()->json(['error' => 'access_denied'], 403);
+                return $this->deny();
             }
 
             $grant = $this->gate->authorize($credential, $company, $permission, time());
         } catch (Throwable) {
-            return response()->json(['error' => 'access_denied'], 403);
+            return $this->deny();
         }
 
         if (!$grant->allowed) {
-            return response()->json(['error' => 'access_denied'], 403);
+            return $this->deny();
         }
 
         $request->attributes->set('university.verified_grant', $grant);
 
-        $response = $next($request);
-        // Conteúdo privado e progresso não devem permanecer em caches compartilhados.
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('Pragma', 'no-cache');
-        return $response;
+        return $this->protectedHeaders($next($request));
     }
 }

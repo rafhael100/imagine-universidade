@@ -1,7 +1,11 @@
-name: Universidade Imagine — QA manual isolado (sem deploy)
+name: Universidade Imagine — QA com aprovação explícita (sem deploy)
 
-# Não é executado ao abrir/atualizar PR. Ação manual explícita exigida.
+# Disparo por rótulo explícito na PR, não por push/abertura/atualização.
+# workflow_dispatch depende da branch padrão; 'labeled' permite QA
+# em branch de revisão sem merge e sem deploy.
 on:
+  pull_request:
+    types: [labeled]
   workflow_dispatch:
     inputs:
       confirm:
@@ -20,7 +24,13 @@ concurrency:
 
 jobs:
   isolated-tests:
-    if: github.event.inputs.confirm == 'test-only'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'test-only') ||
+      (github.event_name == 'pull_request' &&
+       github.event.action == 'labeled' &&
+       github.event.label.name == 'uni-qa-approved' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -71,7 +81,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch" || test "$GITHUB_EVENT_NAME" = "pull_request"
           test "$DB_DATABASE" = "uni_ci"
           test "$DB_USERNAME" = "uni_ci"
           test "$DB_HOST" = "127.0.0.1"

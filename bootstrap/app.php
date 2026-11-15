@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\RequireUniversityGrant;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,9 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // A autenticação central será integrada apenas após contratos homologados.
+        $middleware->alias([
+            'university.grant' => RequireUniversityGrant::class,
+        ]);
+        // O grupo padrão "web" já aplica sessão e proteção CSRF.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // Nunca expor dados/segredos no tratamento de erros.
+        // Nunca expor credenciais de sessão ou detalhes da autoridade.
     })
     ->create();

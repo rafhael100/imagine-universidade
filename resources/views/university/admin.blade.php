@@ -33,6 +33,7 @@
     .actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
     .primary{background:var(--orange);color:#39230F;border:1px solid var(--orange);border-radius:10px;padding:10px 16px;font-weight:850}
     .secondary{background:white;border:1px solid #D8DEE6;border-radius:10px;padding:10px 15px;font-weight:750}
+    .danger{color:#A22724;border-color:#E8BDBA}
     .chip{font-size:11px;border-radius:999px;padding:5px 9px;background:#F0F2F5;color:#536071;font-weight:800}
     .chip.published{background:#E7F5ED;color:#23684A}
     hr{border:0;border-top:1px solid var(--line);margin:26px 0}
@@ -84,7 +85,7 @@
             <div class="field"><label for="lesson-sort">Ordem</label><input id="lesson-sort" type="number" min="0" max="9999" step="1" value="0"></div>
             <div class="field span"><label for="lesson-body">Conteúdo (texto simples)</label><textarea id="lesson-body" minlength="10" maxlength="30000" required></textarea></div>
           </div>
-          <div class="actions"><button class="primary" id="lesson-save" type="submit">Salvar aula</button><button class="secondary" type="button" id="clear-lesson">Nova aula</button></div>
+          <div class="actions"><button class="primary" id="lesson-save" type="submit">Salvar aula</button><button class="secondary" type="button" id="clear-lesson">Nova aula</button><button class="secondary danger" type="button" id="delete-lesson" disabled>Excluir rascunho</button></div>
         </form>
       </div>
     </section>
@@ -141,6 +142,7 @@ function resetLesson(){
   $("lesson-title-heading").textContent="Nova aula";
   $("lesson-slug").disabled=false;
   $("lesson-sort").value="0";
+  $("delete-lesson").disabled=true;
 }
 function renderCourses(){
   $("course-items").replaceChildren();
@@ -205,9 +207,24 @@ $("lesson-items").addEventListener("click",event=>{
   $("lesson-title").value=state.lesson.title;$("lesson-slug").value=state.lesson.slug;
   $("lesson-slug").disabled=true;$("lesson-sort").value=String(state.lesson.sort_order);
   $("lesson-body").value=state.lesson.body;$("lesson-title-heading").textContent="Editar aula";
+  $("delete-lesson").disabled=!draft()||state.lesson.is_published||state.lesson.status!=="draft";
   renderLessons();
 });
 $("clear-lesson").addEventListener("click",()=>{resetLesson();renderLessons();});
+$("delete-lesson").addEventListener("click",async()=>{
+  const lesson=state.lesson,course=state.course;
+  if(!course||course.is_published||!lesson||lesson.is_published||lesson.status!=="draft")return;
+  if(!confirm("Excluir esta aula em rascunho? Esta ação não pode ser desfeita."))return;
+  $("delete-lesson").disabled=true;
+  try{
+    await api("/lessons/"+encodeURIComponent(String(lesson.id)),"DELETE");
+    await refreshLessons();
+    say("Aula em rascunho excluída. Histórico publicado foi preservado.");
+  }catch(error){
+    $("delete-lesson").disabled=false;
+    say(error.message);
+  }
+});
 $("lesson-form").addEventListener("submit",async event=>{
   event.preventDefault();if(!state.course||!draft())return;
   const payload={title:$("lesson-title").value.trim(),slug:$("lesson-slug").value.trim(),

@@ -61,6 +61,15 @@ final readonly class PortalAccessGate
             return PortalGrant::deny('missing_permission');
         }
 
+        // Limites compatíveis com schema candidato e concessões curtas.
+        if (strlen($grant->companyId) > 80 || strlen($grant->subjectId) > 120) {
+            return PortalGrant::deny('invalid_grant');
+        }
+
+        if ($grant->expiresAtEpoch > $nowEpoch + 60) {
+            return PortalGrant::deny('invalid_grant');
+        }
+
         if ($grant->expiresAtEpoch <= $nowEpoch) {
             return PortalGrant::deny('expired');
         }

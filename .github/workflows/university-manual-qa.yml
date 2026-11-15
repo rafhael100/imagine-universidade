@@ -88,14 +88,16 @@ jobs:
           python3 scripts/check-sqlite-contract.py
           node scripts/check-ui-contract.mjs
 
-      - name: Validar definição de dependências
-        run: composer validate --no-check-publish
-
+      # A resolução é local ao runner: o repositório ainda não possui lockfile.
+      # O arquivo gerado é descartado ao fim deste job; não há release.
       # O repositório ainda não contém composer.lock. Isto é somente
       # uma resolução provisória em runner descartável; nunca deployar
       # dependências não travadas em ambiente compartilhado ou produção.
       - name: Resolver dependências de laboratório
         run: composer update --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+
+      - name: Validar dependências após resolução descartável
+        run: composer validate --no-check-publish
 
       - name: PHPUnit Unit e Feature com SQLite em memória
         shell: bash
@@ -112,6 +114,7 @@ jobs:
           test "$APP_ENV" = "testing"
           php artisan migrate:fresh --database=pgsql --force
           php artisan migrate:status --database=pgsql
+          php scripts/check-pg-schema.php
 
       - name: Confirmar que autorizações de produção continuam negadas
         shell: bash

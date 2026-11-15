@@ -51,6 +51,7 @@ echo "[QA] Apenas PostgreSQL 18 sintético em 127.0.0.1:5432."
 php artisan migrate:fresh --database=pgsql --force
 php artisan migrate:status --database=pgsql
 php scripts/check-pg-schema.php
+php scripts/check-pg-flow.php
 
 echo "[QA] Provider de autorização segue DENY-ALL."
 grep -Fq "UnavailablePortalAuthority::class" app/Providers/AppServiceProvider.php

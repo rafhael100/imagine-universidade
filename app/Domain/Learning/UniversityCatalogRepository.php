@@ -164,7 +164,12 @@ final class UniversityCatalogRepository
             ->first();
     }
 
-    /** @return array<int, stdClass> */
+    /**
+     * Aulas da versão publicada com o estado do aluno/empresa autenticados.
+     * Não retorna IDs de progresso ou dados de outros alunos.
+     *
+     * @return array<int, stdClass>
+     */
     public function lessons(PortalGrant $grant, int $courseId): array
     {
         $org = $this->orgId($grant);
@@ -177,9 +182,14 @@ final class UniversityCatalogRepository
             return [];
         }
 
-        return DB::table('educational_lessons as l')
+        $lessons = DB::table('educational_lessons as l')
             ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
             ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->leftJoin('educational_lesson_progress as p', function ($join) use ($org, $grant): void {
+                $join->on('p.educational_lesson_id', '=', 'l.id')
+                    ->where('p.educational_organization_id', '=', $org)
+                    ->where('p.subject_key', '=', $grant->subjectId);
+            })
             ->where('c.id', $courseId)
             ->where('c.educational_organization_id', $editorialOrg)
             ->where('c.is_shared', true)
@@ -188,7 +198,10 @@ final class UniversityCatalogRepository
             ->where('l.is_published', true)
             ->orderBy('l.sort_order')->orderBy('l.id')
             ->select('l.id', 'l.slug', 'l.title', 'l.sort_order')
+            ->selectRaw('CASE WHEN p.id IS NULL THEN 0 ELSE 1 END AS completed')
             ->get()->all();
+
+        return $this->grantUsable($grant, PortalAccessGate::VIEW) ? $lessons : [];
     }
 
     public function isComplete(PortalGrant $grant, int $lessonId): ?bool

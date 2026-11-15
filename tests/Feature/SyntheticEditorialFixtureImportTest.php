@@ -180,6 +180,10 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             ->assertJsonPath('courses.0.lessons_total', 4)
             ->assertJsonPath('courses.0.lessons_completed', 1)
             ->assertJsonPath('courses.0.progress_percent', 25);
+        $firstCourseId = $clientCourses[0]['id'];
+        $lessonStates = $this->getJson('/universidade/private/courses/'.$firstCourseId.'/lessons')
+            ->assertOk()->assertJsonCount(4, 'lessons')->json('lessons');
+        self::assertSame([1, 0, 0, 0], array_column($lessonStates, 'completed'));
         $this->getJson('/universidade/private/admin/courses')->assertForbidden();
 
         $this->withSession([
@@ -190,6 +194,9 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             ->assertOk()->assertJsonCount(3, 'courses')
             ->assertJsonPath('courses.0.lessons_completed', 0)
             ->assertJsonPath('courses.0.progress_percent', 0);
+        $lessonStatesB = $this->getJson('/universidade/private/courses/'.$clientCourses[0]['id'].'/lessons')
+            ->assertOk()->assertJsonCount(4, 'lessons')->json('lessons');
+        self::assertSame([0, 0, 0, 0], array_column($lessonStatesB, 'completed'));
         $this->getJson('/universidade/private/lessons/'.$firstLessonId.'/progress')
             ->assertOk()->assertJsonPath('completed', false);
 

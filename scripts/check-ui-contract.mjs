@@ -42,6 +42,11 @@ assert.match(studentProgressUI, /el\("progress",undefined,"course-progress"\)/, 
 assert.match(studentProgressUI, /bar\.setAttribute\("aria-label"/, "aluno: texto acessível por curso");
 assert.match(studentProgressUI, /await api\("\/courses"\)/, "aluno: atualização pelo servidor");
 console.log("PASS student progress: resumo, porcentagem, barra acessível e API autoritativa");
+assert.ok(studentProgressUI.includes('lessons.find(item=>!Boolean(item.completed))'), "aluno: abrir primeira aula pendente");
+assert.ok(studentProgressUI.includes('markLessonStatus(id,true)'), "aluno: marcar status após conclusão");
+assert.ok(studentProgressUI.includes('statusLabel.dataset.lessonStatus'), "aluno: indicador textual por aula");
+console.log("PASS student resume: aula pendente priorizada e conclusão textual acessível");
+
 
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");

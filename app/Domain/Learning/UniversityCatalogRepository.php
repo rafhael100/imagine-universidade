@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Learning;
 
 use App\Domain\Access\PortalGrant;
+use App\Domain\Access\PortalAccessGate;
 use Illuminate\Support\Facades\DB;
 use stdClass;
 
@@ -14,17 +15,40 @@ use stdClass;
  */
 final class UniversityCatalogRepository
 {
-    private function orgId(PortalGrant $grant): ?int
+    private const EDITORIAL_ORGANIZATION_KEY = 'imagine-editorial';
+
+    private function resolveOrganizationId(string $key): ?int
     {
-        if (!$grant->allowed || $grant->companyId === '' || $grant->subjectId === '') {
+        if (trim($key) === '' || strlen($key) > 80) {
             return null;
         }
-
-        $id = DB::table('educational_organizations')
-            ->where('synthetic_key', $grant->companyId)
-            ->value('id');
-
+        $id = DB::table('educational_organizations')->where('synthetic_key', $key)->value('id');
         return $id === null ? null : (int) $id;
+    }
+
+    // O tenant do cliente contém APENAS seu progresso.
+    private function orgId(PortalGrant $grant): ?int
+    {
+        if (!$grant->allowed || $grant->permission !== PortalAccessGate::VIEW ||
+            $grant->subjectId === '' || $grant->companyId === self::EDITORIAL_ORGANIZATION_KEY) {
+            return null;
+        }
+        return $this->resolveOrganizationId($grant->companyId);
+    }
+
+    // Material editorial centralizado da Imagine; jamais edição por clientes.
+    private function contentOrgId(): ?int
+    {
+        return $this->resolveOrganizationId(self::EDITORIAL_ORGANIZATION_KEY);
+    }
+
+    private function adminOrgId(PortalGrant $grant): ?int
+    {
+        if (!$grant->allowed || $grant->permission !== PortalAccessGate::MANAGE ||
+            $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY || $grant->subjectId === '') {
+            return null;
+        }
+        return $this->contentOrgId();
     }
 
     /** @return array<int, stdClass> */
@@ -35,9 +59,15 @@ final class UniversityCatalogRepository
             return [];
         }
 
+        $editorialOrg = $this->contentOrgId();
+        if ($editorialOrg === null) {
+            return [];
+        }
+
         return DB::table('educational_courses as c')
             ->join('educational_course_versions as v', 'v.educational_course_id', '=', 'c.id')
-            ->where('c.educational_organization_id', $org)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
             ->where('c.is_published', true)
             ->where('v.status', 'published')
             ->orderBy('c.sort_order')
@@ -53,11 +83,17 @@ final class UniversityCatalogRepository
             return null;
         }
 
+        $editorialOrg = $this->contentOrgId();
+        if ($editorialOrg === null) {
+            return null;
+        }
+
         return DB::table('educational_lessons as l')
             ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
             ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
             ->where('l.id', $lessonId)
-            ->where('c.educational_organization_id', $org)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
             ->where('c.is_published', true)
             ->where('v.status', 'published')
             ->where('l.is_published', true)
@@ -73,11 +109,17 @@ final class UniversityCatalogRepository
             return [];
         }
 
+        $editorialOrg = $this->contentOrgId();
+        if ($editorialOrg === null) {
+            return [];
+        }
+
         return DB::table('educational_lessons as l')
             ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
             ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
             ->where('c.id', $courseId)
-            ->where('c.educational_organization_id', $org)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
             ->where('c.is_published', true)
             ->where('v.status', 'published')
             ->where('l.is_published', true)
@@ -107,13 +149,19 @@ final class UniversityCatalogRepository
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $lessonId, $org): bool {
+        $editorialOrg = $this->contentOrgId();
+        if ($editorialOrg === null) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($grant, $lessonId, $org, $editorialOrg): bool {
             // Verificar publicação e empresa novamente, dentro da transação.
             $lesson = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
                 ->where('l.id', $lessonId)
-                ->where('c.educational_organization_id', $org)
+                ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
                 ->where('c.is_published', true)
                 ->where('v.status', 'published')
                 ->where('l.is_published', true)
@@ -140,13 +188,14 @@ final class UniversityCatalogRepository
     /** @return array<int, stdClass> */
     public function adminCourses(PortalGrant $grant): array
     {
-        $org = $this->orgId($grant);
+        $org = $this->adminOrgId($grant);
         if ($org === null) {
             return [];
         }
 
         return DB::table('educational_courses')
             ->where('educational_organization_id', $org)
+            ->where('is_shared', true)
             ->orderBy('sort_order')->orderBy('id')
             ->select('id', 'slug', 'title', 'summary', 'category', 'sort_order', 'is_published')
             ->get()->all();
@@ -154,7 +203,7 @@ final class UniversityCatalogRepository
 
     public function adminLessons(PortalGrant $grant, int $courseId): array
     {
-        $org = $this->orgId($grant);
+        $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return [];
         }
@@ -163,6 +212,7 @@ final class UniversityCatalogRepository
         $course = DB::table('educational_courses')
             ->where('id', $courseId)
             ->where('educational_organization_id', $org)
+            ->where('is_shared', true)
             ->first(['id']);
         if ($course === null) {
             return [];
@@ -187,7 +237,7 @@ final class UniversityCatalogRepository
     /** @param array{slug:string,title:string,category:string,summary?:string|null,sort_order?:int} $input */
     public function createCourse(PortalGrant $grant, array $input): ?int
     {
-        $org = $this->orgId($grant);
+        $org = $this->adminOrgId($grant);
         if ($org === null) {
             return null;
         }
@@ -196,6 +246,7 @@ final class UniversityCatalogRepository
             $now = now();
             $id = DB::table('educational_courses')->insertGetId([
                 'educational_organization_id' => $org,
+                'is_shared' => true,
                 'slug' => $input['slug'],
                 'title' => $input['title'],
                 'category' => $input['category'],
@@ -219,7 +270,7 @@ final class UniversityCatalogRepository
     /** @param array{title:string,summary?:string|null,category:string,sort_order?:int} $input */
     public function updateCourse(PortalGrant $grant, int $courseId, array $input): bool
     {
-        $org = $this->orgId($grant);
+        $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return false;
         }
@@ -227,6 +278,7 @@ final class UniversityCatalogRepository
         return DB::table('educational_courses')
             ->where('id', $courseId)
             ->where('educational_organization_id', $org)
+            ->where('is_shared', true)
             ->where('is_published', false)
             ->update([
                 'title' => $input['title'],
@@ -240,7 +292,7 @@ final class UniversityCatalogRepository
     /** @param array{slug:string,title:string,body:string,sort_order?:int} $input */
     public function addLesson(PortalGrant $grant, int $courseId, array $input): ?int
     {
-        $org = $this->orgId($grant);
+        $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return null;
         }
@@ -249,6 +301,7 @@ final class UniversityCatalogRepository
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
+            ->where('is_shared', true)
                 ->where('is_published', false)
                 ->lockForUpdate()->first(['id']);
             if ($course === null) {
@@ -280,7 +333,7 @@ final class UniversityCatalogRepository
     /** @param array{title:string,body:string,sort_order?:int} $input */
     public function updateLesson(PortalGrant $grant, int $lessonId, array $input): bool
     {
-        $org = $this->orgId($grant);
+        $org = $this->adminOrgId($grant);
         if ($org === null || $lessonId < 1) {
             return false;
         }
@@ -291,6 +344,7 @@ final class UniversityCatalogRepository
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
                 ->where('l.id', $lessonId)
                 ->where('c.educational_organization_id', $org)
+                ->where('c.is_shared', true)
                 ->where('c.is_published', false)
                 ->where('v.status', 'draft')
                 ->select('l.id')->lockForUpdate()->first();
@@ -309,7 +363,7 @@ final class UniversityCatalogRepository
 
     public function setPublished(PortalGrant $grant, int $courseId, bool $publish): bool
     {
-        $org = $this->orgId($grant);
+        $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return false;
         }
@@ -318,6 +372,7 @@ final class UniversityCatalogRepository
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
+            ->where('is_shared', true)
                 ->where('is_published', !$publish)
                 ->lockForUpdate()->first(['id']);
             if ($course === null) {
@@ -393,6 +448,7 @@ final class UniversityCatalogRepository
             DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
+            ->where('is_shared', true)
                 ->update(['is_published' => $publish, 'updated_at' => $now]);
 
             return true;

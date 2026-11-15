@@ -20,7 +20,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('educational_organization_id')
                 ->constrained('educational_organizations')
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
             $table->string('slug', 120);
             $table->string('title', 200);
             $table->boolean('is_published')->default(false);
@@ -32,7 +32,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('educational_course_id')
                 ->constrained('educational_courses')
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
             $table->unsignedInteger('version');
             $table->string('status', 32)->default('draft');
             $table->timestamps();

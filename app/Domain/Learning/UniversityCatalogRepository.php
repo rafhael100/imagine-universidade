@@ -155,23 +155,52 @@ final class UniversityCatalogRepository
         }
 
         return DB::transaction(function () use ($grant, $lessonId, $org, $editorialOrg): bool {
-            // Verificar publicação e empresa novamente, dentro da transação.
-            $lesson = DB::table('educational_lessons as l')
+            // Descobrir o curso sem confiar em course_id enviado pelo navegador.
+            $courseId = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
                 ->where('l.id', $lessonId)
                 ->where('c.educational_organization_id', $editorialOrg)
-            ->where('c.is_shared', true)
+                ->where('c.is_shared', true)
+                ->value('c.id');
+
+            if ($courseId === null) {
+                return false;
+            }
+
+            // Mesma ordem de lock da publicação: primeiro curso, depois aula.
+            // Impede concluir aulas enquanto o editor arquiva/publica versões.
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $editorialOrg)
+                ->where('is_shared', true)
+                ->where('is_published', true)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($course === null) {
+                return false;
+            }
+
+            // Validar novamente a versão e a aula sob bloqueio do curso.
+            $lesson = DB::table('educational_lessons as l')
+                ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+                ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+                ->where('l.id', $lessonId)
+                ->where('c.id', $courseId)
+                ->where('c.educational_organization_id', $editorialOrg)
+                ->where('c.is_shared', true)
                 ->where('c.is_published', true)
                 ->where('v.status', 'published')
                 ->where('l.is_published', true)
-                ->select('l.id')->lockForUpdate()->first();
+                ->first(['l.id']);
+
             if ($lesson === null) {
                 return false;
             }
 
             $now = now();
-            // insertOrIgnore usa a unique key e evita duplicidade entre requisições.
+            // A constraint UNIQUE (empresa,sujeito,aula) resolve repetição.
             DB::table('educational_lesson_progress')->insertOrIgnore([
                 'educational_organization_id' => $org,
                 'subject_key' => $grant->subjectId,

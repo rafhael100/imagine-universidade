@@ -13,7 +13,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 RUN useradd --uid 10001 --create-home --shell /bin/bash uniqa \
  && mkdir -p /work/universidade/bootstrap/cache \
-    /work/universidade/storage/framework/{cache/data,sessions,views} \
+    /work/universidade/storage/framework/cache/data \
+    /work/universidade/storage/framework/sessions \
+    /work/universidade/storage/framework/views \
     /work/universidade/storage/logs \
  && chown -R uniqa:uniqa /work/universidade
 

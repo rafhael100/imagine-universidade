@@ -26,11 +26,31 @@ final class UniversityCatalogRepository
         return $id === null ? null : (int) $id;
     }
 
+    /**
+     * Defense in depth. A grant object is NOT proof of an authenticated
+     * Portal session: the HTTP middleware must verify it first.
+     * Never reuse grants that expired during the current operation.
+     */
+    private function grantUsable(PortalGrant $grant, string $permission): bool
+    {
+        $now = time();
+
+        return $grant->allowed
+            && $grant->permission === $permission
+            && $grant->revision >= 1
+            && $grant->expiresAtEpoch > $now
+            && $grant->expiresAtEpoch <= $now + 60
+            && trim($grant->companyId) !== ''
+            && trim($grant->subjectId) !== ''
+            && strlen($grant->companyId) <= 80
+            && strlen($grant->subjectId) <= 120;
+    }
+
     // O tenant do cliente contém APENAS seu progresso.
     private function orgId(PortalGrant $grant): ?int
     {
-        if (!$grant->allowed || $grant->permission !== PortalAccessGate::VIEW ||
-            $grant->subjectId === '' || $grant->companyId === self::EDITORIAL_ORGANIZATION_KEY) {
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW) ||
+            $grant->companyId === self::EDITORIAL_ORGANIZATION_KEY) {
             return null;
         }
         return $this->resolveOrganizationId($grant->companyId);
@@ -44,8 +64,8 @@ final class UniversityCatalogRepository
 
     private function adminOrgId(PortalGrant $grant): ?int
     {
-        if (!$grant->allowed || $grant->permission !== PortalAccessGate::MANAGE ||
-            $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY || $grant->subjectId === '') {
+        if (!$this->grantUsable($grant, PortalAccessGate::MANAGE) ||
+            $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY) {
             return null;
         }
         return $this->contentOrgId();
@@ -199,6 +219,11 @@ final class UniversityCatalogRepository
                 return false;
             }
 
+            // A permissão pode expirar enquanto o banco espera por lock.
+            if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+                return false;
+            }
+
             $now = now();
             // A restrição UNIQUE permite repetição idempotente.
             // Só declarar sucesso depois de confirmar que existe o
@@ -238,11 +263,8 @@ final class UniversityCatalogRepository
         int $resourceId,
     ): void {
         if (
-            !$grant->allowed ||
-            $grant->permission !== PortalAccessGate::MANAGE ||
-            $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY ||
-            trim($grant->subjectId) === '' ||
-            $grant->revision < 1
+            !$this->grantUsable($grant, PortalAccessGate::MANAGE) ||
+            $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY
         ) {
             throw new \LogicException('Auditoria exige identidade editorial válida.');
         }

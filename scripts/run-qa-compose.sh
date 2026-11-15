@@ -37,5 +37,10 @@ echo "QA isolation: project $PROJECT; NO public ports, binds, deploy or real cre
 echo "This run downloads disposable images/dependencies and uses local CPU/network."
 echo "Running QA does not approve deployment or production access."
 docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa build qa
-docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa run --rm qa
+if ! docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa run --rm qa; then
+  echo "FAIL: disposable Docker QA. Last synthetic PostgreSQL logs:" >&2
+  docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa logs \
+    --no-color --tail=120 db >&2 || true
+  exit 1
+fi
 echo "PASS: disposable QA run finished. Removing services and data."

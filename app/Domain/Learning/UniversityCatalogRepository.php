@@ -458,6 +458,79 @@ final class UniversityCatalogRepository
         });
     }
 
+    /**
+     * Exclui somente aula de rascunho editorial ainda não publicada e sem
+     * progresso. Mantém versões publicadas/arquivadas e histórico intactos.
+     */
+    public function deleteDraftLesson(PortalGrant $grant, int $lessonId): bool
+    {
+        $org = $this->adminOrgId($grant);
+        if ($org === null || $lessonId < 1) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($grant, $org, $lessonId): bool {
+            $courseId = DB::table('educational_lessons as l')
+                ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+                ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+                ->where('l.id', $lessonId)
+                ->where('c.educational_organization_id', $org)
+                ->where('c.is_shared', true)
+                ->value('c.id');
+
+            if ($courseId === null) {
+                return false;
+            }
+
+            // Mesma ordem de lock da publicação: curso antes da aula.
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_shared', true)
+                ->where('is_published', false)
+                ->lockForUpdate()
+                ->first(['id']);
+
+            if ($course === null) {
+                return false;
+            }
+
+            $lesson = DB::table('educational_lessons as l')
+                ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+                ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+                ->where('l.id', $lessonId)
+                ->where('c.id', $courseId)
+                ->where('c.educational_organization_id', $org)
+                ->where('c.is_shared', true)
+                ->where('c.is_published', false)
+                ->where('v.status', 'draft')
+                ->where('l.is_published', false)
+                ->first(['l.id']);
+
+            if ($lesson === null) {
+                return false;
+            }
+
+            // Mesmo diante de dados legados inconsistentes, preservar
+            // conclusões existentes e recusar exclusão em cascata.
+            if (DB::table('educational_lesson_progress')
+                ->where('educational_lesson_id', $lessonId)->exists()) {
+                return false;
+            }
+
+            $deleted = DB::table('educational_lessons')
+                ->where('id', $lessonId)
+                ->where('is_published', false)
+                ->delete() === 1;
+
+            if ($deleted) {
+                $this->audit($grant, $org, 'lesson.deleted', 'lesson', $lessonId);
+            }
+
+            return $deleted;
+        });
+    }
+
     public function setPublished(PortalGrant $grant, int $courseId, bool $publish): bool
     {
         $org = $this->adminOrgId($grant);

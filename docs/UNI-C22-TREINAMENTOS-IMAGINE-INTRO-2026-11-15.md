@@ -29,3 +29,8 @@ Os textos evitam promessas de resultados, não exigem dados pessoais e distingue
 A CI com PHP8.3, PHPUnit, Node e PostgreSQL18 deve ser executada antes de aprovação. O Portal permanece com autoridade real **deny-all** e sem fonte oficial de serviços ativos elegíveis.
 
 **Nenhuma alteração da main, deploy ou gasto extra.**
+
+
+## Resultado de homologação executado
+
+[GitHub Actions #43762781305](https://github.com/rafhael100/imagine-universidade/actions/runs/43762781305): **success**, PHP 8.3.36, 33 Unit (111 asserções), 33 Feature (339 asserções), **66 testes/450 asserções**. Cinco migrações Laravel PostgreSQL18, oito invariantes de esquema e oito checks relacionais com rollback foram aprovados; o script de QA confirmou as duas execuções da carga sintética de quatro cursos e onze aulas, sem duplicação. O resultado não comprova SSO/contratos reais.

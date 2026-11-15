@@ -68,7 +68,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: PHP 8.4 + extensões de teste
+      - name: PHP 8.3 + extensões de teste
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
@@ -140,3 +140,37 @@ jobs:
           grep -Fq "university.grant:view" routes/web.php
           grep -Fq "university.grant:manage" routes/web.php
           echo "Sem deploy, SSO real ou grants operacionais."
+
+  docker-laboratory:
+    needs: isolated-tests
+    if: needs.isolated-tests.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout somente da revisão autorizada
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verificar limites do laboratório descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .env
+          test ! -e .env.production
+          test -f composer.lock
+          test -f compose.qa.yml
+          test -f scripts/run-qa-compose.sh
+          # Sem portas publicadas, volumes/bind mounts ou host remoto.
+          ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
+          ! grep -Eq '^[[:space:]]+volumes:' compose.qa.yml
+          ! grep -Eq '^[[:space:]]+privileged:' compose.qa.yml
+          echo "QA Docker com dados e rede descartáveis autorizado."
+
+      - name: Executar PHP 8.3 e PostgreSQL18 em Docker Compose descartável
+        shell: bash
+        run: bash scripts/run-qa-compose.sh
+
+      - name: Confirmar que nenhuma imagem foi publicada
+        run: echo "Docker local de QA concluído sem push, SSH, publicação ou deploy."

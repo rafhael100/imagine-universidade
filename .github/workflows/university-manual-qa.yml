@@ -1,0 +1,123 @@
+name: Universidade Imagine — QA manual isolado (sem deploy)
+
+# Não é executado ao abrir/atualizar PR. Ação manual explícita exigida.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Confirme execução em runner descartável, sem deploy"
+        type: choice
+        required: true
+        options:
+          - test-only
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-manual-qa-disposable
+  cancel-in-progress: false
+
+jobs:
+  isolated-tests:
+    if: github.event.inputs.confirm == 'test-only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: uni_ci
+          POSTGRES_USER: uni_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uni_ci -d uni_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_KEY: "base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_DATABASE: uni_ci
+      DB_USERNAME: uni_ci
+      DB_PASSWORD: synthetic_ci_only
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+
+    steps:
+      - name: Checkout de revisão — não tocar main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: PHP 8.4 + extensões de teste
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: mbstring, dom, xml, pdo_sqlite, pdo_pgsql, sqlite3, openssl, fileinfo
+          tools: composer:v2
+          coverage: none
+
+      - name: Verificar fronteira descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$DB_DATABASE" = "uni_ci"
+          test "$DB_USERNAME" = "uni_ci"
+          test "$DB_HOST" = "127.0.0.1"
+          test "$APP_ENV" = "testing"
+          test ! -f .env
+          echo "QA isolado permitido; nenhum deploy ou servidor exposto."
+
+      - name: Verificações independentes sem Composer
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/check-access-domain.php
+          php scripts/check-learning-mock.php
+          python3 scripts/check-sqlite-contract.py
+          node scripts/check-ui-contract.mjs
+
+      - name: Validar definição de dependências
+        run: composer validate --no-check-publish
+
+      # O repositório ainda não contém composer.lock. Isto é somente
+      # uma resolução provisória em runner descartável; nunca deployar
+      # dependências não travadas em ambiente compartilhado ou produção.
+      - name: Resolver dependências de laboratório
+        run: composer update --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+
+      - name: PHPUnit Unit e Feature com SQLite em memória
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor/bin/phpunit --testsuite Unit
+          vendor/bin/phpunit --testsuite Feature
+
+      - name: Migrações reais Laravel em PostgreSQL 18 descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DB_DATABASE" = "uni_ci"
+          test "$APP_ENV" = "testing"
+          php artisan migrate:fresh --database=pgsql --force
+          php artisan migrate:status --database=pgsql
+
+      - name: Confirmar que autorizações de produção continuam negadas
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "UnavailablePortalAuthority::class" app/Providers/AppServiceProvider.php
+          grep -Fq "university.grant:view" routes/web.php
+          grep -Fq "university.grant:manage" routes/web.php
+          echo "Sem deploy, SSO real ou grants operacionais."

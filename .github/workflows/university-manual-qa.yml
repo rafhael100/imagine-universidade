@@ -116,6 +116,7 @@ jobs:
           php artisan migrate:fresh --database=pgsql --force
           php artisan migrate:status --database=pgsql
           php scripts/check-pg-schema.php
+          php scripts/check-pg-flow.php
 
       - name: Confirmar que autorizações de produção continuam negadas
         shell: bash

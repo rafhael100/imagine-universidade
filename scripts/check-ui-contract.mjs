@@ -194,6 +194,30 @@ assert.equal(resumeFixture([{id:-1,lessons_total:4,lessons_completed:0}]),null,"
 assert.equal(resumeFixture(null),null,"catálogo inválido");
 console.log("PASS resume studies: priorizar curso incompleto, proteger curso concluído e IDs");
 
+
+const otherCourseFn=studentProgressUI.match(/function nextIncompleteOtherCourseId\(courses,currentCourseId\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(otherCourseFn,"aluno: próximo curso pendente");
+function otherCourseFixture(courses,currentId){
+  return new Script(progressFn+"\n"+otherCourseFn+"\nnextIncompleteOtherCourseId(courses,currentId)",{
+    filename:"student-next-course",
+  }).runInNewContext({courses,currentCourseId:currentId});
+}
+const crossCourse=[
+  {id:1,lessons_total:2,lessons_completed:2},
+  {id:2,lessons_total:2,lessons_completed:1},
+  {id:3,lessons_total:1,lessons_completed:0},
+];
+assert.equal(otherCourseFixture(crossCourse,2),3,"pular atual e concluídos");
+assert.equal(otherCourseFixture(crossCourse,1),2,"priorizar primeiro incompleto");
+assert.equal(otherCourseFixture([{id:1,lessons_total:2,lessons_completed:2}],1),null,"biblioteca concluída");
+assert.equal(otherCourseFixture([{id:1,lessons_total:1,lessons_completed:0}],1),null,"não indicar o mesmo curso");
+assert.equal(otherCourseFixture(null,1),null,"dados inválidos");
+assert.match(studentProgressUI,/nextCourse.dataset.nextCourse=""/,"aluno: botão de próximo curso");
+assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>openCourseWithAllFilters\(nextCourseId\)\)/,"aluno: troca segura de curso");
+assert.match(studentProgressUI,/function openCourseWithAllFilters\(target\)/,"aluno: caminho comum de transição");
+assert.match(studentProgressUI,/if\(state.accessDenied\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
+console.log("PASS cross-course resume: próximo curso incompleto, sem voltar ao atual");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

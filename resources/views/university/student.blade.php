@@ -171,6 +171,15 @@ function nextPendingCourseId(courses,currentCourseId){
   const selected=pending.find(course=>course.id===currentCourseId);
   return (selected||pending[0])?.id??null;
 }
+function nextIncompleteOtherCourseId(courses,currentCourseId){
+  if(!Array.isArray(courses))return null;
+  const found=courses.find(course=>{
+    const p=progressLabel(course);
+    return Number.isSafeInteger(course.id)&&course.id>0&&course.id!==currentCourseId&&
+      p.total>0&&p.completed<p.total;
+  });
+  return found?.id??null;
+}
 function renderCourses(){
   if(state.accessDenied)return;
   list.replaceChildren();
@@ -246,10 +255,18 @@ function nextPendingLessonId(currentId){
   return next?Number(next.dataset.lessonId):null;
 }
 function offerNextLesson(id){
-  if(state.lessonId!==id||content.querySelector("[data-next-lesson]"))return;
+  if(state.accessDenied||state.lessonId!==id||content.querySelector("[data-next-lesson]")||
+    content.querySelector("[data-next-course]"))return;
   const nextId=nextPendingLessonId(id);
   if(nextId===null){
     content.append(el("p","Você concluiu todas as aulas deste curso. Pode revisá-las quando quiser.","mini"));
+    const nextCourseId=nextIncompleteOtherCourseId(state.courses,state.courseId);
+    if(nextCourseId!==null){
+      const nextCourse=el("button","Continuar em outro curso","secondary");
+      nextCourse.type="button";nextCourse.dataset.nextCourse="";
+      nextCourse.addEventListener("click",()=>openCourseWithAllFilters(nextCourseId));
+      content.append(nextCourse);
+    }
     return;
   }
   const advance=el("button","Ir para a próxima aula","secondary");
@@ -300,10 +317,9 @@ async function selectLesson(id){
     if(state.lessonRequest===request){say(error.message);content.replaceChildren();}
   }
 }
-document.getElementById("resume-course").addEventListener("click",()=>{
-  if(state.accessDenied)return;
-  const target=nextPendingCourseId(state.courses,state.courseId);
-  if(target===null)return;
+function openCourseWithAllFilters(target){
+  if(state.accessDenied||!Number.isSafeInteger(target)||target<1)return;
+  if(!state.courses.some(course=>course.id===target))return;
   state.filter="todos";state.query="";
   document.getElementById("course-search").value="";
   document.querySelectorAll("[data-filter]").forEach(btn=>{
@@ -311,6 +327,10 @@ document.getElementById("resume-course").addEventListener("click",()=>{
   });
   say("");
   selectCourse(target);
+}
+document.getElementById("resume-course").addEventListener("click",()=>{
+  const target=nextPendingCourseId(state.courses,state.courseId);
+  if(target!==null)openCourseWithAllFilters(target);
 });
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});

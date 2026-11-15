@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Access\PortalGrant;
 use App\Domain\Learning\UniversityCatalogRepository;
+use App\Domain\Learning\UniversityTenantProvisioner;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -29,6 +30,23 @@ final class UniversityController
         }
 
         return $grant;
+    }
+
+    /**
+     * Só funciona após grant VIEW proveniente de sessão servidor do Portal.
+     * Não recebe company_id nem subject_id do corpo da requisição.
+     */
+    public function initialize(Request $request, UniversityTenantProvisioner $provisioner): JsonResponse
+    {
+        try {
+            $ready = $provisioner->initialize($this->grant($request), time());
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        return $ready
+            ? response()->json(['ready' => true])
+            : response()->json(['error' => 'access_denied'], 403);
     }
 
     public function courses(Request $request): JsonResponse

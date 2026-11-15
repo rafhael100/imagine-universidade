@@ -26,6 +26,14 @@ fi
 
 PROJECT="imagine-uni-qa-$BASHPID"
 cleanup() {
+  local status=$?
+  if [[ "$status" -ne 0 ]]; then
+    # Only synthetic PostgreSQL logs from this uniquely named project.
+    # Do not print private app environment variables or secret files.
+    echo "QA Docker failed. Last 70 lines of disposable PostgreSQL diagnostics:" >&2
+    docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa \
+      logs --no-color --tail 70 db >&2 || true
+  fi
   docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa down \
     --volumes --remove-orphans || true
 }

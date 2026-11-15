@@ -9,7 +9,8 @@ services:
       POSTGRES_USER: uni_ci
       POSTGRES_PASSWORD: synthetic_ci_only
     tmpfs:
-      - /var/lib/postgresql:size=512m,mode=0700
+      # Postgres 18 drops to postgres user: parent must remain traversable.
+      - /var/lib/postgresql:size=512m,mode=1777
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U uni_ci -d uni_ci"]
       interval: 5s

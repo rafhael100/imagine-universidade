@@ -37,4 +37,19 @@ for (const c of catalog) {
     for (const key of ["title","text","time","task"]) assert.ok(typeof l[key]==="string" && l[key].length>0, c.id+" aula "+key);
   }
 }
-console.log("OK: JavaScript válido, 6 cursos, 14 aulas, 3 áreas, acesso offline e metadados de demonstração.");
+// Validar o elo local entre admin publicado e biblioteca, sem browser ou servidor.
+const preState = js.slice(start, js.indexOf("const state=", end));
+const demoAdmin = [
+  {id:"demo-published",title:"Curso publicado",category:"sistemas",summary:"Aula fictícia",published:true,
+   lessons:[{title:"Aula segura",body:"Conteúdo demonstrativo."}]},
+  {id:"demo-hidden",title:"Curso rascunho",category:"sistemas",summary:"Não aparecerá",published:false,
+   lessons:[{title:"Outra aula",body:"Conteúdo demonstrativo."}]}
+];
+const evaluation = '({demoCount:catalog.filter(c=>c.id.startsWith("admin-")).length, publishedName:catalog.find(c=>c.id==="admin-demo-published")?.name, hidden:catalog.some(c=>c.id==="admin-demo-hidden"), escaped:htmlSafe("<img src=x onerror=alert(1)>")})';
+const imported = vm.runInNewContext(preState + evaluation, {localStorage:{getItem:()=>JSON.stringify(demoAdmin)}}, {timeout:1000});
+assert.equal(imported.demoCount, 1);
+assert.equal(imported.publishedName, "Curso publicado");
+assert.equal(imported.hidden, false);
+assert.equal(imported.escaped, "&lt;img src=x onerror=alert(1)&gt;");
+console.log("OK: catálogo sintético, importação do admin e escape de HTML validados estaticamente.");
+

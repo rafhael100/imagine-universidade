@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "status": "editorial_draft",
+  "audience": "authorized_imagine_clients_only",
+  "courses": [
+    {
+      "slug": "metodologia-visitas-leads-clientes",
+      "title": "Metodologia Imagine: Visitas → Leads → Clientes",
+      "category": "metodologia",
+      "summary": "Uma jornada simples para atrair, atender e conquistar clientes.",
+      "lessons": [
+        {
+          "slug": "o-que-e-uma-visita",
+          "title": "Visitas: ser encontrado é o primeiro passo",
+          "body": "Uma visita ocorre quando uma pessoa acessa seu site ou outro canal digital. Visitar não significa solicitar orçamento nem comprar. Antes de investir em mais tráfego, explique claramente o que a empresa faz, para quem trabalha e como o visitante pode entrar em contato. Observe se a página funciona bem no celular. A ação prática é revisar o título da sua página inicial e o botão de contato."
+        },
+        {
+          "slug": "o-que-e-um-lead",
+          "title": "Leads: interesse que pode virar conversa",
+          "body": "Um lead é um contato ou oportunidade com interesse identificável, como alguém que solicita informações ou orçamento. Não confunda visitantes anônimos com pessoas que pediram atendimento. Formulários devem ser claros, coletar apenas o necessário e informar como os dados serão utilizados. A ação prática é revisar o texto do seu convite de contato e o prazo de resposta da equipe."
+        },
+        {
+          "slug": "quando-vira-cliente",
+          "title": "Clientes: contratação e relacionamento",
+          "body": "Um lead passa a ser cliente quando a contratação ou compra é confirmada. Para chegar a esse momento, ajude a pessoa a entender a proposta, tire dúvidas e acompanhe o atendimento sem insistência excessiva. Nem toda oportunidade se converterá em venda. A ação prática é preparar respostas objetivas para três perguntas comuns antes da contratação."
+        },
+        {
+          "slug": "identifique-gargalos",
+          "title": "Como acompanhar a jornada com responsabilidade",
+          "body": "Acompanhe separadamente visitas, leads recebidos e clientes confirmados no mesmo período. Números isolados não contam toda a história: qualidade do público, segmento, preço e atendimento afetam os resultados. Uma simulação pode ajudar a planejar, mas não representa previsão garantida. A ação prática é identificar qual etapa hoje merece mais atenção, sem compartilhar dados pessoais de clientes."
+        }
+      ]
+    },
+    {
+      "slug": "presenca-digital-pratica",
+      "title": "Presença digital para pequenos negócios",
+      "category": "negocios",
+      "summary": "Aprimore a clareza do site e o caminho para o primeiro contato.",
+      "lessons": [
+        {
+          "slug": "site-claro",
+          "title": "O que uma página precisa explicar",
+          "body": "Uma boa página informa o serviço, o público atendido, os benefícios concretos e a forma de contato. Evite textos que prometam resultados garantidos ou que dificultem encontrar informações essenciais. O visitante deve conseguir entender o negócio rapidamente, inclusive no celular. A ação prática é revisar a primeira seção da página e o botão principal."
+        },
+        {
+          "slug": "site-onepage-landing-page",
+          "title": "Site Onepage e Landing Page",
+          "body": "Um Site Onepage apresenta diferentes seções da empresa numa página única. Uma Landing Page normalmente concentra a atenção numa oferta ou objetivo específico, como solicitar uma conversa. Escolha o formato segundo o que o visitante precisa entender e fazer. A ação prática é escrever o objetivo principal da sua próxima página, antes de pensar nas cores ou imagens."
+        }
+      ]
+    },
+    {
+      "slug": "atendimento-e-organizacao",
+      "title": "Organize contatos e oportunidades",
+      "category": "negocios",
+      "summary": "Princípios simples para acompanhar leads com respeito e clareza.",
+      "lessons": [
+        {
+          "slug": "etapas-da-oportunidade",
+          "title": "Um funil de acompanhamento simples",
+          "body": "Um funil ajuda a lembrar o momento de cada oportunidade: novo contato, conversa em andamento, proposta e contratação confirmada. As etapas podem variar conforme o tipo de negócio. Um CRM pode apoiar essa organização, mas os tutoriais de botões e telas devem refletir apenas versões homologadas. A ação prática é desenhar um funil fictício com três oportunidades."
+        },
+        {
+          "slug": "acompanhamento-respeitoso",
+          "title": "Como retomar uma conversa",
+          "body": "Acompanhar uma oportunidade é lembrar o contexto e oferecer ajuda no momento adequado, respeitando a vontade do interessado. Defina o próximo passo de cada conversa, evite mensagens repetitivas e trate os dados apenas para finalidades legítimas e informadas. A ação prática é criar uma mensagem curta de acompanhamento que deixe claro o motivo do contato."
+        }
+      ]
+    }
+  ]
+}

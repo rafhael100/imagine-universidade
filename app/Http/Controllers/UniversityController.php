@@ -159,6 +159,13 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
+    public function deleteDraftLesson(Request $request, int $lessonId): JsonResponse
+    {
+        return $this->catalog->deleteDraftLesson($this->grant($request), $lessonId)
+            ? response()->json(['deleted' => true])
+            : response()->json(['error' => 'not_found_or_protected'], 404);
+    }
+
     public function publish(Request $request, int $courseId): JsonResponse
     {
         return $this->catalog->setPublished($this->grant($request), $courseId, true)

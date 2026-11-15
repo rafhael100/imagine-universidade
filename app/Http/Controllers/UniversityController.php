@@ -166,6 +166,18 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_protected'], 404);
     }
 
+    public function deleteNeverPublishedCourse(Request $request, int $courseId): JsonResponse
+    {
+        try {
+            $deleted = $this->catalog->deleteNeverPublishedCourse($this->grant($request), $courseId);
+        } catch (QueryException) {
+            return response()->json(['error' => 'protected_or_conflict'], 409);
+        }
+        return $deleted
+            ? response()->json(['deleted' => true])
+            : response()->json(['error' => 'not_found_or_protected'], 404);
+    }
+
     public function publish(Request $request, int $courseId): JsonResponse
     {
         return $this->catalog->setPublished($this->grant($request), $courseId, true)

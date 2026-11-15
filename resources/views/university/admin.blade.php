@@ -71,6 +71,7 @@
             <button type="submit" class="primary" id="course-save">Salvar rascunho</button>
             <button type="button" class="secondary" id="publish">Publicar curso</button>
             <button type="button" class="secondary" id="unpublish">Retirar do ar</button>
+            <button type="button" class="secondary danger" id="delete-course" disabled>Excluir rascunho nunca publicado</button>
           </div>
           <p class="help">Retirar um curso do ar arquiva a versão publicada e cria um novo rascunho. O histórico anterior é preservado, mas o progresso da nova versão começa novamente.</p>
         </form>
@@ -155,6 +156,7 @@ function fillCourse(){
   $("course-save").disabled=!editable;
   $("publish").disabled=!c||!!c.is_published;
   $("unpublish").disabled=!c||!c.is_published;
+  $("delete-course").disabled=!c||!!c.is_published;
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
 }
 function resetLesson(){
@@ -271,6 +273,19 @@ $("lesson-form").addEventListener("submit",async event=>{
     }
     await refreshLessons();say("Aula salva em rascunho.");
   }catch(error){say(error.message);}
+});
+$("delete-course").addEventListener("click",async()=>{
+  if(state.accessDenied||!state.course||state.course.is_published)return;
+  const courseId=state.course.id;
+  if(!confirm("Excluir definitivamente este curso criado em rascunho? Somente cursos nunca publicados e sem histórico ou progresso podem ser removidos."))return;
+  if(state.accessDenied||state.course?.id!==courseId)return;
+  $("delete-course").disabled=true;
+  try{
+    await api("/courses/"+courseId,"DELETE");
+    if(state.accessDenied)return;
+    await refreshCourses(state.course?.id===courseId?null:state.course?.id??null);
+    say("Rascunho nunca publicado excluído com registro de auditoria.");
+  }catch(error){say(error.message);if(!state.accessDenied&&state.course?.id===courseId)$("delete-course").disabled=false;}
 });
 $("publish").addEventListener("click",async()=>{
   if(state.accessDenied||!state.course||state.course.is_published)return;

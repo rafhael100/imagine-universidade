@@ -637,6 +637,88 @@ final class UniversityCatalogRepository
         });
     }
 
+    /**
+     * Deleta APENAS um curso que jamais foi publicado: exatamente uma versão
+     * draft, sem aulas publicadas, versões históricas nem progresso registrado.
+     * A ordem das exclusões respeita as FKs RESTRICT e a auditoria é atômica.
+     */
+    public function deleteNeverPublishedCourse(PortalGrant $grant, int $courseId): bool
+    {
+        $org = $this->adminOrgId($grant);
+        if ($org === null || $courseId < 1) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($grant, $org, $courseId): bool {
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_shared', true)
+                ->where('is_published', false)
+                ->lockForUpdate()
+                ->first(['id']);
+            if ($course === null) {
+                return false;
+            }
+
+            $versions = DB::table('educational_course_versions')
+                ->where('educational_course_id', $courseId)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['id', 'status']);
+
+            // A single draft version is required. Prior publication leaves
+            // archived versions and blocks deletion forever.
+            if ($versions->count() !== 1 || $versions[0]->status !== 'draft') {
+                return false;
+            }
+            $versionId = (int) $versions[0]->id;
+
+            $lessonIds = DB::table('educational_lessons')
+                ->where('educational_course_version_id', $versionId)
+                ->pluck('id')->all();
+
+            if (DB::table('educational_lessons')
+                ->where('educational_course_version_id', $versionId)
+                ->where('is_published', true)->exists()) {
+                return false;
+            }
+
+            if ($lessonIds !== [] && DB::table('educational_lesson_progress')
+                ->whereIn('educational_lesson_id', $lessonIds)->exists()) {
+                return false;
+            }
+
+            // If foreign key constraints or concurrent writes disagree,
+            // the transaction throws and rolls back everything.
+            $deletedLessons = DB::table('educational_lessons')
+                ->where('educational_course_version_id', $versionId)
+                ->where('is_published', false)->delete();
+            if ($deletedLessons !== count($lessonIds)) {
+                throw new \RuntimeException('Draft course changed during deletion.');
+            }
+
+            $deletedVersion = DB::table('educational_course_versions')
+                ->where('id', $versionId)
+                ->where('status', 'draft')->delete();
+            if ($deletedVersion !== 1) {
+                throw new \RuntimeException('Draft course version changed during deletion.');
+            }
+
+            $deletedCourse = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_shared', true)
+                ->where('is_published', false)->delete();
+            if ($deletedCourse !== 1) {
+                throw new \RuntimeException('Draft course changed during deletion.');
+            }
+
+            $this->audit($grant, $org, 'course.deleted', 'course', $courseId);
+            return true;
+        });
+    }
+
     public function setPublished(PortalGrant $grant, int $courseId, bool $publish): bool
     {
         $org = $this->adminOrgId($grant);

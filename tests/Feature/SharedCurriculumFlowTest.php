@@ -394,6 +394,59 @@ final class SharedCurriculumFlowTest extends TestCase
             ->count());
     }
 
+
+    public function test_only_editor_can_delete_a_never_published_course_and_its_drafts_with_audit(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-criado-por-engano',
+            'title' => 'Curso criado por engano',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+        $lessonId = $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-inicial',
+            'title' => 'Aula inicial do curso',
+            'body' => 'Conteúdo sintético não publicado e sem progresso.',
+        ])->assertCreated()->json('id');
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->deleteJson("/universidade/private/admin/courses/{$courseId}")->assertForbidden();
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->deleteJson("/universidade/private/admin/courses/{$courseId}")
+            ->assertOk()->assertJsonPath('deleted', true);
+        self::assertSame(0, DB::table('educational_courses')->where('id', $courseId)->count());
+        self::assertSame(0, DB::table('educational_lessons')->where('id', $lessonId)->count());
+        self::assertSame(1, DB::table('educational_audit_events')
+            ->where('action', 'course.deleted')->where('resource_id', $courseId)->count());
+        $this->deleteJson("/universidade/private/admin/courses/{$courseId}")->assertNotFound();
+    }
+
+    public function test_course_with_archived_version_cannot_be_deleted_even_when_unpublished(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-com-historico',
+            'title' => 'Curso com histórico',
+            'category' => 'metodologia',
+        ])->assertCreated()->json('id');
+        $lessonId = $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-publicada',
+            'title' => 'Aula publicada no passado',
+            'body' => 'Esta aula já esteve publicada e não pode ser apagada.',
+        ])->assertCreated()->json('id');
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish")->assertOk();
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/unpublish")->assertOk();
+
+        $this->deleteJson("/universidade/private/admin/courses/{$courseId}")->assertNotFound();
+        self::assertSame(1, DB::table('educational_courses')->where('id', $courseId)->count());
+        self::assertSame(2, DB::table('educational_course_versions')
+            ->where('educational_course_id', $courseId)->count());
+        self::assertSame(1, DB::table('educational_lessons')->where('id', $lessonId)->count());
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('action', 'course.deleted')->count());
+    }
+
     public function test_course_version_and_lesson_references_reject_cascading_deletion(): void
     {
         $this->asPortal('demo-editor', 'imagine-editorial');

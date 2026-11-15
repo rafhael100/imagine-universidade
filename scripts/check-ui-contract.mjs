@@ -182,6 +182,14 @@ assert.match(middleware, /Cache-Control/, "respostas privadas");
 assert.doesNotMatch(middleware, /->header\(['"]X-(?:Company|Portal)/, "não aceitar prova em header");
 console.log("PASS routes: Cliente/Admin com grants separados, fallback e provider deny-all");
 
+
+assert.match(adminUI,/id="delete-course"/,"admin: botão de exclusão de rascunho");
+assert.match(adminUI,/if\(!confirm\("Excluir definitivamente este curso/,"admin: confirmação irreversível");
+assert.match(adminUI,/await api\("\/courses\/"\+courseId,"DELETE"\)/,"admin: delete usa ID capturado");
+assert.match(adminUI,/\$\("delete-course"\)\.disabled=!c\|\|!!c.is_published/,"admin: bloquear exclusão enquanto publicado");
+assert.match(routes,/Route::delete\('\/courses\/\{courseId\}'/,"backend: rota privada de exclusão");
+console.log("PASS delete draft course: confirmação UI e rota administrativa protegida");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

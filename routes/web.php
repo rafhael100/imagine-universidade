@@ -31,6 +31,8 @@ Route::prefix('universidade/private')->group(function (): void {
         Route::post('/courses', [UniversityController::class, 'createCourse']);
         Route::patch('/courses/{courseId}', [UniversityController::class, 'updateCourse'])
             ->whereNumber('courseId');
+        Route::delete('/courses/{courseId}', [UniversityController::class, 'deleteNeverPublishedCourse'])
+            ->whereNumber('courseId');
         Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'adminLessons'])
             ->whereNumber('courseId');
         Route::post('/courses/{courseId}/lessons', [UniversityController::class, 'createLesson'])

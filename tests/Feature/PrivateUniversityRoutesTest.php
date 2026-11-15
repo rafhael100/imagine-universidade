@@ -19,6 +19,20 @@ final class PrivateUniversityRoutesTest extends TestCase
         $this->postJson('/universidade/private/lessons/1/complete')->assertForbidden();
     }
 
+    public function test_denied_requests_have_private_security_headers(): void
+    {
+        $this->getJson('/universidade/private/courses')
+            ->assertForbidden()
+            ->assertHeader('Cache-Control', 'private, no-store')
+            ->assertHeader('X-Frame-Options', 'DENY')
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+
+        $this->get('/universidade/private/app')
+            ->assertForbidden()
+            ->assertHeader('Cache-Control', 'private, no-store');
+    }
+
     public function test_admin_endpoints_reject_anonymous_access(): void
     {
         $this->getJson('/universidade/private/admin/courses')->assertForbidden();

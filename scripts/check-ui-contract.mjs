@@ -168,6 +168,32 @@ assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)r
 assert.match(adminUI,/await api\("\/courses\/".*\+courseId\+"\/unpublish","POST"\)/,"admin: endpoint de despublicação com ID capturado");
 console.log("PASS unpublish: confirmação explícita, histórico e novo progresso declarados");
 
+
+assert.match(studentProgressUI, /id="resume-course" class="primary resume-btn" disabled/, "aluno: retomar bloqueado antes de dados autorizados");
+assert.match(studentProgressUI, /document.getElementById\("resume-course"\).disabled=true/, "aluno: retomar bloqueado após revogação");
+assert.match(studentProgressUI, /state.filter="todos";state.query="";/, "aluno: retomar restaura filtros");
+const progressFn=studentProgressUI.match(/function progressLabel\(course\)\{[\s\S]*?\n\}/)?.[0];
+const resumeFn=studentProgressUI.match(/function nextPendingCourseId\(courses,currentCourseId\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(progressFn&&resumeFn, "aluno: funções puras de retomada");
+function resumeFixture(courses,currentCourseId=null){
+  return new Script(progressFn+"\n"+resumeFn+"\nnextPendingCourseId(courses,currentCourseId)",{
+    filename:"student-resume",
+  }).runInNewContext({courses,currentCourseId});
+}
+const sampleResume=[
+  {id:10,lessons_total:4,lessons_completed:4},
+  {id:20,lessons_total:4,lessons_completed:1},
+  {id:30,lessons_total:3,lessons_completed:0}
+];
+assert.equal(resumeFixture(sampleResume),20,"retomar primeira pendente");
+assert.equal(resumeFixture(sampleResume,30),30,"manter curso atual pendente");
+assert.equal(resumeFixture(sampleResume,10),20,"pular curso já concluído");
+assert.equal(resumeFixture([{id:3,lessons_total:2,lessons_completed:2}]),null,"todos concluídos");
+assert.equal(resumeFixture([{id:3,lessons_total:0,lessons_completed:0}]),null,"curso sem aulas publicado");
+assert.equal(resumeFixture([{id:-1,lessons_total:4,lessons_completed:0}]),null,"ID inválido");
+assert.equal(resumeFixture(null),null,"catálogo inválido");
+console.log("PASS resume studies: priorizar curso incompleto, proteger curso concluído e IDs");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

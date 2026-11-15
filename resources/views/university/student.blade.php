@@ -38,6 +38,7 @@
     .course-btn[aria-current="true"],.lesson-btn[aria-current="true"]{border-color:#F4D4A9;background:#FFF5E8}
     .course-btn strong,.lesson-btn strong{display:block}.course-btn span,.lesson-btn span{display:block;font-size:12px;color:var(--muted);margin-top:4px}
     .overall-progress{font-size:13px;font-weight:700;color:#FFF0DC!important;margin-top:14px!important}
+    .resume-btn{margin-top:16px}
     .course-progress{height:7px;width:100%;accent-color:#F9941D;display:block;margin-top:8px;border-radius:8px}
     .course-progress::-webkit-progress-bar{background:#EDEFF2;border-radius:8px}
     .course-progress::-webkit-progress-value{background:#F9941D;border-radius:8px}
@@ -68,6 +69,7 @@
     <h1 id="hero-title">Visitas. Leads. Clientes.</h1>
     <p>Aprenda com aulas rápidas, nossa metodologia e orientações práticas para aproveitar melhor os serviços Imagine.</p>
     <p id="overall-progress" class="overall-progress" aria-live="polite">Seu progresso será exibido após autorizar os cursos.</p>
+    <button type="button" id="resume-course" class="primary resume-btn" disabled>Retomar meus estudos</button>
   </section>
   <div id="status" role="status" aria-live="polite" class="status" hidden></div>
   <nav class="pills" aria-label="Categorias dos cursos">
@@ -123,6 +125,7 @@ function lockAccess(message){
   content.append(el("p","Volte ao Portal do Cliente para verificar seu acesso.","empty"));
   overall.textContent="Acesso à Universidade encerrado.";
   document.getElementById("course-search").disabled=true;
+  document.getElementById("resume-course").disabled=true;
   document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
   say(message);
 }
@@ -159,6 +162,15 @@ function filterCourses(courses,category,query){
 function coursesFiltered(){
   return filterCourses(state.courses,state.filter,state.query);
 }
+function nextPendingCourseId(courses,currentCourseId){
+  if(!Array.isArray(courses))return null;
+  const pending=courses.filter(course=>{
+    const p=progressLabel(course);
+    return Number.isSafeInteger(course.id)&&course.id>0&&p.total>0&&p.completed<p.total;
+  });
+  const selected=pending.find(course=>course.id===currentCourseId);
+  return (selected||pending[0])?.id??null;
+}
 function renderCourses(){
   if(state.accessDenied)return;
   list.replaceChildren();
@@ -168,6 +180,8 @@ function renderCourses(){
   overall.textContent=totals.total
     ?"Seu progresso: "+totals.completed+" de "+totals.total+" aulas concluídas."
     :"Nenhuma aula publicada disponível no momento.";
+  const resume=document.getElementById("resume-course");
+  resume.disabled=nextPendingCourseId(state.courses,state.courseId)===null;
   const items=coursesFiltered();
   if(!items.length){list.append(el("p","Nenhum curso publicado nesta categoria.","empty"));return;}
   for(const c of items){
@@ -286,6 +300,18 @@ async function selectLesson(id){
     if(state.lessonRequest===request){say(error.message);content.replaceChildren();}
   }
 }
+document.getElementById("resume-course").addEventListener("click",()=>{
+  if(state.accessDenied)return;
+  const target=nextPendingCourseId(state.courses,state.courseId);
+  if(target===null)return;
+  state.filter="todos";state.query="";
+  document.getElementById("course-search").value="";
+  document.querySelectorAll("[data-filter]").forEach(btn=>{
+    btn.setAttribute("aria-pressed",String(btn.dataset.filter==="todos"));
+  });
+  say("");
+  selectCourse(target);
+});
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});
 document.getElementById("course-search").addEventListener("input",event=>{

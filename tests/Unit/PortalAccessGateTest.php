@@ -91,4 +91,18 @@ final class PortalAccessGateTest extends TestCase
         self::assertFalse($result->allowed);
         self::assertSame('authority_unavailable', $result->reasonCode);
     }
+    public function test_overlong_grants_and_excessive_ttl_are_denied(): void
+    {
+        foreach ([
+            PortalGrant::allow('synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 61),
+            PortalGrant::allow(str_repeat('a', 81), 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 60),
+            PortalGrant::allow('synthetic-company', str_repeat('b', 121), PortalAccessGate::VIEW, 1, self::NOW + 60),
+        ] as $grant) {
+            $requestedCompany = strlen($grant->companyId) > 80 ? $grant->companyId : 'synthetic-company';
+            self::assertSame('invalid_grant', $this->gate($grant)->authorize(
+                'synthetic-session', $requestedCompany, PortalAccessGate::VIEW, self::NOW
+            )->reasonCode);
+        }
+    }
+
 }

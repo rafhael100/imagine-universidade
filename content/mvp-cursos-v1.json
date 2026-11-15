@@ -66,6 +66,29 @@
           "body": "Acompanhar uma oportunidade é lembrar o contexto e oferecer ajuda no momento adequado, respeitando a vontade do interessado. Defina o próximo passo de cada conversa, evite mensagens repetitivas e trate os dados apenas para finalidades legítimas e informadas. A ação prática é criar uma mensagem curta de acompanhamento que deixe claro o motivo do contato."
         }
       ]
+    },
+    {
+      "slug": "introducao-ferramentas-imagine",
+      "title": "Primeiros passos com os serviços Imagine",
+      "category": "sistemas",
+      "summary": "Entenda como Portal, Sites, CRM e Performance se conectam à jornada Visitas → Leads → Clientes.",
+      "lessons": [
+        {
+          "slug": "portal-do-cliente-visao-geral",
+          "title": "Portal do Cliente: o ponto de acompanhamento",
+          "body": "O Portal do Cliente é o espaço previsto para acompanhar informações dos serviços Imagine e solicitações relacionadas à sua empresa. O acesso depende da ativação e das permissões do serviço contratado; uma tela de demonstração não significa que a funcionalidade esteja liberada. Comece identificando seu objetivo e o canal oficial de suporte. A ação prática é listar três dúvidas sobre seus serviços, sem compartilhar senhas, tokens ou dados pessoais."
+        },
+        {
+          "slug": "sites-e-crm-da-visita-ao-lead",
+          "title": "Sites Imagine e CRM: da visita ao lead",
+          "body": "O Site Onepage e a Landing Page podem apresentar a empresa e facilitar o contato de pessoas interessadas. O CRM Imagine foi planejado para organizar oportunidades e acompanhar respostas, respeitando as permissões de cada usuário. Integrações e automações dependem da configuração e da contratação efetivamente habilitadas. A ação prática é desenhar, usando dados fictícios, o caminho de uma visita que vira um lead e recebe atendimento. Nenhuma conversão é garantida."
+        },
+        {
+          "slug": "performance-ai-acompanhamento-responsavel",
+          "title": "Performance AI: objetivos e acompanhamento responsável",
+          "body": "Uma campanha pode atrair visitas, mas seu desempenho depende de público, orçamento, oferta e atendimento. O Imagine Performance AI está em desenvolvimento; previsões, exemplos e prévias não representam campanhas ativas nem resultados prometidos. Antes de investir, defina o objetivo, a verba autorizada e como acompanhar visitas, leads e clientes sem confundir essas etapas. A ação prática é escrever um objetivo de campanha em uma frase, sem inserir dados de pagamento em ambientes de teste."
+        }
+      ]
     }
   ]
 }

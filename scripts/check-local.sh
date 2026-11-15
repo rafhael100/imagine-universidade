@@ -23,6 +23,8 @@ echo '[PASS] Sintaxe PHP verificada'
 # Contrato de acesso funciona também sem Composer e sem banco.
 php scripts/check-access-domain.php
 echo '[PASS] Política de acesso em PHP puro'
+php scripts/check-learning-mock.php
+echo '[PASS] Progresso sintético em PHP puro'
 
 if ! command -v composer >/dev/null 2>&1; then
   echo '[PENDENTE] Composer não instalado; testes Laravel não foram executados.' >&2

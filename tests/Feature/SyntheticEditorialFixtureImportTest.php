@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Domain\Access\PortalAccessGate;
+use App\Domain\Access\PortalAuthority;
+use App\Domain\Access\PortalGrant;
 use App\Domain\Learning\UniversityEditorialFixtureImporter;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -100,4 +103,90 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             $this->app->detectEnvironment(static fn(): string => $environment);
         }
     }
+
+    public function test_editor_can_publish_imported_courses_and_clients_have_isolated_progress(): void
+    {
+        $this->artisan('university:load-synthetic-editorial', [
+            '--confirm-synthetic' => true,
+        ])->assertExitCode(0);
+
+        $now = now();
+        foreach (['synthetic-client-a', 'synthetic-client-b'] as $company) {
+            DB::table('educational_organizations')->insert([
+                'synthetic_key' => $company, 'created_at' => $now, 'updated_at' => $now,
+            ]);
+        }
+
+        // Test-only, never registered in the application's production provider.
+        $this->app->instance(PortalAuthority::class, new class implements PortalAuthority {
+            public function verify(
+                string $serverSessionCredential,
+                string $companyId,
+                string $permission,
+            ): PortalGrant {
+                $sessions = [
+                    'fixture-editor' => ['imagine-editorial', 'fixture-editor-subject', PortalAccessGate::MANAGE],
+                    'fixture-client-a' => ['synthetic-client-a', 'fixture-person-a', PortalAccessGate::VIEW],
+                    'fixture-client-b' => ['synthetic-client-b', 'fixture-person-b', PortalAccessGate::VIEW],
+                ];
+                $entry = $sessions[$serverSessionCredential] ?? null;
+                if ($entry === null || $entry[0] !== $companyId || $entry[2] !== $permission) {
+                    return PortalGrant::deny('not_authorized');
+                }
+                return PortalGrant::allow($entry[0], $entry[1], $entry[2], 1, time() + 30);
+            }
+        });
+
+        $this->withSession([
+            'portal_server_credential' => 'fixture-editor',
+            'portal_company_id' => 'imagine-editorial',
+        ]);
+
+        $editorCourses = $this->getJson('/universidade/private/admin/courses')
+            ->assertOk()->assertJsonCount(3, 'courses')->json('courses');
+        foreach ($editorCourses as $course) {
+            $this->postJson('/universidade/private/admin/courses/'.$course['id'].'/publish')
+                ->assertOk()->assertJsonPath('published', true);
+        }
+
+        $this->withSession([
+            'portal_server_credential' => 'fixture-client-a',
+            'portal_company_id' => 'synthetic-client-a',
+        ]);
+        $clientCourses = $this->getJson('/universidade/private/courses')
+            ->assertOk()->assertJsonCount(3, 'courses')->json('courses');
+
+        $lessonCount = 0;
+        $firstLessonId = null;
+        foreach ($clientCourses as $course) {
+            $lessons = $this->getJson('/universidade/private/courses/'.$course['id'].'/lessons')
+                ->assertOk()->json('lessons');
+            $lessonCount += count($lessons);
+            if ($firstLessonId === null) {
+                $firstLessonId = $lessons[0]['id'];
+            }
+        }
+        self::assertSame(8, $lessonCount);
+        self::assertNotNull($firstLessonId);
+
+        $this->postJson('/universidade/private/lessons/'.$firstLessonId.'/complete')
+            ->assertOk()->assertJsonPath('completed', true);
+        $this->getJson('/universidade/private/lessons/'.$firstLessonId.'/progress')
+            ->assertOk()->assertJsonPath('completed', true);
+        $this->getJson('/universidade/private/admin/courses')->assertForbidden();
+
+        $this->withSession([
+            'portal_server_credential' => 'fixture-client-b',
+            'portal_company_id' => 'synthetic-client-b',
+        ]);
+        $this->getJson('/universidade/private/courses')
+            ->assertOk()->assertJsonCount(3, 'courses');
+        $this->getJson('/universidade/private/lessons/'.$firstLessonId.'/progress')
+            ->assertOk()->assertJsonPath('completed', false);
+
+        self::assertSame(1, DB::table('educational_lesson_progress')->count());
+        self::assertSame(3, DB::table('educational_courses')->where('is_published', true)->count());
+        self::assertSame(8, DB::table('educational_lessons')->where('is_published', true)->count());
+    }
+
 }

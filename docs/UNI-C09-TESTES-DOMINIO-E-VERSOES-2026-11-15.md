@@ -27,8 +27,14 @@ As duas sentenças SQL de índices foram verificadas em um banco SQLite `:memory
 1. `php scripts/check-access-domain.php`
 2. `php scripts/check-learning-mock.php`
 3. `bash scripts/check-local.sh` para lint PHP/Composer/PHPUnit, **apenas se o ambiente estiver completo e isolado**.
-4. Quando houver PHP/Composer, pdo_sqlite e dependências aprovadas: `vendor/bin/phpunit --testsuite Unit` e `vendor/bin/phpunit --testsuite Feature`.
-5. Executar migrações/concorrência em PostgreSQL 18 exclusivamente de homologação, com backup, banco descartável e rollback documentados.
+4. `node scripts/check-ui-contract.mjs` (Node 18+, sem dependências), para validar sintaxe JavaScript, CSRF, rotas protegidas, escape textual e manifesto de conteúdo.
+5. Somente depois disso, executar os testes Laravel/SQLite e PostgreSQL com as dependências de homologação.
+6. Quando houver PHP/Composer, pdo_sqlite e dependências aprovadas: `vendor/bin/phpunit --testsuite Unit` e `vendor/bin/phpunit --testsuite Feature`.
+7. Executar migrações/concorrência em PostgreSQL 18 exclusivamente de homologação, com backup, banco descartável e rollback documentados.
+
+## Inspeção estática adicional de UI
+
+O script `scripts/check-ui-contract.mjs` foi incluído nesta branch. A inspeção direta dos arquivos da branch passou nos itens verificados: JavaScript das páginas Cliente/Admin, uso de `textContent`, CSRF/same-origin, rotas protegidas, bloqueio padrão do Portal, catálogo de três cursos em rascunho com oito aulas. O próprio script foi analisado sintaticamente, mas **a execução integral de Node dentro de um checkout da aplicação ainda não ocorreu**.
 
 ## Bloqueios atuais
 

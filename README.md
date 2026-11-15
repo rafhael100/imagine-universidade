@@ -1,6 +1,6 @@
 # Universidade Imagine — Documentação oficial de planejamento
 
-> **Repositório privado de documentação.** Não contém implementação da plataforma, vídeos publicados, contratos de fornecedores ou homologação de ambiente.
+> **Contexto atualizado da branch de revisão:** a `main` mantém o planejamento documental; esta branch contém código candidato em PRs DRAFT, não homologado nem implantado. Não há vídeos publicados, clientes com acesso operacional, contratos adicionais nem homologação de ambiente.
 
 **Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. **O Gate D foi encerrado documentalmente em 04/11/2026 por aprovação expressa do D15**; orçamento/teto do desenvolvimento, contratações e programação **não foram autorizados**.
 
@@ -19,6 +19,12 @@
 **Bloco B do Pré-Gate C (04/11/2026):** [proposta documental sobre responsáveis, esforço, custo e orçamento C-00](docs/00-governanca/PRE-GATE-C-BLOCO-B-RESPONSAVEIS-ORCAMENTO-E-TETO-C00-v0.1-2026-11-04.md), inclui alternativas de código local, VPS compartilhada ou sequência gradual, com **estimativas não vinculantes e sem teto aprovado**. **Aprovado como base documental e B-M como preferência** pela [DEC-UNI-BB](docs/00-governanca/DECISAO-UNI-PRE-GATE-C-BLOCO-B-BASE-APROVADA-BM-2026-11-04.md), **sem teto, nomes ou horas ratificados; Gate C fechado.**
 
 **Bloco A do Pré-Gate C (04/11/2026):** [proposta de arquitetura e ambiente C-00 na VPS Leaseweb compartilhada](docs/00-governanca/PRE-GATE-C-BLOCO-A-ARQUITETURA-E-AMBIENTE-C00-v0.1-2026-11-04.md), com Laravel/PHP como backend **proposto**, PostgreSQL isolado, mocks de identidade/elegibilidade, Docker Compose e cópias de desenvolvimento R2 EU. **Bloco A APROVADO como base técnica documental** por [DEC-UNI-BA](docs/00-governanca/DECISAO-UNI-PRE-GATE-C-BLOCO-A-APROVADO-2026-11-04.md); Laravel/PHP, PostgreSQL, Compose e mocks definidos como diretrizes, com versões e capacidade a validar. **Bloco B orçamento/equipe proposto, Bloco C termo Gate C pendente. Não autoriza programação ou contratação.**
+
+**Início técnico restrito da Fundação Segura C-00 (04/11/2026):** [registro de primeira entrega em revisão](docs/00-governanca/REGISTRO-UNI-C00-CODIGO-INICIAL-EM-REVISAO-2026-11-04.md) e [Pull Request draft #1](https://github.com/rafhael100/imagine-universidade/pull/1). Foram preparados arquivos de Laravel, migração educacional fictícia, política mock de acesso e testes unitários **não executados**, exclusivamente na branch `feat/uni-c00-fundacao-segura`; `main` segue documental. **Gate C formal ainda não aberto**: falta nomear responsáveis, comprovar ambiente local, aprovar horas/custos e teto financeiro específico. Sem merge, contratação, servidor, CI, implantação ou acesso a dados reais.
+
+**Condição financeira e revisão C-00 (04/11/2026):** [DEC-UNI-C00 — teto R$ 0 e revisão obrigatória](docs/00-governanca/DECISAO-UNI-C00-TETO-ZERO-E-REVISAO-2026-11-04.md). **Aprovado R$ 0,00 de novas despesas de fornecedores para a fase local**, sem presumir custo humano zero. Revisão técnica/segurança humana exigida; responsáveis, sandbox local, esforço, vigência e autorização formal Gate C continuam pendentes. PR #1 permanece draft e não executada.
+
+**Revisão técnica e segurança C-00 (04/11/2026):** o solicitante assumiu pessoalmente esta função, conforme [DEC-UNI-C00-REVISAO](docs/00-governanca/DECISAO-UNI-C00-RESPONSAVEL-REVISAO-2026-11-04.md). A designação não é uma revisão concluída da [PR #1](https://github.com/rafhael100/imagine-universidade/pull/1); executor, ambiente local, independência/controle compensatório, custos humanos e Gate C continuam pendentes.
 
 ## Por onde começar
 

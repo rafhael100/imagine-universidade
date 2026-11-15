@@ -51,5 +51,41 @@ def main():
     print("\n7 SQLite contract cases passed; 0 failed (synthetic in-memory).")
 
 
+def verify_reference_safety():
+    """A data deletion cannot silently erase published/history-dependent rows."""
+    with sqlite3.connect(":memory:") as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        assert db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        db.executescript("""
+            CREATE TABLE orgs (id INTEGER PRIMARY KEY);
+            CREATE TABLE courses (id INTEGER PRIMARY KEY,
+                org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE RESTRICT);
+            CREATE TABLE versions (id INTEGER PRIMARY KEY,
+                course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE RESTRICT);
+            CREATE TABLE lessons (id INTEGER PRIMARY KEY,
+                version_id INTEGER NOT NULL REFERENCES versions(id) ON DELETE RESTRICT);
+            CREATE TABLE progress (id INTEGER PRIMARY KEY,
+                org_id INTEGER NOT NULL REFERENCES orgs(id) ON DELETE RESTRICT,
+                lesson_id INTEGER NOT NULL REFERENCES lessons(id) ON DELETE RESTRICT);
+            INSERT INTO orgs VALUES (1);
+            INSERT INTO courses VALUES (2, 1);
+            INSERT INTO versions VALUES (3, 2);
+            INSERT INTO lessons VALUES (4, 3);
+            INSERT INTO progress VALUES (5, 1, 4);
+        """)
+        must_reject(db, "DELETE FROM lessons WHERE id=?", (4,),
+                    "lesson cannot cascade-delete progress")
+        must_reject(db, "DELETE FROM versions WHERE id=?", (3,),
+                    "version cannot cascade-delete lesson history")
+        must_reject(db, "DELETE FROM courses WHERE id=?", (2,),
+                    "course cannot cascade-delete published versions")
+        must_reject(db, "DELETE FROM orgs WHERE id=?", (1,),
+                    "organization cannot cascade-delete progress")
+        assert db.execute("SELECT COUNT(*) FROM progress").fetchone()[0] == 1
+        print("PASS explicit restrict retains progress after rejected deletions")
+    print("\n5 FK RESTRICT contract cases passed; 0 failed (synthetic in-memory).")
+
+
 if __name__ == "__main__":
     main()
+    verify_reference_safety()

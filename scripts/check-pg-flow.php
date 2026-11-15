@@ -57,8 +57,12 @@ function expectPgConstraint(PDO $pdo, string $sql, string $name, string $expecte
         $pdo->exec('ROLLBACK TO SAVEPOINT synthetic_constraint_check');
         throw new RuntimeException("Unexpectedly accepted: {$name}");
     } catch (PDOException $error) {
-        $state = (string) $error->getCode();
+        $state = (string) ($error->errorInfo[0] ?? $error->getCode());
         $pdo->exec('ROLLBACK TO SAVEPOINT synthetic_constraint_check');
+        if ($state !== $expectedState) {
+            // Apenas SQLSTATE é exibido; nunca registrar SQL, segredos ou dados reais.
+            fwrite(STDERR, "Unexpected SQLSTATE for {$name}: {$state}; expected {$expectedState}\n");
+        }
         requireCondition($state === $expectedState, $name);
     } finally {
         $pdo->exec('RELEASE SAVEPOINT synthetic_constraint_check');
@@ -196,10 +200,14 @@ try {
 
     $pdo->rollBack();
     echo "\nPASS: eight PostgreSQL synthetic relational checks; entire transaction ROLLED BACK.\n";
-} catch (Throwable) {
+} catch (Throwable $error) {
     if ($pdo instanceof PDO && $pdo->inTransaction()) {
         $pdo->rollBack();
     }
-    fwrite(STDERR, "FAIL: synthetic PostgreSQL relational checks did not complete.\n");
+    // Diagnóstico apenas da classe/SQLSTATE, sem divulgar mensagem SQL ou conexão.
+    $safeCode = preg_match('/^[A-Za-z0-9]{1,10}$/', (string) $error->getCode())
+        ? (string) $error->getCode() : 'unknown';
+    fwrite(STDERR, 'FAIL: synthetic PostgreSQL relational checks did not complete ('
+        .get_debug_type($error).', code '.$safeCode.").\n");
     exit(1);
 }

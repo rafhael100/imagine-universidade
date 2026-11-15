@@ -22,8 +22,9 @@ O iniciador constrói a imagem (pode baixar imagens/pacotes), executa QA e reali
 
 ## Verificações feitas nesta rodada
 - Docker e PostgreSQL não estão instalados nem disponíveis no ambiente de execução desta conversa, portanto **o Compose NÃO FOI EXECUTADO**.
-- A configuração YAML equivalente foi analisada por PyYAML, com oito invariantes aprovados: profile manual, imagem PostgreSQL18, sem portas públicas, sem mounts, dados tmpfs, rede compartilhada com DB, banco sintético e APP_ENV testing.
-- A verificação do script SQL PostgreSQL é apenas leitura estática nesta rodada; **não passou por PHP lint nem por PostgreSQL real**.
+- O **arquivo Compose exato da branch** foi analisado por PyYAML, com oito invariantes aprovados; SHA Git local/remote idêntico: `b592f399a8d1e7c57663e24d91c58b6624714c9c`.
+- O script real `check-pg-flow.php` passou por `php -l` (PHP 8.4), recusou execução fora do banco sintético e teve hash idêntico à branch: `db346a8893f9802a03f7a731b1ad0a24fc046fac`. **Ainda não passou por PostgreSQL real**.
+- Os dois scripts Bash de entrada e limpeza foram verificados com `bash -n` e hash Git idêntico aos arquivos da branch: `qa-compose-entrypoint.sh` e `run-qa-compose.sh`.
 - Testes anteriormente executados: 40/40 em PHP puro e 12/12 SQLite sintético, separados dos testes Laravel.
 
 ## Gate de homologação seguinte

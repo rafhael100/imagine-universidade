@@ -17,7 +17,7 @@ fi
 
 while IFS= read -r -d '' source; do
   php -l "$source" >/dev/null
-done < <(find app bootstrap database routes tests -type f -name '*.php' -print0)
+done < <(find app bootstrap database routes tests scripts -type f -name '*.php' -print0)
 echo '[PASS] Sintaxe PHP verificada'
 
 # Contrato de acesso funciona também sem Composer e sem banco.
@@ -33,11 +33,25 @@ else
   echo '[PENDENTE] Python3 indisponível para o smoke SQL; seguir apenas com testes PHP.' >&2
 fi
 
+if command -v node >/dev/null 2>&1; then
+  node scripts/check-ui-contract.mjs
+  echo '[PASS] Contratos de UI/rotas/catálogo em Node'
+else
+  echo '[PENDENTE] Node não instalado; contrato estático de UI não executado.' >&2
+fi
+
 if ! command -v composer >/dev/null 2>&1; then
   echo '[PENDENTE] Composer não instalado; testes Laravel não foram executados.' >&2
   exit 2
 fi
-composer validate --strict
+if [[ -f composer.lock ]]; then
+  composer validate --strict
+  echo '[PASS] Composer e lockfile verificados'
+else
+  # Sem lockfile é permitido apenas diagnóstico exploratório na sandbox.
+  composer validate --no-check-publish
+  echo '[ATENÇÃO] composer.lock ausente: dependências NÃO são reprodutíveis para release.' >&2
+fi
 
 if [[ ! -f vendor/autoload.php || ! -x vendor/bin/phpunit ]]; then
   echo '[PENDENTE] Dependências não instaladas; não instalar automaticamente.' >&2

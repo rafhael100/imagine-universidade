@@ -166,7 +166,7 @@ try {
         $pdo,
         "DELETE FROM educational_lessons WHERE id={$lesson}",
         'progress prevents deletion of published lesson',
-        '23503'
+        '23001'
     );
 
     $stmt = $pdo->prepare("UPDATE educational_lessons SET is_published=false WHERE id=?");

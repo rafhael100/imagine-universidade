@@ -33,7 +33,7 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
         self::assertSame(0, DB::table('educational_lessons')->count());
     }
 
-    public function test_import_creates_only_three_unpublished_courses_and_eight_lessons(): void
+    public function test_import_creates_four_unpublished_courses_and_eleven_lessons(): void
     {
         $this->artisan('university:load-synthetic-editorial', [
             '--confirm-synthetic' => true,
@@ -42,14 +42,14 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
         self::assertSame(1, DB::table('educational_organizations')->count());
         self::assertSame('imagine-editorial', DB::table('educational_organizations')
             ->value('synthetic_key'));
-        self::assertSame(3, DB::table('educational_courses')->count());
-        self::assertSame(3, DB::table('educational_course_versions')->count());
-        self::assertSame(8, DB::table('educational_lessons')->count());
+        self::assertSame(4, DB::table('educational_courses')->count());
+        self::assertSame(4, DB::table('educational_course_versions')->count());
+        self::assertSame(11, DB::table('educational_lessons')->count());
         self::assertSame(0, DB::table('educational_courses')->where('is_published', true)->count());
         self::assertSame(0, DB::table('educational_lessons')->where('is_published', true)->count());
-        self::assertSame(3, DB::table('educational_course_versions')
+        self::assertSame(4, DB::table('educational_course_versions')
             ->where('status', 'draft')->count());
-        self::assertSame(3, DB::table('educational_courses')
+        self::assertSame(4, DB::table('educational_courses')
             ->where('is_shared', true)->count());
         self::assertSame(0, DB::table('educational_lesson_progress')->count());
 
@@ -83,8 +83,8 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             '--confirm-synthetic' => true,
         ])->assertExitCode(0);
 
-        self::assertSame(3, DB::table('educational_courses')->count());
-        self::assertSame(8, DB::table('educational_lessons')->count());
+        self::assertSame(4, DB::table('educational_courses')->count());
+        self::assertSame(11, DB::table('educational_lessons')->count());
         self::assertSame('Edição editorial sintética preservada',
             DB::table('educational_courses')->where('id', $courseId)->value('title'));
         self::assertSame('Aula sintética editada, que não pode ser sobrescrita.',
@@ -143,7 +143,7 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
         ]);
 
         $editorCourses = $this->getJson('/universidade/private/admin/courses')
-            ->assertOk()->assertJsonCount(3, 'courses')->json('courses');
+            ->assertOk()->assertJsonCount(4, 'courses')->json('courses');
         foreach ($editorCourses as $course) {
             $this->postJson('/universidade/private/admin/courses/'.$course['id'].'/publish')
                 ->assertOk()->assertJsonPath('published', true);
@@ -154,10 +154,10 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             'portal_company_id' => 'synthetic-client-a',
         ]);
         $clientCourses = $this->getJson('/universidade/private/courses')
-            ->assertOk()->assertJsonCount(3, 'courses')->json('courses');
-        self::assertSame([4, 2, 2], array_column($clientCourses, 'lessons_total'));
-        self::assertSame([0, 0, 0], array_column($clientCourses, 'lessons_completed'));
-        self::assertSame([0, 0, 0], array_column($clientCourses, 'progress_percent'));
+            ->assertOk()->assertJsonCount(4, 'courses')->json('courses');
+        self::assertSame([4, 2, 2, 3], array_column($clientCourses, 'lessons_total'));
+        self::assertSame([0, 0, 0, 0], array_column($clientCourses, 'lessons_completed'));
+        self::assertSame([0, 0, 0, 0], array_column($clientCourses, 'progress_percent'));
 
         $lessonCount = 0;
         $firstLessonId = null;
@@ -169,7 +169,7 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
                 $firstLessonId = $lessons[0]['id'];
             }
         }
-        self::assertSame(8, $lessonCount);
+        self::assertSame(11, $lessonCount);
         self::assertNotNull($firstLessonId);
 
         $this->postJson('/universidade/private/lessons/'.$firstLessonId.'/complete')
@@ -191,7 +191,7 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             'portal_company_id' => 'synthetic-client-b',
         ]);
         $this->getJson('/universidade/private/courses')
-            ->assertOk()->assertJsonCount(3, 'courses')
+            ->assertOk()->assertJsonCount(4, 'courses')
             ->assertJsonPath('courses.0.lessons_completed', 0)
             ->assertJsonPath('courses.0.progress_percent', 0);
         $lessonStatesB = $this->getJson('/universidade/private/courses/'.$clientCourses[0]['id'].'/lessons')
@@ -201,8 +201,8 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             ->assertOk()->assertJsonPath('completed', false);
 
         self::assertSame(1, DB::table('educational_lesson_progress')->count());
-        self::assertSame(3, DB::table('educational_courses')->where('is_published', true)->count());
-        self::assertSame(8, DB::table('educational_lessons')->where('is_published', true)->count());
+        self::assertSame(4, DB::table('educational_courses')->where('is_published', true)->count());
+        self::assertSame(11, DB::table('educational_lessons')->where('is_published', true)->count());
     }
 
 }

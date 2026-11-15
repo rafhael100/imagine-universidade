@@ -201,6 +201,36 @@ final class PortalBoundaryFlowTest extends TestCase
         self::assertSame(0, DB::table('educational_lesson_progress')->count());
     }
 
+
+    public function test_tutor_response_is_withheld_if_course_unpublished_during_inference(): void
+    {
+        [$courseId, $lessonId] = $this->createPublishedCourse();
+        $this->app->instance(TutorGateway::class, new class($courseId) implements TutorGateway {
+            public function __construct(private int $courseId) {}
+
+            public function explain(TutorQuestion $question): TutorReply
+            {
+                $versionId = DB::table('educational_course_versions')
+                    ->where('educational_course_id', $this->courseId)
+                    ->where('status', 'published')->value('id');
+                DB::table('educational_courses')->where('id', $this->courseId)
+                    ->update(['is_published' => false]);
+                DB::table('educational_course_versions')->where('id', $versionId)
+                    ->update(['status' => 'archived']);
+                DB::table('educational_lessons')->where('educational_course_version_id', $versionId)
+                    ->update(['is_published' => false]);
+                return new TutorReply('Texto do tutor que deve ficar bloqueado.');
+            }
+        });
+
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/tutor", [
+            'question' => 'Explique a aula.',
+        ])->assertForbidden()->assertDontSee('Texto do tutor');
+
+        $this->getJson("/universidade/private/lessons/{$lessonId}")->assertNotFound();
+    }
+
     public function test_headers_and_body_cannot_create_a_server_session(): void
     {
         $headers = [

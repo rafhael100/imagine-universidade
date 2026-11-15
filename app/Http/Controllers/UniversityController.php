@@ -136,6 +136,20 @@ final class UniversityController
             return response()->json(['error' => 'access_denied'], 403);
         }
 
+        // The course could be unpublished or the lesson revised while a
+        // model was working. Never release text from a stale source.
+        try {
+            $freshLesson = $this->catalog->lesson($latest, $lessonId);
+            if ($freshLesson === null
+                || (string) $freshLesson->slug !== (string) $lesson->slug
+                || (int) $freshLesson->course_version !== (int) $lesson->course_version
+                || (string) $freshLesson->body !== (string) $lesson->body) {
+                return response()->json(['error' => 'access_denied'], 403);
+            }
+        } catch (\Throwable) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
         if (trim($reply->message) === '' || strlen($reply->message) > 12000) {
             return response()->json(['error' => 'tutor_unavailable'], 503);
         }

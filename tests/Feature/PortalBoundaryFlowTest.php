@@ -295,4 +295,40 @@ final class PortalBoundaryFlowTest extends TestCase
         self::assertSame(1, DB::table('educational_courses')->where('is_published', true)->count());
         self::assertSame(1, DB::table('educational_courses')->count());
     }
+
+    public function test_progress_export_follows_service_revocation_portal_outage_and_reactivation(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertOk()->assertJsonPath('completed', true);
+        $this->getJson('/universidade/private/progress/export')
+            ->assertOk()->assertJsonCount(1, 'completions')
+            ->assertJsonPath('completions.0.lesson_slug', 'teste-aula-um');
+
+        // Losing the LAST qualifying service blocks all private exports.
+        $this->fakeAuthority->clientAEligible = false;
+        $this->getJson('/universidade/private/progress/export')
+            ->assertForbidden()->assertDontSee('teste-aula-um');
+        self::assertSame(1, DB::table('educational_lesson_progress')->count());
+
+        // Even after commercial eligibility is restored, an offline Portal
+        // must deny exports instead of trusting an earlier grant or cache.
+        $this->fakeAuthority->clientAEligible = true;
+        $this->fakeAuthority->online = false;
+        $this->getJson('/universidade/private/progress/export')
+            ->assertForbidden()->assertDontSee('teste-aula-um');
+
+        $this->fakeAuthority->online = true;
+        $this->getJson('/universidade/private/progress/export')
+            ->assertOk()->assertJsonCount(1, 'completions')
+            ->assertJsonPath('completions.0.lesson_slug', 'teste-aula-um');
+
+        // A second company has its own progress and cannot recover A's.
+        $this->asClientB();
+        $this->getJson('/universidade/private/progress/export')
+            ->assertOk()->assertJsonCount(0, 'completions');
+    }
+
 }

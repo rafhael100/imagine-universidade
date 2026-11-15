@@ -150,7 +150,7 @@ const third=refreshFixture();
 fakeState.accessDenied=true;
 pendingLessons[2].resolve({lessons:[{id:30}]});
 await third;
-assert.equal(fakeState.lessons[0].id,20,"admin: resposta posterior a revogação ignorada");
+assert.equal(fakeState.lessons.length,0,"admin: após revogação, carregamento de aulas não restaura conteúdo");
 assert.match(adminUI,/const request=\+\+state.courseRequest;/,"admin: token de atualização de cursos");
 assert.match(adminUI,/\+\+state.courseRequest;\+\+state.lessonRequest;/,"admin: invalidar após troca/negação");
 assert.match(adminUI,/function fillCourse\(\)\{\n  if\(state.accessDenied\)return;/,"admin: formulário não reabilitado");

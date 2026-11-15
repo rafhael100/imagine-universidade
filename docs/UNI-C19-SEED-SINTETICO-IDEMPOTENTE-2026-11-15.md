@@ -31,3 +31,10 @@ A execução do GitHub Actions precisa passar PHP 8.3, testes PHPUnit Unit e Fea
 ## Ensaio Cliente/Admin com o catálogo importado
 
 A suíte Feature foi estendida para uma operação completa com dados sintéticos: o editor fictício carrega os três cursos, publica cada um pelo endpoint protegido, e dois clientes fictícios consultam os três cursos/oito conteúdos. O cliente A conclui uma aula, o cliente B não vê seu progresso, e nenhum cliente recebe permissão de administração. **Essa autoridade de teste é injetada exclusivamente dentro do PHPUnit**; não existe SSO real nem acesso a dados de clientes.
+
+
+## Ensaio adicional de contêineres
+
+O workflow de QA controlado por rótulo ganhou um segundo job `isolated-compose`, dependente do sucesso de `isolated-tests`. Ele roda exclusivamente no runner Ubuntu descartável e executa `scripts/run-qa-compose.sh`: construção de PHP 8.3, libsodium, PostgreSQL 18 em `tmpfs`, testes Unit/Feature e duas importações sintéticas. O Compose **não publica portas**, não usa bind mounts, não possui secrets de produção e remove volumes/serviços ao encerrar.
+
+Este job é uma **verificação candidata da infraestrutura** e não implica autorização para usar a VPS ou hospedar clientes. O resultado de GitHub Actions deve ser conferido antes de considerá-lo aprovado.

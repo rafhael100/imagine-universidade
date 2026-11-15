@@ -176,6 +176,31 @@
       ]}
     ];
     const labels={metodologia:"Metodologia Imagine",negocios:"Gestão e negócios",sistemas:"Treinamentos Imagine"};
+    // Importação DEMONSTRATIVA do rascunho editorial local, sem backend.
+    // Somente cursos marcados como "publicados" no painel offline são exibidos.
+    const previewAdminKey="imagine-universidade-admin-preview-v1";
+    function importAdminCourses(){
+      try{
+        const saved=JSON.parse(localStorage.getItem(previewAdminKey)||"[]");
+        if(!Array.isArray(saved)||saved.length>50)return;
+        const seen=new Set();
+        for(const c of saved){
+          if(!c||c.published!==true||typeof c.id!=="string"||!(/^[a-zA-Z0-9_-]{1,100}$/).test(c.id)||seen.has(c.id))continue;
+          seen.add(c.id);
+          if(typeof c.title!=="string"||!c.title.trim()||c.title.length>160||typeof c.summary!=="string"||c.summary.length>500)continue;
+          if(!Object.hasOwn(labels,c.category)||!Array.isArray(c.lessons)||!c.lessons.length||c.lessons.length>50)continue;
+          if(!c.lessons.every(l=>l&&typeof l.title==="string"&&l.title.trim()&&l.title.length<=160&&typeof l.body==="string"&&l.body.trim()&&l.body.length<=5000))continue;
+          catalog.push({
+            id:"admin-"+c.id,area:c.category,name:c.title,description:c.summary||"Conteúdo criado na demonstração administrativa.",
+            icon:"✦",lessons:c.lessons.map(l=>({
+              title:l.title,time:"Leitura",text:l.body,task:"Reflita sobre como aplicar este conteúdo no seu negócio."
+            }))
+          });
+        }
+      }catch(_){/* Sem armazenamento local disponível: exibir somente exemplos estáticos. */}
+    }
+    importAdminCourses();
+    const htmlSafe=value=>String(value).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
     const state={filter:"todos",query:"",course:null,lesson:0};
     const progressKey="imagine-uni-preview-progress-v1";
     let progress={};
@@ -191,10 +216,10 @@
       for(const c of filtered){
         const article=document.createElement("article");article.className="course";
         const pct=Math.round(totalDone(c)/c.lessons.length*100);
-        // Conteúdo abaixo é 100% estático e definido no catálogo local, nunca proveniente de usuário/API.
-        article.innerHTML='<div class="course-top"><div class="course-icon" aria-hidden="true">'+c.icon+'</div><span class="tag">'+labels[c.area]+'</span><h3>'+c.name+'</h3><p>'+c.description+'</p></div>'+
+        // Títulos e aulas locais podem ser editados na prévia admin: escapar HTML.
+        article.innerHTML='<div class="course-top"><div class="course-icon" aria-hidden="true">'+htmlSafe(c.icon)+'</div><span class="tag">'+htmlSafe(labels[c.area])+'</span><h3>'+htmlSafe(c.name)+'</h3><p>'+htmlSafe(c.description)+'</p></div>'+
           '<div class="course-bottom"><div class="meta"><span>'+c.lessons.length+' aulas curtas</span><span>'+pct+'% concluído</span></div><div class="progress" aria-label="'+pct+' por cento concluído"><span style="width:'+pct+'%"></span></div>'+
-          '<button class="open" type="button" data-course="'+c.id+'">Ver aulas</button></div>';
+          '<button class="open" type="button" data-course="'+htmlSafe(c.id)+'">Ver aulas</button></div>';
         coursesEl.append(article);
       }
       if(!filtered.length){const p=document.createElement("p");p.className="empty";p.textContent="Nenhum conteúdo corresponde à busca. Tente outro termo.";coursesEl.append(p);}

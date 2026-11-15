@@ -24,7 +24,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('educational_course_version_id')
                 ->constrained('educational_course_versions')
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
             $table->string('slug', 120);
             $table->string('title', 200);
             $table->text('body');
@@ -39,10 +39,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('educational_organization_id')
                 ->constrained('educational_organizations')
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
             $table->foreignId('educational_lesson_id')
                 ->constrained('educational_lessons')
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
             $table->string('subject_key', 120);
             $table->timestampTz('completed_at');
             $table->timestamps();

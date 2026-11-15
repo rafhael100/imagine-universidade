@@ -2,9 +2,45 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\UniversityController;
 use Illuminate\Support\Facades\Route;
 
-// Nenhum catálogo real, login público ou rota de concessão de acesso no C-00.
+/**
+ * C-03: rotas privadas para implementação futura. SEM SSO, o provider
+ * UnavailablePortalAuthority nega TODAS as requisições (403).
+ * Grupo web Laravel inclui sessão e CSRF em escritas.
+ */
+Route::prefix('universidade/private')->group(function (): void {
+    Route::middleware('university.grant:view')->group(function (): void {
+        Route::get('/courses', [UniversityController::class, 'courses']);
+        Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'lessons'])
+            ->whereNumber('courseId');
+        Route::get('/lessons/{lessonId}', [UniversityController::class, 'lesson'])
+            ->whereNumber('lessonId');
+        Route::get('/lessons/{lessonId}/progress', [UniversityController::class, 'progress'])
+            ->whereNumber('lessonId');
+        Route::post('/lessons/{lessonId}/complete', [UniversityController::class, 'complete'])
+            ->whereNumber('lessonId');
+    });
+
+    Route::middleware('university.grant:manage')->prefix('admin')->group(function (): void {
+        Route::get('/courses', [UniversityController::class, 'adminCourses']);
+        Route::post('/courses', [UniversityController::class, 'createCourse']);
+        Route::patch('/courses/{courseId}', [UniversityController::class, 'updateCourse'])
+            ->whereNumber('courseId');
+        Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'adminLessons'])
+            ->whereNumber('courseId');
+        Route::post('/courses/{courseId}/lessons', [UniversityController::class, 'createLesson'])
+            ->whereNumber('courseId');
+        Route::patch('/lessons/{lessonId}', [UniversityController::class, 'updateLesson'])
+            ->whereNumber('lessonId');
+        Route::post('/courses/{courseId}/publish', [UniversityController::class, 'publish'])
+            ->whereNumber('courseId');
+        Route::post('/courses/{courseId}/unpublish', [UniversityController::class, 'unpublish'])
+            ->whereNumber('courseId');
+    });
+});
+
 Route::fallback(static function () {
     return response()->json(['error' => 'not_found'], 404);
 });

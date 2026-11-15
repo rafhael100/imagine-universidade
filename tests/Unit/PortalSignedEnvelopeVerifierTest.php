@@ -189,4 +189,31 @@ final class PortalSignedEnvelopeVerifierTest extends TestCase
             $tampered, 'synthetic-company-a', PortalAccessGate::VIEW, self::NOW,
         ));
     }
+
+    public function test_shared_public_vector_is_verified_without_any_authorization(): void
+    {
+        $path = dirname(__DIR__).'/Fixtures/uni-v1-ed25519-public-vector.json';
+        self::assertSame(
+            'b6925128a7d66efe1e304710d085d51c5e854215230fa0f02505d201b4381e7c',
+            hash_file('sha256', $path),
+        );
+
+        $fixture = json_decode((string) file_get_contents($path), true, 16, JSON_THROW_ON_ERROR);
+        $key = base64_decode($fixture['public_key_base64'], true);
+        self::assertIsString($key);
+        $verified = (new PortalSignedEnvelopeVerifier(['synthetic-vector-k1' => $key]))
+            ->inspect(
+                $fixture['envelope'],
+                $fixture['expected_company'],
+                $fixture['expected_permission'],
+                $fixture['verification_epoch'],
+            );
+        self::assertNotNull($verified);
+        self::assertSame('synthetic-company-a', $verified->companyId);
+        self::assertFalse($verified->mayAuthorizeAccess());
+        self::assertNull((new PortalSignedEnvelopeVerifier(['synthetic-vector-k1' => $key]))
+            ->inspect($fixture['envelope'], 'synthetic-company-b',
+                $fixture['expected_permission'], $fixture['verification_epoch']));
+    }
+
 }

@@ -219,4 +219,66 @@ final class SharedCurriculumFlowTest extends TestCase
     }
 
 
+    public function test_only_editor_can_delete_draft_lesson_with_audit(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-rascunho',
+            'title' => 'Curso Rascunho',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+        $lessonId = $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-rascunho',
+            'title' => 'Aula rascunho',
+            'body' => 'Conteúdo sintético que ainda não foi publicado.',
+        ])->assertCreated()->json('id');
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->deleteJson("/universidade/private/admin/lessons/{$lessonId}")->assertForbidden();
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->deleteJson("/universidade/private/admin/lessons/{$lessonId}")
+            ->assertOk()->assertJsonPath('deleted', true);
+        self::assertSame(0, DB::table('educational_lessons')->where('id', $lessonId)->count());
+        self::assertSame('lesson.deleted', DB::table('educational_audit_events')
+            ->orderByDesc('id')->value('action'));
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish")
+            ->assertStatus(409);
+    }
+
+    public function test_draft_lesson_with_legacy_progress_must_not_be_deleted(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-legado',
+            'title' => 'Curso Legado',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+        $lessonId = $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-legada',
+            'title' => 'Aula legada',
+            'body' => 'Conteúdo fictício com registro histórico para preservação.',
+        ])->assertCreated()->json('id');
+
+        $orgId = DB::table('educational_organizations')
+            ->where('synthetic_key', 'synthetic-company-a')->value('id');
+        $now = now();
+        DB::table('educational_lesson_progress')->insert([
+            'educational_organization_id' => $orgId,
+            'educational_lesson_id' => $lessonId,
+            'subject_key' => 'synthetic-person-a',
+            'completed_at' => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $this->deleteJson("/universidade/private/admin/lessons/{$lessonId}")
+            ->assertNotFound();
+        self::assertSame(1, DB::table('educational_lessons')->where('id', $lessonId)->count());
+        self::assertSame(1, DB::table('educational_lesson_progress')
+            ->where('educational_lesson_id', $lessonId)->count());
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('action', 'lesson.deleted')->count());
+    }
+
 }

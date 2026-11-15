@@ -71,7 +71,12 @@ final class UniversityCatalogRepository
         return $this->contentOrgId();
     }
 
-    /** @return array<int, stdClass> */
+    /**
+     * Catálogo publicado da Imagine, com progresso calculado somente pela
+     * empresa/sujeito do grant verificado. Sem consultar outros tenants.
+     *
+     * @return array<int, stdClass>
+     */
     public function catalog(PortalGrant $grant): array
     {
         $org = $this->orgId($grant);
@@ -84,7 +89,7 @@ final class UniversityCatalogRepository
             return [];
         }
 
-        return DB::table('educational_courses as c')
+        $courses = DB::table('educational_courses as c')
             ->join('educational_course_versions as v', 'v.educational_course_id', '=', 'c.id')
             ->where('c.educational_organization_id', $editorialOrg)
             ->where('c.is_shared', true)
@@ -94,6 +99,44 @@ final class UniversityCatalogRepository
             ->orderBy('c.id')
             ->select('c.id', 'c.slug', 'c.title', 'c.summary', 'c.category', 'v.id as version_id')
             ->get()->all();
+
+        if ($courses === []) {
+            return [];
+        }
+
+        // Única consulta agrupada, limitada às versões publicadas,
+        // com LEFT JOIN restrito ao aluno/empresa autenticados.
+        // Não contam conclusões de versões arquivadas nem rascunhos.
+        $versionIds = array_map(static fn (stdClass $c): int => (int) $c->version_id, $courses);
+        $counts = DB::table('educational_lessons as l')
+            ->leftJoin('educational_lesson_progress as p', function ($join) use ($org, $grant): void {
+                $join->on('p.educational_lesson_id', '=', 'l.id')
+                    ->where('p.educational_organization_id', '=', $org)
+                    ->where('p.subject_key', '=', $grant->subjectId);
+            })
+            ->whereIn('l.educational_course_version_id', $versionIds)
+            ->where('l.is_published', true)
+            ->groupBy('l.educational_course_version_id')
+            ->select('l.educational_course_version_id')
+            ->selectRaw('COUNT(l.id) AS lessons_total')
+            ->selectRaw('COUNT(p.id) AS lessons_completed')
+            ->get()
+            ->keyBy('educational_course_version_id');
+
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return [];
+        }
+
+        foreach ($courses as $course) {
+            $totals = $counts->get($course->version_id);
+            $course->lessons_total = (int) ($totals->lessons_total ?? 0);
+            $course->lessons_completed = (int) ($totals->lessons_completed ?? 0);
+            $course->progress_percent = $course->lessons_total > 0
+                ? (int) round(100 * $course->lessons_completed / $course->lessons_total)
+                : 0;
+        }
+
+        return $courses;
     }
 
     public function lesson(PortalGrant $grant, int $lessonId): ?stdClass

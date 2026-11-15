@@ -23,3 +23,12 @@ O verificador Ed25519 da Universidade aceita apenas um envelope assinado de test
 Rodar PHPUnit Unit/Feature em PHP 8.3, migrações PostgreSQL18, verificador SQL nonce e scripts de interface. **Não reivindicar aprovação antes de verificar a execução GitHub Actions**.
 
 Sem deploy, fusão de branches, custos novos ou dados de clientes.
+
+
+## Complemento: retenção e homologação executada
+
+O serviço `PortalNonceReplayRetention` remove, em lotes de até 500, somente hashes cuja validade terminou há **mais de 24 horas**. A migração passou a recusar rollback enquanto qualquer registro de nonce existir, impedindo apagar provas de single-use acidentalmente. Dois testes Feature confirmam limites de lote, preservação de registros recentes e falha conservadora do banco.
+
+[GitHub Actions #43766650898](https://github.com/rafhael100/imagine-universidade/actions/runs/43766650898): **success**, PHP8.3.36, **72 testes/494 asserções** (33 Unit/111 e 39 Feature/383), cinco migrações prévias + nova tabela, PostgreSQL18 sintético, oito invariantes de esquema, oito testes relacionais com rollback e teste específico do índice único de nonce/replay. Conteúdo inicial 4 cursos/11 aulas também reimportado sem duplicação.
+
+**Este PASS não homologou a conexão com o Portal real.** Ainda faltam a identidade/mTLS, serviço elegível ativo, revogação autenticada e revisão AppSec/DBA/LGPD.

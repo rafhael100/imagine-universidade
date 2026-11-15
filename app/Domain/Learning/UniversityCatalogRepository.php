@@ -1,0 +1,347 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Domain\Learning;
+
+use App\Domain\Access\PortalGrant;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use stdClass;
+
+/**
+ * C-03: consultas sempre limitadas à organização do grant VERIFICADO no servidor.
+ * Não usar antes do adaptador Portal homologado e das migrações aprovadas.
+ */
+final class UniversityCatalogRepository
+{
+    private function orgId(PortalGrant $grant): ?int
+    {
+        if (!$grant->allowed || $grant->companyId === '' || $grant->subjectId === '') {
+            return null;
+        }
+
+        $id = DB::table('educational_organizations')
+            ->where('synthetic_key', $grant->companyId)
+            ->value('id');
+
+        return $id === null ? null : (int) $id;
+    }
+
+    /** @return array<int, stdClass> */
+    public function catalog(PortalGrant $grant): array
+    {
+        $org = $this->orgId($grant);
+        if ($org === null) {
+            return [];
+        }
+
+        return DB::table('educational_courses as c')
+            ->join('educational_course_versions as v', 'v.educational_course_id', '=', 'c.id')
+            ->where('c.educational_organization_id', $org)
+            ->where('c.is_published', true)
+            ->where('v.status', 'published')
+            ->orderBy('c.sort_order')
+            ->orderBy('c.id')
+            ->select('c.id', 'c.slug', 'c.title', 'c.summary', 'c.category', 'v.id as version_id')
+            ->get()->all();
+    }
+
+    public function lesson(PortalGrant $grant, int $lessonId): ?stdClass
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $lessonId < 1) {
+            return null;
+        }
+
+        return DB::table('educational_lessons as l')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->where('l.id', $lessonId)
+            ->where('c.educational_organization_id', $org)
+            ->where('c.is_published', true)
+            ->where('v.status', 'published')
+            ->where('l.is_published', true)
+            ->select('l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order', 'c.id as course_id')
+            ->first();
+    }
+
+    /** @return array<int, stdClass> */
+    public function lessons(PortalGrant $grant, int $courseId): array
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $courseId < 1) {
+            return [];
+        }
+
+        return DB::table('educational_lessons as l')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->where('c.id', $courseId)
+            ->where('c.educational_organization_id', $org)
+            ->where('c.is_published', true)
+            ->where('v.status', 'published')
+            ->where('l.is_published', true)
+            ->orderBy('l.sort_order')->orderBy('l.id')
+            ->select('l.id', 'l.slug', 'l.title', 'l.sort_order')
+            ->get()->all();
+    }
+
+    public function isComplete(PortalGrant $grant, int $lessonId): ?bool
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $this->lesson($grant, $lessonId) === null) {
+            return null;
+        }
+
+        return DB::table('educational_lesson_progress')
+            ->where('educational_organization_id', $org)
+            ->where('subject_key', $grant->subjectId)
+            ->where('educational_lesson_id', $lessonId)
+            ->exists();
+    }
+
+    public function complete(PortalGrant $grant, int $lessonId): bool
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $lessonId < 1) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($grant, $lessonId, $org): bool {
+            // Verificar publicação e empresa novamente, dentro da transação.
+            $lesson = DB::table('educational_lessons as l')
+                ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+                ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+                ->where('l.id', $lessonId)
+                ->where('c.educational_organization_id', $org)
+                ->where('c.is_published', true)
+                ->where('v.status', 'published')
+                ->where('l.is_published', true)
+                ->select('l.id')->lockForUpdate()->first();
+            if ($lesson === null) {
+                return false;
+            }
+
+            $now = now();
+            // insertOrIgnore usa a unique key e evita duplicidade entre requisições.
+            DB::table('educational_lesson_progress')->insertOrIgnore([
+                'educational_organization_id' => $org,
+                'subject_key' => $grant->subjectId,
+                'educational_lesson_id' => $lessonId,
+                'completed_at' => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+            return true;
+        });
+    }
+
+    /** @return array<int, stdClass> */
+    public function adminCourses(PortalGrant $grant): array
+    {
+        $org = $this->orgId($grant);
+        if ($org === null) {
+            return [];
+        }
+
+        return DB::table('educational_courses')
+            ->where('educational_organization_id', $org)
+            ->orderBy('sort_order')->orderBy('id')
+            ->select('id', 'slug', 'title', 'summary', 'category', 'sort_order', 'is_published')
+            ->get()->all();
+    }
+
+    public function adminLessons(PortalGrant $grant, int $courseId): array
+    {
+        $org = $this->orgId($grant);
+        if ($org === null) {
+            return [];
+        }
+
+        return DB::table('educational_lessons as l')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->where('c.educational_organization_id', $org)
+            ->where('c.id', $courseId)
+            ->orderByDesc('v.version')->orderBy('l.sort_order')->orderBy('l.id')
+            ->select('l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order', 'l.is_published', 'v.status')
+            ->get()->all();
+    }
+
+    /** @param array{slug:string,title:string,category:string,summary?:string|null,sort_order?:int} $input */
+    public function createCourse(PortalGrant $grant, array $input): ?int
+    {
+        $org = $this->orgId($grant);
+        if ($org === null) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($org, $input): int {
+            $now = now();
+            $id = DB::table('educational_courses')->insertGetId([
+                'educational_organization_id' => $org,
+                'slug' => $input['slug'],
+                'title' => $input['title'],
+                'category' => $input['category'],
+                'summary' => $input['summary'] ?? null,
+                'sort_order' => $input['sort_order'] ?? 0,
+                'is_published' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            DB::table('educational_course_versions')->insert([
+                'educational_course_id' => $id,
+                'version' => 1,
+                'status' => 'draft',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            return (int) $id;
+        });
+    }
+
+    /** @param array{title:string,summary?:string|null,category:string,sort_order?:int} $input */
+    public function updateCourse(PortalGrant $grant, int $courseId, array $input): bool
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $courseId < 1) {
+            return false;
+        }
+
+        return DB::table('educational_courses')
+            ->where('id', $courseId)
+            ->where('educational_organization_id', $org)
+            ->where('is_published', false)
+            ->update([
+                'title' => $input['title'],
+                'summary' => $input['summary'] ?? null,
+                'category' => $input['category'],
+                'sort_order' => $input['sort_order'] ?? 0,
+                'updated_at' => now(),
+            ]) > 0;
+    }
+
+    /** @param array{slug:string,title:string,body:string,sort_order?:int} $input */
+    public function addLesson(PortalGrant $grant, int $courseId, array $input): ?int
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $courseId < 1) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($org, $courseId, $input): ?int {
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_published', false)
+                ->lockForUpdate()->first(['id']);
+            if ($course === null) {
+                return null;
+            }
+
+            $version = DB::table('educational_course_versions')
+                ->where('educational_course_id', $courseId)
+                ->where('status', 'draft')
+                ->orderByDesc('version')->first(['id']);
+            if ($version === null) {
+                return null;
+            }
+
+            $now = now();
+            return (int) DB::table('educational_lessons')->insertGetId([
+                'educational_course_version_id' => $version->id,
+                'slug' => $input['slug'],
+                'title' => $input['title'],
+                'body' => $input['body'],
+                'sort_order' => $input['sort_order'] ?? 0,
+                'is_published' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        });
+    }
+
+    /** @param array{title:string,body:string,sort_order?:int} $input */
+    public function updateLesson(PortalGrant $grant, int $lessonId, array $input): bool
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $lessonId < 1) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($org, $lessonId, $input): bool {
+            $row = DB::table('educational_lessons as l')
+                ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+                ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+                ->where('l.id', $lessonId)
+                ->where('c.educational_organization_id', $org)
+                ->where('c.is_published', false)
+                ->where('v.status', 'draft')
+                ->select('l.id')->lockForUpdate()->first();
+            if ($row === null) {
+                return false;
+            }
+
+            return DB::table('educational_lessons')->where('id', $row->id)->update([
+                'title' => $input['title'],
+                'body' => $input['body'],
+                'sort_order' => $input['sort_order'] ?? 0,
+                'updated_at' => now(),
+            ]) > 0;
+        });
+    }
+
+    public function setPublished(PortalGrant $grant, int $courseId, bool $publish): bool
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $courseId < 1) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($org, $courseId, $publish): bool {
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->where('is_published', !$publish)
+                ->lockForUpdate()->first(['id']);
+            if ($course === null) {
+                return false;
+            }
+
+            $version = DB::table('educational_course_versions')
+                ->where('educational_course_id', $courseId)
+                ->where('status', $publish ? 'draft' : 'published')
+                ->orderByDesc('version')
+                ->lockForUpdate()->first(['id']);
+            if ($version === null) {
+                return false;
+            }
+
+            if ($publish && !DB::table('educational_lessons')
+                ->where('educational_course_version_id', $version->id)
+                ->whereRaw("length(trim(title)) > 0")
+                ->whereRaw("length(trim(body)) > 0")
+                ->exists()) {
+                return false;
+            }
+
+            $now = now();
+            DB::table('educational_lessons')
+                ->where('educational_course_version_id', $version->id)
+                ->update(['is_published' => $publish, 'updated_at' => $now]);
+
+            DB::table('educational_course_versions')
+                ->where('id', $version->id)
+                ->update(['status' => $publish ? 'published' : 'draft', 'updated_at' => $now]);
+
+            DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $org)
+                ->update(['is_published' => $publish, 'updated_at' => $now]);
+
+            return true;
+        });
+    }
+}

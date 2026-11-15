@@ -46,6 +46,29 @@ assert.ok(studentProgressUI.includes('lessons.find(item=>!Boolean(item.completed
 assert.ok(studentProgressUI.includes('markLessonStatus(id,true)'), "aluno: marcar status após conclusão");
 assert.ok(studentProgressUI.includes('statusLabel.dataset.lessonStatus'), "aluno: indicador textual por aula");
 console.log("PASS student resume: aula pendente priorizada e conclusão textual acessível");
+assert.ok(studentProgressUI.includes('advance.dataset.nextLesson'), "aluno: botão para próxima aula");
+assert.ok(studentProgressUI.includes("Você concluiu todas as aulas deste curso"), "aluno: conclusão sem certificação");
+
+const nextFunction = studentProgressUI.match(/function nextPendingLessonId\(currentId\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(nextFunction, "aluno: função pura de seleção de próxima aula ausente");
+function fixtureNext(entries, currentId) {
+  const items = entries.map(([id, completed]) => ({
+    dataset: { lessonId: String(id), completed: String(completed) },
+  }));
+  return new Script(nextFunction + "\nnextPendingLessonId(currentId)", {
+    filename: "student-next-lesson",
+  }).runInNewContext({
+    currentId,
+    lessonsBox: { querySelectorAll: () => items },
+  });
+}
+assert.equal(fixtureNext([[10, 1], [20, 0], [30, 0]], 10), 20, "próxima pendente");
+assert.equal(fixtureNext([[10, 0], [20, 1], [30, 1]], 30), 10, "retorno ao início");
+assert.equal(fixtureNext([[10, 1], [20, 1]], 10), null, "curso concluído");
+assert.equal(fixtureNext([[10, 0], [20, 1]], 999), null, "aula inválida");
+console.log("PASS next lesson: sequência, retorno, conclusão e ID inválido");
+
+
 
 
 const routes = read("routes/web.php");

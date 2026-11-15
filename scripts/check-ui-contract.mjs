@@ -98,6 +98,16 @@ assert.equal(searchFixture("SISTEMAS","sistemas"),"2","categoria + busca");
 assert.equal(searchFixture("não existe"),"","sem resultado");
 console.log("PASS course search: acessibilidade, limites, acentos e categorias");
 
+
+assert.ok(studentProgressUI.includes("const request=++state.courseRequest;"),"aluno: token monotônico de curso");
+assert.ok(studentProgressUI.includes("const request=++state.lessonRequest;"),"aluno: token monotônico de aula");
+assert.ok(studentProgressUI.includes("if(state.courseRequest!==request)return;"),"aluno: curso atrasado não altera tela");
+assert.ok(studentProgressUI.includes("if(state.lessonRequest!==request)return;"),"aluno: aula atrasada não altera tela");
+assert.ok(studentProgressUI.includes("if(state.courseRequest===request){say(error.message)"),"aluno: erro antigo de curso ignorado");
+assert.ok(studentProgressUI.includes("if(state.lessonRequest===request){say(error.message)"),"aluno: erro antigo de aula ignorado");
+assert.ok(studentProgressUI.includes("++state.courseRequest;++state.lessonRequest;"),"aluno: troca de filtro cancela seleção antiga");
+console.log("PASS async navigation: respostas e erros obsoletos isolados por token");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

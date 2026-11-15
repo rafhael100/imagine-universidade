@@ -100,7 +100,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function progressLabel(course){
@@ -166,12 +166,15 @@ function renderCourses(){
   }
 }
 async function selectCourse(id){
+  // Invalidate prior course requests and lesson reads, including same-course clicks.
+  const request=++state.courseRequest;
+  ++state.lessonRequest;
   state.courseId=id;state.lessonId=null;renderCourses();
   lessonsBox.replaceChildren();content.replaceChildren();
   content.append(el("p","Carregando aulas...","empty"));
   try{
     const payload=await api("/courses/"+encodeURIComponent(String(id))+"/lessons");
-    if(state.courseId!==id)return;
+    if(state.courseRequest!==request)return;
     const lessons=Array.isArray(payload.lessons)?payload.lessons:[];
     lessonsBox.replaceChildren();content.replaceChildren();
     if(!lessons.length){content.append(el("p","Ainda não existem aulas publicadas neste curso.","empty"));return;}
@@ -186,7 +189,9 @@ async function selectCourse(id){
     // concluídas, abrir a última para permitir revisar o conteúdo.
     const next=lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
     await selectLesson(Number(next.id));
-  }catch(error){say(error.message);content.replaceChildren();}
+  }catch(error){
+    if(state.courseRequest===request){say(error.message);content.replaceChildren();}
+  }
 }
 function markLessonStatus(id,completed){
   lessonsBox.querySelectorAll("[data-lesson-id]").forEach(btn=>{
@@ -218,6 +223,7 @@ function offerNextLesson(id){
   content.append(advance);
 }
 async function selectLesson(id){
+  const request=++state.lessonRequest;
   state.lessonId=id;
   lessonsBox.querySelectorAll("[data-lesson-id]").forEach(btn=>btn.setAttribute("aria-current",String(Number(btn.dataset.lessonId)===id)));
   content.replaceChildren();content.append(el("p","Carregando aula...","empty"));
@@ -226,7 +232,7 @@ async function selectLesson(id){
       api("/lessons/"+encodeURIComponent(String(id))),
       api("/lessons/"+encodeURIComponent(String(id))+"/progress"),
     ]);
-    if(state.lessonId!==id)return;
+    if(state.lessonRequest!==request)return;
     const lesson=lessonPayload.lesson;
     markLessonStatus(id,!!progressPayload.completed);
     content.replaceChildren();
@@ -237,6 +243,7 @@ async function selectLesson(id){
       action.disabled=true;
       try{
         await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
+        if(state.lessonRequest!==request)return;
         action.textContent="✓ Aula concluída";say("Seu progresso foi registrado.");
         markLessonStatus(id,true);
         offerNextLesson(id);
@@ -244,6 +251,7 @@ async function selectLesson(id){
         // não deve tornar o botão ativo nem sugerir conclusão malsucedida.
         try{
           const latest=await api("/courses");
+          if(state.lessonRequest!==request)return;
           state.courses=Array.isArray(latest.courses)?latest.courses:[];
           renderCourses();
         }catch(refreshError){
@@ -253,19 +261,23 @@ async function selectLesson(id){
     });
     content.append(action);
     if(progressPayload.completed)offerNextLesson(id);
-  }catch(error){say(error.message);content.replaceChildren();}
+  }catch(error){
+    if(state.lessonRequest===request){say(error.message);content.replaceChildren();}
+  }
 }
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});
 document.getElementById("course-search").addEventListener("input",event=>{
   state.query=event.target.value.slice(0,80);
+  ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
   lessonsBox.replaceChildren();content.replaceChildren();
   content.append(el("p","Escolha um curso para ver as aulas.","empty"));
   renderCourses();
 });
 document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("click",()=>{
-  state.filter=btn.dataset.filter;state.courseId=null;state.lessonId=null;
+  state.filter=btn.dataset.filter;++state.courseRequest;++state.lessonRequest;
+  state.courseId=null;state.lessonId=null;
   document.querySelectorAll("[data-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));
   lessonsBox.replaceChildren();content.replaceChildren();content.append(el("p","Escolha um curso para ver as aulas.","empty"));renderCourses();
 }));

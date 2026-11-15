@@ -26,3 +26,8 @@ A universidade operacional continua sem SSO/elegibilidade real do Portal; a aute
 A execução do GitHub Actions precisa passar PHP 8.3, testes PHPUnit Unit e Feature, migrações PG18, verificação de isolamento/restrições e dupla carga de 3 cursos/8 aulas. Confirmar logs e eventuais regressões antes de usar a saída para demonstrar o catálogo.
 
 **NO-MERGE / NO-DEPLOY até gates do Portal, AppSec/DBA/LGPD e segurança serem concluídos.**
+
+
+## Ensaio Cliente/Admin com o catálogo importado
+
+A suíte Feature foi estendida para uma operação completa com dados sintéticos: o editor fictício carrega os três cursos, publica cada um pelo endpoint protegido, e dois clientes fictícios consultam os três cursos/oito conteúdos. O cliente A conclui uma aula, o cliente B não vê seu progresso, e nenhum cliente recebe permissão de administração. **Essa autoridade de teste é injetada exclusivamente dentro do PHPUnit**; não existe SSO real nem acesso a dados de clientes.

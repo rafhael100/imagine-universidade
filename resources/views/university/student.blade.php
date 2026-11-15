@@ -186,11 +186,15 @@ async function selectLesson(id){
       try{
         await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
         action.textContent="✓ Aula concluída";say("Seu progresso foi registrado.");
-        // Atualização autoritativa: nunca supor que o banco contabilizou
-        // apenas com base no clique; atualiza o resumo após confirmação.
-        const latest=await api("/courses");
-        state.courses=Array.isArray(latest.courses)?latest.courses:[];
-        renderCourses();
+        // A conclusão já foi confirmada. A falha de atualização da lista
+        // não deve tornar o botão ativo nem sugerir conclusão malsucedida.
+        try{
+          const latest=await api("/courses");
+          state.courses=Array.isArray(latest.courses)?latest.courses:[];
+          renderCourses();
+        }catch(refreshError){
+          say("Aula concluída. Atualize a página para conferir o resumo do progresso.");
+        }
       }catch(error){action.disabled=false;say(error.message);}
     });
     content.append(action);

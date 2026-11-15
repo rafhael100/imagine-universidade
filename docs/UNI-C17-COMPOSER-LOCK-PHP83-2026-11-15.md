@@ -16,9 +16,13 @@ A resolução foi refeita usando `config.platform.php=8.3.0` no Composer. [Execu
 - `ops/qa/Dockerfile`: laboratório usa `php:8.3-cli-bookworm`.
 - `scripts/qa-compose-entrypoint.sh`: bloqueia QA quando `composer.lock` está ausente; nunca faz atualização livre de dependências.
 
-## Verificação final necessária
+## Verificação final executada e aprovada
 
-Reexecutar o workflow exclusivamente via etiqueta `uni-qa-approved` em PR de revisão, para provar que o **lock versionado instala e testa em PHP 8.3 real** com PostgreSQL18 sintético, sem resolver pacotes novamente. Não declarar esse passo aprovado antes de examinar os logs.
+[GitHub Actions #43757330006](https://github.com/rafhael100/imagine-universidade/actions/runs/43757330006), HEAD `b172a009533714bceee14d45846a6cf0bebc80c0`, terminou **success** usando `composer install --no-plugins --no-scripts` diretamente do lockfile versionado.
+
+O runner confirmou **PHP 8.3.36**, 26 Unit (70 asserções), 28 Feature (234 asserções), cinco migrações Laravel PostgreSQL 18, oito verificações estruturais e oito verificações relacionais PostgreSQL com rollback. Não houve `composer update` nem exportação de lockfile nessa execução.
+
+O lock garante reprodutibilidade da resolução das dependências para PHP 8.3; ainda não é prova de homologação de SSO real, implantação ou segurança de produção.
 
 O Docker Compose local ainda não foi executado no runtime da conversa. O Portal permanece fail-closed; serviço elegível ativo, emissor de grants, sessões de negócio, revogação real, AppSec/DBA/LGPD e implantação continuam NO-GO.
 

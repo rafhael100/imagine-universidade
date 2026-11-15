@@ -72,7 +72,7 @@
             <button type="button" class="secondary" id="publish">Publicar curso</button>
             <button type="button" class="secondary" id="unpublish">Retirar do ar</button>
           </div>
-          <p class="help">Para editar conteúdo já publicado, retire-o do ar e revise a nova versão antes de republicar.</p>
+          <p class="help">Retirar um curso do ar arquiva a versão publicada e cria um novo rascunho. O histórico anterior é preservado, mas o progresso da nova versão começa novamente.</p>
         </form>
         <hr>
         <h3>Aulas do curso</h3>
@@ -277,10 +277,21 @@ $("publish").addEventListener("click",async()=>{
   try{await api("/courses/"+state.course.id+"/publish","POST");await refreshCourses(state.course.id);say("Curso publicado para clientes autorizados.");}
   catch(error){say(error.message);}
 });
+function unpublishWarning(title){
+  const name=String(title||"este curso").slice(0,200);
+  return "Retirar "+name+" do ar? As aulas publicadas ficarão indisponíveis para os alunos, o histórico anterior será preservado e a nova versão começará com progresso separado. Confirme apenas se deseja criar o novo rascunho.";
+}
 $("unpublish").addEventListener("click",async()=>{
   if(state.accessDenied||!state.course||!state.course.is_published)return;
-  try{await api("/courses/"+state.course.id+"/unpublish","POST");await refreshCourses(state.course.id);say("Curso retirado do ar; nova versão em rascunho.");}
-  catch(error){say(error.message);}
+  const courseId=state.course.id;
+  if(!confirm(unpublishWarning(state.course.title)))return;
+  if(state.accessDenied||state.course?.id!==courseId)return;
+  try{
+    await api("/courses/"+courseId+"/unpublish","POST");
+    if(state.accessDenied)return;
+    await refreshCourses(state.course?.id===courseId?courseId:state.course?.id??null);
+    say("Versão anterior arquivada; novo rascunho criado. O progresso da versão nova começa separado.");
+  }catch(error){say(error.message);}
 });
 (async()=>{try{await refreshCourses();}catch(error){say(error.message);if(!state.accessDenied)$("course-items").replaceChildren();}})();
 </script>

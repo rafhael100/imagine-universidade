@@ -156,6 +156,18 @@ assert.match(adminUI,/\+\+state.courseRequest;\+\+state.lessonRequest;/,"admin: 
 assert.match(adminUI,/function fillCourse\(\)\{\n  if\(state.accessDenied\)return;/,"admin: formulário não reabilitado");
 console.log("PASS admin race: respostas fora de ordem e pós-revogação descartadas");
 
+
+const warningFn=adminUI.match(/function unpublishWarning\(title\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(warningFn,"admin: aviso de despublicação obrigatório");
+const warning=new Script(warningFn+"\nunpublishWarning('Curso fictício')").runInNewContext({});
+for(const word of ["Curso fictício","histórico anterior","nova versão","progresso separado"]){
+  assert.ok(warning.includes(word),"admin: aviso omite "+word);
+}
+assert.match(adminUI,/if\(!confirm\(unpublishWarning\(state.course.title\)\)\)return;/,"admin: exigência de confirmação antes do POST");
+assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)return;/,"admin: revalidar seleção após confirmação");
+assert.match(adminUI,/await api\("\/courses\/".*\+courseId\+"\/unpublish","POST"\)/,"admin: endpoint de despublicação com ID capturado");
+console.log("PASS unpublish: confirmação explícita, histórico e novo progresso declarados");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

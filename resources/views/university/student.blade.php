@@ -100,7 +100,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:""};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function progressLabel(course){
@@ -109,7 +109,23 @@ function progressLabel(course){
     ?Math.min(course.lessons_completed,total):0;
   return {total,completed,percent:total?Math.round(completed*100/total):0};
 }
-function say(message){status.hidden=!message;status.textContent=message||"";}
+function say(message){
+  const shown=state.accessDenied?state.accessMessage:message;
+  status.hidden=!shown;status.textContent=shown||"";
+}
+function lockAccess(message){
+  if(state.accessDenied)return;
+  state.accessDenied=true;state.accessMessage=message;
+  state.courses=[];state.courseId=null;state.lessonId=null;
+  ++state.courseRequest;++state.lessonRequest;
+  list.replaceChildren();lessonsBox.replaceChildren();content.replaceChildren();
+  list.append(el("p","Biblioteca indisponível até um novo acesso autorizado.","empty"));
+  content.append(el("p","Volte ao Portal do Cliente para verificar seu acesso.","empty"));
+  overall.textContent="Acesso à Universidade encerrado.";
+  document.getElementById("course-search").disabled=true;
+  document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
+  say(message);
+}
 function el(tag,text,className){
   const node=document.createElement(tag);
   if(text!==undefined)node.textContent=text;
@@ -117,16 +133,20 @@ function el(tag,text,className){
   return node;
 }
 async function api(path,options={}){
+  if(state.accessDenied)throw new Error(state.accessMessage);
   const response=await fetch(root+path,{
     method:options.method||"GET",
     credentials:"same-origin",
     cache:"no-store",
     headers:{"Accept":"application/json","X-Requested-With":"XMLHttpRequest","X-CSRF-TOKEN":csrf},
   });
-  if(response.status===403){throw new Error("Seu acesso não está autorizado. Retorne ao Portal do Cliente.");}
-  if(response.status===419){throw new Error("Sua sessão expirou. Acesse novamente pelo Portal.");}
+  if(response.status===403)lockAccess("Seu acesso não está autorizado. Retorne ao Portal do Cliente.");
+  if(response.status===419)lockAccess("Sua sessão expirou. Acesse novamente pelo Portal.");
+  if(state.accessDenied)throw new Error(state.accessMessage);
   if(!response.ok){throw new Error("Não foi possível concluir esta operação. Tente novamente.");}
-  return response.json();
+  const data=await response.json();
+  if(state.accessDenied)throw new Error(state.accessMessage);
+  return data;
 }
 function normalizeSearchText(text){
   return String(text||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
@@ -140,6 +160,7 @@ function coursesFiltered(){
   return filterCourses(state.courses,state.filter,state.query);
 }
 function renderCourses(){
+  if(state.accessDenied)return;
   list.replaceChildren();
   const totals=state.courses.reduce((memo,c)=>{
     const p=progressLabel(c);memo.completed+=p.completed;memo.total+=p.total;return memo;
@@ -286,9 +307,10 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
     // Post estritamente autorizado pelo Portal; cria somente o tenant técnico.
     await api("/initialize",{method:"POST"});
     const payload=await api("/courses");
+    if(state.accessDenied)return;
     state.courses=Array.isArray(payload.courses)?payload.courses:[];
     renderCourses();
-  }catch(error){say(error.message);list.replaceChildren();list.append(el("p","A biblioteca permanece indisponível.","empty"));}
+  }catch(error){say(error.message);if(!state.accessDenied){list.replaceChildren();list.append(el("p","A biblioteca permanece indisponível.","empty"));}}
 })();
 </script>
 </body>

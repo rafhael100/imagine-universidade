@@ -108,6 +108,19 @@ assert.ok(studentProgressUI.includes("if(state.lessonRequest===request){say(erro
 assert.ok(studentProgressUI.includes("++state.courseRequest;++state.lessonRequest;"),"aluno: troca de filtro cancela seleção antiga");
 console.log("PASS async navigation: respostas e erros obsoletos isolados por token");
 
+const adminUI=read("resources/views/university/admin.blade.php");
+for(const [role,view] of [["student",studentProgressUI],["admin",adminUI]]){
+  assert.match(view,/function lockAccess\(message\)/,role+": encerramento explícito");
+  assert.match(view,/if\(response.status===403\)lockAccess/,role+": revogação 403");
+  assert.match(view,/if\(response.status===419\)lockAccess/,role+": sessão 419");
+  assert.match(view,/if\(state.accessDenied\)throw new Error\(state.accessMessage\)/,role+": negar novas requisições");
+  assert.match(view,/if\(state.accessDenied\)throw new Error\(state.accessMessage\);\n  return data;/,role+": retorno JSON só após conferir revogação");
+  assert.match(view,/state.courses=\[\]/,role+": limpeza de catálogo");
+}
+assert.match(studentProgressUI,/\+\+state.courseRequest;\+\+state.lessonRequest;/,"aluno: invalidar respostas obsoletas");
+assert.match(adminUI,/document.querySelectorAll\("\.layout button,.layout input,.layout select,.layout textarea"\)/,"admin: impedir uso de controles após revogação");
+console.log("PASS revocation UI: student/admin fail-closed on HTTP 403/419, clear private state");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

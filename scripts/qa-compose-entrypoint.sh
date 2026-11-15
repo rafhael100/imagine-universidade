@@ -55,9 +55,9 @@ php scripts/check-pg-nonce.php
 
 # Fixture only, inside APP_ENV=testing and the disposable PostgreSQL database.
 first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
-echo "$first" | grep -Fq '4 courses created; 11 lessons created; 0 courses preserved.'
+echo "$first" | grep -Fq '10 courses created; 35 lessons created; 0 courses preserved.'
 second=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
-echo "$second" | grep -Fq '0 courses created; 0 lessons created; 4 courses preserved.'
+echo "$second" | grep -Fq '0 courses created; 0 lessons created; 10 courses preserved.'
 echo "[QA] PASS: quatro cursos e onze aulas em rascunho, sem duplicar no segundo ensaio."
 
 echo "[QA] Provider de autorização segue DENY-ALL."

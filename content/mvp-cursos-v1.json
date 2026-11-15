@@ -89,6 +89,174 @@
           "body": "Uma campanha pode atrair visitas, mas seu desempenho depende de público, orçamento, oferta e atendimento. O Imagine Performance AI está em desenvolvimento; previsões, exemplos e prévias não representam campanhas ativas nem resultados prometidos. Antes de investir, defina o objetivo, a verba autorizada e como acompanhar visitas, leads e clientes sem confundir essas etapas. A ação prática é escrever um objetivo de campanha em uma frase, sem inserir dados de pagamento em ambientes de teste."
         }
       ]
+    },
+    {
+      "slug": "trilha-jornada-completa",
+      "title": "Trilha Imagine 1: Visitas, Leads e Clientes",
+      "category": "metodologia",
+      "summary": "Entenda o percurso completo, do primeiro acesso até uma contratação confirmada.",
+      "lessons": [
+        {
+          "slug": "visita-nao-e-venda",
+          "title": "Visita não é venda",
+          "body": "Uma visita indica que alguém chegou a um site ou canal digital. Ela pode apenas consultar informações e sair. Por isso, não some visitas como se fossem pedidos de orçamento ou vendas. Aplicação opcional: desenhe uma jornada fictícia de uma pessoa que visita uma página e decide se deseja entrar em contato."
+        },
+        {
+          "slug": "lead-e-interesse-identificavel",
+          "title": "Lead: interesse identificável",
+          "body": "Um lead é um contato ou oportunidade cujo interesse pode ser acompanhado legitimamente. Um visitante anônimo não se torna lead automaticamente. Formulários precisam informar para que os dados serão utilizados, com tratamento adequado. Aplicação opcional: redija uma mensagem de convite ao contato usando somente uma empresa imaginária."
+        },
+        {
+          "slug": "cliente-e-contratacao-confirmada",
+          "title": "Cliente: contratação confirmada",
+          "body": "Cliente é a pessoa ou organização que efetivamente comprou ou contratou. Um pedido de informações, uma negociação e uma proposta ainda não são uma venda. Registre a conversão somente quando houver confirmação confiável. Aplicação opcional: identifique em um exemplo fictício o momento em que a oportunidade se transforma em cliente."
+        },
+        {
+          "slug": "mapear-gargalo-da-jornada",
+          "title": "Encontre o gargalo da jornada",
+          "body": "Uma empresa pode receber muitas visitas e poucos leads, ou muitos leads sem contratações. As causas podem envolver público, clareza, oferta, preço ou atendimento. Não conclua que mais anúncios resolverão tudo sem investigar. Aplicação opcional: escolha uma etapa da jornada de um negócio fictício e proponha uma melhoria pequena e verificável."
+        }
+      ]
+    },
+    {
+      "slug": "trilha-visitas-seja-encontrado",
+      "title": "Trilha Imagine 2: Visitas — seja encontrado",
+      "category": "metodologia",
+      "summary": "Aprenda a preparar páginas úteis e atrair pessoas com expectativas realistas.",
+      "lessons": [
+        {
+          "slug": "site-como-destino-util",
+          "title": "Seu site como destino útil",
+          "body": "Um site precisa explicar com clareza o que a empresa faz, para quem trabalha e como pedir informações. Uma página bonita mas confusa pode dificultar o próximo passo. Considere especialmente o uso no celular. Aplicação opcional: revise o título e a principal chamada de ação de uma página de demonstração."
+        },
+        {
+          "slug": "conteudo-e-busca-organica",
+          "title": "Conteúdo e busca orgânica",
+          "body": "Uma pessoa encontra respostas quando o conteúdo combina dúvidas reais com informações claras. SEO envolve organização técnica, conteúdo e relevância, mas nenhuma posição no Google é garantida. Prefira utilidade a repetição artificial de palavras-chave. Aplicação opcional: escreva três dúvidas que um cliente fictício pesquisaria antes de contratar."
+        },
+        {
+          "slug": "canais-pagos-e-organicos",
+          "title": "Conheça os canais de descoberta",
+          "body": "Busca orgânica, Google Ads, Meta Ads e outros canais podem levar visitantes com intenções diferentes. Escolher o canal exige considerar oferta, orçamento disponível, público e capacidade de atendimento. Investimento em mídia não equivale automaticamente a clientes. Aplicação opcional: compare dois canais para uma pequena empresa imaginária, sem simular receita garantida."
+        },
+        {
+          "slug": "qualidade-do-publico",
+          "title": "Qualidade das visitas importa",
+          "body": "Nem toda visita é relevante: parte do público busca outra região, produto ou faixa de preço. Avalie a qualidade de maneira agregada e respeite a privacidade dos visitantes. Mais acessos sem interesse não representam necessariamente evolução comercial. Aplicação opcional: liste sinais não pessoais de que uma página está atraindo dúvidas realmente relacionadas ao serviço."
+        }
+      ]
+    },
+    {
+      "slug": "trilha-leads-interesse-contato",
+      "title": "Trilha Imagine 3: Leads — do interesse ao contato",
+      "category": "metodologia",
+      "summary": "Transforme interesse em conversas úteis com formulários e atendimento responsáveis.",
+      "lessons": [
+        {
+          "slug": "oferta-e-chamada-acao",
+          "title": "Uma oferta clara e uma boa chamada de ação",
+          "body": "A pessoa precisa entender o que receberá ao clicar em um botão de contato. Termos como solicitar orçamento ou agendar conversa são mais claros que promessas vagas. Evite pressão e urgência artificial. Aplicação opcional: escreva dois botões alternativos para um serviço fictício e explique qual comunica melhor o próximo passo."
+        },
+        {
+          "slug": "formulario-simples-transparente",
+          "title": "Formulário simples e transparente",
+          "body": "Peça apenas os dados necessários para responder à solicitação. Informe como a empresa fará o contato e onde encontrar a política de privacidade aplicável. Não use campos excessivos só para enriquecer cadastros. Aplicação opcional: desenhe um formulário fictício com o mínimo de informações e um texto claro sobre a finalidade."
+        },
+        {
+          "slug": "origem-e-qualificacao",
+          "title": "Entenda a origem e a qualificação do lead",
+          "body": "A origem do contato ajuda a avaliar quais iniciativas despertam interesse, mas nem sempre é possível atribuir uma venda a um único canal. Perguntas de qualificação devem ser proporcionais ao serviço e respeitosas. Aplicação opcional: formule três perguntas que ajudem a entender uma solicitação sem pedir documentos ou dados sensíveis."
+        },
+        {
+          "slug": "tempo-resposta-util",
+          "title": "Responda com agilidade e clareza",
+          "body": "Um lead pode perder o interesse se a empresa demorar ou responder sem contexto. Confirme o pedido, explique o próximo passo e estabeleça um prazo realista de atendimento. Não prometa disponibilidade que a equipe não possui. Aplicação opcional: escreva uma primeira resposta cordial a um pedido de orçamento fictício."
+        }
+      ]
+    },
+    {
+      "slug": "trilha-clientes-conquiste-acompanhe",
+      "title": "Trilha Imagine 4: Clientes — conquiste e acompanhe",
+      "category": "negocios",
+      "summary": "Conduza oportunidades com propostas claras e relacionamento respeitoso.",
+      "lessons": [
+        {
+          "slug": "entenda-necessidade",
+          "title": "Descubra a necessidade antes de vender",
+          "body": "A melhor resposta comercial começa por compreender o problema de quem entrou em contato. Pergunte pelo objetivo e pelas condições importantes antes de indicar uma solução. Evite induzir uma compra incompatível com a necessidade. Aplicação opcional: escreva perguntas abertas para um atendimento fictício, sem solicitar informações pessoais reais."
+        },
+        {
+          "slug": "proposta-comercial-clara",
+          "title": "Apresente uma proposta compreensível",
+          "body": "Uma proposta deve informar escopo, entregas, prazos, condições e limites com linguagem simples. Diferencie o investimento em serviço do orçamento de mídia, quando aplicável. Não esconda requisitos ou custos recorrentes. Aplicação opcional: organize uma proposta fictícia em cinco itens que possam ser compreendidos sem explicação adicional."
+        },
+        {
+          "slug": "follow-up-respeitoso",
+          "title": "Acompanhe sem pressionar",
+          "body": "Retomar uma conversa pode ajudar a esclarecer dúvidas, mas mensagens repetitivas e insistência excessiva prejudicam a confiança. Respeite preferências de contato e pedidos para interromper mensagens. Um CRM pode registrar a próxima ação autorizada. Aplicação opcional: redija uma mensagem breve de acompanhamento para uma oportunidade imaginária."
+        },
+        {
+          "slug": "pos-venda-retencao",
+          "title": "Pós-venda e relacionamento",
+          "body": "A relação comercial continua após a contratação. Combine canais de suporte, acompanhe entregas e recolha sugestões sem prometer resultados que não controla. O cuidado com dados e preferências também vale no pós-venda. Aplicação opcional: crie um roteiro de boas-vindas e acompanhamento para um cliente fictício."
+        }
+      ]
+    },
+    {
+      "slug": "trilha-conecte-pilares",
+      "title": "Trilha Imagine 5: Conecte os três pilares",
+      "category": "metodologia",
+      "summary": "Aprenda a interpretar métricas e priorizar melhorias, sem previsões garantidas.",
+      "lessons": [
+        {
+          "slug": "metricas-diferentes",
+          "title": "Visitas, leads e clientes são métricas diferentes",
+          "body": "Visitas representam acessos, leads representam oportunidades identificáveis e clientes representam contratações confirmadas. Compare períodos equivalentes e evite somar conceitos diferentes. A jornada não é uma fórmula fixa. Aplicação opcional: organize uma tabela fictícia com os três números e escreva duas perguntas que ela desperta."
+        },
+        {
+          "slug": "origem-atribuicao-com-limites",
+          "title": "Origem e atribuição têm limites",
+          "body": "Uma pessoa pode conhecer uma empresa por vários canais antes de solicitar contato. Por isso, relatórios de origem e atribuição são estimativas ou registros parciais, conforme a ferramenta. Evite conclusões causais sem evidência. Aplicação opcional: descreva um exemplo em que a mesma pessoa encontra a marca em dois canais, sem usar dados reais."
+        },
+        {
+          "slug": "orcamento-nao-e-resultado",
+          "title": "Orçamento não é resultado garantido",
+          "body": "Investir em anúncios ou tecnologia não garante quantidade de leads, vendas ou retorno financeiro. O resultado depende de mercado, oferta, atendimento, período e diversas outras condições. Simulações devem informar suas premissas e incertezas. Aplicação opcional: compare dois cenários fictícios e identifique que informações faltam para estimar resultados."
+        },
+        {
+          "slug": "melhoria-continua-pequena",
+          "title": "Melhore uma etapa de cada vez",
+          "body": "Melhorias simples podem começar por texto mais claro, formulário menor ou atendimento mais organizado. Escolha um indicador, um período de observação e um próximo passo factível antes de ampliar investimentos. Não trate variações pequenas como prova definitiva. Aplicação opcional: planeje uma revisão quinzenal com uma mudança e um critério de aprendizado."
+        }
+      ]
+    },
+    {
+      "slug": "trilha-ia-trabalhar-melhor",
+      "title": "Trilha Imagine 6: IA para trabalhar melhor",
+      "category": "negocios",
+      "summary": "Use IA com revisão humana, privacidade e expectativas responsáveis.",
+      "lessons": [
+        {
+          "slug": "ia-apoia-nao-garante",
+          "title": "IA como apoio, não como promessa",
+          "body": "Assistentes de IA podem ajudar a organizar ideias, textos e tarefas, mas podem errar, omitir fatos ou sugerir soluções inadequadas. Revise conteúdos antes de utilizar com clientes. Uma recomendação automatizada não substitui responsabilidade humana. Aplicação opcional: peça a um tutor de demonstração uma explicação de visitas, leads e clientes e confira os conceitos."
+        },
+        {
+          "slug": "ideias-conteudo-com-revisao",
+          "title": "Gere ideias de conteúdo com critério",
+          "body": "A IA pode sugerir dúvidas frequentes, títulos e esboços, desde que o responsável confira a utilidade e a veracidade do material. Não publique informações inventadas sobre a empresa ou resultados fictícios como reais. Aplicação opcional: crie três pautas para um negócio imaginário e revise se elas respondem a perguntas reais."
+        },
+        {
+          "slug": "organize-duvidas-contatos-sem-pii",
+          "title": "Organize dúvidas sem expor contatos",
+          "body": "Classificar perguntas recorrentes e criar modelos de resposta pode economizar trabalho, mas não é necessário enviar nomes, telefones ou históricos reais para ferramentas não autorizadas. Prefira dados fictícios e canais aprovados. Aplicação opcional: agrupe cinco dúvidas inventadas em categorias e proponha respostas de orientação."
+        },
+        {
+          "slug": "limites-aprovacao-e-dados",
+          "title": "Defina limites, aprovação e cuidado com dados",
+          "body": "Antes de automatizar mensagens ou ações comerciais, defina quem aprova, quais informações são permitidas e quando a pessoa deve assumir o atendimento. Evite incluir credenciais, informações financeiras e dados pessoais em exemplos de aprendizado. Aplicação opcional: escreva um pequeno checklist de revisão humana para uma mensagem gerada por IA."
+        }
+      ]
     }
   ]
 }

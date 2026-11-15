@@ -12,7 +12,7 @@ use RuntimeException;
  * Explicit synthetic LAB importer only. Never called from HTTP and
  * impossible to run outside APP_ENV=testing.
  *
- * Prepares the three approved draft courses for QA. Does not publish,
+ * Prepares the approved editorial draft courses for isolated QA. Does not publish,
  * create customers, impersonate Portal grants, delete or edit existing data.
  */
 final class UniversityEditorialFixtureImporter

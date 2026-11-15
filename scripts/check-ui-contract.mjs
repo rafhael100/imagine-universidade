@@ -248,6 +248,11 @@ assert.match(studentProgressUI,/await api\("\/progress\/export"\)/,"aluno: expor
 assert.match(studentProgressUI,/link.download="imagine-universidade-progresso.json"/,"aluno: arquivo com nome explícito");
 console.log("PASS export progress: download privado, desabilitado na revogação");
 
+
+assert.match(routes,/Route::post\('\/lessons\/\{lessonId\}\/tutor', \[UniversityController::class, 'askTutor'\]\)/,"tutor: route protected inside student group");
+assert.match(provider,/TutorGateway::class, DisabledTutorGateway::class/,"tutor: provider default disabled");
+console.log("PASS tutor policy: no model provider activated in application");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

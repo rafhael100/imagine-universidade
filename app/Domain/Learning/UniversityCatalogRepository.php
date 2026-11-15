@@ -160,7 +160,8 @@ final class UniversityCatalogRepository
             ->where('c.is_published', true)
             ->where('v.status', 'published')
             ->where('l.is_published', true)
-            ->select('l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order', 'c.id as course_id')
+            ->select('l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order', 'c.id as course_id',
+                'v.version as course_version')
             ->first();
     }
 

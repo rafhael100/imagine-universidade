@@ -20,6 +20,8 @@ Route::prefix('universidade/private')->group(function (): void {
             ->whereNumber('courseId');
         Route::get('/lessons/{lessonId}', [UniversityController::class, 'lesson'])
             ->whereNumber('lessonId');
+        Route::post('/lessons/{lessonId}/tutor', [UniversityController::class, 'askTutor'])
+            ->whereNumber('lessonId');
         Route::get('/lessons/{lessonId}/progress', [UniversityController::class, 'progress'])
             ->whereNumber('lessonId');
         Route::post('/lessons/{lessonId}/complete', [UniversityController::class, 'complete'])

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Domain\Access\PortalGrant;
+use App\Domain\Access\PortalAccessGate;
+use App\Domain\Tutor\TutorGateway;
+use App\Domain\Tutor\TutorQuestion;
 use App\Domain\Learning\UniversityCatalogRepository;
 use App\Domain\Learning\UniversityTenantProvisioner;
 use Illuminate\Database\QueryException;
@@ -80,6 +83,70 @@ final class UniversityController
         return $lesson === null
             ? response()->json(['error' => 'not_found'], 404)
             : response()->json(['lesson' => $lesson]);
+    }
+
+    /**
+     * Candidate read-only educational tutor API.
+     * The default gateway ALWAYS returns unavailable. No model/egress enabled.
+     */
+    public function askTutor(
+        Request $request,
+        int $lessonId,
+        TutorGateway $gateway,
+        PortalAccessGate $gate,
+    ): JsonResponse {
+        $grant = $this->grant($request);
+        $data = $request->validate([
+            'question' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        $lesson = $this->catalog->lesson($grant, $lessonId);
+        if ($lesson === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+
+        try {
+            $reply = $gateway->explain(new TutorQuestion(
+                (string) $data['question'],
+                (string) $lesson->slug,
+                (int) $lesson->course_version,
+                (string) $lesson->body,
+            ));
+        } catch (\Throwable) {
+            return response()->json(['error' => 'tutor_unavailable'], 503);
+        }
+
+        // A future inference may take time. Re-check live Portal authority
+        // before releasing ANY generated text, denying revocation/tenant/
+        // subject/revision changes that occurred during the operation.
+        try {
+            $credential = $request->session()->get('portal_server_credential');
+            $company = $request->session()->get('portal_company_id');
+            if (!is_string($credential) || !is_string($company)) {
+                return response()->json(['error' => 'access_denied'], 403);
+            }
+            $latest = $gate->authorize($credential, $company, PortalAccessGate::VIEW, time());
+            if (!$latest->allowed || $latest->companyId !== $grant->companyId
+                || $latest->subjectId !== $grant->subjectId
+                || $latest->revision !== $grant->revision
+                || $latest->permission !== PortalAccessGate::VIEW) {
+                return response()->json(['error' => 'access_denied'], 403);
+            }
+        } catch (\Throwable) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
+        if (trim($reply->message) === '' || strlen($reply->message) > 12000) {
+            return response()->json(['error' => 'tutor_unavailable'], 503);
+        }
+
+        return response()->json([
+            'reply' => $reply->message,
+            'source' => [
+                'lesson_slug' => (string) $lesson->slug,
+                'course_version' => (int) $lesson->course_version,
+            ],
+        ]);
     }
 
     public function progress(Request $request, int $lessonId): JsonResponse

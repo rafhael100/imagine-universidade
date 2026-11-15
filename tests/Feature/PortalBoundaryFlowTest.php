@@ -7,6 +7,9 @@ namespace Tests\Feature;
 use App\Domain\Access\PortalAccessGate;
 use App\Domain\Access\PortalAuthority;
 use App\Domain\Access\PortalGrant;
+use App\Domain\Tutor\TutorGateway;
+use App\Domain\Tutor\TutorQuestion;
+use App\Domain\Tutor\TutorReply;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
@@ -142,6 +145,60 @@ final class PortalBoundaryFlowTest extends TestCase
             ->assertOk()->assertJsonPath('published', true);
 
         return [$courseId, $lessonId];
+    }
+
+
+    public function test_tutor_is_unavailable_by_default_without_blocking_static_learning(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/tutor", [
+            'question' => 'Explique a diferença entre visitas e leads.',
+        ])->assertStatus(503)->assertJsonPath('error', 'tutor_unavailable');
+
+        $this->getJson("/universidade/private/lessons/{$lessonId}")->assertOk();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertOk()->assertJsonPath('completed', true);
+
+        $this->postJson("/universidade/private/lessons/{$lessonId}/tutor", [
+            'question' => 'x',
+        ])->assertUnprocessable();
+
+        $this->asEditor();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/tutor", [
+            'question' => 'Permissão de gestão permite tutoria?',
+        ])->assertForbidden();
+
+        self::assertSame(1, DB::table('educational_lesson_progress')->count());
+    }
+
+    public function test_tutor_fake_reply_is_withheld_if_portal_revokes_access_mid_request(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $authority = $this->fakeAuthority;
+        $this->app->instance(TutorGateway::class, new class($authority) implements TutorGateway {
+            public function __construct(private PortalAuthority $authority) {}
+
+            public function explain(TutorQuestion $question): TutorReply
+            {
+                if ($question->lessonSlug !== 'teste-aula-um'
+                    || $question->courseVersion !== 1
+                    || $question->publishedLessonText === '') {
+                    throw new RuntimeException('Invalid published lesson context.');
+                }
+                $this->authority->clientAEligible = false;
+                return new TutorReply('Informação sintética que NÃO deve chegar ao cliente.');
+            }
+        });
+
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/tutor", [
+            'question' => 'Explique este conteúdo.',
+        ])->assertForbidden()->assertDontSee('Informação sintética');
+
+        $this->getJson("/universidade/private/lessons/{$lessonId}")->assertForbidden();
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
     }
 
     public function test_headers_and_body_cannot_create_a_server_session(): void

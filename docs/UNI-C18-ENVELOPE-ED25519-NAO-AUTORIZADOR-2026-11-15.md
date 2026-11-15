@@ -34,3 +34,10 @@ O GitHub Actions de homologação instala extensão `sodium` e o Dockerfile de Q
 A integração Portal permanece bloqueada no [Portal #848](https://github.com/rafhael100/imagine-portal/issues/848). A fonte oficial de contratos ativos não foi identificada nem homologada. Este envelope é **somente um candidato de protocolo, não um JWT, SSO pronto ou emissor de grants**.
 
 **Não houve deploy, alteração da main, dados reais, segredos ou permissões concedidas.**
+
+
+## Vetor criptográfico compartilhado (somente teste)
+
+Os repositórios Portal e Universidade contêm o mesmo arquivo público `uni-v1-ed25519-public-vector.json` em seus diretórios `tests/Fixtures`. SHA-256 do conteúdo **b6925128a7d66efe1e304710d085d51c5e854215230fa0f02505d201b4381e7c**.
+
+O vetor foi assinado localmente com um par de chaves sintético efêmero; **somente a chave pública e a mensagem assinada foram versionadas**. A chave privada não foi publicada nem reutilizada. Os testes verificam a assinatura e a separação de domínio `uni-v1.`, sem conceder grants ou credenciais. A igualdade do SHA nos dois repositórios impede divergência silenciosa no contrato.

@@ -71,6 +71,33 @@ console.log("PASS next lesson: sequência, retorno, conclusão e ID inválido");
 
 
 
+
+assert.match(studentProgressUI, /id="course-search" type="search"/, "aluno: campo de busca acessível");
+assert.match(studentProgressUI, /<label for="course-search">Buscar cursos<\/label>/, "aluno: label de busca");
+assert.ok(studentProgressUI.includes('state.query=event.target.value.slice(0,80)'), "aluno: entrada limitada");
+const normalizeFn=studentProgressUI.match(/function normalizeSearchText\(text\)\{[\s\S]*?\n\}/)?.[0];
+const filterFn=studentProgressUI.match(/function filterCourses\(courses,category,query\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(normalizeFn && filterFn, "aluno: funções puras de busca");
+const sampleCourses=[
+  {id:1,title:"Gestão de negócios",summary:"Funil de vendas",category:"negocios"},
+  {id:2,title:"Sistemas Imagine",summary:"Primeiros passos",category:"sistemas"},
+  {id:3,title:"Conversão de leads",summary:"Acompanhamento",category:"metodologia"}
+];
+function searchFixture(query,category="todos"){
+  const code=normalizeFn+"\n"+filterFn+"\nfilterCourses(items,category,query)";
+  return new Script(code,{filename:"student-course-search"}).runInNewContext({
+    items:sampleCourses,category,query,
+    labels:{metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"}
+  }).map(item=>item.id).join(",");
+}
+assert.equal(searchFixture("NEGOCIOS"),"1","busca sem acentos");
+assert.equal(searchFixture("  primeiros  "),"2","busca por resumo com trim");
+assert.equal(searchFixture(""),"1,2,3","busca vazia");
+assert.equal(searchFixture("funil","sistemas"),"","interseção categoria + busca");
+assert.equal(searchFixture("SISTEMAS","sistemas"),"2","categoria + busca");
+assert.equal(searchFixture("não existe"),"","sem resultado");
+console.log("PASS course search: acessibilidade, limites, acentos e categorias");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

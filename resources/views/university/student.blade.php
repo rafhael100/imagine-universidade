@@ -22,6 +22,9 @@
     .hero p{color:#E2E7EF;max-width:660px;margin:0}
     .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#FFBC70;font-weight:850}
     .pills{display:flex;gap:7px;flex-wrap:wrap;margin:27px 0 18px}
+    .searchbar{display:grid;gap:7px;margin:0 0 18px;max-width:460px}
+    .searchbar label{font-weight:750;font-size:13px;color:#465369}
+    .searchbar input{font:inherit;width:100%;padding:11px 14px;border:1px solid #C9D1DC;border-radius:11px;background:#fff;color:var(--ink)}
     .pill{border:1px solid var(--line);background:white;border-radius:999px;padding:9px 14px;font-weight:750;font-size:13px}
     .pill[aria-pressed="true"]{background:#FFF0D9;border-color:#F0BD7C;color:#8A4700}
     .main{display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start}
@@ -73,6 +76,10 @@
     <button type="button" class="pill" data-filter="negocios" aria-pressed="false">Negócios</button>
     <button type="button" class="pill" data-filter="sistemas" aria-pressed="false">Sistemas Imagine</button>
   </nav>
+  <div class="searchbar">
+    <label for="course-search">Buscar cursos</label>
+    <input id="course-search" type="search" placeholder="Busque pelo nome ou assunto" maxlength="80" autocomplete="off">
+  </div>
   <div class="main">
     <section class="panel" aria-labelledby="courses-title">
       <div class="panel-head"><h2 id="courses-title">Seus cursos</h2><p>Escolha um tema para começar.</p></div>
@@ -93,7 +100,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",courseId:null,lessonId:null};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function progressLabel(course){
@@ -121,8 +128,16 @@ async function api(path,options={}){
   if(!response.ok){throw new Error("Não foi possível concluir esta operação. Tente novamente.");}
   return response.json();
 }
+function normalizeSearchText(text){
+  return String(text||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
+}
+function filterCourses(courses,category,query){
+  const term=normalizeSearchText(String(query||"").trim());
+  return courses.filter(c=>(category==="todos"||c.category===category)&&
+    (!term||normalizeSearchText([c.title,c.summary,labels[c.category]||""].join(" ")).includes(term)));
+}
 function coursesFiltered(){
-  return state.courses.filter(c=>state.filter==="todos"||c.category===state.filter);
+  return filterCourses(state.courses,state.filter,state.query);
 }
 function renderCourses(){
   list.replaceChildren();
@@ -242,6 +257,13 @@ async function selectLesson(id){
 }
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});
+document.getElementById("course-search").addEventListener("input",event=>{
+  state.query=event.target.value.slice(0,80);
+  state.courseId=null;state.lessonId=null;
+  lessonsBox.replaceChildren();content.replaceChildren();
+  content.append(el("p","Escolha um curso para ver as aulas.","empty"));
+  renderCourses();
+});
 document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("click",()=>{
   state.filter=btn.dataset.filter;state.courseId=null;state.lessonId=null;
   document.querySelectorAll("[data-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));

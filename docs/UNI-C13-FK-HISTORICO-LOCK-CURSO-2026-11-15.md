@@ -25,6 +25,12 @@ As verificações reproduzem o modelo lógico SQLite; **não são migrações re
 
 As alterações ocorreram nos arquivos das migrações-base **ainda em PR DRAFT e declaradamente não aplicadas em produção**. Se qualquer ambiente já tiver executado as migrações antigas, **editar os arquivos não modifica constraints existentes**. Nesse caso é necessário inventariar as FKs reais do banco e criar uma migração corretiva com plano de rollback, sem aplicar cegamente. Não executar `migrate:fresh` em ambiente com dados reais.
 
+## Verificador PostgreSQL 18 preparado (não executado)
+
+Foi criado `scripts/check-pg-schema.php`, somente para `APP_ENV=testing`, host `127.0.0.1`, banco e usuário sintéticos `uni_ci`. Ele consulta metadados de `pg_constraint` / `pg_indexes` em modo leitura e exige **seis FKs RESTRICT** (as cinco acima mais auditoria) e **dois índices únicos parciais** para uma versão publicada e uma draft.
+
+O workflow de QA manual foi alterado para executar esse verificador **após** `php artisan migrate:fresh` no PostgreSQL descartável, e a validação Composer foi movida para depois da resolução de dependências. A checagem estática de guardas/somente leitura passou, mas **ainda não houve execução em PostgreSQL ou em GitHub Actions da Universidade**. O workflow não tem gatilho automático e não foi iniciado.
+
 ## Continuidade e gates
 
 - Portal `university:view` / `university:manage` segue apenas em vocabulário, sem grants nem SSO operativo (Portal PR #856 / issue #848).

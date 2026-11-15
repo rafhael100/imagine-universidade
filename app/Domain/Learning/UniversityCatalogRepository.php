@@ -214,6 +214,38 @@ final class UniversityCatalogRepository
         });
     }
 
+    /**
+     * Registro atômico junto à mutação editorial.
+     * Não registrar conteúdo, IP, tokens de Portal, segredo ou dados de cobrança.
+     */
+    private function audit(
+        PortalGrant $grant,
+        int $editorialOrg,
+        string $action,
+        string $kind,
+        int $resourceId,
+    ): void {
+        if (
+            !$grant->allowed ||
+            $grant->permission !== PortalAccessGate::MANAGE ||
+            $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY ||
+            trim($grant->subjectId) === '' ||
+            $grant->revision < 1
+        ) {
+            throw new \LogicException('Auditoria exige identidade editorial válida.');
+        }
+
+        DB::table('educational_audit_events')->insert([
+            'educational_organization_id' => $editorialOrg,
+            'actor_key' => $grant->subjectId,
+            'action' => $action,
+            'resource_kind' => $kind,
+            'resource_id' => $resourceId,
+            'authority_revision' => $grant->revision,
+            'occurred_at' => now(),
+        ]);
+    }
+
     /** @return array<int, stdClass> */
     public function adminCourses(PortalGrant $grant): array
     {
@@ -271,7 +303,7 @@ final class UniversityCatalogRepository
             return null;
         }
 
-        return DB::transaction(function () use ($org, $input): int {
+        return DB::transaction(function () use ($grant, $org, $input): int {
             $now = now();
             $id = DB::table('educational_courses')->insertGetId([
                 'educational_organization_id' => $org,
@@ -292,6 +324,7 @@ final class UniversityCatalogRepository
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+            $this->audit($grant, $org, 'course.created', 'course', (int) $id);
             return (int) $id;
         });
     }
@@ -304,7 +337,8 @@ final class UniversityCatalogRepository
             return false;
         }
 
-        return DB::table('educational_courses')
+        return DB::transaction(function () use ($grant, $org, $courseId, $input): bool {
+            $changed = DB::table('educational_courses')
             ->where('id', $courseId)
             ->where('educational_organization_id', $org)
             ->where('is_shared', true)
@@ -316,6 +350,11 @@ final class UniversityCatalogRepository
                 'sort_order' => $input['sort_order'] ?? 0,
                 'updated_at' => now(),
             ]) > 0;
+            if ($changed) {
+                $this->audit($grant, $org, 'course.updated', 'course', $courseId);
+            }
+            return $changed;
+        });
     }
 
     /** @param array{slug:string,title:string,body:string,sort_order?:int} $input */
@@ -326,7 +365,7 @@ final class UniversityCatalogRepository
             return null;
         }
 
-        return DB::transaction(function () use ($org, $courseId, $input): ?int {
+        return DB::transaction(function () use ($grant, $org, $courseId, $input): ?int {
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
@@ -346,7 +385,7 @@ final class UniversityCatalogRepository
             }
 
             $now = now();
-            return (int) DB::table('educational_lessons')->insertGetId([
+            $lessonId = (int) DB::table('educational_lessons')->insertGetId([
                 'educational_course_version_id' => $version->id,
                 'slug' => $input['slug'],
                 'title' => $input['title'],
@@ -356,6 +395,8 @@ final class UniversityCatalogRepository
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+            $this->audit($grant, $org, 'lesson.created', 'lesson', $lessonId);
+            return $lessonId;
         });
     }
 
@@ -367,7 +408,7 @@ final class UniversityCatalogRepository
             return false;
         }
 
-        return DB::transaction(function () use ($org, $lessonId, $input): bool {
+        return DB::transaction(function () use ($grant, $org, $lessonId, $input): bool {
             $courseId = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
@@ -404,12 +445,16 @@ final class UniversityCatalogRepository
                 return false;
             }
 
-            return DB::table('educational_lessons')->where('id', $row->id)->update([
+            $changed = DB::table('educational_lessons')->where('id', $row->id)->update([
                 'title' => $input['title'],
                 'body' => $input['body'],
                 'sort_order' => $input['sort_order'] ?? 0,
                 'updated_at' => now(),
             ]) > 0;
+            if ($changed) {
+                $this->audit($grant, $org, 'lesson.updated', 'lesson', $lessonId);
+            }
+            return $changed;
         });
     }
 
@@ -420,7 +465,7 @@ final class UniversityCatalogRepository
             return false;
         }
 
-        return DB::transaction(function () use ($org, $courseId, $publish): bool {
+        return DB::transaction(function () use ($grant, $org, $courseId, $publish): bool {
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
@@ -503,6 +548,13 @@ final class UniversityCatalogRepository
             ->where('is_shared', true)
                 ->update(['is_published' => $publish, 'updated_at' => $now]);
 
+            $this->audit(
+                $grant,
+                $org,
+                $publish ? 'course.published' : 'course.unpublished',
+                'course',
+                $courseId
+            );
             return true;
         });
     }

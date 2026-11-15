@@ -52,6 +52,13 @@ php artisan migrate:status --database=pgsql
 php scripts/check-pg-schema.php
 php scripts/check-pg-flow.php
 
+# Fixture only, inside APP_ENV=testing and the disposable PostgreSQL database.
+first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
+echo "$first" | grep -Fq '3 courses created; 8 lessons created; 0 courses preserved.'
+second=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
+echo "$second" | grep -Fq '0 courses created; 0 lessons created; 3 courses preserved.'
+echo "[QA] PASS: três cursos e oito aulas em rascunho, sem duplicar no segundo ensaio."
+
 echo "[QA] Provider de autorização segue DENY-ALL."
 grep -Fq "UnavailablePortalAuthority::class" app/Providers/AppServiceProvider.php
 

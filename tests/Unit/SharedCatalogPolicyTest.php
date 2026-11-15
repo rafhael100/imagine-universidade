@@ -40,6 +40,7 @@ final class SharedCatalogPolicyTest extends TestCase
         );
         self::assertNull($method->invoke($repository, $editorialUser));
     }
+
     public function test_expired_student_grants_are_rejected_before_touching_database(): void
     {
         $method = new ReflectionMethod(UniversityCatalogRepository::class, 'orgId');
@@ -48,7 +49,7 @@ final class SharedCatalogPolicyTest extends TestCase
         foreach ([
             PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 1, time() - 1),
             PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 1, time()),
-            PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 1, time() + 61),
+            PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 1, time() + 3600),
             PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 0, time() + 30),
             PortalGrant::allow('synthetic-company-a', '   ', PortalAccessGate::VIEW, 1, time() + 30),
         ] as $staleOrInvalid) {

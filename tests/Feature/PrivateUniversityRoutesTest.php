@@ -42,6 +42,7 @@ final class PrivateUniversityRoutesTest extends TestCase
         $this->getJson('/universidade/private/admin/courses/1/lessons')->assertForbidden();
         $this->postJson('/universidade/private/admin/courses/1/lessons', ['title' => 'Demo'])->assertForbidden();
         $this->patchJson('/universidade/private/admin/lessons/1', ['title' => 'Demo'])->assertForbidden();
+        $this->deleteJson('/universidade/private/admin/lessons/1')->assertForbidden();
         $this->postJson('/universidade/private/admin/courses/1/publish')->assertForbidden();
         $this->postJson('/universidade/private/admin/courses/1/unpublish')->assertForbidden();
     }

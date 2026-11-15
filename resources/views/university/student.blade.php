@@ -34,6 +34,11 @@
     .course-btn:hover,.lesson-btn:hover{background:#F7F8FA}
     .course-btn[aria-current="true"],.lesson-btn[aria-current="true"]{border-color:#F4D4A9;background:#FFF5E8}
     .course-btn strong,.lesson-btn strong{display:block}.course-btn span,.lesson-btn span{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+    .overall-progress{font-size:13px;font-weight:700;color:#FFF0DC!important;margin-top:14px!important}
+    .course-progress{height:7px;width:100%;accent-color:#F9941D;display:block;margin-top:8px;border-radius:8px}
+    .course-progress::-webkit-progress-bar{background:#EDEFF2;border-radius:8px}
+    .course-progress::-webkit-progress-value{background:#F9941D;border-radius:8px}
+    .course-progress::-moz-progress-bar{background:#F9941D;border-radius:8px}
     .lesson-items{border-bottom:1px solid var(--line);padding:10px}
     .lesson-content{padding:25px}
     .lesson-content h3{font-size:22px;letter-spacing:-.5px;margin:0 0 12px}
@@ -57,6 +62,7 @@
     <span class="eyebrow">Conhecimento que impulsiona seu negócio</span>
     <h1 id="hero-title">Visitas. Leads. Clientes.</h1>
     <p>Aprenda com aulas rápidas, nossa metodologia e orientações práticas para aproveitar melhor os serviços Imagine.</p>
+    <p id="overall-progress" class="overall-progress" aria-live="polite">Seu progresso será exibido após autorizar os cursos.</p>
   </section>
   <div id="status" role="status" aria-live="polite" class="status" hidden></div>
   <nav class="pills" aria-label="Categorias dos cursos">
@@ -87,6 +93,13 @@ const list=document.getElementById("course-list"),lessonsBox=document.getElement
 const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",courseId:null,lessonId:null};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
+const overall=document.getElementById("overall-progress");
+function progressLabel(course){
+  const total=Number.isInteger(course.lessons_total)&&course.lessons_total>=0?course.lessons_total:0;
+  const completed=Number.isInteger(course.lessons_completed)&&course.lessons_completed>=0
+    ?Math.min(course.lessons_completed,total):0;
+  return {total,completed,percent:total?Math.round(completed*100/total):0};
+}
 function say(message){status.hidden=!message;status.textContent=message||"";}
 function el(tag,text,className){
   const node=document.createElement(tag);
@@ -111,13 +124,27 @@ function coursesFiltered(){
 }
 function renderCourses(){
   list.replaceChildren();
+  const totals=state.courses.reduce((memo,c)=>{
+    const p=progressLabel(c);memo.completed+=p.completed;memo.total+=p.total;return memo;
+  },{completed:0,total:0});
+  overall.textContent=totals.total
+    ?"Seu progresso: "+totals.completed+" de "+totals.total+" aulas concluídas."
+    :"Nenhuma aula publicada disponível no momento.";
   const items=coursesFiltered();
   if(!items.length){list.append(el("p","Nenhum curso publicado nesta categoria.","empty"));return;}
   for(const c of items){
+    const p=progressLabel(c);
     const btn=el("button",undefined,"course-btn");
     btn.type="button";btn.dataset.courseId=String(c.id);
     btn.setAttribute("aria-current",String(c.id===state.courseId));
-    btn.append(el("strong",c.title),el("span",(labels[c.category]||"Curso")+" · "+(c.summary||"Aulas práticas")));
+    btn.append(el("strong",c.title),
+      el("span",(labels[c.category]||"Curso")+" · "+(c.summary||"Aulas práticas")),
+      el("span",p.completed+" de "+p.total+" aulas concluídas · "+p.percent+"%"));
+    const bar=el("progress",undefined,"course-progress");
+    bar.max=Math.max(1,p.total);
+    bar.value=p.completed;
+    bar.setAttribute("aria-label","Progresso do curso "+c.title+": "+p.percent+"%");
+    btn.append(bar);
     list.append(btn);
   }
 }
@@ -159,6 +186,11 @@ async function selectLesson(id){
       try{
         await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
         action.textContent="✓ Aula concluída";say("Seu progresso foi registrado.");
+        // Atualização autoritativa: nunca supor que o banco contabilizou
+        // apenas com base no clique; atualiza o resumo após confirmação.
+        const latest=await api("/courses");
+        state.courses=Array.isArray(latest.courses)?latest.courses:[];
+        renderCourses();
       }catch(error){action.disabled=false;say(error.message);}
     });
     content.append(action);

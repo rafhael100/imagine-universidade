@@ -38,3 +38,17 @@ A suíte Feature foi estendida para uma operação completa com dados sintético
 O workflow de QA controlado por rótulo ganhou um segundo job `isolated-compose`, dependente do sucesso de `isolated-tests`. Ele roda exclusivamente no runner Ubuntu descartável e executa `scripts/run-qa-compose.sh`: construção de PHP 8.3, libsodium, PostgreSQL 18 em `tmpfs`, testes Unit/Feature e duas importações sintéticas. O Compose **não publica portas**, não usa bind mounts, não possui secrets de produção e remove volumes/serviços ao encerrar.
 
 Este job é uma **verificação candidata da infraestrutura** e não implica autorização para usar a VPS ou hospedar clientes. O resultado de GitHub Actions deve ser conferido antes de considerá-lo aprovado.
+
+
+## Homologação real de Docker Compose — aprovada
+
+[GitHub Actions #43762244236](https://github.com/rafhael100/imagine-universidade/actions/runs/43762244236), commit `a5c9cff2ff6d699081703eb305f9750cf1252719`: **success** nos dois jobs `isolated-tests` e `isolated-compose`.
+
+Falhas detectadas e corrigidas no próprio QA Docker:
+- O Dockerfile não incluía `libsqlite3-dev` para compilar `pdo_sqlite`. Dependência adicionada.
+- O diretório `tmpfs` do PostgreSQL 18 tinha modo 0700, impedindo a inicialização do processo sob o usuário `postgres`. Ajustado para modo 1777 **apenas no contêiner efêmero**, mantendo `PGDATA` protegido conforme o entrypoint PostgreSQL.
+- O wrapper agora registra os últimos logs do banco sintético quando o job falhar, antes de apagar os contêineres.
+
+Resultado registrado dentro dos contêineres: PHP 8.3.36, **66 PHPUnit/406 asserções**, oito verificações estruturais de PG, oito verificações relacionais com rollback, três cursos/oito aulas em rascunho e segunda carga sem duplicação. O log termina com `PASS: disposable QA run finished. Removing services and data.`
+
+Essa homologação **não liga serviços reais, não cria endpoint público, não usa a VPS e não habilita grants do Portal**.

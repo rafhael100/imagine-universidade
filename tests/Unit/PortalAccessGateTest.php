@@ -1,0 +1,94 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit;
+
+use App\Domain\Access\PortalAccessGate;
+use App\Domain\Access\PortalAuthority;
+use App\Domain\Access\PortalGrant;
+use App\Domain\Access\UnavailablePortalAuthority;
+use PHPUnit\Framework\TestCase;
+use RuntimeException;
+
+final class PortalAccessGateTest extends TestCase
+{
+    private const NOW = 1794750000;
+
+    private function gate(PortalGrant $grant): PortalAccessGate
+    {
+        return new PortalAccessGate(new class($grant) implements PortalAuthority {
+            public function __construct(private readonly PortalGrant $grant) {}
+            public function verify(string $serverSessionCredential, string $companyId, string $permission): PortalGrant
+            {
+                return $this->grant;
+            }
+        });
+    }
+
+    public function test_default_unavailable_authority_never_grants(): void
+    {
+        $result = (new PortalAccessGate(new UnavailablePortalAuthority()))
+            ->authorize('synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW);
+        self::assertFalse($result->allowed);
+        self::assertSame('authority_unavailable', $result->reasonCode);
+    }
+
+    public function test_explicit_valid_verified_grant_is_accepted_only_for_exact_permission(): void
+    {
+        $grant = PortalGrant::allow('synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 60);
+        $gate = $this->gate($grant);
+        self::assertTrue($gate->authorize('synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW)->allowed);
+        self::assertSame('missing_permission', $gate->authorize(
+            'synthetic-session', 'synthetic-company', PortalAccessGate::MANAGE, self::NOW
+        )->reasonCode);
+    }
+
+    public function test_wrong_company_is_denied(): void
+    {
+        $grant = PortalGrant::allow('synthetic-company-B', 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 60);
+        self::assertSame('wrong_company', $this->gate($grant)->authorize(
+            'synthetic-session', 'synthetic-company-A', PortalAccessGate::VIEW, self::NOW
+        )->reasonCode);
+    }
+
+    public function test_expiry_at_boundary_and_missing_revision_are_denied(): void
+    {
+        foreach ([self::NOW - 1, self::NOW] as $expiresAt) {
+            $grant = PortalGrant::allow('synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 1, $expiresAt);
+            self::assertSame('expired', $this->gate($grant)->authorize(
+                'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
+            )->reasonCode);
+        }
+        $grant = PortalGrant::allow('synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 0, self::NOW + 60);
+        self::assertSame('invalid_grant', $this->gate($grant)->authorize(
+            'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
+        )->reasonCode);
+    }
+
+    public function test_empty_session_and_unknown_permission_never_touch_authority(): void
+    {
+        $gate = $this->gate(PortalGrant::allow('synthetic-company', 'synthetic-person', PortalAccessGate::MANAGE, 1, self::NOW + 60));
+        self::assertSame('invalid_context', $gate->authorize(
+            '', 'synthetic-company', PortalAccessGate::MANAGE, self::NOW
+        )->reasonCode);
+        self::assertSame('invalid_context', $gate->authorize(
+            'synthetic-session', 'synthetic-company', 'owner', self::NOW
+        )->reasonCode);
+    }
+
+    public function test_authority_exception_fails_closed(): void
+    {
+        $authority = new class implements PortalAuthority {
+            public function verify(string $serverSessionCredential, string $companyId, string $permission): PortalGrant
+            {
+                throw new RuntimeException('unavailable');
+            }
+        };
+        $result = (new PortalAccessGate($authority))->authorize(
+            'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
+        );
+        self::assertFalse($result->allowed);
+        self::assertSame('authority_unavailable', $result->reasonCode);
+    }
+}

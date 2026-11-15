@@ -20,6 +20,10 @@ while IFS= read -r -d '' source; do
 done < <(find app bootstrap database routes tests -type f -name '*.php' -print0)
 echo '[PASS] Sintaxe PHP verificada'
 
+# Contrato de acesso funciona também sem Composer e sem banco.
+php scripts/check-access-domain.php
+echo '[PASS] Política de acesso em PHP puro'
+
 if ! command -v composer >/dev/null 2>&1; then
   echo '[PENDENTE] Composer não instalado; testes Laravel não foram executados.' >&2
   exit 2

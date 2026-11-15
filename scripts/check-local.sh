@@ -25,6 +25,8 @@ php scripts/check-access-domain.php
 echo '[PASS] Política de acesso em PHP puro'
 php scripts/check-learning-mock.php
 echo '[PASS] Progresso sintético em PHP puro'
+php scripts/check-tenant-guard.php
+echo '[PASS] Provisionamento nega grants inválidos em PHP puro'
 
 if command -v python3 >/dev/null 2>&1; then
   python3 scripts/check-sqlite-contract.py

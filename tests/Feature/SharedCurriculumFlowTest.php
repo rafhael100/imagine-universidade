@@ -175,4 +175,48 @@ final class SharedCurriculumFlowTest extends TestCase
     }
 
 
+    public function test_admin_mutations_write_minimal_audit_but_student_actions_do_not(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $course = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-auditado',
+            'title' => 'Curso auditado',
+            'category' => 'metodologia',
+        ])->assertCreated()->json('id');
+
+        $lesson = $this->postJson("/universidade/private/admin/courses/{$course}/lessons", [
+            'slug' => 'aula-auditada',
+            'title' => 'Aula auditada',
+            'body' => 'Conteúdo fictício sem dados pessoais.',
+        ])->assertCreated()->json('id');
+
+        $this->postJson("/universidade/private/admin/courses/{$course}/publish")->assertOk();
+
+        $events = DB::table('educational_audit_events')->orderBy('id')->get();
+        self::assertCount(3, $events);
+        self::assertSame(
+            ['course.created', 'lesson.created', 'course.published'],
+            $events->pluck('action')->all()
+        );
+        foreach ($events as $event) {
+            self::assertSame('synthetic-editor', $event->actor_key);
+            self::assertSame(1, $event->authority_revision);
+            self::assertNotEmpty($event->occurred_at);
+        }
+        self::assertFalse(\Illuminate\Support\Facades\Schema::hasColumn(
+            'educational_audit_events', 'session_token'
+        ));
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson("/universidade/private/lessons/{$lesson}/complete")->assertOk();
+        self::assertSame(3, DB::table('educational_audit_events')->count());
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->postJson("/universidade/private/admin/courses/{$course}/unpublish")->assertOk();
+        self::assertSame(4, DB::table('educational_audit_events')->count());
+        self::assertSame('course.unpublished', DB::table('educational_audit_events')
+            ->orderByDesc('id')->value('action'));
+    }
+
+
 }

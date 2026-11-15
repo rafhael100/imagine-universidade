@@ -11,6 +11,7 @@ final class PrivateUniversityRoutesTest extends TestCase
     public function test_student_endpoints_reject_anonymous_access(): void
     {
         $this->getJson('/universidade/private/courses')->assertForbidden();
+        $this->postJson('/universidade/private/initialize')->assertForbidden();
         $this->getJson('/universidade/private/courses/1/lessons')->assertForbidden();
         $this->getJson('/universidade/private/lessons/1')->assertForbidden();
         $this->getJson('/universidade/private/lessons/1/progress')->assertForbidden();

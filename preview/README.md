@@ -4,6 +4,19 @@
 
 Este recorte dá forma à intenção de uma Universidade simples: um benefício de capacitação para clientes Imagine, não uma escola, marketplace de cursos ou novo SaaS. A identidade visual usa a cor-base laranja Imagine (#F9941D), visual claro e navegação enxuta. Logo/peças finais dependem da conferência com a identidade do Portal.
 
+## Testar a jornada de demonstração (sem acesso real)
+
+1. Abra preview/admin.html e selecione um curso fictício.
+2. Adicione uma aula ou edite título e descrição; salve o curso.
+3. Clique em **Publicar na demonstração** (somente armazenamento deste navegador).
+4. Abra ou atualize preview/index.html **no mesmo navegador e origem**; o curso aparecerá na biblioteca.
+5. Leia a aula, marque concluída e volte ao painel; simule despublicação e atualize a biblioteca: o curso desaparece.
+6. Para restaurar os dados editoriais, use **Restaurar dados fictícios** no painel.
+
+Se o navegador restringir armazenamento em arquivos locais, inicie um servidor estático **somente na pasta preview e somente no computador local**: python -m http.server 8765 --bind 127.0.0.1 --directory preview. Então use http://127.0.0.1:8765/admin.html e http://127.0.0.1:8765/index.html. Nunca use 0.0.0.0, IP público, VPS ou pastas que contenham .env/código privado para essa demonstração.
+
+Esta integração simula **edição → publicação → estudo** apenas no browser. Não há SSO, permissão real, banco, entrega de cursos a clientes nem compartilhamento entre dispositivos. O painel administrativo não possui login real e não pode ser publicado. Use exclusivamente conteúdo fictício.
+
 ## Executar a prévia
 
 1. Abrir o arquivo preview/index.html em navegador moderno, diretamente do computador, sem servidor.

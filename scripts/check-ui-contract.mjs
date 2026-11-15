@@ -35,6 +35,14 @@ for (const [role, path, prefix] of views) {
   console.log("PASS " + role + ": JavaScript válido, conteúdo textual seguro, CSRF e mesmo domínio");
 }
 
+const studentProgressUI = read("resources/views/university/student.blade.php");
+assert.match(studentProgressUI, /id="overall-progress"/, "aluno: resumo do progresso");
+assert.match(studentProgressUI, /function progressLabel\(course\)/, "aluno: progresso normalizado");
+assert.match(studentProgressUI, /el\("progress",undefined,"course-progress"\)/, "aluno: barra nativa acessível");
+assert.match(studentProgressUI, /bar\.setAttribute\("aria-label"/, "aluno: texto acessível por curso");
+assert.match(studentProgressUI, /await api\("\/courses"\)/, "aluno: atualização pelo servidor");
+console.log("PASS student progress: resumo, porcentagem, barra acessível e API autoritativa");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

@@ -121,6 +121,41 @@ assert.match(studentProgressUI,/\+\+state.courseRequest;\+\+state.lessonRequest;
 assert.match(adminUI,/document.querySelectorAll\("\.layout button,.layout input,.layout select,.layout textarea"\)/,"admin: impedir uso de controles após revogação");
 console.log("PASS revocation UI: student/admin fail-closed on HTTP 403/419, clear private state");
 
+
+const lessonsFn=adminUI.match(/async function refreshLessons\(\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(lessonsFn,"admin: função de atualização de aulas");
+const pendingLessons=[];
+const fakeState={course:{id:1},lessons:[],lesson:null,lessonRequest:0,accessDenied:false};
+const fakeContext={
+  state:fakeState,
+  api:path=>new Promise(resolve=>pendingLessons.push({path,resolve})),
+  renderLessons:()=>{},
+  resetLesson:()=>{},
+  fillCourse:()=>{}
+};
+const refreshFixture=new Script(lessonsFn+"\nrefreshLessons",{filename:"admin-lesson-race"}).runInNewContext(fakeContext);
+const first=refreshFixture();
+fakeState.course={id:2};
+const second=refreshFixture();
+assert.equal(pendingLessons.length,2);
+assert.match(pendingLessons[0].path,/\/courses\/1\/lessons$/);
+assert.match(pendingLessons[1].path,/\/courses\/2\/lessons$/);
+pendingLessons[1].resolve({lessons:[{id:20}]});
+await second;
+pendingLessons[0].resolve({lessons:[{id:10}]});
+await first;
+assert.equal(fakeState.lessons[0].id,20,"admin: resposta tardia de curso antigo não substitui aulas atuais");
+fakeState.course={id:3};
+const third=refreshFixture();
+fakeState.accessDenied=true;
+pendingLessons[2].resolve({lessons:[{id:30}]});
+await third;
+assert.equal(fakeState.lessons[0].id,20,"admin: resposta posterior a revogação ignorada");
+assert.match(adminUI,/const request=\+\+state.courseRequest;/,"admin: token de atualização de cursos");
+assert.match(adminUI,/\+\+state.courseRequest;\+\+state.lessonRequest;/,"admin: invalidar após troca/negação");
+assert.match(adminUI,/function fillCourse\(\)\{\n  if\(state.accessDenied\)return;/,"admin: formulário não reabilitado");
+console.log("PASS admin race: respostas fora de ordem e pós-revogação descartadas");
+
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");

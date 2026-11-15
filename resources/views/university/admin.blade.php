@@ -97,7 +97,7 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,accessDenied:false,accessMessage:""};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:""};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
@@ -107,6 +107,7 @@ function lockAccess(message){
   if(state.accessDenied)return;
   state.accessDenied=true;state.accessMessage=message;
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
+  ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
   $("course-items").append(el("p","Cursos indisponíveis até novo acesso autorizado.","help"));
   $("lesson-items").append(el("p","Retorne ao Portal para verificar a sessão.","help"));
@@ -139,6 +140,7 @@ async function api(path,method="GET",payload=null){
 const intField=id=>Number.parseInt($(id).value,10)||0;
 const draft=()=>!state.accessDenied&&(state.course===null||!Boolean(state.course.is_published));
 function fillCourse(){
+  if(state.accessDenied)return;
   const c=state.course;
   $("course-title").value=c?.title||"";
   $("course-slug").value=c?.slug||"";
@@ -149,7 +151,6 @@ function fillCourse(){
   $("publication-status").textContent=c?.is_published?"Publicado":"Rascunho";
   $("publication-status").className="chip"+(c?.is_published?" published":"");
   const editable=draft();
-  if(state.accessDenied)return;
   for(const id of ["course-title","course-category","course-summary","course-sort"]){$(id).disabled=!editable;}
   $("course-save").disabled=!editable;
   $("publish").disabled=!c||!!c.is_published;
@@ -157,6 +158,7 @@ function fillCourse(){
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
 }
 function resetLesson(){
+  if(state.accessDenied)return;
   state.lesson=null;
   $("lesson-form").reset();
   $("lesson-title-heading").textContent="Nova aula";
@@ -165,6 +167,7 @@ function resetLesson(){
   $("delete-lesson").disabled=true;
 }
 function renderCourses(){
+  if(state.accessDenied)return;
   $("course-items").replaceChildren();
   if(!state.courses.length){$("course-items").append(el("p","Nenhum curso cadastrado."));return;}
   for(const c of state.courses){
@@ -175,6 +178,7 @@ function renderCourses(){
   }
 }
 function renderLessons(){
+  if(state.accessDenied)return;
   $("lesson-items").replaceChildren();
   if(!state.lessons.length){$("lesson-items").append(el("p","Nenhuma aula cadastrada.","help"));return;}
   for(const l of state.lessons){
@@ -185,28 +189,33 @@ function renderLessons(){
   }
 }
 async function refreshCourses(preferredId=state.course?.id??null){
+  const request=++state.courseRequest;
   const result=await api("/courses");
-  if(state.accessDenied)return;
+  if(state.accessDenied||state.courseRequest!==request)return;
   state.courses=Array.isArray(result.courses)?result.courses:[];
   state.course=state.courses.find(c=>c.id===preferredId)||null;
   renderCourses();fillCourse();
   await refreshLessons();
 }
 async function refreshLessons(){
+  const request=++state.lessonRequest;
+  const courseId=state.course?.id??null;
   state.lessons=[];state.lesson=null;renderLessons();resetLesson();fillCourse();
-  if(!state.course)return;
-  const result=await api("/courses/"+encodeURIComponent(String(state.course.id))+"/lessons");
-  if(state.accessDenied)return;
+  if(courseId===null||state.accessDenied)return;
+  const result=await api("/courses/"+encodeURIComponent(String(courseId))+"/lessons");
+  if(state.accessDenied||state.lessonRequest!==request||state.course?.id!==courseId)return;
   state.lessons=Array.isArray(result.lessons)?result.lessons:[];renderLessons();
 }
 $("course-items").addEventListener("click",async event=>{
   const b=event.target.closest("[data-course]");if(!b||state.accessDenied)return;
+  ++state.courseRequest;
   say("");state.course=state.courses.find(c=>c.id===Number(b.dataset.course))||null;
   renderCourses();fillCourse();
   try{await refreshLessons();}catch(error){say(error.message);}
 });
 $("new-course").addEventListener("click",()=>{
   if(state.accessDenied)return;
+  ++state.courseRequest;++state.lessonRequest;
   state.course=null;state.lessons=[];state.lesson=null;
   renderCourses();renderLessons();fillCourse();resetLesson();$("course-title").focus();say("");
 });
@@ -244,7 +253,7 @@ $("delete-lesson").addEventListener("click",async()=>{
     await refreshLessons();
     say("Aula em rascunho excluída. Histórico publicado foi preservado.");
   }catch(error){
-    $("delete-lesson").disabled=false;
+    if(!state.accessDenied)$("delete-lesson").disabled=false;
     say(error.message);
   }
 });
@@ -264,12 +273,12 @@ $("lesson-form").addEventListener("submit",async event=>{
   }catch(error){say(error.message);}
 });
 $("publish").addEventListener("click",async()=>{
-  if(!state.course||state.course.is_published)return;
+  if(state.accessDenied||!state.course||state.course.is_published)return;
   try{await api("/courses/"+state.course.id+"/publish","POST");await refreshCourses(state.course.id);say("Curso publicado para clientes autorizados.");}
   catch(error){say(error.message);}
 });
 $("unpublish").addEventListener("click",async()=>{
-  if(!state.course||!state.course.is_published)return;
+  if(state.accessDenied||!state.course||!state.course.is_published)return;
   try{await api("/courses/"+state.course.id+"/unpublish","POST");await refreshCourses(state.course.id);say("Curso retirado do ar; nova versão em rascunho.");}
   catch(error){say(error.message);}
 });

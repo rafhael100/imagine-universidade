@@ -277,4 +277,18 @@ for (const course of manifest.courses) {
   }
 }
 console.log("PASS catalog: " + manifest.courses.length + " cursos em rascunho e " + lessonCount + " aulas únicas");
+
+const trackCourses=manifest.courses.filter(c=>c.slug.startsWith("trilha-"));
+assert.equal(trackCourses.length,6,"trilha aprovada: seis cursos");
+assert.equal(trackCourses.reduce((n,c)=>n+c.lessons.length,0),24,"trilha aprovada: vinte e quatro aulas");
+for(const course of trackCourses){
+  assert.equal(course.lessons.length,4,"cada curso da trilha tem 4 aulas: "+course.slug);
+  for(const lesson of course.lessons){
+    assert.ok(lesson.body.length>=750,"roteiro editorial incompleto: "+lesson.slug);
+    assert.match(lesson.body,/EXEMPLO FICTÍCIO\n[\s\S]+APLICAÇÃO OPCIONAL\n[\s\S]+CUIDADO IMPORTANTE\n/,"estrutura do microcurso: "+lesson.slug);
+    assert.doesNotMatch(lesson.body,/https?:\/\/\S+/,"não incluir links externos em conteúdo editorial sintético");
+  }
+}
+console.log("PASS 6 trilhas / 24 microaulas com caso fictício, prática e salvaguarda");
+
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

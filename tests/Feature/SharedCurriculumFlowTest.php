@@ -100,12 +100,17 @@ final class SharedCurriculumFlowTest extends TestCase
             ->assertJsonPath('courses.0.lessons_total', 1)
             ->assertJsonPath('courses.0.lessons_completed', 1)
             ->assertJsonPath('courses.0.progress_percent', 100);
+        $this->getJson("/universidade/private/courses/{$courseId}/lessons")->assertOk()
+            ->assertJsonCount(1, 'lessons')
+            ->assertJsonPath('lessons.0.completed', 1);
 
         $this->asPortal('demo-b', 'synthetic-company-b');
         $this->getJson('/universidade/private/courses')->assertOk()
             ->assertJsonCount(1, 'courses')
             ->assertJsonPath('courses.0.lessons_completed', 0)
             ->assertJsonPath('courses.0.progress_percent', 0);
+        $this->getJson("/universidade/private/courses/{$courseId}/lessons")->assertOk()
+            ->assertJsonPath('lessons.0.completed', 0);
         $this->getJson("/universidade/private/lessons/{$lessonId}/progress")
             ->assertOk()->assertJsonPath('completed', false);
 
@@ -151,6 +156,8 @@ final class SharedCurriculumFlowTest extends TestCase
             ->assertJsonPath('courses.0.lessons_total', 1)
             ->assertJsonPath('courses.0.lessons_completed', 0)
             ->assertJsonPath('courses.0.progress_percent', 0);
+        $this->getJson("/universidade/private/courses/{$course}/lessons")->assertOk()
+            ->assertJsonPath('lessons.0.completed', 0);
         $this->getJson("/universidade/private/lessons/{$firstLesson}")->assertNotFound();
 
         self::assertSame(1, DB::table('educational_lesson_progress')->count());

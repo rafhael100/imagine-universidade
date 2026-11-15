@@ -155,16 +155,31 @@ final class UniversityCatalogRepository
     public function adminLessons(PortalGrant $grant, int $courseId): array
     {
         $org = $this->orgId($grant);
-        if ($org === null) {
+        if ($org === null || $courseId < 1) {
+            return [];
+        }
+
+        // Mesmo na administração, nunca consultar uma versão de outro tenant.
+        $course = DB::table('educational_courses')
+            ->where('id', $courseId)
+            ->where('educational_organization_id', $org)
+            ->first(['id']);
+        if ($course === null) {
+            return [];
+        }
+
+        $versionId = DB::table('educational_course_versions')
+            ->where('educational_course_id', $courseId)
+            ->orderByDesc('version')
+            ->value('id');
+        if ($versionId === null) {
             return [];
         }
 
         return DB::table('educational_lessons as l')
             ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
-            ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
-            ->where('c.educational_organization_id', $org)
-            ->where('c.id', $courseId)
-            ->orderByDesc('v.version')->orderBy('l.sort_order')->orderBy('l.id')
+            ->where('v.id', $versionId)
+            ->orderBy('l.sort_order')->orderBy('l.id')
             ->select('l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order', 'l.is_published', 'v.status')
             ->get()->all();
     }
@@ -313,15 +328,17 @@ final class UniversityCatalogRepository
                 ->where('educational_course_id', $courseId)
                 ->where('status', $publish ? 'draft' : 'published')
                 ->orderByDesc('version')
-                ->lockForUpdate()->first(['id']);
+                ->lockForUpdate()->first(['id', 'version']);
             if ($version === null) {
                 return false;
             }
 
+            $lessons = DB::table('educational_lessons')
+                ->where('educational_course_version_id', $version->id)
+                ->orderBy('sort_order')->orderBy('id')
+                ->get(['slug', 'title', 'body', 'sort_order']);
+
             if ($publish) {
-                $lessons = DB::table('educational_lessons')
-                    ->where('educational_course_version_id', $version->id)
-                    ->get(['title', 'body']);
                 if ($lessons->isEmpty()) {
                     return false;
                 }
@@ -333,13 +350,45 @@ final class UniversityCatalogRepository
             }
 
             $now = now();
-            DB::table('educational_lessons')
-                ->where('educational_course_version_id', $version->id)
-                ->update(['is_published' => $publish, 'updated_at' => $now]);
+            if ($publish) {
+                DB::table('educational_lessons')
+                    ->where('educational_course_version_id', $version->id)
+                    ->update(['is_published' => true, 'updated_at' => $now]);
+                DB::table('educational_course_versions')
+                    ->where('id', $version->id)
+                    ->update(['status' => 'published', 'updated_at' => $now]);
+            } else {
+                // Retirar do ar imediatamente. Versão publicada torna-se
+                // imutável: os progressos permanecem vinculados a aulas antigas.
+                DB::table('educational_lessons')
+                    ->where('educational_course_version_id', $version->id)
+                    ->update(['is_published' => false, 'updated_at' => $now]);
+                DB::table('educational_course_versions')
+                    ->where('id', $version->id)
+                    ->update(['status' => 'archived', 'updated_at' => $now]);
 
-            DB::table('educational_course_versions')
-                ->where('id', $version->id)
-                ->update(['status' => $publish ? 'published' : 'draft', 'updated_at' => $now]);
+                $draftId = DB::table('educational_course_versions')->insertGetId([
+                    'educational_course_id' => $courseId,
+                    'version' => (int) $version->version + 1,
+                    'status' => 'draft',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                // Novos IDs preservam o histórico das aulas antigas.
+                foreach ($lessons as $lesson) {
+                    DB::table('educational_lessons')->insert([
+                        'educational_course_version_id' => $draftId,
+                        'slug' => $lesson->slug,
+                        'title' => $lesson->title,
+                        'body' => $lesson->body,
+                        'sort_order' => $lesson->sort_order,
+                        'is_published' => false,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                }
+            }
 
             DB::table('educational_courses')
                 ->where('id', $courseId)
@@ -349,4 +398,5 @@ final class UniversityCatalogRepository
             return true;
         });
     }
+
 }

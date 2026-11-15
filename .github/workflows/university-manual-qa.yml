@@ -124,6 +124,12 @@ jobs:
           php artisan migrate:status --database=pgsql
           php scripts/check-pg-schema.php
           php scripts/check-pg-flow.php
+          # Carga sintética EXCLUSIVA do PostgreSQL descartável de CI.
+          first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
+          echo "$first" | grep -Fq '3 courses created; 8 lessons created; 0 courses preserved.'
+          second=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
+          echo "$second" | grep -Fq '0 courses created; 0 lessons created; 3 courses preserved.'
+          echo 'PASS: catálogo sintético PostgreSQL preparado e reexecutado sem duplicação.'
 
       - name: Confirmar que autorizações de produção continuam negadas
         shell: bash

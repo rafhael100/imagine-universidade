@@ -40,4 +40,34 @@ final class SharedCatalogPolicyTest extends TestCase
         );
         self::assertNull($method->invoke($repository, $editorialUser));
     }
+    public function test_expired_student_grants_are_rejected_before_touching_database(): void
+    {
+        $method = new ReflectionMethod(UniversityCatalogRepository::class, 'orgId');
+        $repository = new UniversityCatalogRepository();
+
+        foreach ([
+            PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 1, time() - 1),
+            PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 1, time()),
+            PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 1, time() + 61),
+            PortalGrant::allow('synthetic-company-a', 'person-a', PortalAccessGate::VIEW, 0, time() + 30),
+            PortalGrant::allow('synthetic-company-a', '   ', PortalAccessGate::VIEW, 1, time() + 30),
+        ] as $staleOrInvalid) {
+            self::assertNull($method->invoke($repository, $staleOrInvalid));
+        }
+    }
+
+    public function test_expired_editorial_grant_cannot_manage_or_audit(): void
+    {
+        $repository = new UniversityCatalogRepository();
+        $adminOrg = new ReflectionMethod(UniversityCatalogRepository::class, 'adminOrgId');
+        $audit = new ReflectionMethod(UniversityCatalogRepository::class, 'audit');
+        $expired = PortalGrant::allow(
+            'imagine-editorial', 'editor-synthetic', PortalAccessGate::MANAGE, 1, time() - 1
+        );
+
+        self::assertNull($adminOrg->invoke($repository, $expired));
+        $this->expectException(\LogicException::class);
+        $audit->invoke($repository, $expired, 1, 'lesson.updated', 'lesson', 1);
+    }
+
 }

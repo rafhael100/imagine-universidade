@@ -6,7 +6,6 @@ namespace App\Domain\Learning;
 
 use App\Domain\Access\PortalGrant;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use stdClass;
 
 /**
@@ -319,12 +318,18 @@ final class UniversityCatalogRepository
                 return false;
             }
 
-            if ($publish && !DB::table('educational_lessons')
-                ->where('educational_course_version_id', $version->id)
-                ->whereRaw("length(trim(title)) > 0")
-                ->whereRaw("length(trim(body)) > 0")
-                ->exists()) {
-                return false;
+            if ($publish) {
+                $lessons = DB::table('educational_lessons')
+                    ->where('educational_course_version_id', $version->id)
+                    ->get(['title', 'body']);
+                if ($lessons->isEmpty()) {
+                    return false;
+                }
+                foreach ($lessons as $lesson) {
+                    if (trim((string) $lesson->title) === '' || trim((string) $lesson->body) === '') {
+                        return false;
+                    }
+                }
             }
 
             $now = now();

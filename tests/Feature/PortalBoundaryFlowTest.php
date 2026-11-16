@@ -542,6 +542,52 @@ final class PortalBoundaryFlowTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_editor_revoked_during_unpublish_read_does_not_change_published_course(): void
+    {
+        [$courseId] = $this->createPublishedCourse();
+        $this->asEditor();
+        $authority = $this->fakeAuthority;
+        $revoked = false;
+        $countBefore = $authority->verificationCount;
+
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $query
+        ) use ($authority, &$revoked): void {
+            if (!$revoked && str_contains($query->sql, 'educational_lessons')) {
+                $revoked = true;
+                $authority->editorEnabled = false;
+            }
+        });
+
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/unpublish")
+            ->assertNotFound();
+
+        self::assertTrue($revoked, 'Editor revocation must occur during the locked publication flow.');
+        self::assertGreaterThanOrEqual($countBefore + 2, $authority->verificationCount);
+        self::assertSame(1, DB::table('educational_courses')
+            ->where('id', $courseId)->where('is_published', true)->count());
+        self::assertSame(1, DB::table('educational_course_versions')
+            ->where('educational_course_id', $courseId)->where('status', 'published')->count());
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('action', 'course.unpublished')->where('resource_id', $courseId)->count());
+    }
+
+    public function test_direct_publication_without_live_portal_fence_is_denied(): void
+    {
+        [$courseId] = $this->createPublishedCourse();
+        $grant = PortalGrant::allow(
+            'imagine-editorial', 'synthetic-editor', PortalAccessGate::MANAGE, 1, time() + 30
+        );
+        $repository = $this->app->make(UniversityCatalogRepository::class);
+
+        self::assertFalse($repository->setPublished($grant, $courseId, false));
+        self::assertFalse($repository->setPublished(
+            $grant, $courseId, false, null, static fn (): ?PortalGrant => null,
+        ));
+        self::assertSame(1, DB::table('educational_courses')
+            ->where('id', $courseId)->where('is_published', true)->count());
+    }
+
     public function test_editor_revocation_blocks_future_mutations_and_does_not_erase_approved_content(): void
     {
         [$courseId] = $this->createPublishedCourse();

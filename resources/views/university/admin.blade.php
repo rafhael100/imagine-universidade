@@ -477,6 +477,18 @@ function confirmDiscardLesson(){
   if(!lessonHasUnsavedEdits())return true;
   return confirm("Esta aula tem alterações não salvas. Descartá-las e continuar?");
 }
+// Protect drafts on browser navigation as well as internal course/lesson
+// switching. Do not intercept navigation after the Portal revokes access;
+// no private content may be retained by an expired session.
+function mustConfirmBrowserExit(){
+  return !state.accessDenied &&
+    (state.writePending||courseHasUnsavedEdits()||lessonHasUnsavedEdits());
+}
+window.addEventListener("beforeunload",event=>{
+  if(!mustConfirmBrowserExit())return;
+  event.preventDefault();
+  event.returnValue="";
+});
 
 function renderPublicationCheck(snapshot){
   const box=$("publication-readiness");box.replaceChildren();box.hidden=false;

@@ -43,6 +43,7 @@ const lessonRows=()=>[
 ];
 let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,invalidAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,invalidAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
 let requests=0,progressReads=0,completionPosts=0,exportReads=0;
+let editorialCoursePosts=0,uncertainCourseWriteOnce=false,createdCourseInLab=false;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
  {id:1,action:"course.created",resource_kind:"course",resource_id:1,occurred_at:"2026-11-15T11:00:00"}
@@ -108,6 +109,15 @@ const server=http.createServer((req,res)=>{
     return send(res,200,payload);
   }
   if(p==="/universidade/private/admin/courses"){
+    if(req.method==="POST"){
+      editorialCoursePosts++;
+      if(uncertainCourseWriteOnce){
+        uncertainCourseWriteOnce=false;
+        createdCourseInLab=true; // the fake server committed despite HTTP 503
+        return send(res,503,{error:"commit_succeeded_but_response_lost"});
+      }
+      return send(res,201,{id:3}); // never used for the ambiguous-write scenario
+    }
     if(failAdminCoursesOnce){failAdminCoursesOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     if(invalidAdminCoursesOnce){
       invalidAdminCoursesOnce=false;
@@ -117,7 +127,11 @@ const server=http.createServer((req,res)=>{
         title:"Curso duplicado",category:"negocios",summary:null,
         sort_order:1,is_published:false}]});
     }
-    return send(res,200,{courses:[{id:1,slug:"curso-sintetico",title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho exclusivo de QA",sort_order:0,is_published:false}]});
+    const rows=[{id:1,slug:"curso-sintetico",title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho exclusivo de QA",sort_order:0,is_published:false}];
+    if(createdCourseInLab)rows.push({id:2,slug:"curso-resposta-perdida",
+      title:"Rascunho após resposta perdida",category:"metodologia",
+      summary:"Gravado somente na fixture sintética.",sort_order:1,is_published:false});
+    return send(res,200,{courses:rows});
   }
   if(p==="/universidade/private/admin/courses/1/lessons"){
     if(failAdminLessonsOnce){failAdminLessonsOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
@@ -440,6 +454,52 @@ async function inspect(page,name){
     check((await adminLessonRetry.locator("#retry-lessons").count())===0,
       "successful admin lesson retry clears error state");
     await adminLessonRetry.close();
+
+    // A POST may commit server-side then return a 503. The frontend
+    // must not replay it; allow a deliberate GET reconciliation only.
+    uncertainCourseWriteOnce=true;
+    const uncertainAdmin=await context.newPage();
+    await ensureLocalPage(uncertainAdmin);
+    uncertainAdmin.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+    await uncertainAdmin.goto(base+"/admin");
+    await uncertainAdmin.locator("#new-course").waitFor({state:"visible",timeout:8000});
+    await uncertainAdmin.locator("#course-title").fill("Rascunho após resposta perdida");
+    await uncertainAdmin.locator("#course-slug").fill("curso-resposta-perdida");
+    const beforeEditorialPosts=editorialCoursePosts;
+    await uncertainAdmin.locator("#course-save").click();
+    await uncertainAdmin.waitForFunction(()=>document.querySelector("#status").textContent.includes("Não repita a operação"));
+    check(editorialCoursePosts===beforeEditorialPosts+1,
+      "lost editorial POST response must never trigger a second automatic write");
+    check(await uncertainAdmin.locator("#course-save").isDisabled(),
+      "ambiguous course creation must disable subsequent saves");
+    check(await uncertainAdmin.locator("#new-course").isDisabled(),
+      "ambiguous editorial write blocks new course creation");
+    check(await uncertainAdmin.locator("#retry-catalog").isVisible(),
+      "ambiguous write offers a human-initiated verification of server state");
+    check((await uncertainAdmin.locator("#course-title").inputValue())==="Rascunho após resposta perdida",
+      "ambiguous write preserves the editor's draft until human reconciliation");
+
+    let acceptReconciliation=false,confirmationCount=0;
+    uncertainAdmin.on("dialog",async dialog=>{
+      confirmationCount++;
+      if(acceptReconciliation)await dialog.accept();else await dialog.dismiss();
+    });
+    await uncertainAdmin.locator("#retry-catalog").click();
+    check(confirmationCount===1,"refresh after ambiguous mutation requires a discard warning");
+    check(await uncertainAdmin.locator("#course-save").isDisabled(),
+      "cancelled verification must keep uncertain writes frozen");
+    check(editorialCoursePosts===beforeEditorialPosts+1,
+      "cancelled verification must never resubmit POST");
+    acceptReconciliation=true;
+    await uncertainAdmin.locator("#retry-catalog").click();
+    await uncertainAdmin.locator("#course-items [data-course='2']").waitFor({state:"visible",timeout:8000});
+    check(confirmationCount===2,"reconciliation requires explicit approval");
+    check(!(await uncertainAdmin.locator("#new-course").isDisabled()),
+      "fresh authorized GET unfreezes course creation");
+    check(editorialCoursePosts===beforeEditorialPosts+1,
+      "server-side committed course is observed via GET, not replay");
+    await uncertainAdmin.close();
+    createdCourseInLab=false;
 
     const admin=await context.newPage();
     await ensureLocalPage(admin);

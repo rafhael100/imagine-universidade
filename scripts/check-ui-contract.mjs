@@ -119,7 +119,7 @@ for(const [role,view] of [["student",studentProgressUI],["admin",adminUI]]){
   assert.match(view,/state.courses=\[\]/,role+": limpeza de catálogo");
 }
 assert.match(studentProgressUI,/\+\+state.courseRequest;\+\+state.lessonRequest;/,"aluno: invalidar respostas obsoletas");
-assert.match(adminUI,/document.querySelectorAll\("\.layout button,.layout input,.layout select,.layout textarea"\)/,"admin: impedir uso de controles após revogação");
+assert.match(adminUI,/document.querySelectorAll\("\.layout button,.layout input,.layout select,.layout textarea,.audit-panel button"\)/,"admin: impedir uso de controles e auditoria após revogação");
 console.log("PASS revocation UI: student/admin fail-closed on HTTP 403/419, clear private state");
 
 
@@ -320,6 +320,14 @@ for(const [role,view] of [["aluno",studentProgressUI],["admin",adminUI]]){
   assert.match(view,/class="nav-links" aria-label=/,"navegação real por tarefa "+role);
 }
 console.log("PASS Imagine DS-v1: logo original SHA, tokens canônicos, navegação e acessibilidade");
+
+
+assert.match(routes,/Route::get\('\/audit', \[UniversityController::class, 'adminAudit'\]\)/,"admin: rota privada audit");
+assert.match(adminUI,/id="audit-panel" class="panel audit-panel"/,"admin: seção de histórico");
+assert.match(adminUI,/state.auditRequest!==request/,"admin: resposta obsoleta ignorada");
+assert.match(adminUI,/\+\+state.auditRequest;state.auditEvents=\[\]/,"admin: zerar histórico após revogação");
+assert.match(adminUI,/el\("strong",String\(item.action\|\|"alteração"\)\)/,"admin: somente texto na tela");
+console.log("PASS private audit: painel, filtro de acesso, paginação e limpeza por revogação");
 
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);

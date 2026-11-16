@@ -48,6 +48,11 @@
     .help{font-size:12px}
     .editorial-preview{border:1px solid #E7BF88;background:#FFFAF4;border-radius:12px;padding:20px;margin:20px 0 0;overflow-wrap:anywhere}
     .editorial-preview[hidden]{display:none}
+    .audit-panel{margin-top:20px}
+    .audit-list{padding:10px 20px;display:grid;gap:6px}
+    .audit-row{padding:12px 0;border-bottom:1px solid var(--line)}
+    .audit-row strong{display:block;font-weight:750}
+    .audit-row small{display:block;color:var(--muted);font-size:12px}
     .editorial-preview h3{font-size:19px;color:#263044}
     .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
     .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
@@ -59,7 +64,7 @@
 <a class="skip-link" href="#main-content">Ir para o conteúdo</a>
 <header class="top"><div class="top-inner">
   <div class="brand"><img class="logo" src="{{ asset('assets/logo-imagine.png') }}" alt="Imagine" width="200" height="55"><span class="product-name">Universidade</span></div>
-  <nav class="nav-links" aria-label="Seções administrativas"><a href="#courses-title">Cursos</a><a href="#edit-title">Editar conteúdo</a></nav>
+  <nav class="nav-links" aria-label="Seções administrativas"><a href="#courses-title">Cursos</a><a href="#edit-title">Editar conteúdo</a><a href="#audit-title">Histórico</a></nav>
   <div class="eyebrow">Painel editorial · acesso restrito</div>
 </div></header>
 <main id="main-content" class="container">
@@ -113,6 +118,16 @@
       </div>
     </section>
   </div>
+  <section id="audit-panel" class="panel audit-panel" aria-labelledby="audit-title">
+    <div class="panel-header">
+      <h2 id="audit-title">Histórico editorial</h2>
+      <button type="button" id="refresh-audit" class="secondary">Atualizar histórico</button>
+    </div>
+    <div id="audit-items" class="audit-list" aria-live="polite"><p class="help">Carregando alterações autorizadas...</p></div>
+    <div class="panel-body"><button type="button" class="secondary" id="load-more-audit" disabled>Carregar anteriores</button>
+      <p class="help">Eventos paginados, sem identificadores pessoais dos operadores. A retenção depende da política Imagine.</p>
+    </div>
+  </section>
   <footer class="footer">Universidade Imagine · Somente a área Imagine autorizada poderá administrar conteúdos. Toda alteração deve ser auditada em produção.</footer>
 </main>
 <script>
@@ -120,7 +135,7 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:""};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,accessDenied:false,accessMessage:""};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
@@ -133,9 +148,11 @@ function lockAccess(message){
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
   hideLessonPreview();
+  ++state.auditRequest;state.auditEvents=[];state.auditNextBeforeId=null;
+  $("audit-items").replaceChildren();
   $("course-items").append(el("p","Cursos indisponíveis até novo acesso autorizado.","help"));
   $("lesson-items").append(el("p","Retorne ao Portal para verificar a sessão.","help"));
-  document.querySelectorAll(".layout button,.layout input,.layout select,.layout textarea")
+  document.querySelectorAll(".layout button,.layout input,.layout select,.layout textarea,.audit-panel button")
     .forEach(field=>{if("value" in field&&field.tagName!=="SELECT")field.value="";field.disabled=true;});
   $("publication-status").textContent="Acesso encerrado";
   say(message);
@@ -371,7 +388,46 @@ $("unpublish").addEventListener("click",async()=>{
     say("Versão anterior arquivada; novo rascunho criado. O progresso da versão nova começa separado.");
   }catch(error){say(error.message);}
 });
+function renderAudit(){
+  if(state.accessDenied)return;
+  const box=$("audit-items");box.replaceChildren();
+  if(!state.auditEvents.length)box.append(el("p","Nenhuma alteração editorial registrada.","help"));
+  for(const item of state.auditEvents){
+    const row=el("div",undefined,"audit-row");
+    row.append(
+      el("strong",String(item.action||"alteração")),
+      el("small",String(item.resource_kind||"recurso")+" #"+
+        String(item.resource_id??"")+" · "+String(item.occurred_at||"").slice(0,19))
+    );
+    box.append(row);
+  }
+  $("load-more-audit").disabled=state.auditNextBeforeId===null;
+}
+async function refreshAudit(beforeId=null){
+  if(state.accessDenied)return;
+  const request=++state.auditRequest;
+  $("refresh-audit").disabled=true;$("load-more-audit").disabled=true;
+  try{
+    const query=beforeId!==null?"?before_id="+encodeURIComponent(String(beforeId)):"";
+    const response=await api("/audit"+query);
+    if(state.accessDenied||state.auditRequest!==request)return;
+    const rows=Array.isArray(response.events)?response.events:[];
+    state.auditEvents=beforeId===null?rows:state.auditEvents.concat(rows);
+    state.auditNextBeforeId=Number.isSafeInteger(response.next_before_id)&&response.next_before_id>0
+      ?response.next_before_id:null;
+    renderAudit();
+  }finally{
+    if(!state.accessDenied&&state.auditRequest===request)$("refresh-audit").disabled=false;
+  }
+}
+$("refresh-audit").addEventListener("click",()=>{refreshAudit().catch(error=>say(error.message));});
+$("load-more-audit").addEventListener("click",()=>{
+  if(state.auditNextBeforeId!==null){
+    refreshAudit(state.auditNextBeforeId).catch(error=>say(error.message));
+  }
+});
 (async()=>{try{await refreshCourses();}catch(error){say(error.message);if(!state.accessDenied)$("course-items").replaceChildren();}})();
+(async()=>{try{await refreshAudit();}catch(error){say(error.message);}})();
 </script>
 </body>
 </html>

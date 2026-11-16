@@ -512,8 +512,8 @@ console.log("PASS editor browser exit: warn on unsaved drafts/write, no lock aft
 
 assert.ok(adminRecoveryUI.includes('state.catalogReady=false;'),"admin: catalog begins and fails closed");
 assert.ok(adminRecoveryUI.includes('state.catalogReady=true;'),"admin: only successful authoritative catalog load permits writes");
-assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|!state\.catalogReady\|\|\(state\.course!==null&&!state\.lessonsReady\)\)return false;/,"admin: mutations denied while catalogue or course lessons are unavailable");
-assert.match(adminRecoveryUI,/const draft=\(\)=>!state\.accessDenied&&state\.catalogReady/,"admin: draft controls disabled until catalog success");
+assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|state\.writeOutcomeUnknown\|\|!state\.catalogReady\|\|\(state\.course!==null&&!state\.lessonsReady\)\)return false;/,"admin: no writes until previous uncertain mutation and catalogue/lessons are reconciled");
+assert.match(adminRecoveryUI,/const draft=\(\)=>!state\.accessDenied&&!state\.writeOutcomeUnknown&&state\.catalogReady/,"admin: draft controls disabled while write outcome is unknown");
 console.log("PASS editorial catalog authority: do not mutate during unavailable service list");
 
 const adminCatalogFn=adminRecoveryUI.match(/function validatedAdminCourses\(payload\)\{[\s\S]*?\n\}/)?.[0];
@@ -565,6 +565,36 @@ assert.match(adminRecoveryUI,/if\(verified===null\)throw new Error\("A lista de 
 assert.match(adminRecoveryUI,/state\.lessonsReady=true;/,"editor: lesson state opened only after verified list");
 assert.match(adminRecoveryUI,/state\.course!==null&&!state\.lessonsReady/,"editor: prevent writes while selected course lessons unverified");
 console.log("PASS admin lessons: invalid 200 list never unlocks edits or publication");
+
+const freezeFn=adminRecoveryUI.match(/function freezeUncertainEditorialWrite\(\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(freezeFn,"editor: ambiguous mutation must have a dedicated no-replay fence");
+const ids=["new-course","course-save","lesson-save","delete-course","delete-lesson","publish","unpublish","check-publication"];
+const elements=Object.fromEntries(ids.map(k=>[k,{disabled:false,hidden:true,replaceChildren(){}}]));
+elements["catalog-recovery"]={hidden:true};
+elements["retry-catalog"]={disabled:true};
+let statusMessage="";
+const frozen= new Script(freezeFn+"\nfreezeUncertainEditorialWrite();"+
+  "({unknown:state.writeOutcomeUnknown,catalog:state.catalogReady,lessons:state.lessonsReady})",
+  {filename:"ambiguous-editorial-no-replay"}).runInNewContext({
+  state:{accessDenied:false,writeOutcomeUnknown:false,catalogReady:true,lessonsReady:true,courseRequest:0,lessonRequest:0},
+  $:id=>elements[id]??{disabled:false},clearPublicationCheck:()=>{},hideLessonPreview:()=>{},
+  say:m=>{statusMessage=m;},
+});
+assert.equal(frozen.unknown,true,"editor: error after possible commit must freeze writes");
+assert.equal(frozen.catalog,false,"editor: no cached catalogue authority after ambiguous write");
+assert.equal(frozen.lessons,false,"editor: no cached lesson authority after ambiguous write");
+assert.ok(ids.every(k=>elements[k].disabled),"editor: every write/publish/delete control disabled");
+assert.equal(elements["catalog-recovery"].hidden,false,"editor: manual reconciliation must be visible");
+assert.equal(elements["retry-catalog"].disabled,false,"editor: manual fresh read must remain possible");
+assert.match(statusMessage,/Não repita a operação/,"editor: warn against replaying ambiguous POST");
+for(const op of ["course-form","lesson-form","delete-course","delete-lesson","publish","unpublish"]){
+  assert.ok((adminRecoveryUI.match(/catch\(error\)\{freezeUncertainEditorialWrite\(\);\}/g)||[]).length>=6,
+    "all six editorial writes must call freeze on a failed response");
+}
+assert.match(adminRecoveryUI,/if\(state\.writeOutcomeUnknown&&!confirm\(/,"editor: fresh read must warn before replacing drafts");
+assert.match(adminRecoveryUI,/state\.writeOutcomeUnknown=false;/,"editor: clear unknown only after a successful fresh catalogue+lessons read");
+console.log("PASS ambiguous editorial mutation: no automatic replay; manual revalidation with warning");
+
 
 
 

@@ -11,6 +11,7 @@ name: UNI isolated branch QA (test-only, no deploy)
 # UNI C-91: preserve 320/390/768/1440 synthetic screenshots and 200%-scale layout checks.
 # UNI C-87/C-90: full QA of student/admin retry and unsaved editorial guards.
 # UNI C-85: revalidate timed Portal authority and expiring grants in all isolated labs.
+# UNI C-102: export immutable full-text review package for the existing 35 draft lessons.
 # UNI C-101: test lost editorial POST response after commit, no auto-replay, manual revalidation.
 # Continuous *test-only* review branch QA, with no production credentials.
 # Runs on relevant code pushes only; docs/preview changes are excluded.
@@ -111,6 +112,7 @@ jobs:
           node scripts/check-write-fence.mjs
           node scripts/check-ui-contract.mjs
           node scripts/check-learning-content.mjs
+          node scripts/check-editorial-review-pack.mjs
           node preview/current-check.mjs
           python3 scripts/check-sqlite-contract.py
 
@@ -143,6 +145,38 @@ jobs:
 
       - name: Confirm no publication occurred
         run: echo 'QA finished on disposable runner; no merge, VPS, DNS, billing, API keys or deployment.'
+
+  editorial-review-pack:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact reviewed editorial source without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare reviewer-only package for all 35 draft lessons
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -e .env && test ! -e .env.production
+          test -f content/mvp-cursos-v1.json
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/build-editorial-review-pack.mjs --out "$RUNNER_TEMP/universidade-editorial-review"
+          grep -Fq 'NÃO É APROVAÇÃO NEM PUBLICAÇÃO' "$RUNNER_TEMP/universidade-editorial-review/LEIA-PRIMEIRO.md"
+          test "$(find "$RUNNER_TEMP/universidade-editorial-review/cursos" -type f -name '*.md' | wc -l)" -eq 10
+          echo "PASS editorial review evidence only; no approval, deploy, grant or publication."
+
+      - name: Upload unapproved editorial handoff for human review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-revisao-editorial-PENDENTE
+          path: ${{ runner.temp }}/universidade-editorial-review/
+          retention-days: 14
+          if-no-files-found: error
 
   portal-contract-parity:
     needs: validation

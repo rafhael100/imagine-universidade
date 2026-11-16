@@ -135,15 +135,32 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,accessDenied:false,accessMessage:""};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,writePending:false,accessDenied:false,accessMessage:""};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
   note.hidden=!shown;note.textContent=shown||"";
 }
+function beginWrite(){
+  if(state.accessDenied||state.writePending)return false;
+  state.writePending=true;
+  ++state.courseRequest;++state.lessonRequest;
+  const layout=document.querySelector(".layout");
+  layout.inert=true;
+  layout.setAttribute("aria-busy","true");
+  say("Aplicando alteração editorial...");
+  return true;
+}
+function finishWrite(){
+  state.writePending=false;
+  const layout=document.querySelector(".layout");
+  layout.setAttribute("aria-busy","false");
+  layout.inert=state.accessDenied;
+}
 function lockAccess(message){
   if(state.accessDenied)return;
   state.accessDenied=true;state.accessMessage=message;
+  document.querySelector(".layout").inert=true;
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
@@ -280,14 +297,14 @@ async function refreshLessons(){
   state.lessons=Array.isArray(result.lessons)?result.lessons:[];renderLessons();
 }
 $("course-items").addEventListener("click",async event=>{
-  const b=event.target.closest("[data-course]");if(!b||state.accessDenied)return;
+  const b=event.target.closest("[data-course]");if(!b||state.accessDenied||state.writePending)return;
   ++state.courseRequest;
   say("");state.course=state.courses.find(c=>c.id===Number(b.dataset.course))||null;
   renderCourses();fillCourse();
   try{await refreshLessons();}catch(error){say(error.message);}
 });
 $("new-course").addEventListener("click",()=>{
-  if(state.accessDenied)return;
+  if(state.accessDenied||state.writePending)return;
   ++state.courseRequest;++state.lessonRequest;
   state.course=null;state.lessons=[];state.lesson=null;
   renderCourses();renderLessons();fillCourse();resetLesson();$("course-title").focus();say("");
@@ -297,16 +314,18 @@ $("course-form").addEventListener("submit",async event=>{
   const payload={title:$("course-title").value.trim(),slug:$("course-slug").value.trim(),
     category:$("course-category").value,summary:$("course-summary").value.trim(),sort_order:intField("course-sort")};
   if(!payload.title){say("Informe o título.");return;}
+  const courseId=state.course?.id??null;
+  if(!beginWrite())return;
   try{
-    const result=state.course
-      ? await api("/courses/"+state.course.id,"PATCH",(({slug,...withoutSlug})=>withoutSlug)(payload))
+    const result=courseId!==null
+      ? await api("/courses/"+courseId,"PATCH",(({slug,...withoutSlug})=>withoutSlug)(payload))
       : await api("/courses","POST",payload);
-    const id=state.course?.id??result.id;
-    await refreshCourses(id);say("Rascunho salvo.");
+    if(!state.accessDenied){await refreshCourses(courseId??result.id);say("Rascunho salvo.");}
   }catch(error){say(error.message);}
+  finally{finishWrite();}
 });
 $("lesson-items").addEventListener("click",event=>{
-  const b=event.target.closest("[data-lesson]");if(!b||state.accessDenied)return;
+  const b=event.target.closest("[data-lesson]");if(!b||state.accessDenied||state.writePending)return;
   state.lesson=state.lessons.find(l=>l.id===Number(b.dataset.lesson))||null;
   hideLessonPreview();
   if(!state.lesson)return;
@@ -316,61 +335,65 @@ $("lesson-items").addEventListener("click",event=>{
   $("delete-lesson").disabled=!draft()||state.lesson.is_published||state.lesson.status!=="draft";
   renderLessons();
 });
-$("clear-lesson").addEventListener("click",()=>{if(state.accessDenied)return;resetLesson();renderLessons();});
+$("clear-lesson").addEventListener("click",()=>{if(state.accessDenied||state.writePending)return;resetLesson();renderLessons();});
 $("preview-lesson").addEventListener("click",showLessonPreview);
 $("delete-lesson").addEventListener("click",async()=>{
   const lesson=state.lesson,course=state.course;
   if(state.accessDenied||!course||course.is_published||!lesson||lesson.is_published||lesson.status!=="draft")return;
   if(!confirm("Excluir esta aula em rascunho? Esta ação não pode ser desfeita."))return;
+  if(!beginWrite())return;
   $("delete-lesson").disabled=true;
   try{
     await api("/lessons/"+encodeURIComponent(String(lesson.id)),"DELETE");
-    await refreshLessons();
-    say("Aula em rascunho excluída. Histórico publicado foi preservado.");
+    if(!state.accessDenied){await refreshLessons();say("Aula em rascunho excluída. Histórico publicado foi preservado.");}
   }catch(error){
     if(!state.accessDenied)$("delete-lesson").disabled=false;
     say(error.message);
-  }
+  }finally{finishWrite();}
 });
 $("lesson-form").addEventListener("submit",async event=>{
   event.preventDefault();if(!state.course||!draft())return;
   const payload={title:$("lesson-title").value.trim(),slug:$("lesson-slug").value.trim(),
     body:$("lesson-body").value.trim(),sort_order:intField("lesson-sort")};
   if(!payload.title||payload.body.length<10){say("Preencha título e conteúdo.");return;}
+  const courseId=state.course.id,lessonId=state.lesson?.id??null;
+  if(!beginWrite())return;
   try{
-    if(state.lesson){
+    if(lessonId!==null){
       const {slug,...data}=payload;
-      await api("/lessons/"+state.lesson.id,"PATCH",data);
+      await api("/lessons/"+lessonId,"PATCH",data);
     }else{
-      await api("/courses/"+state.course.id+"/lessons","POST",payload);
+      await api("/courses/"+courseId+"/lessons","POST",payload);
     }
-    await refreshLessons();say("Aula salva em rascunho.");
+    if(!state.accessDenied){await refreshLessons();say("Aula salva em rascunho.");}
   }catch(error){say(error.message);}
+  finally{finishWrite();}
 });
 $("delete-course").addEventListener("click",async()=>{
   if(state.accessDenied||!state.course||state.course.is_published)return;
   const courseId=state.course.id;
   if(!confirm("Excluir definitivamente este curso criado em rascunho? Somente cursos nunca publicados e sem histórico ou progresso podem ser removidos."))return;
-  if(state.accessDenied||state.course?.id!==courseId)return;
+  if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
   $("delete-course").disabled=true;
   try{
     await api("/courses/"+courseId,"DELETE");
-    if(state.accessDenied)return;
-    await refreshCourses(state.course?.id===courseId?null:state.course?.id??null);
-    say("Rascunho nunca publicado excluído com registro de auditoria.");
+    if(!state.accessDenied){await refreshCourses(null);say("Rascunho nunca publicado excluído com registro de auditoria.");}
   }catch(error){say(error.message);if(!state.accessDenied&&state.course?.id===courseId)$("delete-course").disabled=false;}
+  finally{finishWrite();}
 });
 $("publish").addEventListener("click",async()=>{
   if(state.accessDenied||!state.course||state.course.is_published)return;
   const courseId=state.course.id;
   if(!confirm("Publicar este curso para os clientes elegíveis? Confirme somente após revisão editorial independente do conteúdo e da versão. A publicação não libera o SSO ou o Portal por si só."))return;
-  if(state.accessDenied||state.course?.id!==courseId)return;
+  if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
   try{
     await api("/courses/"+courseId+"/publish","POST");
-    if(state.accessDenied)return;
-    await refreshCourses(state.course?.id===courseId?courseId:state.course?.id??null);
-    say("Versão do curso publicada no catálogo privado; elegibilidade continua decidida pelo Portal.");
+    if(!state.accessDenied){
+      await refreshCourses(courseId);
+      say("Versão do curso publicada no catálogo privado; elegibilidade continua decidida pelo Portal.");
+    }
   }catch(error){say(error.message);}
+  finally{finishWrite();}
 });
 function unpublishWarning(title){
   const name=String(title||"este curso").slice(0,200);
@@ -380,13 +403,15 @@ $("unpublish").addEventListener("click",async()=>{
   if(state.accessDenied||!state.course||!state.course.is_published)return;
   const courseId=state.course.id;
   if(!confirm(unpublishWarning(state.course.title)))return;
-  if(state.accessDenied||state.course?.id!==courseId)return;
+  if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
   try{
     await api("/courses/"+courseId+"/unpublish","POST");
-    if(state.accessDenied)return;
-    await refreshCourses(state.course?.id===courseId?courseId:state.course?.id??null);
-    say("Versão anterior arquivada; novo rascunho criado. O progresso da versão nova começa separado.");
+    if(!state.accessDenied){
+      await refreshCourses(courseId);
+      say("Versão anterior arquivada; novo rascunho criado. O progresso da versão nova começa separado.");
+    }
   }catch(error){say(error.message);}
+  finally{finishWrite();}
 });
 function renderAudit(){
   if(state.accessDenied)return;

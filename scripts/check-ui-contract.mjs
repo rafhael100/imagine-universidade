@@ -349,6 +349,31 @@ for(const [role,source] of [["aluno",studentProgressUI],["editor",adminUI]]){
 }
 console.log("PASS WCAG AA footer contrast: student/editor text remains legible");
 
+
+const writeStart=adminUI.match(/function beginWrite\(\)\{[\s\S]*?\n\}/)?.[0];
+const writeEnd=adminUI.match(/function finishWrite\(\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(writeStart&&writeEnd,"Admin: single-flight writes defined");
+const fakeLayout={inert:false,setAttribute(){}};
+const result=new Script(writeStart+"\n"+writeEnd+"\n"+
+  "const first=beginWrite(),duplicate=beginWrite();finishWrite();"+
+  "const retry=beginWrite();state.accessDenied=true;finishWrite();"+
+  "({first,duplicate,retry,locked:document.querySelector('.layout').inert,"+
+  "courseRequest:state.courseRequest,lessonRequest:state.lessonRequest})",
+  {filename:"admin-write-serialization"}).runInNewContext({
+    state:{accessDenied:false,writePending:false,courseRequest:0,lessonRequest:0},
+    document:{querySelector:()=>fakeLayout},say:()=>{}
+  });
+assert.equal(result.first,true);
+assert.equal(result.duplicate,false,"double-click cannot start second POST");
+assert.equal(result.retry,true,"next write allowed after completion");
+assert.equal(result.locked,true,"403 remains inert after completion");
+assert.equal(result.courseRequest,2);
+assert.equal(result.lessonRequest,2);
+assert.match(adminUI,/document.querySelector\("\.layout"\)\.inert=true/,"lock on 403");
+assert.ok((adminUI.match(/finally\{finishWrite\(\);\}/g)||[]).length>=6,
+  "all six write pathways must release busy fence");
+console.log("PASS admin single-flight: no duplicate submits, stale GET invalidation and fail-closed state");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

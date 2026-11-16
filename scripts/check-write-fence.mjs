@@ -85,6 +85,11 @@ for (const regression of [
   "test_progress_write_checks_exact_subject_tenant_permission_and_revision_again",
   "test_editor_revoked_during_unpublish_read_does_not_change_published_course",
   "test_direct_publication_without_live_portal_fence_is_denied",
+  "test_editor_revoked_during_create_course_prevents_insert",
+  "test_editor_revoked_during_draft_lesson_deletion_preserves_lesson",
+  "test_internal_course_creation_without_live_authorization_cannot_mutate_db",
+  "test_tenant_initialization_rechecks_portal_before_provisioning",
+  "test_internal_tenant_provisioner_denies_missing_live_fence",
 ]) {
   assert.ok(feature.includes(regression), "missing negative regression: " + regression);
 }

@@ -158,7 +158,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,exportLoading:false};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -528,23 +528,61 @@ function openCourseWithAllFilters(target){
 document.querySelectorAll(".sim-inputs input").forEach(field=>{
   field.addEventListener("input",renderSimulator);
 });
+// An allowlisted, versioned portable format. Never serialize the raw
+// server object into a student file: a future regression in the endpoint
+// could introduce private identity, contract, or other tenant fields.
+// Reject malformed/oversized histories instead of silently truncating.
+function sanitizedProgressExport(payload){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)||
+     payload.schema_version!==1||payload.scope!=="current_authenticated_student"||
+     !Array.isArray(payload.completions)||payload.completions.length>5000)return null;
+  const slug=/^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const timestamp=/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+  const rows=[];
+  for(const item of payload.completions){
+    if(!item||typeof item!=="object"||Array.isArray(item)||
+       typeof item.course_slug!=="string"||item.course_slug.length>120||!slug.test(item.course_slug)||
+       typeof item.lesson_slug!=="string"||item.lesson_slug.length>120||!slug.test(item.lesson_slug)||
+       !Number.isSafeInteger(item.course_version)||item.course_version<1||item.course_version>1000000||
+       typeof item.completed_at!=="string"||item.completed_at.length>40||!timestamp.test(item.completed_at))return null;
+    rows.push({
+      course_slug:item.course_slug,
+      course_version:item.course_version,
+      lesson_slug:item.lesson_slug,
+      completed_at:item.completed_at,
+    });
+  }
+  return {schema_version:1,scope:"current_authenticated_student",completions:rows};
+}
 document.getElementById("export-progress").addEventListener("click",async()=>{
-  if(state.accessDenied)return;
+  if(state.accessDenied||state.exportLoading)return;
+  state.exportLoading=true;
   const button=document.getElementById("export-progress");
   button.disabled=true;
   try{
     const progress=await api("/progress/export");
     if(state.accessDenied)return;
-    const data=new Blob([JSON.stringify(progress,null,2)],{type:"application/json"});
+    const sanitized=sanitizedProgressExport(progress);
+    if(sanitized===null)throw new Error("O histórico recebido não passou na validação de privacidade. Tente novamente mais tarde.");
+    const data=new Blob([JSON.stringify(sanitized,null,2)],{type:"application/json"});
     const url=URL.createObjectURL(data);
-    const link=document.createElement("a");
-    link.href=url;link.download="imagine-universidade-progresso.json";
-    document.body.append(link);
-    link.click();link.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-    say("Arquivo de progresso preparado. Guarde seus dados com segurança.");
-  }catch(error){say(error.message);}
-  finally{if(!state.accessDenied)button.disabled=false;}
+    try{
+      if(state.accessDenied)return;
+      const link=document.createElement("a");
+      link.href=url;link.download="imagine-universidade-progresso.json";
+      document.body.append(link);
+      link.click();link.remove();
+      say("Arquivo de progresso preparado. Guarde seus dados com segurança.");
+    }finally{
+      // Give the browser a task boundary for the download and revoke the
+      // temporary object URL even when a local browser action fails.
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+  }catch(error){if(!state.accessDenied)say(error.message);}
+  finally{
+    state.exportLoading=false;
+    if(!state.accessDenied)button.disabled=false;
+  }
 });
 document.getElementById("resume-course").addEventListener("click",()=>{
   const target=nextPendingCourseId(state.courses,state.courseId);

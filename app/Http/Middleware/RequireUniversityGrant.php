@@ -87,6 +87,28 @@ final class RequireUniversityGrant
         }
         $request->attributes->set('university.csp_nonce', $nonce);
 
-        return $this->protectedHeaders($next($request), $nonce);
+        $response = $next($request);
+
+        // A long-running read may finish AFTER the last qualifying service
+        // was revoked, a session changed company, or Portal became unavailable.
+        // Revalidate GET/HEAD before releasing any page or JSON content.
+        // This does not replace authorization/locking for writes: a response
+        // check after a committed POST could misleadingly report failure.
+        if ($request->isMethod('GET') || $request->isMethod('HEAD')) {
+            try {
+                $fresh = $this->gate->authorize($credential, $company, $permission, time());
+                if (!$fresh->allowed
+                    || $fresh->companyId !== $grant->companyId
+                    || $fresh->subjectId !== $grant->subjectId
+                    || $fresh->permission !== $grant->permission
+                    || $fresh->revision !== $grant->revision) {
+                    return $this->deny();
+                }
+            } catch (Throwable) {
+                return $this->deny();
+            }
+        }
+
+        return $this->protectedHeaders($response, $nonce);
     }
 }

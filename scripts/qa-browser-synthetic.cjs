@@ -301,6 +301,7 @@ async function inspect(page,name){
       "manager sees real read-only readiness state");
     check((await admin.locator("#publication-readiness").innerText()).includes("1 aula"),
       "readiness shows lesson count without publishing");
+    const originalLessonBody=await admin.locator("#lesson-body").inputValue();
     await admin.locator("#lesson-body").fill("Alteração fictícia ainda não salva");
     check(!(await admin.locator("#publication-readiness").isVisible()),
       "editing a lesson immediately invalidates the previous readiness review");
@@ -321,6 +322,19 @@ async function inspect(page,name){
       "course and lesson navigation must each request one confirmation");
     check(deniedDiscards.every(text=>text.includes("alterações")),
       "both confirmation messages must clearly describe unsaved changes");
+    const dirtyExit=await admin.evaluate(()=>{
+      const event=new Event("beforeunload",{cancelable:true});
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    check(dirtyExit,"unsaved editorial fields must request browser-navigation confirmation");
+    await admin.locator("#lesson-body").fill(originalLessonBody);
+    const cleanExit=await admin.evaluate(()=>{
+      const event=new Event("beforeunload",{cancelable:true});
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    check(!cleanExit,"clean editorial form must not block browser navigation");
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));
     console.log("PASS synthetic Chromium browser: "+results.assertions+" checks, student/admin UI, progress, revocation, draft preview, audit, widths 320/390/768/1440 and WCAG serious/critical scan.");

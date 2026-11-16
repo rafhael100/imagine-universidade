@@ -36,6 +36,39 @@ final class UniversityController
     }
 
     /**
+     * Never release protected data after a slow DB/model operation unless
+     * the live Portal decision still matches the original subject, tenant,
+     * permission and revision. Neither signatures nor cached sessions replace
+     * the authority's current state.
+     */
+    private function freshGrant(
+        Request $request,
+        PortalAccessGate $gate,
+        PortalGrant $expected,
+    ): ?PortalGrant {
+        try {
+            $credential = $request->session()->get('portal_server_credential');
+            $company = $request->session()->get('portal_company_id');
+            if (!is_string($credential) || !is_string($company)) {
+                return null;
+            }
+
+            $latest = $gate->authorize($credential, $company, $expected->permission, time());
+            if (!$latest->allowed
+                || $latest->companyId !== $expected->companyId
+                || $latest->subjectId !== $expected->subjectId
+                || $latest->revision !== $expected->revision
+                || $latest->permission !== $expected->permission) {
+                return null;
+            }
+
+            return $latest;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * Só funciona após grant VIEW proveniente de sessão servidor do Portal.
      * Não recebe company_id nem subject_id do corpo da requisição.
      */
@@ -57,19 +90,27 @@ final class UniversityController
         return response()->json(['courses' => $this->catalog->catalog($this->grant($request))]);
     }
 
-    public function exportProgress(Request $request): JsonResponse
+    public function exportProgress(Request $request, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
         try {
-            $progress = $this->catalog->exportProgress($this->grant($request));
+            $progress = $this->catalog->exportProgress($grant);
         } catch (\Throwable) {
             return response()->json(['error' => 'temporarily_unavailable'], 503);
         }
 
-        return $progress === null
-            ? response()->json(['error' => 'temporarily_unavailable'], 503)
-            : response()->json($progress, 200, [
-                'Content-Disposition' => 'attachment; filename="imagine-universidade-progresso.json"',
-            ]);
+        if ($progress === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        // A service may have been revoked while a large history was read.
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
+        return response()->json($progress, 200, [
+            'Content-Disposition' => 'attachment; filename="imagine-universidade-progresso.json"',
+        ]);
     }
 
     public function lessons(Request $request, int $courseId): JsonResponse
@@ -116,23 +157,10 @@ final class UniversityController
             return response()->json(['error' => 'tutor_unavailable'], 503);
         }
 
-        // A future inference may take time. Re-check live Portal authority
-        // before releasing ANY generated text, denying revocation/tenant/
-        // subject/revision changes that occurred during the operation.
-        try {
-            $credential = $request->session()->get('portal_server_credential');
-            $company = $request->session()->get('portal_company_id');
-            if (!is_string($credential) || !is_string($company)) {
-                return response()->json(['error' => 'access_denied'], 403);
-            }
-            $latest = $gate->authorize($credential, $company, PortalAccessGate::VIEW, time());
-            if (!$latest->allowed || $latest->companyId !== $grant->companyId
-                || $latest->subjectId !== $grant->subjectId
-                || $latest->revision !== $grant->revision
-                || $latest->permission !== PortalAccessGate::VIEW) {
-                return response()->json(['error' => 'access_denied'], 403);
-            }
-        } catch (\Throwable) {
+        // A slow tutor response must satisfy the same live authority fence
+        // as a potentially slow history export.
+        $latest = $this->freshGrant($request, $gate, $grant);
+        if ($latest === null) {
             return response()->json(['error' => 'access_denied'], 403);
         }
 

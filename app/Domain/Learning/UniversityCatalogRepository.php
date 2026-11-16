@@ -40,10 +40,8 @@ final class UniversityCatalogRepository
             && $grant->revision >= 1
             && $grant->expiresAtEpoch > $now
             && $grant->expiresAtEpoch <= $now + 60
-            && trim($grant->companyId) !== ''
-            && trim($grant->subjectId) !== ''
-            && strlen($grant->companyId) <= 80
-            && strlen($grant->subjectId) <= 120;
+            && preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,79}\z/D', $grant->companyId) === 1
+            && preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,119}\z/D', $grant->subjectId) === 1;
     }
 
     // O tenant do cliente contém APENAS seu progresso.

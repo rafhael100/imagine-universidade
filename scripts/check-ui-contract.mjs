@@ -107,7 +107,7 @@ assert.ok(studentProgressUI.includes("const request=++state.lessonRequest;"),"al
 assert.ok(studentProgressUI.includes("if(state.courseRequest!==request)return;"),"aluno: curso atrasado não altera tela");
 assert.ok(studentProgressUI.includes("if(state.lessonRequest!==request)return;"),"aluno: aula atrasada não altera tela");
 assert.ok(studentProgressUI.includes("if(state.courseRequest===request&&!state.accessDenied){"),"aluno: erro antigo de curso ignorado e revogação não reabre tela");
-assert.ok(studentProgressUI.includes("if(state.lessonRequest===request){say(error.message)"),"aluno: erro antigo de aula ignorado");
+assert.ok(studentProgressUI.includes("if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id){"),"aluno: erro antigo, aula trocada ou sessão revogada não reabre conteúdo");
 assert.ok(studentProgressUI.includes("++state.courseRequest;++state.lessonRequest;"),"aluno: troca de filtro cancela seleção antiga");
 console.log("PASS async navigation: respostas e erros obsoletos isolados por token");
 

@@ -7,7 +7,7 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <link rel="stylesheet" href="{{ asset('assets/imagine-tokens.css') }}">
   <title>Universidade Imagine | Área do cliente</title>
-  <style>
+  <style nonce="{{ request()->attributes->get('university.csp_nonce') }}">
     :root{--orange:var(--imagine-orange);--ink:var(--imagine-ink);--muted:var(--imagine-muted);--line:var(--imagine-border);--bg:var(--imagine-surface);--white:var(--imagine-white)}
     *{box-sizing:border-box}
     body{font:15px/1.6 var(--imagine-font-ui);color:var(--ink);background:var(--bg);margin:0}
@@ -108,7 +108,7 @@
   </div>
   <footer class="footer">Universidade Imagine · Educação prática para clientes elegíveis · Resultados comerciais nunca são garantidos.</footer>
 </main>
-<script>
+<script nonce="{{ request()->attributes->get('university.csp_nonce') }}">
 "use strict";
 const root="/universidade/private";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";

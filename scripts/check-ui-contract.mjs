@@ -20,11 +20,13 @@ const views = [
 
 for (const [role, path, prefix] of views) {
   const html = read(path);
-  const match = html.match(/<script>([\s\S]*?)<\/script>/);
+  const match = html.match(/<script\b[^>]*>([\s\S]*?)<\/script>/);
   assert.ok(match, role + ": JavaScript ausente");
   new Script(match[1], { filename: path });
 
   assert.match(html, /<html lang="pt-BR">/, role + ": idioma");
+  assert.match(html, /<script nonce="\{\{ request\(\)->attributes->get\('university\.csp_nonce'\) \}\}">/, role + ": CSP nonce JS");
+  assert.match(html, /<style nonce="\{\{ request\(\)->attributes->get\('university\.csp_nonce'\) \}\}">/, role + ": CSP nonce CSS");
   assert.match(html, /name="robots" content="noindex,nofollow,noarchive"/, role + ": robots");
   assert.match(html, /name="csrf-token" content="\{\{ csrf_token\(\) \}\}"/, role + ": CSRF");
   assert.doesNotMatch(html, /<script\b[^>]*\bsrc\s*=/i, role + ": JS externo");

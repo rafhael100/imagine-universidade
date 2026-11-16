@@ -7,7 +7,7 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <link rel="stylesheet" href="{{ asset('assets/imagine-tokens.css') }}">
   <title>Universidade Imagine | Administração</title>
-  <style>
+  <style nonce="{{ request()->attributes->get('university.csp_nonce') }}">
     :root{--orange:var(--imagine-orange);--ink:var(--imagine-ink);--muted:var(--imagine-muted);--line:var(--imagine-border);--bg:var(--imagine-surface);--white:var(--imagine-white)}
     *{box-sizing:border-box}
     body{font:14px/1.6 var(--imagine-font-ui);margin:0;background:var(--bg);color:var(--ink)}
@@ -130,7 +130,7 @@
   </section>
   <footer class="footer">Universidade Imagine · Somente a área Imagine autorizada poderá administrar conteúdos. Toda alteração deve ser auditada em produção.</footer>
 </main>
-<script>
+<script nonce="{{ request()->attributes->get('university.csp_nonce') }}">
 "use strict";
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";

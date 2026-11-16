@@ -471,7 +471,20 @@ async function selectLesson(id){
     content.append(action);
     if(progressPayload.completed)offerNextLesson(id);
   }catch(error){
-    if(state.lessonRequest===request){say(error.message);content.replaceChildren();}
+    if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id){
+      // A transient failure loading EITHER body or progress must not render
+      // a partial lesson. The user chooses whether to retry; 403/419 always
+      // purges and locks the UI. Never retry an old lesson selection.
+      content.replaceChildren();
+      say(error.message);
+      content.append(el("p","A aula está temporariamente indisponível.", "empty"));
+      const retry=el("button","Tentar abrir aula novamente","secondary lesson-detail-retry");
+      retry.type="button";
+      retry.addEventListener("click",()=>{
+        if(!state.accessDenied&&state.lessonId===id)selectLesson(id);
+      });
+      content.append(retry);
+    }
   }
 }
 function openCourseWithAllFilters(target){

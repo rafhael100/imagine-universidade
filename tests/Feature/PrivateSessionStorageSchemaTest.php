@@ -33,6 +33,25 @@ final class PrivateSessionStorageSchemaTest extends TestCase
         self::assertNull(DB::table('educational_organizations')->first());
     }
 
+    public function test_laravel_database_session_handler_really_persists_and_purges_only_synthetic_records(): void
+    {
+        $handler = new \Illuminate\Session\DatabaseSessionHandler(
+            DB::connection(), 'sessions', 1
+        );
+        $id = 'ci-session-db-handler-test';
+        $payload = 'synthetic-only-no-personal-information';
+        self::assertTrue($handler->write($id, $payload));
+        self::assertSame($payload, $handler->read($id));
+        self::assertSame(1, DB::table('sessions')->where('id', $id)->count());
+        self::assertSame(0, DB::table('educational_organizations')->count());
+        $this->getJson('/universidade/private/courses')->assertForbidden();
+
+        DB::table('sessions')->where('id', $id)->update(['last_activity' => 1]);
+        $handler->gc(60);
+        self::assertSame(0, DB::table('sessions')->count());
+        self::assertSame('', $handler->read($id));
+    }
+
     public function test_synthetic_session_row_can_be_stored_without_any_portal_grant(): void
     {
         DB::table('sessions')->insert([

@@ -107,6 +107,7 @@ jobs:
           node ops/staging/check-compose-static.mjs
           bash ops/staging/check-compose-syntax.sh
           bash -n scripts/qa-staging-image-build.sh
+          php -l scripts/qa-staging-runtime-deny.php
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |

@@ -44,6 +44,34 @@ final class UniversityCatalogRepository
             && preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,119}\z/D', $grant->subjectId) === 1;
     }
 
+    /**
+     * Verify authority inside a write transaction immediately before
+     * mutation. A verified PortalGrant alone is insufficient to write.
+     * The official Portal authority remains deny-all until homologation.
+     */
+    private function freshWriteGrantMatches(
+        PortalGrant $expected,
+        string $permission,
+        ?callable $verifyFreshGrant,
+    ): bool {
+        if ($verifyFreshGrant === null || !$this->grantUsable($expected, $permission)) {
+            return false;
+        }
+
+        try {
+            $latest = $verifyFreshGrant();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $latest instanceof PortalGrant
+            && $this->grantUsable($latest, $permission)
+            && $latest->companyId === $expected->companyId
+            && $latest->subjectId === $expected->subjectId
+            && $latest->permission === $expected->permission
+            && $latest->revision === $expected->revision;
+    }
+
     // O tenant do cliente contém APENAS seu progresso.
     private function orgId(PortalGrant $grant): ?int
     {
@@ -329,27 +357,9 @@ final class UniversityCatalogRepository
                 return false;
             }
 
-            // A permissão pode expirar enquanto o banco espera por lock.
-            if (!$this->grantUsable($grant, PortalAccessGate::VIEW) || $verifyFreshGrant === null) {
-                // Internal callers cannot bypass the live Portal fence by omitting it.
-                return false;
-            }
-
-            // Reconsultar autoridade Portal com lock do curso mantido, antes
-            // de qualquer INSERT. Não confiar apenas no grant da borda HTTP.
-            // A integração operacional ainda exige fonte oficial e análise
-            // de concorrência/limites de timeout entre serviços.
-            try {
-                $latest = $verifyFreshGrant();
-            } catch (\Throwable) {
-                return false;
-            }
-            if (!$latest instanceof PortalGrant
-                || !$this->grantUsable($latest, PortalAccessGate::VIEW)
-                || $latest->companyId !== $grant->companyId
-                || $latest->subjectId !== $grant->subjectId
-                || $latest->permission !== $grant->permission
-                || $latest->revision !== $grant->revision) {
+            // Curso/aula já foram verificados sob lock. Confirmar novamente
+            // revogação, identidade e revisão antes do primeiro INSERT.
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::VIEW, $verifyFreshGrant)) {
                 return false;
             }
 

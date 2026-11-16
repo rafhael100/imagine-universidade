@@ -14,6 +14,7 @@ Além da busca existente pelo nome/resumo de cursos, o aluno passa a localizar u
 - A resposta inclui apenas IDs de curso/aula, títulos e trecho curto de conteúdo. Nenhum identificador do aluno, empresa, progresso, histórico ou credencial é retornado.
 - Ao terminar a busca, o controller verifica novamente **a fonte Portal** e recusa transmitir os resultados se houver revogação ou revisão de autorização; o binding real segue `UnavailablePortalAuthority` (deny-all).
 - O navegador usa `textContent`, valida IDs/tamanhos, só cria navegação para cursos já autorizados na biblioteca e limpa os resultados após falha ou HTTP 403/419.
+- Se um resultado ficar desatualizado após republicação/retirada de uma aula, a navegação verifica a lista publicada atual e informa indisponibilidade, sem abrir outra aula por engano.
 
 ## Aceite técnico
 

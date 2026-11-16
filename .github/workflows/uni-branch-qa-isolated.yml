@@ -1,5 +1,6 @@
 name: UNI isolated branch QA (test-only, no deploy)
 
+# UNI C-92: recheck both translated unsaved-change dialogs under Chromium.
 # UNI C-91: preserve 320/390/768/1440 synthetic screenshots and 200%-scale layout checks.
 # UNI C-87/C-90: full QA of student/admin retry and unsaved editorial guards.
 # UNI C-85: revalidate timed Portal authority and expiring grants in all isolated labs.

@@ -5,19 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <link rel="stylesheet" href="{{ asset('assets/imagine-tokens.css') }}">
   <title>Universidade Imagine | Área do cliente</title>
   <style>
-    :root{--orange:#F9941D;--ink:#252D3A;--muted:#677285;--line:#E5E9EF;--bg:#F8F9FB;--white:#fff}
+    :root{--orange:var(--imagine-orange);--ink:var(--imagine-ink);--muted:var(--imagine-muted);--line:var(--imagine-border);--bg:var(--imagine-surface);--white:var(--imagine-white)}
     *{box-sizing:border-box}
-    body{font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg);margin:0}
-    button{font:inherit;cursor:pointer}button:disabled{opacity:.6;cursor:not-allowed}
-    :focus-visible{outline:3px solid #D87906;outline-offset:3px}
+    body{font:15px/1.6 var(--imagine-font-ui);color:var(--ink);background:var(--bg);margin:0}
+    button{font:inherit;cursor:pointer;min-height:var(--imagine-touch-target)}button:disabled{opacity:.6;cursor:not-allowed}
+    :focus-visible{outline:3px solid var(--imagine-focus);outline-offset:3px}
     .top{background:#fff;border-bottom:1px solid var(--line)}
     .top-inner{max-width:1160px;margin:auto;padding:19px 23px;display:flex;justify-content:space-between;gap:15px;align-items:center}
-    .brand{font-size:20px;font-weight:850;letter-spacing:-.6px}.brand em{font-style:normal;color:#CC7000}
+    .brand{display:flex;align-items:center;gap:14px;min-width:0}
+    .logo{width:170px;max-width:100%;height:auto;display:block}
+    .product-name{border-left:1px solid var(--line);padding-left:14px;font-weight:750;font-size:16px;color:var(--ink)}
+    .nav-links{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+    .nav-links a{display:inline-flex;align-items:center;min-height:var(--imagine-touch-target);color:#414441;text-decoration:none;padding:7px 11px;border-radius:var(--imagine-radius-navigation);font-weight:700;font-size:13px}
+    .nav-links a:hover,.nav-links a:focus-visible{background:var(--imagine-orange-soft)}
+    .skip-link{position:absolute;top:-100px;left:12px;background:var(--ink);color:white;padding:12px;z-index:20}
+    .skip-link:focus{top:8px}
     .mini{font-size:12px;color:var(--muted)}
     .container{max-width:1160px;margin:0 auto;padding:28px 23px 55px}
-    .hero{border-radius:20px;padding:33px 37px;background:#252D3A;color:#fff}
+    .hero{border-radius:var(--imagine-radius-panel);padding:33px 37px;background:var(--ink);color:#fff}
     .hero h1{font-size:clamp(25px,3vw,36px);line-height:1.2;margin:6px 0 12px;letter-spacing:-.8px}
     .hero p{color:#E2E7EF;max-width:660px;margin:0}
     .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#FFBC70;font-weight:850}
@@ -28,7 +36,7 @@
     .pill{border:1px solid var(--line);background:white;border-radius:999px;padding:9px 14px;font-weight:750;font-size:13px}
     .pill[aria-pressed="true"]{background:#FFF0D9;border-color:#F0BD7C;color:#8A4700}
     .main{display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start}
-    .panel{background:#fff;border:1px solid var(--line);border-radius:17px;overflow:hidden}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:var(--imagine-radius-panel);box-shadow:var(--imagine-shadow-panel);overflow:hidden}
     .panel-head{padding:20px;border-bottom:1px solid var(--line)}
     .panel-head h2{font-size:19px;letter-spacing:-.3px;margin:0 0 4px}
     .panel-head p{margin:0;color:var(--muted);font-size:13px}
@@ -57,15 +65,17 @@
     .status[hidden]{display:none}
     .empty{padding:25px;color:var(--muted)}
     .footer{color:#8892A1;font-size:12px;margin-top:28px}
-    @media(max-width:800px){.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px}}
+    @media(max-width:800px){.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Ir para o conteúdo</a>
 <header class="top"><div class="top-inner">
-  <div class="brand">imagine <em>✦</em> <small>universidade</small></div>
-  <div class="mini">Benefício exclusivo dos clientes Imagine</div>
+  <div class="brand"><img class="logo" src="{{ asset('assets/logo-imagine.png') }}" alt="Imagine" width="200" height="55"><span class="product-name">Universidade</span></div>
+  <nav class="nav-links" aria-label="Seções da Universidade"><a href="#courses-title">Biblioteca</a><a href="#lesson-panel-title">Minhas aulas</a></nav>
+  <div class="mini">Benefício exclusivo de clientes elegíveis</div>
 </div></header>
-<main class="container">
+<main id="main-content" class="container">
   <section class="hero" aria-labelledby="hero-title">
     <span class="eyebrow">Conhecimento que impulsiona seu negócio</span>
     <h1 id="hero-title">Visitas. Leads. Clientes.</h1>

@@ -5,22 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <link rel="stylesheet" href="{{ asset('assets/imagine-tokens.css') }}">
   <title>Universidade Imagine | Administração</title>
   <style>
-    :root{--orange:#F9941D;--ink:#263044;--muted:#697586;--line:#E4E8EE;--bg:#F8F9FB;--white:#fff}
+    :root{--orange:var(--imagine-orange);--ink:var(--imagine-ink);--muted:var(--imagine-muted);--line:var(--imagine-border);--bg:var(--imagine-surface);--white:var(--imagine-white)}
     *{box-sizing:border-box}
-    body{font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:var(--bg);color:var(--ink)}
-    button,input,select,textarea{font:inherit}button{cursor:pointer}button:disabled{opacity:.6;cursor:not-allowed}
-    :focus-visible{outline:3px solid #CE7500;outline-offset:2px}
+    body{font:14px/1.6 var(--imagine-font-ui);margin:0;background:var(--bg);color:var(--ink)}
+    button,input,select,textarea{font:inherit}button{cursor:pointer;min-height:var(--imagine-touch-target)}button:disabled{opacity:.6;cursor:not-allowed}
+    :focus-visible{outline:3px solid var(--imagine-focus);outline-offset:2px}
     .top{background:#fff;border-bottom:1px solid var(--line)}.top-inner{max-width:1180px;margin:auto;display:flex;justify-content:space-between;gap:15px;align-items:center;padding:18px 22px}
-    .brand{font-size:20px;font-weight:850;letter-spacing:-.5px}.brand em{font-style:normal;color:#CC7000}
+    .brand{display:flex;align-items:center;gap:14px;min-width:0}
+    .logo{width:170px;max-width:100%;height:auto;display:block}
+    .product-name{border-left:1px solid var(--line);padding-left:14px;font-weight:750;font-size:16px;color:var(--ink)}
+    .nav-links{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+    .nav-links a{display:inline-flex;align-items:center;min-height:var(--imagine-touch-target);color:#414441;text-decoration:none;padding:7px 11px;border-radius:var(--imagine-radius-navigation);font-weight:700;font-size:13px}
+    .nav-links a:hover,.nav-links a:focus-visible{background:var(--imagine-orange-soft)}
+    .skip-link{position:absolute;top:-100px;left:12px;background:var(--ink);color:white;padding:12px;z-index:20}
+    .skip-link:focus{top:8px}
     .eyebrow{color:#A85B00;font-size:11px;letter-spacing:1.6px;font-weight:850;text-transform:uppercase}
     .container{max-width:1180px;margin:auto;padding:27px 22px 55px}h1{margin:4px 0 8px;font-size:30px}h2{font-size:19px;margin:0}h3{font-size:16px;margin:0 0 10px}
     p{color:var(--muted);margin:0 0 14px}
     .notice{border-radius:12px;padding:12px 17px;background:#FFF5E6;border:1px solid #EED2A6;color:#7F521A;margin:20px 0}
     .notice[hidden]{display:none}
     .layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:19px;align-items:start}
-    .panel{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:var(--imagine-radius-panel);box-shadow:var(--imagine-shadow-panel);overflow:hidden}
     .panel-header{padding:19px 21px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}
     .panel-body{padding:21px}.items{padding:9px;display:grid;gap:6px}
     .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%}
@@ -44,15 +52,17 @@
     .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
     .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
     .footer{font-size:12px;color:#8F98A4;margin-top:28px}
-    @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px}.grid{grid-template-columns:1fr}}
+    @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Ir para o conteúdo</a>
 <header class="top"><div class="top-inner">
-  <div class="brand">imagine <em>✦</em> <small>universidade</small></div>
-  <div class="eyebrow">Painel de conteúdos · acesso restrito</div>
+  <div class="brand"><img class="logo" src="{{ asset('assets/logo-imagine.png') }}" alt="Imagine" width="200" height="55"><span class="product-name">Universidade</span></div>
+  <nav class="nav-links" aria-label="Seções administrativas"><a href="#courses-title">Cursos</a><a href="#edit-title">Editar conteúdo</a></nav>
+  <div class="eyebrow">Painel editorial · acesso restrito</div>
 </div></header>
-<main class="container">
+<main id="main-content" class="container">
   <div class="eyebrow">Administração Imagine</div>
   <h1>Biblioteca de cursos</h1>
   <p>Cadastre cursos e aulas em rascunho. A publicação só é permitida a operadores autorizados pelo Portal.</p>

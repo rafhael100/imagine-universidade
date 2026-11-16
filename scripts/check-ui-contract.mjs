@@ -10,6 +10,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
+import { createHash } from "node:crypto";
 
 const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
 const views = [
@@ -289,6 +290,26 @@ assert.match(adminUI,/function hideLessonPreview\(\)/,"editor: limpar conteúdo 
 assert.match(adminUI,/if\(!confirm\("Publicar este curso para os clientes elegíveis/,"editor: publicação exige confirmação");
 assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)return;/,"editor: evitar troca de curso no diálogo");
 console.log("PASS preview editorial: conteúdo local sem HTML, confirmação humana explícita");
+
+
+const originalLogo=readFileSync(new URL("../public/assets/logo-imagine.png",import.meta.url));
+assert.equal(originalLogo.subarray(0,8).toString("hex"),"89504e470d0a1a0a","logo Imagine PNG válido");
+const gitBlobHash=createHash("sha1").update(Buffer.from("blob "+originalLogo.length+"\\0")).update(originalLogo).digest("hex");
+assert.equal(gitBlobHash,"678adeceb3a8ecdaeb6b576b9ee18d1bf0396f77","logo idêntico ao original do Portal Node");
+const imagineTokens=read("public/assets/imagine-tokens.css");
+for(const token of ["--imagine-orange: #f9941d","--imagine-ink: #171b19","--imagine-surface: #f7f7f8","--imagine-touch-target: 44px"]){
+  assert.ok(imagineTokens.includes(token),"token canônico ausente: "+token);
+}
+for(const [role,view] of [["aluno",studentProgressUI],["admin",adminUI]]){
+  assert.match(view,/assets\/logo-imagine.png/,"identidade original "+role);
+  assert.match(view,/alt="Imagine" width="200" height="55"/,"alt e tamanho logo "+role);
+  assert.match(view,/assets\/imagine-tokens.css/,"CSS local "+role);
+  assert.match(view,/class="skip-link" href="#main-content"/,"atalho de teclado "+role);
+  assert.match(view,/id="main-content"/,"alvo de navegação "+role);
+  assert.match(view,/min-height:var\(--imagine-touch-target\)/,"alvos de toque "+role);
+  assert.match(view,/class="nav-links" aria-label=/,"navegação real por tarefa "+role);
+}
+console.log("PASS Imagine DS-v1: logo original SHA, tokens canônicos, navegação e acessibilidade");
 
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);

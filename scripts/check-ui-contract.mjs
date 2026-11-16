@@ -20,7 +20,7 @@ const views = [
 
 for (const [role, path, prefix] of views) {
   const html = read(path);
-  const match = html.match(/<script\b[^>]*>([\s\S]*?)<\/script>/);
+  const match = html.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/);
   assert.ok(match, role + ": JavaScript ausente");
   new Script(match[1], { filename: path });
 

@@ -101,4 +101,28 @@ final class MockEntitlementPolicyTest extends TestCase
             $this->eligible(['resourcePermissionGranted' => false])
         )->allowed);
     }
+
+    public function test_fail_closed_matrix_for_last_service_and_invalid_session_context(): void
+    {
+        // Synthetic representation of the Portal #886 contract; no real service is queried.
+        $cases = [
+            'last_service_cancelled' => [['hasEligibleActiveService' => false], 'not_eligible'],
+            'trial_only_despite_service_flag' => [['trialOnly' => true], 'not_eligible'],
+            'revoked_company' => [['revoked' => true], 'revoked'],
+            'portal_timeout_or_failure' => [['authorityVerified' => false], 'authority_unavailable'],
+            'subject_not_authenticated' => [['identityVerified' => false], 'unauthenticated'],
+            'company_link_removed' => [['companyLinkActive' => false], 'link_not_active'],
+            'resource_access_removed' => [['resourcePermissionGranted' => false], 'missing_permission'],
+            'tenant_switched' => [['requestedCompanyId' => 'synthetic-company-B'], 'wrong_company'],
+            'missing_subject' => [['subjectId' => ' '], 'invalid_context'],
+            'missing_company' => [['requestedCompanyId' => ' '], 'invalid_context'],
+            'invalid_revision' => [['entitlementRevision' => -1], 'invalid_context'],
+        ];
+
+        foreach ($cases as $label => [$overrides, $reason]) {
+            $decision = $this->policy->evaluate($this->eligible($overrides));
+            self::assertFalse($decision->allowed, $label);
+            self::assertSame($reason, $decision->reasonCode, $label);
+        }
+    }
 }

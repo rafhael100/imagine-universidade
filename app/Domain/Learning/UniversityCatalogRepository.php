@@ -652,9 +652,8 @@ final class UniversityCatalogRepository
                 return false;
             }
 
-            // Conferir autoridade viva após locks e leituras e antes de
-            // publicar/arquivar aulas. Um grant inicial não basta.
-            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
                 return false;
             }
 
@@ -998,8 +997,9 @@ final class UniversityCatalogRepository
                 }
             }
 
-            // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            // Reconfirmar a autoridade após os locks de curso e versão e
+            // antes de publicar ou arquivar qualquer aula.
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return false;
             }
 

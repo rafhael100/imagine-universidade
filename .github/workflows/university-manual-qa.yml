@@ -127,6 +127,7 @@ jobs:
           php scripts/check-pg-schema.php
           php scripts/check-pg-flow.php
           php scripts/check-pg-nonce.php
+          php scripts/check-pg-concurrency.php
           # Carga sintética EXCLUSIVA do PostgreSQL descartável de CI.
           first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
           echo "$first" | grep -Fq '10 courses created; 35 lessons created; 0 courses preserved.'

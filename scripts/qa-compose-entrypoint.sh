@@ -52,6 +52,7 @@ php artisan migrate:status --database=pgsql
 php scripts/check-pg-schema.php
 php scripts/check-pg-flow.php
 php scripts/check-pg-nonce.php
+php scripts/check-pg-concurrency.php
 
 # Fixture only, inside APP_ENV=testing and the disposable PostgreSQL database.
 first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)

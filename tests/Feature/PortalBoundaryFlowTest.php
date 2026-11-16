@@ -424,6 +424,37 @@ final class PortalBoundaryFlowTest extends TestCase
         self::assertSame(0, DB::table('educational_lesson_progress')->count());
     }
 
+    public function test_progress_write_checks_exact_subject_tenant_permission_and_revision_again(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $grant = PortalGrant::allow(
+            'test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 5, time() + 30
+        );
+        $repository = $this->app->make(UniversityCatalogRepository::class);
+
+        $invalidFresh = [
+            PortalGrant::allow('test-client-b', 'synthetic-person-a', PortalAccessGate::VIEW, 5, time() + 30),
+            PortalGrant::allow('test-client-a', 'different-person', PortalAccessGate::VIEW, 5, time() + 30),
+            PortalGrant::allow('test-client-a', 'synthetic-person-a', PortalAccessGate::MANAGE, 5, time() + 30),
+            PortalGrant::allow('test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 6, time() + 30),
+            PortalGrant::allow('test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 5, time() - 1),
+            PortalGrant::deny('authority_unavailable'),
+        ];
+
+        foreach ($invalidFresh as $latest) {
+            self::assertFalse($repository->complete(
+                $grant, $lessonId, static fn (): PortalGrant => $latest,
+            ));
+        }
+        self::assertFalse($repository->complete(
+            $grant, $lessonId, static function (): PortalGrant {
+                throw new RuntimeException('synthetic authority timeout');
+            },
+        ));
+
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
     public function test_revoking_last_service_blocks_next_read_and_write_without_removing_history(): void
     {
         [, $lessonId] = $this->createPublishedCourse();

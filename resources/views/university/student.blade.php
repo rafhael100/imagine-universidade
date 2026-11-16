@@ -29,6 +29,18 @@
     .hero h1{font-size:clamp(25px,3vw,36px);line-height:1.2;margin:6px 0 12px;letter-spacing:-.8px}
     .hero p{color:#E2E7EF;max-width:660px;margin:0}
     .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#FFBC70;font-weight:850}
+.learning-path{margin:23px 0 21px}
+    .learning-path h2{font-size:19px;margin:0 0 5px}
+    .learning-path p{font-size:13px;color:var(--muted);margin:0 0 14px}
+    .path-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .path-card{border:1px solid var(--line);border-radius:var(--imagine-radius-panel);background:#fff;padding:16px;text-align:left;min-width:0;box-shadow:var(--imagine-shadow-panel)}
+    .path-card:disabled{cursor:default;opacity:1}
+    .path-card:focus-visible{outline-offset:3px}
+    .path-card strong,.path-card small{display:block}
+    .path-card strong{font-size:17px}
+    .path-card small{font-size:12px;color:#535A55;margin:8px 0}
+    .path-card[aria-current="true"]{border-color:#F9941D;background:#FFF6EC}
+    .path-card progress{display:block;width:100%;height:8px;accent-color:#F9941D;margin:9px 0}
     .pills{display:flex;gap:7px;flex-wrap:wrap;margin:27px 0 18px}
     .searchbar{display:grid;gap:7px;margin:0 0 18px;max-width:460px}
     .searchbar label{font-weight:750;font-size:13px;color:#465369}
@@ -65,7 +77,7 @@
     .status[hidden]{display:none}
     .empty{padding:25px;color:var(--muted)}
     .footer{color:#565D56;font-size:12px;margin-top:28px}
-    @media(max-width:800px){.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
+    @media(max-width:800px){.path-cards{grid-template-columns:1fr}.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>
 <body>
@@ -83,6 +95,11 @@
     <p id="overall-progress" class="overall-progress" aria-live="polite">Seu progresso será exibido após autorizar os cursos.</p>
     <button type="button" id="resume-course" class="primary resume-btn" disabled>Retomar meus estudos</button>
     <button type="button" id="export-progress" class="secondary" disabled>Exportar meu progresso</button>
+  </section>
+  <section class="learning-path" aria-labelledby="path-title">
+    <h2 id="path-title">Sua jornada: Visitas → Leads → Clientes</h2>
+    <p>Cada pilar conecta a teoria à prática. Cursos aparecem aqui somente quando publicados e autorizados.</p>
+    <div id="pillar-cards" class="path-cards" aria-live="polite"></div>
   </section>
   <div id="status" role="status" aria-live="polite" class="status" hidden></div>
   <nav class="pills" aria-label="Categorias dos cursos">
@@ -134,6 +151,8 @@ function lockAccess(message){
   state.courses=[];state.courseId=null;state.lessonId=null;
   ++state.courseRequest;++state.lessonRequest;
   list.replaceChildren();lessonsBox.replaceChildren();content.replaceChildren();
+  document.getElementById("pillar-cards").replaceChildren();
+  document.getElementById("pillar-cards").append(el("p","Jornada indisponível. Volte ao Portal.","empty"));
   list.append(el("p","Biblioteca indisponível até um novo acesso autorizado.","empty"));
   content.append(el("p","Volte ao Portal do Cliente para verificar seu acesso.","empty"));
   overall.textContent="Acesso à Universidade encerrado.";
@@ -194,8 +213,42 @@ function nextIncompleteOtherCourseId(courses,currentCourseId){
   });
   return found?.id??null;
 }
+const pillars=[
+  {slug:"trilha-visitas-seja-encontrado",title:"1 · Visitas",intro:"Seja encontrado e ofereça uma página útil"},
+  {slug:"trilha-leads-interesse-contato",title:"2 · Leads",intro:"Transforme interesse em contato informado"},
+  {slug:"trilha-clientes-conquiste-acompanhe",title:"3 · Clientes",intro:"Atenda, proponha e acompanhe com respeito"}
+];
+function pillarCards(courses){
+  return pillars.map(pillar=>{
+    const course=Array.isArray(courses)?courses.find(c=>c.slug===pillar.slug):null;
+    const progress=course?progressLabel(course):{total:0,completed:0,percent:0};
+    return {...pillar,courseId:course?.id??null,progress};
+  });
+}
+function renderPillars(){
+  if(state.accessDenied)return;
+  const box=document.getElementById("pillar-cards");box.replaceChildren();
+  for(const pillar of pillarCards(state.courses)){
+    const button=el("button",undefined,"path-card");button.type="button";
+    button.disabled=!Number.isSafeInteger(pillar.courseId)||pillar.courseId<1||!pillar.progress.total;
+    if(!button.disabled)button.dataset.pillarCourse=String(pillar.courseId);
+    button.setAttribute("aria-current",String(pillar.courseId!==null&&pillar.courseId===state.courseId));
+    button.append(el("strong",pillar.title),el("small",pillar.intro));
+    if(button.disabled){
+      button.append(el("small","Trilha ainda não publicada para seu acesso."));
+    }else{
+      button.append(el("small",pillar.progress.completed+" de "+pillar.progress.total+" aulas · "+pillar.progress.percent+"%"));
+      const bar=el("progress");
+      bar.max=Math.max(1,pillar.progress.total);bar.value=pillar.progress.completed;
+      bar.setAttribute("aria-label","Progresso em "+pillar.title+": "+pillar.progress.percent+"%");
+      button.append(bar);
+    }
+    box.append(button);
+  }
+}
 function renderCourses(){
   if(state.accessDenied)return;
+  renderPillars();
   list.replaceChildren();
   const totals=state.courses.reduce((memo,c)=>{
     const p=progressLabel(c);memo.completed+=p.completed;memo.total+=p.total;return memo;
@@ -387,6 +440,14 @@ document.getElementById("export-progress").addEventListener("click",async()=>{
 document.getElementById("resume-course").addEventListener("click",()=>{
   const target=nextPendingCourseId(state.courses,state.courseId);
   if(target!==null)openCourseWithAllFilters(target);
+});
+document.getElementById("pillar-cards").addEventListener("click",e=>{
+  const item=e.target.closest("[data-pillar-course]");
+  if(!item||state.accessDenied)return;
+  const id=Number(item.dataset.pillarCourse);
+  if(Number.isSafeInteger(id)&&state.courses.some(c=>c.id===id)){
+    openCourseWithAllFilters(id);
+  }
 });
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});

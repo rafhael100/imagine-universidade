@@ -397,6 +397,27 @@ assert.match(adminUI,/\$\("lesson-form"\)\.addEventListener\("input",clearPublic
 assert.match(adminUI,/clearPublicationCheck\(\);\s*\+\+state\.auditRequest/,"editor: clear on 403/419");
 console.log("PASS editorial readiness: pending GET invalidated by edits and revocation");
 
+
+const pillarFn=studentProgressUI.match(/function pillarCards\(courses\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(pillarFn,"student: pure 3 pillar path function");
+const testPath = new Script("const pillars="+JSON.stringify([
+  {slug:"trilha-visitas-seja-encontrado",title:"1 · Visitas",intro:"v"},
+  {slug:"trilha-leads-interesse-contato",title:"2 · Leads",intro:"l"},
+  {slug:"trilha-clientes-conquiste-acompanhe",title:"3 · Clientes",intro:"c"}
+])+";\n"+pillarFn+"\n"+
+"pillarCards(courses).map(p=>[p.courseId,p.progress.total,p.progress.completed])",
+{filename:"student-guided-path"}).runInNewContext({
+  courses:[{id:41,slug:"trilha-visitas-seja-encontrado",lessons_total:4,lessons_completed:2}],
+  progressLabel:course=>({total:course.lessons_total,completed:course.lessons_completed,percent:50}),
+});
+assert.equal(JSON.stringify(testPath),JSON.stringify([[41,4,2],[null,0,0],[null,0,0]]));
+assert.match(studentProgressUI,/id="pillar-cards"/,"student: 3 pillars region");
+assert.match(studentProgressUI,/renderPillars\(\);/,"student: refresh from authoritative catalog");
+assert.match(studentProgressUI,/document.getElementById\("pillar-cards"\)\.replaceChildren\(\)/,"student: purge on 403");
+assert.match(studentProgressUI,/button\.disabled=!Number\.isSafeInteger\(pillar\.courseId\)/,"student: unapproved courses are disabled");
+assert.match(studentProgressUI,/openCourseWithAllFilters\(id\)/,"student: route through guarded course selection");
+console.log("PASS student three-pillar journey: only published authorized course IDs clickable");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

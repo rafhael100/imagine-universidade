@@ -36,7 +36,7 @@ const assets={
   "/assets/logo-imagine.png":{body:fs.readFileSync(path.join(root,"public/assets/logo-imagine.png")),type:"image/png"},
   "/assets/imagine-tokens.css":{body:fs.readFileSync(path.join(root,"public/assets/imagine-tokens.css")),type:"text/css; charset=utf-8"}
 };
-const courses=()=>[{id:1,title:"Visitas, Leads e Clientes — Exemplo sintético",summary:"Aulas fictícias apenas para QA.",category:"metodologia",lessons_total:2,lessons_completed:completed?1:0}];
+const courses=()=>[{id:1,slug:"trilha-visitas-seja-encontrado",title:"Visitas, Leads e Clientes — Exemplo sintético",summary:"Aulas fictícias apenas para QA.",category:"metodologia",lessons_total:2,lessons_completed:completed?1:0}];
 const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
@@ -141,6 +141,20 @@ async function inspect(page,name){
     await ensureLocalPage(admin);
     admin.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
     await admin.goto(base+"/admin");
+    const studentJourney=await context.newPage();
+    await ensureLocalPage(studentJourney);
+    await studentJourney.goto(base+"/student");
+    await studentJourney.locator("#pillar-cards .path-card").first().waitFor();
+    check(await studentJourney.locator("#pillar-cards .path-card").count()===3,
+      "exactly three methodology pillars, even if not published");
+    check(await studentJourney.locator("#pillar-cards [data-pillar-course='1']").count()===1,
+      "only published authorized pillar is clickable");
+    check(await studentJourney.locator("#pillar-cards button:disabled").count()===2,
+      "unpublished pillar courses must stay disabled");
+    await studentJourney.locator("#pillar-cards [data-pillar-course='1']").click();
+    check(await studentJourney.locator("#lesson-items [data-lesson-id='11']").count()>0,
+      "authorized pillar takes student to actual course");
+    await studentJourney.close();
     await admin.locator("#course-items [data-course='1']").waitFor();
     await admin.locator("#course-items [data-course='1']").click();
     await admin.locator("#lesson-items [data-lesson='11']").waitFor();

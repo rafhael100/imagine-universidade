@@ -759,7 +759,7 @@ final class SharedCurriculumFlowTest extends TestCase
             ->assertJsonPath('results.0.course_id', $courseId)
             ->assertJsonPath('results.0.lesson_id', $lessonId)
             ->assertJsonPath('results.0.lesson_title', 'Organize sua vitrine digital')
-            ->assertHeader('Cache-Control', 'private, no-store');
+            ->assertHeader('Cache-Control', 'no-store, private');
         self::assertSame(
             ['course_id', 'course_title', 'lesson_id', 'lesson_title', 'snippet'],
             array_keys($found->json('results.0')),

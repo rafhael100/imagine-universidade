@@ -58,7 +58,7 @@ first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no
 echo "$first" | grep -Fq '10 courses created; 35 lessons created; 0 courses preserved.'
 second=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
 echo "$second" | grep -Fq '0 courses created; 0 lessons created; 10 courses preserved.'
-echo "[QA] PASS: quatro cursos e onze aulas em rascunho, sem duplicar no segundo ensaio."
+echo "[QA] PASS: dez cursos e trinta e cinco aulas em rascunho, sem duplicar no segundo ensaio."
 
 echo "[QA] Provider de autorização segue DENY-ALL."
 grep -Fq "UnavailablePortalAuthority::class" app/Providers/AppServiceProvider.php

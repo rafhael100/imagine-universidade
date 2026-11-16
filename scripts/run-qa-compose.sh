@@ -46,4 +46,7 @@ echo "This run downloads disposable images/dependencies and uses local CPU/netwo
 echo "Running QA does not approve deployment or production access."
 docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa build qa
 docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa run --rm qa
-echo "PASS: disposable QA run finished. Removing services and data."
+echo "QA synthetic PostgreSQL backup and restore in disposable db container."
+docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa exec -T db sh -s \
+  < scripts/qa-pg-backup-restore.sh
+echo "PASS: disposable QA and restore finished. Removing services and data."

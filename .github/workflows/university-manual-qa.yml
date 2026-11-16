@@ -96,6 +96,8 @@ jobs:
           php scripts/check-learning-mock.php
           php scripts/check-tenant-guard.php
           python3 scripts/check-sqlite-contract.py
+          bash -n scripts/run-qa-compose.sh
+          sh -n scripts/qa-pg-backup-restore.sh
           node scripts/check-ui-contract.mjs
 
       - name: Instalar dependências travadas de PHP 8.3

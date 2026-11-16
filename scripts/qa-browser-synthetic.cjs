@@ -242,7 +242,7 @@ async function inspect(page,name){
     await admin.locator("#clear-lesson").click();
     check((await admin.locator("#lesson-body").inputValue())===unsavedLessonText,
       "cancelled new-lesson navigation preserves unsaved lesson edits");
-    check(deniedDiscards.length===2&&deniedDiscards.every(text=>text.includes("não salvas")),
+    check(deniedDiscards.length===2&&deniedDiscards.every(text=>text.includes("Descartar")),
       "both unsaved-change confirmations are explicit");
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));

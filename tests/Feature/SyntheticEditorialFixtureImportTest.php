@@ -76,6 +76,13 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
             ->where('slug', 'performance-ai-acompanhamento-responsavel')->value('body');
         self::assertIsString($performanceLesson);
         self::assertStringContainsString('está em desenvolvimento', $performanceLesson);
+        $bodies = DB::table('educational_lessons')->pluck('body');
+        self::assertCount(35, $bodies);
+        foreach ($bodies as $body) {
+            self::assertStringContainsString('EXEMPLO FICTÍCIO', $body);
+            self::assertStringContainsString('APLICAÇÃO OPCIONAL', $body);
+            self::assertStringContainsString('CUIDADO IMPORTANTE', $body);
+        }
     }
 
     public function test_repeated_import_does_not_overwrite_edited_content_or_history(): void

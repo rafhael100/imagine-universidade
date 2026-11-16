@@ -100,6 +100,7 @@ jobs:
           sh -n scripts/qa-pg-backup-restore.sh
           node scripts/check-ui-contract.mjs
           node preview/current-check.mjs
+          node scripts/check-learning-content.mjs
           bash -n ops/staging/inventory-readonly.sh
           node ops/staging/check-inventory.mjs
           node ops/staging/check-release-gates.mjs

@@ -461,6 +461,13 @@ assert.match(adminRecoveryUI,/if\(!confirmDiscardLesson\(\)\)return;/,"admin: sw
 assert.match(adminRecoveryUI,/state\.lesson\?\.id===Number\(b\.dataset\.lesson\)/,"admin: same-lesson selection preserves edits");
 console.log("PASS editorial navigation: unsaved course and lesson changes require explicit discard");
 
+assert.ok(studentProgressUI.includes('const retry=el("button","Tentar carregar aulas","secondary lesson-retry")'),"student: failed lesson read must offer manual retry");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id)selectCourse(id);'),"student: lesson retry only with current authorized course");
+assert.ok(adminRecoveryUI.includes('retry.id="retry-lessons"'),"admin: failed lesson read must offer manual retry");
+assert.ok(adminRecoveryUI.includes('if(!state.accessDenied&&!state.writePending&&state.course?.id===courseId)'),"admin: retry forbidden after revocation or concurrent edit");
+console.log("PASS both private lesson lists: fail-closed manual recovery without stale data");
+
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

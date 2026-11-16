@@ -438,6 +438,22 @@ assert.match(studentProgressUI,/document.querySelectorAll\("\.sim-inputs input"\
 assert.doesNotMatch(studentProgressUI,/fetch\([^)]*sim-/,"simulator must not transmit fields");
 console.log("PASS educational simulator: hypothetical 1000→50→5, limits, no personal data");
 
+// Recover transient server failures, but NEVER automatically retry an
+// unavailable/revoked Portal session. Both private pages must be recoverable
+// with a single explicit action and clear all stale data on denial.
+const adminRecoveryUI=read("resources/views/university/admin.blade.php");
+assert.match(studentProgressUI,/id="library-recovery"/,"student: retry panel");
+assert.match(studentProgressUI,/id="retry-library"/,"student: manual retry button");
+assert.match(studentProgressUI,/if\(state\.accessDenied\|\|state\.libraryLoading\)return;/,"student: no retry after revocation and single flight");
+assert.match(studentProgressUI,/recovery\.hidden=false;/,"student: show retry only after recoverable failure");
+assert.match(studentProgressUI,/document\.getElementById\("library-recovery"\)\.hidden=true;/,"student: revoked state hides retry");
+assert.match(adminRecoveryUI,/id="catalog-recovery"/,"admin: retry panel");
+assert.match(adminRecoveryUI,/id="retry-catalog"/,"admin: manual retry button");
+assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|state\.catalogLoading\)return;/,"admin: no stale retries or concurrent writes");
+assert.match(adminRecoveryUI,/state\.courses=\[\];state\.course=null;state\.lessons=\[\];state\.lesson=null;/,"admin: purge stale editorial data");
+assert.match(adminRecoveryUI,/\$\("catalog-recovery"\)\.hidden=true;/,"admin: access revocation hides retry");
+console.log("PASS manual recovery UI: transient errors retry once; denial purges and disables both panels");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

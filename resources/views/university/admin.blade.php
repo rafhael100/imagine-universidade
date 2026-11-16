@@ -322,6 +322,9 @@ async function refreshLessons(){
 }
 $("course-items").addEventListener("click",async event=>{
   const b=event.target.closest("[data-course]");if(!b||state.accessDenied||state.writePending)return;
+  const nextId=Number(b.dataset.course);
+  if(state.course?.id===nextId)return;
+  if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;
   say("");state.course=state.courses.find(c=>c.id===Number(b.dataset.course))||null;
   renderCourses();fillCourse();
@@ -329,6 +332,7 @@ $("course-items").addEventListener("click",async event=>{
 });
 $("new-course").addEventListener("click",()=>{
   if(state.accessDenied||state.writePending)return;
+  if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;++state.lessonRequest;
   state.course=null;state.lessons=[];state.lesson=null;
   renderCourses();renderLessons();fillCourse();resetLesson();$("course-title").focus();say("");
@@ -350,6 +354,8 @@ $("course-form").addEventListener("submit",async event=>{
 });
 $("lesson-items").addEventListener("click",event=>{
   const b=event.target.closest("[data-lesson]");if(!b||state.accessDenied||state.writePending)return;
+  if(state.lesson?.id===Number(b.dataset.lesson))return;
+  if(!confirmDiscardLesson())return;
   state.lesson=state.lessons.find(l=>l.id===Number(b.dataset.lesson))||null;
   hideLessonPreview();
   if(!state.lesson)return;
@@ -359,7 +365,10 @@ $("lesson-items").addEventListener("click",event=>{
   $("delete-lesson").disabled=!draft()||state.lesson.is_published||state.lesson.status!=="draft";
   renderLessons();
 });
-$("clear-lesson").addEventListener("click",()=>{if(state.accessDenied||state.writePending)return;resetLesson();renderLessons();});
+$("clear-lesson").addEventListener("click",()=>{
+  if(state.accessDenied||state.writePending||!confirmDiscardLesson())return;
+  resetLesson();renderLessons();
+});
 $("preview-lesson").addEventListener("click",showLessonPreview);
 $("delete-lesson").addEventListener("click",async()=>{
   const lesson=state.lesson,course=state.course;
@@ -421,6 +430,36 @@ function editorialHasUnsavedChanges(){
   return Boolean($("lesson-title").value.trim()||
      $("lesson-slug").value.trim()||$("lesson-body").value.trim());
 }
+// A navigation-only dirty check. The editorial publication preflight uses
+// editorialHasUnsavedChanges() with stricter semantics for unsaved courses.
+function courseHasUnsavedEdits(){
+  const c=state.course;
+  if(!c)return Boolean($("course-title").value.trim()||$("course-slug").value.trim()||
+    $("course-summary").value.trim()||Number($("course-sort").value)!==0||
+    $("course-category").value!=="metodologia");
+  return $("course-title").value.trim()!==String(c.title||"")||
+    $("course-category").value!==String(c.category||"")||
+    $("course-summary").value.trim()!==String(c.summary||"")||
+    intField("course-sort")!==Number(c.sort_order||0);
+}
+function lessonHasUnsavedEdits(){
+  const lesson=state.lesson;
+  if(!lesson)return Boolean($("lesson-title").value.trim()||
+    $("lesson-slug").value.trim()||$("lesson-body").value.trim()||
+    Number($("lesson-sort").value)!==0);
+  return $("lesson-title").value.trim()!==String(lesson.title||"")||
+    $("lesson-body").value.trim()!==String(lesson.body||"")||
+    intField("lesson-sort")!==Number(lesson.sort_order||0);
+}
+function confirmDiscardCourseAndLesson(){
+  if(!courseHasUnsavedEdits()&&!lessonHasUnsavedEdits())return true;
+  return confirm("Há alterações em curso ou aula que ainda não foram salvas. Descartar essas alterações e continuar?");
+}
+function confirmDiscardLesson(){
+  if(!lessonHasUnsavedEdits())return true;
+  return confirm("Esta aula tem alterações não salvas. Descartá-las e continuar?");
+}
+
 function renderPublicationCheck(snapshot){
   const box=$("publication-readiness");box.replaceChildren();box.hidden=false;
   box.append(el("strong",snapshot.ready?

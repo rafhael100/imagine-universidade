@@ -1,5 +1,6 @@
 name: UNI isolated branch QA (test-only, no deploy)
 
+# C-82 revalidation checkpoint: test all ten private write paths with synthetic data.
 # One-shot: this job is triggered ONLY when this exact workflow file changes
 # on the authorized review branch. Never push, merge, deploy or use credentials.
 on:

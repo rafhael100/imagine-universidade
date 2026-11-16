@@ -110,6 +110,7 @@ jobs:
           php -l scripts/qa-staging-runtime-deny.php
           bash -n scripts/qa-staging-private-http.sh
           php -l scripts/qa-staging-private-http-probe.php
+          bash -n scripts/qa-staging-postgres-http.sh
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |

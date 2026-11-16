@@ -50,4 +50,5 @@ docker run --rm --network none --add-host app:127.0.0.1 --read-only --cap-drop A
   --tmpfs /var/cache/nginx:mode=1777 --tmpfs /var/run:mode=1777 --tmpfs /tmp:mode=1777 \
   "${tag}-nginx" nginx -t
 bash scripts/qa-staging-private-http.sh "${tag}-php" "${tag}-nginx"
+bash scripts/qa-staging-postgres-http.sh "${tag}-php" "${tag}-nginx"
 echo "PASS candidate staging PHP/Nginx images build locally without deploy."

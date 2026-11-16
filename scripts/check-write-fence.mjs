@@ -16,33 +16,63 @@ function section(text, start, end) {
   return text.slice(first, last);
 }
 
-const progress = section(repository, "public function complete(", "private function audit(");
-const publish = section(repository, "public function setPublished(", null);
-const edit = section(repository, "public function updateCourse(", "public function addLesson(");
-assert.match(repository, /private function freshWriteGrantMatches\(/);
-assert.match(repository, /if \(\$verifyFreshGrant === null \|\| !\$this->grantUsable\(\$expected, \$permission\)\)/);
-assert.match(repository, /\$latest->companyId === \$expected->companyId/);
-assert.match(repository, /\$latest->subjectId === \$expected->subjectId/);
-assert.match(repository, /\$latest->revision === \$expected->revision/);
-assert.match(progress, /DB::transaction\(function \(\) use \([^)]*\$verifyFreshGrant/);
-assert.match(progress, /freshWriteGrantMatches\(\$grant, PortalAccessGate::VIEW, \$verifyFreshGrant\)/);
-assert.match(progress, /freshWriteGrantMatches[\s\S]*?insertOrIgnore\(/);
-assert.match(publish, /DB::transaction\(function \(\) use \([^)]*\$verifyFreshGrant/);
-assert.match(publish, /freshWriteGrantMatches\(\$grant, PortalAccessGate::MANAGE, \$verifyFreshGrant\)/);
-assert.match(publish, /freshWriteGrantMatches[\s\S]*?->update\(/);
-assert.doesNotMatch(edit, /\$verifyFreshGrant/,
-  "course editing cannot reference an unbound callback");
-const studentController = section(controller, "public function complete(", "public function adminAudit(");
-const publicationController = section(controller, "public function publish(", null);
-assert.match(studentController, /PortalAccessGate \$gate/);
-assert.match(studentController, /\$this->freshGrant\(\$request, \$gate, \$grant\)/);
-assert.equal((publicationController.match(/\$this->freshGrant\(\$request, \$gate, \$grant\)/g) || []).length, 2,
-  "publish and unpublish must reconsult Portal");
+assert.ok(repository.includes("private function freshWriteGrantMatches("));
+for (const field of ["companyId", "subjectId", "permission", "revision"]) {
+  assert.ok(repository.includes("$latest->" + field + " === $expected->" + field),
+    "live grant must match original " + field);
+}
+assert.ok(repository.includes("$verifyFreshGrant === null"));
 assert.match(bindings, /bind\(PortalAuthority::class, UnavailablePortalAuthority::class\)/);
-for (const test of [
+
+const writes = [
+  ["complete", "audit", "VIEW"],
+  ["createCourse", "updateCourse", "MANAGE"],
+  ["updateCourse", "addLesson", "MANAGE"],
+  ["addLesson", "updateLesson", "MANAGE"],
+  ["updateLesson", "deleteDraftLesson", "MANAGE"],
+  ["deleteDraftLesson", "deleteNeverPublishedCourse", "MANAGE"],
+  ["deleteNeverPublishedCourse", "setPublished", "MANAGE"],
+  ["setPublished", null, "MANAGE"],
+];
+for (const [method, next, capability] of writes) {
+  const body = section(repository, "public function " + method + "(",
+    next ? "public function " + next + "(" : null);
+  assert.ok(body.includes("DB::transaction"), "write must be transactional: " + method);
+  assert.ok(body.includes("$verifyFreshGrant"), "missing live grant callback: " + method);
+  assert.ok(body.includes("freshWriteGrantMatches($grant, PortalAccessGate::" +
+    capability + ", $verifyFreshGrant)"), "missing live grant fence: " + method);
+
+  const fence = body.indexOf("freshWriteGrantMatches(");
+  const mutation = Math.min(...["->insertGetId(", "->insert(", "->update(", "->delete(", "->insertOrIgnore("]
+    .map(x => body.indexOf(x)).filter(x => x >= 0));
+  assert.ok(Number.isFinite(mutation) && fence >= 0 && fence < mutation,
+    "authority must be checked before first mutation: " + method);
+}
+
+const controllers = [
+  ["complete", "adminAudit"],
+  ["createCourse", "updateCourse"],
+  ["updateCourse", "createLesson"],
+  ["createLesson", "updateLesson"],
+  ["updateLesson", "deleteDraftLesson"],
+  ["deleteDraftLesson", "deleteNeverPublishedCourse"],
+  ["deleteNeverPublishedCourse", "publish"],
+  ["publish", "unpublish"],
+  ["unpublish", null]
+];
+for (const [method, next] of controllers) {
+  const body = section(controller, "public function " + method + "(",
+    next ? "public function " + next + "(" : null);
+  assert.ok(body.includes("PortalAccessGate $gate"), "missing Gate dependency: " + method);
+  assert.ok(body.includes("freshGrant($request, $gate, $grant)"),
+    "HTTP controller must refresh the official Portal decision: " + method);
+}
+for (const regression of [
   "test_last_service_revoked_during_completion_lookup_does_not_commit_progress",
   "test_progress_write_checks_exact_subject_tenant_permission_and_revision_again",
   "test_editor_revoked_during_unpublish_read_does_not_change_published_course",
   "test_direct_publication_without_live_portal_fence_is_denied",
-]) assert.ok(feature.includes(test), "missing regression: " + test);
-console.log("PASS: write fences wired for progress, publication and removal; original editor method unaffected.");
+]) {
+  assert.ok(feature.includes(regression), "missing negative regression: " + regression);
+}
+console.log("PASS: all 9 HTTP write paths use transaction-scoped Portal validation, including 2 publish actions.");

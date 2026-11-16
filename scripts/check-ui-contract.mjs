@@ -514,6 +514,31 @@ assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|
 assert.match(adminRecoveryUI,/const draft=\(\)=>!state\.accessDenied&&state\.catalogReady/,"admin: draft controls disabled until catalog success");
 console.log("PASS editorial catalog authority: do not mutate during unavailable service list");
 
+const adminCatalogFn=adminRecoveryUI.match(/function validatedAdminCourses\(payload\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(adminCatalogFn,"admin: malformed 200 catalogs require closed-schema validation");
+const parseAdmin=input=>new Script(adminCatalogFn+"\nvalidatedAdminCourses(input)",{
+  filename:"university-admin-catalog-contract",
+}).runInNewContext({input});
+const item={id:1,slug:"curso-um",title:"Curso privado de teste",category:"metodologia",
+  summary:null,sort_order:0,is_published:0,internal_identity:"must-not-enter-browser-state"};
+const accepted=parseAdmin({courses:[item]});
+assert.equal(JSON.stringify(accepted),JSON.stringify([{id:1,slug:"curso-um",
+  title:"Curso privado de teste",category:"metodologia",summary:"",
+  sort_order:0,is_published:false}]),"admin: drop unexpected internal fields");
+assert.equal(JSON.stringify(parseAdmin({courses:[]})),JSON.stringify([]),"admin: valid empty list is permitted");
+assert.equal(parseAdmin({}),null,"admin: missing courses is not an empty list");
+assert.equal(parseAdmin({courses:null}),null,"admin: null courses fail closed");
+assert.equal(parseAdmin({courses:[item,{...item}]}),null,"admin: duplicate course IDs fail closed");
+assert.equal(parseAdmin({courses:[{...item,id:0}]}),null,"admin: invalid IDs fail closed");
+assert.equal(parseAdmin({courses:[{...item,category:"universidade_imagine"}]}),null,"admin: invalid category fails closed");
+assert.equal(parseAdmin({courses:[{...item,title:" "}]}),null,"admin: blank course title fails closed");
+assert.equal(parseAdmin({courses:[{...item,is_published:"true"}]}),null,"admin: invalid publishing status fails closed");
+assert.equal(parseAdmin({courses:[{...item,sort_order:10000}]}),null,"admin: invalid sort order fails closed");
+assert.match(adminRecoveryUI,/const verified=validatedAdminCourses\(result\);/,"admin: validate before enabling catalogue writes");
+assert.match(adminRecoveryUI,/if\(verified===null\)throw new Error/,"admin: unknown response must deny mutations");
+console.log("PASS admin catalogue: invalid or duplicate 200 response cannot activate editorial writes");
+
+
 assert.ok(studentProgressUI.includes('if(receipt?.completed!==true)throw new Error('),"student: completion requires explicit server acknowledgment");
 assert.ok(studentProgressUI.includes('const verified=await api("/lessons/"+encodeURIComponent(String(id))+"/progress")'),"student: uncertain completion must be reconciled via authoritative GET");
 assert.ok(studentProgressUI.includes('if(verified?.completed===true)'),"student: committed-but-lost response is confirmed");

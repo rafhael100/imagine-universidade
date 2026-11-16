@@ -41,7 +41,7 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false;
+let completed=false,denyStudent=false,failInitializeOnce=false;
 let requests=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
@@ -65,7 +65,10 @@ const server=http.createServer((req,res)=>{
   if(p.startsWith("/universidade/private/")&&!p.startsWith("/universidade/private/admin/")&&denyStudent){
     return send(res,403,{error:"access_denied"});
   }
-  if(p==="/universidade/private/initialize"&&req.method==="POST")return send(res,200,{ready:true});
+  if(p==="/universidade/private/initialize"&&req.method==="POST"){
+    if(failInitializeOnce){failInitializeOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    return send(res,200,{ready:true});
+  }
   if(p==="/universidade/private/courses"&&req.method==="GET")return send(res,200,{courses:courses()});
   if(p==="/universidade/private/courses/1/lessons")return send(res,200,{lessons:lessonRows()});
   if(p==="/universidade/private/lessons/11"&&req.method==="GET")return send(res,200,{lesson:{id:11,title:"Visitas fictícias",body:"Contexto da aula.\n\nEXEMPLO FICTÍCIO\nUm visitante fictício.\n\nAPLICAÇÃO OPCIONAL\nDesenhar a jornada.\n\nCUIDADO IMPORTANTE\nSem promessas de vendas."}});
@@ -119,6 +122,26 @@ async function inspect(page,name){
     const pageErrors=[];
     page.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
 
+    // Temporary Portal/backend outage: no automatic retry, explicit
+    // accessible recovery; authorized data appears only after a new
+    // server-side initialize + catalog request succeeds.
+    failInitializeOnce=true;
+    const recovering=await context.newPage();
+    await ensureLocalPage(recovering);
+    await recovering.goto(base+"/student");
+    await recovering.locator("#retry-library").waitFor({state:"visible",timeout:8000});
+    check((await recovering.locator("#course-list").innerText()).includes("indisponíveis"),
+      "transient failure does not leak a cached catalog");
+    check((await recovering.locator("#course-list [data-course-id]").count())===0,
+      "no authorized course is rendered before retry");
+    await recovering.locator("#retry-library").click();
+    await recovering.locator("#course-list [data-course-id='1']").waitFor({state:"visible",timeout:8000});
+    check(!(await recovering.locator("#library-recovery").isVisible()),
+      "successful manual retry hides the recovery action");
+    check((await recovering.locator("#course-list [data-course-id]").count())===1,
+      "successful retry reloads catalog from synthetic server");
+    await recovering.close();
+
     await page.goto(base+"/student");
     await page.waitForFunction(()=>!document.querySelector("#resume-course").disabled);
     await page.locator("#sim-visits").fill("1000");
@@ -142,6 +165,7 @@ async function inspect(page,name){
     await page.waitForFunction(()=>document.querySelector("#resume-course").disabled && document.querySelector("#export-progress").disabled);
     check((await page.locator("#lesson-content").innerText()).includes("Volte ao Portal"),"revoke must purge lesson");
     check(await page.locator("#sim-visits").isDisabled(),"revoked student cannot use simulator");
+    check(!(await page.locator("#library-recovery").isVisible()),"revoked access cannot offer retry");
     check(!(await page.locator("#sim-results").isVisible()),"simulator response purged after revocation");
     check(await page.getByText("Visitas fictícias",{exact:true}).count()===0,"private lesson title must be removed");
     denyStudent=false;

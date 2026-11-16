@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Disposable GitHub Actions only. Never touch real secrets, VPS or any listener.
+fail(){ printf 'HOLD image build: %s\n' "$1" >&2; exit 2; }
+[[ "${CI:-}" == "true" && "${GITHUB_ACTIONS:-}" == "true" ]] || fail "CI only"
+[[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]] || fail "PR only"
+[[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" ]] || fail "local Docker only"
+[[ "$(docker context show)" == "default" ]] || fail "default context required"
+test ! -e .env && test ! -e .env.production &&
+  test ! -e ops/staging/.env.staging || fail "environment secrets in checkout"
+test -f composer.lock || fail "locked dependencies required"
+
+tag="uni-qa-stage-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+docker build --file ops/staging/Dockerfile.php --tag "${tag}-php" .
+docker build --file ops/staging/Dockerfile.nginx --tag "${tag}-nginx" .
+
+# No open ports, no network or access to real data.
+docker run --rm --network none --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --tmpfs /tmp \
+  --tmpfs /var/www/html/storage --tmpfs /var/www/html/bootstrap/cache \
+  --env APP_ENV=testing --env APP_DEBUG=false \
+  --env APP_KEY='base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
+  --env SESSION_DRIVER=array --env CACHE_STORE=array \
+  "${tag}-php" sh -ec '
+  test ! -f .env
+  php -m | grep -Fxq sodium
+  php -m | grep -Fxq pdo_pgsql
+  test -f vendor/autoload.php
+  php artisan route:list --path=universidade/private --except-vendor > /tmp/uni-routes.txt
+  grep -Fq universidade/private /tmp/uni-routes.txt
+  echo "PASS staging PHP Laravel private route startup, no live authority"
+  '
+docker run --rm --network none --read-only --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /var/cache/nginx --tmpfs /var/run --tmpfs /tmp \
+  "${tag}-nginx" nginx -t
+echo "PASS candidate staging PHP/Nginx images build locally without deploy."

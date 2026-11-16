@@ -106,6 +106,7 @@ jobs:
           node ops/staging/check-release-gates.mjs
           node ops/staging/check-compose-static.mjs
           bash ops/staging/check-compose-syntax.sh
+          bash -n scripts/qa-staging-image-build.sh
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |
@@ -235,3 +236,18 @@ jobs:
           name: universidade-qa-navegador-ficticio
           path: ${{ runner.temp }}/uni-browser-evidence
           retention-days: 7
+
+  staging-image-laboratory:
+    needs: isolated-tests
+    if: needs.isolated-tests.result == 'success' && github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout somente da revisão autorizada
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compilar e validar imagens candidatas PHP e Nginx sem deploy
+        env:
+          CI: 'true'
+        run: bash scripts/qa-staging-image-build.sh

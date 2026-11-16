@@ -542,6 +542,89 @@ final class PortalBoundaryFlowTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_editor_revoked_during_create_course_prevents_insert(): void
+    {
+        $this->asEditor();
+        $authority = $this->fakeAuthority;
+        $revoked = false;
+
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $query
+        ) use ($authority, &$revoked): void {
+            if (!$revoked && str_contains($query->sql, 'educational_organizations')) {
+                $revoked = true;
+                $authority->editorEnabled = false;
+            }
+        });
+
+        $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-sem-autorizacao',
+            'title' => 'Curso de revisão de sessão',
+            'category' => 'metodologia',
+        ])->assertNotFound();
+
+        self::assertTrue($revoked, 'Revocation must occur after the initial request grant.');
+        self::assertSame(0, DB::table('educational_courses')->count());
+        self::assertSame(0, DB::table('educational_audit_events')->count());
+    }
+
+    public function test_editor_revoked_during_draft_lesson_deletion_preserves_lesson(): void
+    {
+        $this->asEditor();
+        $courseId = (int) $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-exclusao-segura',
+            'title' => 'Curso com rascunho',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+        $lessonId = (int) $this->postJson(
+            "/universidade/private/admin/courses/{$courseId}/lessons",
+            [
+                'slug' => 'aula-de-rascunho',
+                'title' => 'Aula antes da revisão',
+                'body' => 'Conteúdo suficiente para ensaiar a exclusão de rascunho.',
+            ],
+        )->assertCreated()->json('id');
+
+        $authority = $this->fakeAuthority;
+        $revoked = false;
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $query
+        ) use ($authority, &$revoked): void {
+            if (!$revoked && str_contains($query->sql, 'educational_lesson_progress')) {
+                $revoked = true;
+                $authority->editorEnabled = false;
+            }
+        });
+
+        $this->deleteJson("/universidade/private/admin/lessons/{$lessonId}")
+            ->assertNotFound();
+
+        self::assertTrue($revoked, 'Revocation must occur before the draft lesson deletion.');
+        self::assertSame(1, DB::table('educational_lessons')
+            ->where('id', $lessonId)->count());
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('action', 'lesson.deleted')->where('resource_id', $lessonId)->count());
+    }
+
+    public function test_internal_course_creation_without_live_authorization_cannot_mutate_db(): void
+    {
+        $grant = PortalGrant::allow(
+            'imagine-editorial', 'synthetic-editor', PortalAccessGate::MANAGE, 1, time() + 30
+        );
+        $repository = $this->app->make(UniversityCatalogRepository::class);
+        $input = [
+            'slug' => 'insercao-interna-bloqueada',
+            'title' => 'Curso sem sessão revalidada',
+            'category' => 'negocios',
+        ];
+
+        self::assertNull($repository->createCourse($grant, $input));
+        self::assertNull($repository->createCourse(
+            $grant, $input, static fn (): PortalGrant => PortalGrant::deny('revoked'),
+        ));
+        self::assertSame(0, DB::table('educational_courses')->count());
+    }
+
     public function test_editor_revoked_during_unpublish_read_does_not_change_published_course(): void
     {
         [$courseId] = $this->createPublishedCourse();

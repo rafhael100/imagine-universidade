@@ -31,7 +31,7 @@
     .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#FFBC70;font-weight:850}
 .learning-path{margin:23px 0 21px}
     .learning-path h2{font-size:19px;margin:0 0 5px}
-    .learning-path p{font-size:13px;color:var(--muted);margin:0 0 14px}
+    .learning-path p{font-size:13px;color:#565D56;margin:0 0 14px}
     .path-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
     .path-card{border:1px solid var(--line);border-radius:var(--imagine-radius-panel);background:#fff;padding:16px;text-align:left;min-width:0;box-shadow:var(--imagine-shadow-panel)}
     .path-card:disabled{cursor:default;opacity:1}

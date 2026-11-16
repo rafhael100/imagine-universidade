@@ -104,6 +104,7 @@ jobs:
           bash -n ops/staging/inventory-readonly.sh
           node ops/staging/check-inventory.mjs
           node ops/staging/check-release-gates.mjs
+          node scripts/check-release-gate-policy.mjs
           node ops/staging/check-compose-static.mjs
           bash ops/staging/check-compose-syntax.sh
           bash -n scripts/qa-staging-image-build.sh

@@ -1,0 +1,92 @@
+name: imagine-universidade-staging
+
+# C-62 candidate ONLY. NO automatic start, deploy or migrations.
+# Explicit unique port is mandatory; a DNS/TLS proxy is separate.
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.php
+    env_file:
+      - .env.staging
+    environment:
+      APP_ENV: staging
+      APP_DEBUG: 'false'
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: '5432'
+      DB_DATABASE: '${UNI_STAGING_DB:?official-staging-db-name-required}'
+      DB_USERNAME: '${UNI_STAGING_APP_DB_USER:?least-privilege-db-role-required}'
+      DB_PASSWORD: '${UNI_STAGING_APP_DB_PASSWORD:?private-role-password-required}'
+      SESSION_DRIVER: database
+      SESSION_ENCRYPT: 'true'
+      SESSION_SECURE_COOKIE: 'true'
+      SESSION_HTTP_ONLY: 'true'
+      SESSION_SAME_SITE: lax
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    volumes:
+      - university_storage:/var/www/html/storage
+      - university_cache:/var/www/html/bootstrap/cache
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 2g
+    pids_limit: 160
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - university_front
+      - university_database
+    restart: 'no'
+
+  web:
+    build:
+      context: ../..
+      dockerfile: ops/staging/Dockerfile.nginx
+    ports:
+      - '127.0.0.1:${UNI_STAGING_LOOPBACK_PORT:?explicit-free-port-required}:80'
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:mode=1777
+      - /var/run:mode=1777
+      - /tmp:mode=1777
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 256m
+    pids_limit: 64
+    depends_on: [app]
+    networks:
+      - university_front
+    restart: 'no'
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: '${UNI_STAGING_DB:?official-staging-db-name-required}'
+      POSTGRES_USER: '${UNI_STAGING_DB_OWNER:?separate-migration-owner-required}'
+      POSTGRES_PASSWORD: '${UNI_STAGING_DB_OWNER_PASSWORD:?private-owner-password-required}'
+    volumes:
+      - university_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    mem_limit: 4g
+    pids_limit: 160
+    networks:
+      - university_database
+    restart: 'no'
+
+networks:
+  university_front: {}
+  university_database:
+    internal: true
+
+volumes:
+  university_storage: {}
+  university_cache: {}
+  university_pgdata: {}

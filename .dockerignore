@@ -29,6 +29,10 @@
 !ops/
 !ops/qa/
 !ops/qa/Dockerfile
+!ops/staging/
+!ops/staging/Dockerfile.php
+!ops/staging/Dockerfile.nginx
+!ops/staging/nginx.conf
 
 # Even if they occur inside an allowed directory, exclude confidential data.
 **/.env

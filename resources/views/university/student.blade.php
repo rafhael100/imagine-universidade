@@ -357,7 +357,18 @@ async function selectCourse(id){
     const next=lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
     await selectLesson(Number(next.id));
   }catch(error){
-    if(state.courseRequest===request){say(error.message);content.replaceChildren();}
+    if(state.courseRequest===request&&!state.accessDenied){
+      // A transient lesson read may be retried by a deliberate click; never
+      // automatically re-use old course content or bypass a revoked session.
+      say(error.message);lessonsBox.replaceChildren();content.replaceChildren();
+      content.append(el("p","As aulas não puderam ser carregadas.", "empty"));
+      const retry=el("button","Tentar carregar aulas","secondary lesson-retry");
+      retry.type="button";
+      retry.addEventListener("click",()=>{
+        if(!state.accessDenied&&state.courseId===id)selectCourse(id);
+      });
+      content.append(retry);
+    }
   }
 }
 function markLessonStatus(id,completed){

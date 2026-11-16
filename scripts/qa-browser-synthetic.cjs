@@ -44,6 +44,7 @@ const lessonRows=()=>[
 let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,invalidAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,invalidAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
 let requests=0,progressReads=0,completionPosts=0,exportReads=0;
 let editorialCoursePosts=0,uncertainCourseWriteOnce=false,createdCourseInLab=false;
+let lessonSearchReads=0,failLessonSearchOnce=false,denyLessonSearchOnce=false,malformedLessonSearchOnce=false;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
  {id:1,action:"course.created",resource_kind:"course",resource_id:1,occurred_at:"2026-11-15T11:00:00"}
@@ -71,6 +72,15 @@ const server=http.createServer((req,res)=>{
     return send(res,200,{ready:true});
   }
   if(p==="/universidade/private/courses"&&req.method==="GET")return send(res,200,{courses:courses()});
+  if(p==="/universidade/private/search"&&req.method==="POST"){
+    lessonSearchReads++;
+    if(denyLessonSearchOnce){denyLessonSearchOnce=false;return send(res,403,{error:"access_denied"});}
+    if(failLessonSearchOnce){failLessonSearchOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    if(malformedLessonSearchOnce){malformedLessonSearchOnce=false;return send(res,200,{results:[{course_id:999,lesson_id:999,course_title:"Vazamento sintético",lesson_title:"Proibido",snippet:""}]});}
+    return send(res,200,{results:[{course_id:1,course_title:"Visitas, Leads e Clientes — Exemplo sintético",
+      lesson_id:12,lesson_title:"Leads fictícios",snippet:"Entenda a jornada do lead."}]});
+  }
+
   if(p==="/universidade/private/courses/1/lessons"){
     if(failStudentLessonsOnce){failStudentLessonsOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     return send(res,200,{lessons:lessonRows()});
@@ -320,6 +330,43 @@ async function inspect(page,name){
     check((await page.locator("#sim-results").innerText()).includes("5 clientes"),
       "simulator calculates fictional clients on the client");
     check((await page.locator("#course-list [data-course-id]").count())===1,"student must show authorized synthetic course");
+    // Private full-lesson search: actual browser POST and direct result navigation.
+    const sbox=page.locator("#lesson-search-query"),sgo=page.locator("#lesson-search-submit");
+    check(!(await sbox.isDisabled()),"authorized course load enables private lesson search");
+    await sbox.fill("Leads");
+    const searchBefore=lessonSearchReads;
+    await sgo.click();
+    await page.locator("#lesson-search-results [data-search-lesson='12']").waitFor({state:"visible",timeout:8000});
+    check(lessonSearchReads===searchBefore+1,"private lesson search uses exactly one POST");
+    check((await page.locator("#lesson-search-results").innerText()).includes("Leads fictícios"),
+      "published lesson search result appears without HTML injection");
+    await page.locator("#lesson-search-results [data-search-lesson='12']").click();
+    await page.getByRole("heading",{name:"Leads fictícios"}).waitFor({state:"visible",timeout:8000});
+    check((await page.locator("#lesson-content h3").innerText())==="Leads fictícios",
+      "search result opens its exact authorized lesson, not arbitrary next lesson");
+
+    failLessonSearchOnce=true;
+    await sbox.fill("visitas");
+    await sgo.click();
+    await page.waitForFunction(()=>document.querySelector("#lesson-search-results").textContent.includes("indisponível"));
+    check((await page.locator("#lesson-search-results [data-search-lesson]").count())===0,
+      "temporary search failure wipes stale results");
+
+    malformedLessonSearchOnce=true;
+    await sbox.fill("leads");
+    await sgo.click();
+    await page.waitForFunction(()=>document.querySelector("#lesson-search-results").textContent.includes("indisponível"));
+    check((await page.locator("#lesson-search-results [data-search-lesson]").count())===0,
+      "unknown course from 200 response never creates a forged result");
+
+    const beforeBadQuery=lessonSearchReads;
+    await sbox.fill("%");
+    await page.locator("#lesson-search-form").evaluate(form=>{
+      form.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));
+    });
+    await page.waitForFunction(()=>document.querySelector("#lesson-search-results").textContent.includes("3 a 60"));
+    check(lessonSearchReads===beforeBadQuery,"SQL wildcard-like query rejected before network access");
+
     await page.locator("#course-list [data-course-id='1']").click();
     await page.waitForFunction(()=>document.querySelector("#lesson-content h3")!==null);
     check(await page.getByRole("heading",{name:"Visitas fictícias"}).count()===1,"lesson must load");
@@ -365,6 +412,19 @@ async function inspect(page,name){
     check(downloads.length===fileCount,"HTTP 503 may not expose stale exported data");
 
     await inspect(page,"student");
+    // A private search may be denied after the interface was loaded.
+    // 403 must close the authorized session and purge results and inputs.
+    denyLessonSearchOnce=true;
+    await page.locator("#lesson-search-query").fill("clientes");
+    await page.locator("#lesson-search-submit").click();
+    await page.waitForFunction(()=>document.querySelector("#overall-progress").textContent.includes("Acesso à Universidade encerrado"));
+    check(await page.locator("#lesson-search-query").isDisabled(),
+      "rejected search locks input after Portal 403");
+    check((await page.locator("#lesson-search-results [data-search-lesson]").count())===0,
+      "rejected search never preserves prior result buttons");
+    check(await page.locator("#lesson-search-submit").isDisabled(),
+      "search submit forbidden after revocation");
+
     denyStudent=true;
     await page.locator("#export-progress").click();
     await page.waitForFunction(()=>document.querySelector("#resume-course").disabled && document.querySelector("#export-progress").disabled);

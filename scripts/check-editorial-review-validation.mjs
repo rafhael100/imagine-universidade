@@ -67,7 +67,9 @@ try{
   accepts("Brazilian Excel CSV with semicolon and BOM",excel,s=>assert.equal(s.pending,35));
   rejects("stale content digest",alter(csv,1,2,"0".repeat(64)));
   rejects("fake unknown course",alter(csv,1,0,"fake-course"));
-  rejects("duplicate lesson key",csv.replace(/^.*\n/m,"course_slug,lesson_slug,content_sha256,review_status,reviewer,evidence_ref,notes\n"));
+  const duplicateReviewLines=csv.trimEnd().split("\n");
+  duplicateReviewLines[2]=duplicateReviewLines[1];
+  rejects("duplicate lesson key",duplicateReviewLines.join("\n")+"\n");
   rejects("untrusted single-letter reviewer",alter(alter(alter(csv,1,3,"CLAIMED_HUMAN_APPROVED"),1,4,"X"),1,5,ref));
   rejects("reviewer evidence from outside repository",alter(alter(alter(csv,1,3,"CLAIMED_HUMAN_APPROVED"),1,4,"Revisora Editorial"),1,5,"https://github.com/external/repo/issues/1"));
   rejects("missing claimed reviewer",alter(alter(csv,1,3,"CLAIMED_HUMAN_APPROVED"),1,5,ref));

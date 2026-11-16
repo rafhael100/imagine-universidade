@@ -43,8 +43,10 @@ docker run --rm -i --network none --read-only --cap-drop ALL \
   --env APP_KEY='base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
   --env SESSION_DRIVER=array --env CACHE_STORE=array \
   "${tag}-php" sh -c 'mkdir -p storage/logs storage/framework/sessions storage/framework/views storage/framework/cache/data && exec php' < scripts/qa-staging-runtime-deny.php
-docker run --rm --network none --read-only --cap-drop ALL \
+# Only to allow a syntax check without starting/connecting to the app.
+# The fake mapping never opens a socket; Docker's network remains none.
+docker run --rm --network none --add-host app:127.0.0.1 --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
-  --tmpfs /var/cache/nginx --tmpfs /var/run --tmpfs /tmp \
+  --tmpfs /var/cache/nginx:mode=1777 --tmpfs /var/run:mode=1777 --tmpfs /tmp:mode=1777 \
   "${tag}-nginx" nginx -t
 echo "PASS candidate staging PHP/Nginx images build locally without deploy."

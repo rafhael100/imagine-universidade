@@ -251,6 +251,36 @@ assert.match(studentProgressUI,/await api\("\/progress\/export"\)/,"aluno: expor
 assert.match(studentProgressUI,/link.download="imagine-universidade-progresso.json"/,"aluno: arquivo com nome explícito");
 console.log("PASS export progress: download privado, desabilitado na revogação");
 
+const exportFn=studentProgressUI.match(/function sanitizedProgressExport\(payload\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(exportFn,"export: sanitizer pure function must exist");
+const sanitizeExport=input=>new Script(exportFn+"\nsanitizedProgressExport(input)",{
+  filename:"university-safe-export",
+}).runInNewContext({input});
+const safeExportFixture={schema_version:1,scope:"current_authenticated_student",completions:[{
+  course_slug:"visitas",course_version:2,lesson_slug:"primeiros-passos",
+  completed_at:"2026-11-16 12:34:56",email:"must-not-export@example.invalid",
+}]};
+assert.equal(JSON.stringify(sanitizeExport(safeExportFixture)),JSON.stringify({
+  schema_version:1,scope:"current_authenticated_student",completions:[{
+    course_slug:"visitas",course_version:2,lesson_slug:"primeiros-passos",
+    completed_at:"2026-11-16 12:34:56",
+  }],
+}),"export: allowlist must strip unknown personal fields");
+assert.equal(sanitizeExport({...safeExportFixture,schema_version:2}),null,"export: reject future or unknown schema");
+assert.equal(sanitizeExport({...safeExportFixture,scope:"another_student"}),null,"export: reject foreign scope");
+assert.equal(sanitizeExport({...safeExportFixture,completions:new Array(5001).fill(safeExportFixture.completions[0])}),null,"export: reject oversized histories");
+assert.equal(sanitizeExport({...safeExportFixture,completions:[{...safeExportFixture.completions[0],course_version:0}]}),null,"export: reject invalid course versions");
+assert.equal(sanitizeExport({...safeExportFixture,completions:[{...safeExportFixture.completions[0],course_slug:"tenant/other"}]}),null,"export: reject invalid slug");
+assert.equal(sanitizeExport({...safeExportFixture,completions:[{...safeExportFixture.completions[0],completed_at:"yesterday"}]}),null,"export: reject malformed timestamps");
+assert.equal(JSON.stringify(sanitizeExport({...safeExportFixture,completions:[]})),JSON.stringify({
+  schema_version:1,scope:"current_authenticated_student",completions:[],
+}),"export: an empty history is still valid");
+assert.match(studentProgressUI,/if\(state\.accessDenied\|\|state\.exportLoading\)return;/,"export: no duplicate requests or revoked download");
+assert.match(studentProgressUI,/const sanitized=sanitizedProgressExport\(progress\)/,"export: never serialize raw API payload");
+assert.match(studentProgressUI,/JSON\.stringify\(sanitized,null,2\)/,"export: download only allowlisted progress");
+console.log("PASS export privacy: versioned scope, max 5000 entries, allowlisted fields, single-flight and no foreign data");
+
+
 
 assert.match(routes,/Route::post\('\/lessons\/\{lessonId\}\/tutor', \[UniversityController::class, 'askTutor'\]\)/,"tutor: route protected inside student group");
 assert.match(provider,/TutorGateway::class, DisabledTutorGateway::class/,"tutor: provider default disabled");

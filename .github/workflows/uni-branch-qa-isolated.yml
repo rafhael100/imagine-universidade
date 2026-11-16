@@ -133,6 +133,43 @@ jobs:
       - name: Confirm no publication occurred
         run: echo 'QA finished on disposable runner; no merge, VPS, DNS, billing, API keys or deployment.'
 
+  portal-contract-parity:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout University candidate without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact reviewed Portal V4 contract, read-only
+        uses: actions/checkout@v4
+        with:
+          repository: rafhael100/imagine-portal
+          ref: 8f469b7079467098337568178637cc989420a102
+          path: portal-contract-source
+          persist-credentials: false
+
+      - name: PHP 8.3 pure cross-repository contract probe
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Assert pinned revision, ID compatibility and default denial
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -f .env && test ! -f portal-contract-source/apps/portal/.env
+          test "$(git -C portal-contract-source rev-parse HEAD)" = "8f469b7079467098337568178637cc989420a102"
+          php -l scripts/check-portal-university-contract.php
+          PORTAL_CONTRACT_DIR="$GITHUB_WORKSPACE/portal-contract-source" \
+            php scripts/check-portal-university-contract.php
+          echo "PASS pinned public Portal source checked against real University code; no SSO, grant or deploy."
+
   # Expensive laboratories only on an explicit QA-marked commit. Avoid
   # repeated Docker/browser downloads on every subsequent code change.
   docker-lab:

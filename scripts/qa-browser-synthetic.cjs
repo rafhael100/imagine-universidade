@@ -109,12 +109,22 @@ async function inspect(page,name){
     await page.waitForTimeout(90);
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1);
     check(!overflow,name+" horizontal overflow "+width);
-    if(width===390||width===1440){
+    if([320,390,768,1440].includes(width)){
       const file=name+"-"+width+".png";
       await page.screenshot({path:path.join(out,file),fullPage:true});
       results.screenshots.push(file);
     }
   }
+  // Responsive viewport at 720 CSS px approximates the layout space
+  // left by a 1440 px wide browser window at 200% zoom. This is a layout
+  // proxy, not a substitute for manual assistive-technology review.
+  await page.setViewportSize({width:720,height:900});
+  await page.waitForTimeout(90);
+  const zoomEquivalentOverflow=await page.evaluate(
+    ()=>document.documentElement.scrollWidth>window.innerWidth+1
+  );
+  check(!zoomEquivalentOverflow,name+" effective 200%-zoom layout proxy must not overflow");
+  await page.setViewportSize({width:1440,height:900});
   const axe=await new AxeBuilder({page}).withTags(["wcag2a","wcag2aa","wcag21a","wcag21aa"]).analyze();
   const issues=axe.violations.map(v=>({id:v.id,impact:v.impact,description:v.help,targets:v.nodes.map(n=>n.target)}));
   fs.writeFileSync(path.join(out,name+"-axe.json"),JSON.stringify({page:name,violations:issues},null,2));

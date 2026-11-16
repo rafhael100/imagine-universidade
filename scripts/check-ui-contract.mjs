@@ -472,6 +472,13 @@ assert.ok(studentProgressUI.includes('if(state.lessonRequest===request&&!state.a
 assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id)selectLesson(id);'),"student: retry only while same lesson and permission context remains active");
 console.log("PASS individual lesson read: no partial body or progress and no revoked retry");
 
+assert.match(adminRecoveryUI,/function mustConfirmBrowserExit\(\)/,"admin: beforeunload gate is explicit");
+assert.match(adminRecoveryUI,/state\.writePending\|\|courseHasUnsavedEdits\(\)\|\|lessonHasUnsavedEdits\(\)/,"admin: pending writes and both drafts warn");
+assert.match(adminRecoveryUI,/window\.addEventListener\("beforeunload",event=>\{/,"admin: window exit protection");
+assert.match(adminRecoveryUI,/if\(!mustConfirmBrowserExit\(\)\)return;/,"admin: clean or revoked session does not block exit");
+console.log("PASS editor browser exit: warn on unsaved drafts/write, no lock after Portal revocation");
+
+
 
 
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));

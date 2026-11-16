@@ -542,6 +542,50 @@ final class PortalBoundaryFlowTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_tenant_initialization_rechecks_portal_before_provisioning(): void
+    {
+        $authority = new class implements PortalAuthority {
+            public int $calls = 0;
+            public function verify(
+                string $serverSessionCredential,
+                string $companyId,
+                string $permission,
+            ): PortalGrant {
+                $this->calls++;
+                if ($this->calls > 1) {
+                    return PortalGrant::deny('last_service_cancelled');
+                }
+                return PortalGrant::allow(
+                    'test-client-a', 'synthetic-person-a',
+                    PortalAccessGate::VIEW, 1, time() + 30
+                );
+            }
+        };
+
+        $this->app->instance(PortalAuthority::class, $authority);
+        $this->asClientA();
+        $before = DB::table('educational_organizations')->count();
+
+        $this->postJson('/universidade/private/initialize')
+            ->assertForbidden()->assertJsonPath('error', 'access_denied');
+
+        self::assertSame(2, $authority->calls,
+            'Initial middleware check must be followed by transaction-scoped check.');
+        self::assertSame($before, DB::table('educational_organizations')->count());
+    }
+
+    public function test_internal_tenant_provisioner_denies_missing_live_fence(): void
+    {
+        $provisioner = new \App\Domain\Learning\UniversityTenantProvisioner();
+        $grant = PortalGrant::allow(
+            'test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 1, time() + 30
+        );
+        self::assertFalse($provisioner->initialize($grant, time()));
+        self::assertFalse($provisioner->initialize(
+            $grant, time(), static fn (): ?PortalGrant => null,
+        ));
+    }
+
     public function test_editor_revoked_during_create_course_prevents_insert(): void
     {
         $this->asEditor();

@@ -32,6 +32,8 @@ COPY --chown=uniqa:uniqa resources/views/ ./resources/views/
 COPY --chown=uniqa:uniqa content/ ./content/
 COPY --chown=uniqa:uniqa tests/ ./tests/
 COPY --chown=uniqa:uniqa scripts/ ./scripts/
+# The disposable SQL role-policy test needs this file; not shipped in production images.
+COPY --chown=uniqa:uniqa ops/staging/role-grants-candidate.sql ./ops/staging/role-grants-candidate.sql
 COPY --chown=uniqa:uniqa public/index.php ./public/index.php
 COPY --chown=uniqa:uniqa public/assets/logo-imagine.png public/assets/imagine-tokens.css ./public/assets/
 

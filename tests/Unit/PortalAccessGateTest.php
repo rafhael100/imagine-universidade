@@ -105,4 +105,41 @@ final class PortalAccessGateTest extends TestCase
         }
     }
 
+    public function test_invalid_context_is_rejected_before_consulting_portal_authority(): void
+    {
+        $authority = new class implements PortalAuthority {
+            public int $calls = 0;
+
+            public function verify(
+                string $serverSessionCredential,
+                string $companyId,
+                string $permission,
+            ): PortalGrant {
+                $this->calls++;
+                return PortalGrant::allow(
+                    'synthetic-company', 'synthetic-person',
+                    PortalAccessGate::VIEW, 1, 1794750030
+                );
+            }
+        };
+        $gate = new PortalAccessGate($authority);
+        $inputs = [
+            [str_repeat('x', 4097), 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic\ncredential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic\x00credential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ['synthetic-credential', str_repeat('c', 81), PortalAccessGate::VIEW, self::NOW],
+            ['synthetic-credential', "synthetic\rcompany", PortalAccessGate::VIEW, self::NOW],
+            ['synthetic-credential', 'synthetic-company', PortalAccessGate::VIEW, 0],
+            ['synthetic-credential', 'synthetic-company', 'owner', self::NOW],
+        ];
+
+        foreach ($inputs as [$credential, $company, $permission, $now]) {
+            $decision = $gate->authorize($credential, $company, $permission, $now);
+            self::assertFalse($decision->allowed);
+            self::assertSame('invalid_context', $decision->reasonCode);
+        }
+
+        self::assertSame(0, $authority->calls);
+    }
+
 }

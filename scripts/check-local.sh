@@ -22,6 +22,7 @@ echo '[PASS] Sintaxe PHP verificada'
 
 # Contrato de acesso funciona também sem Composer e sem banco.
 php scripts/check-access-domain.php
+php scripts/check-portal-context.php
 echo '[PASS] Política de acesso em PHP puro'
 php scripts/check-learning-mock.php
 echo '[PASS] Progresso sintético em PHP puro'

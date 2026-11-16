@@ -95,6 +95,35 @@ final class UniversityController
         return response()->json(['courses' => $this->catalog->catalog($this->grant($request))]);
     }
 
+    /**
+     * Student search is a POST only to avoid putting study terms in URL logs.
+     * It is read-only, bounded, private and always rechecks Portal afterward.
+     */
+    public function searchLessons(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        $data = $request->validate([
+            'query' => ['required', 'string', 'min:3', 'max:60',
+                'regex:/\A[\p{L}\p{N} -]{3,60}\z/u'],
+        ]);
+        try {
+            $results = $this->catalog->searchPublishedLessons($grant, (string) $data['query']);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        if ($results === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
+        return response()->json(['results' => $results], 200, [
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
     public function exportProgress(Request $request, PortalAccessGate $gate): JsonResponse
     {
         $grant = $this->grant($request);

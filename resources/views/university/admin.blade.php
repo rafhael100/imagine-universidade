@@ -553,6 +553,7 @@ async function loadAdminCatalog(){
       $("course-items").replaceChildren();
       $("course-items").append(el("p","Cursos temporariamente indisponíveis.", "help"));
       $("lesson-items").replaceChildren();
+      renderCourses();renderLessons();fillCourse();resetLesson();
       hideLessonPreview();clearPublicationCheck();
       say(error.message);
       recovery.hidden=false;

@@ -131,3 +131,109 @@ jobs:
 
       - name: Confirm no publication occurred
         run: echo 'QA finished on disposable runner; no merge, VPS, DNS, billing, API keys or deployment.'
+
+  # Expensive laboratories only on an explicit QA-marked commit. Avoid
+  # repeated Docker/browser downloads on every subsequent code change.
+  docker-lab:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade' && contains(github.event.head_commit.message, '[uni-full-qa]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require disposable local Docker only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -e .env
+          test ! -e .env.production
+          test -f composer.lock
+          test -f compose.qa.yml
+          test -z "${DOCKER_HOST:-}"
+          test "$(docker context show)" = "default"
+          ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
+          ! grep -Fq '/var/run/docker.sock' compose.qa.yml
+      - name: Synthetic PHP and PostgreSQL Docker Compose tests, automatic cleanup
+        shell: bash
+        run: bash scripts/run-qa-compose.sh
+
+  browser-lab:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade' && contains(github.event.head_commit.message, '[uni-full-qa]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify offline synthetic browser origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -e .env
+          test ! -e .env.production
+          test -f public/assets/logo-imagine.png
+          test -f public/assets/imagine-tokens.css
+          test -f preview/current.html
+          node --check scripts/qa-browser-synthetic.cjs
+          node preview/current-check.mjs
+      - name: Real Chromium and accessibility QA with synthetic fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uni-browser-packages" "$RUNNER_TEMP/uni-browser-evidence"
+          cd "$RUNNER_TEMP/uni-browser-packages"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          cd "$GITHUB_WORKSPACE"
+          NODE_PATH="$RUNNER_TEMP/uni-browser-packages/node_modules" \
+          UNI_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-browser-evidence" \
+            node scripts/qa-browser-synthetic.cjs
+      - name: Downloadable offline educational preview (test-only)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: imagine-universidade-offline-previa-revisao
+          path: |
+            preview/current.html
+            preview/logo-imagine.png
+          if-no-files-found: error
+          retention-days: 7
+
+  staging-image-lab:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade' && contains(github.event.head_commit.message, '[uni-full-qa]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Deny production files, host Docker and uncontrolled branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REPOSITORY" = "rafhael100/imagine-universidade"
+          test ! -e .env
+          test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          test -f composer.lock
+          test -z "${DOCKER_HOST:-}"
+          test "$(docker context show)" = "default"
+          bash -n scripts/qa-staging-image-build.sh
+          bash -n scripts/qa-staging-private-http.sh
+          bash -n scripts/qa-staging-postgres-http.sh
+      - name: Build PHP/Nginx staging images and verify private HTTP/PG topology
+        shell: bash
+        run: bash scripts/qa-staging-image-build.sh

@@ -134,7 +134,9 @@ const fakeContext={
   api:path=>new Promise(resolve=>pendingLessons.push({path,resolve})),
   renderLessons:()=>{},
   resetLesson:()=>{},
-  fillCourse:()=>{}
+  fillCourse:()=>{},
+  // Race test isolates request ordering; the actual validator is tested below.
+  validatedAdminLessons:response=>response.lessons
 };
 const refreshFixture=new Script(lessonsFn+"\nrefreshLessons",{filename:"admin-lesson-race"}).runInNewContext(fakeContext);
 const first=refreshFixture();
@@ -390,7 +392,7 @@ const result=new Script(writeStart+"\n"+writeEnd+"\n"+
   "({first,duplicate,retry,locked:document.querySelector('.layout').inert,"+
   "courseRequest:state.courseRequest,lessonRequest:state.lessonRequest})",
   {filename:"admin-write-serialization"}).runInNewContext({
-    state:{accessDenied:false,writePending:false,catalogReady:true,courseRequest:0,lessonRequest:0},
+    state:{accessDenied:false,writePending:false,catalogReady:true,course:null,lessonsReady:true,courseRequest:0,lessonRequest:0},
     document:{querySelector:()=>fakeLayout},say:()=>{}
   });
 assert.equal(result.first,true);
@@ -537,6 +539,33 @@ assert.equal(parseAdmin({courses:[{...item,sort_order:10000}]}),null,"admin: inv
 assert.match(adminRecoveryUI,/const verified=validatedAdminCourses\(result\);/,"admin: validate before enabling catalogue writes");
 assert.match(adminRecoveryUI,/if\(verified===null\)throw new Error/,"admin: unknown response must deny mutations");
 console.log("PASS admin catalogue: invalid or duplicate 200 response cannot activate editorial writes");
+
+const lessonsValidatorFn=adminRecoveryUI.match(/function validatedAdminLessons\(payload\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(lessonsValidatorFn,"editor: private lesson list validator must exist");
+const parseLessons=input=>new Script(lessonsValidatorFn+"\nvalidatedAdminLessons(input)",{
+  filename:"university-admin-lesson-contract",
+}).runInNewContext({input});
+const validLesson={id:11,slug:"aula-ficticia",title:"Aula de teste",
+  body:"Conteúdo sintético para conferir aula.",sort_order:0,status:"draft",
+  is_published:false,subject_key:"must-not-be-in-editor-state"};
+assert.equal(JSON.stringify(parseLessons({lessons:[validLesson]})),JSON.stringify([{
+  id:11,slug:"aula-ficticia",title:"Aula de teste",
+  body:"Conteúdo sintético para conferir aula.",sort_order:0,status:"draft",
+  is_published:false,
+}]),"editor: allowed fields only");
+assert.equal(JSON.stringify(parseLessons({lessons:[]})),JSON.stringify([]),"editor: verified empty lesson list");
+assert.equal(parseLessons({}),null,"editor: missing list is not an empty lesson list");
+assert.equal(parseLessons({lessons:null}),null,"editor: null list fails closed");
+assert.equal(parseLessons({lessons:[validLesson,{...validLesson}]}),null,"editor: duplicate IDs fail closed");
+assert.equal(parseLessons({lessons:[validLesson,{...validLesson,id:12}]}),null,"editor: duplicate slug fails closed");
+assert.equal(parseLessons({lessons:[{...validLesson,status:"untrusted"}]}),null,"editor: unknown status fails closed");
+assert.equal(parseLessons({lessons:[{...validLesson,is_published:"true"}]}),null,"editor: non-boolean published flag fails closed");
+assert.equal(parseLessons({lessons:[{...validLesson,body:42}]}),null,"editor: malformed content fails closed");
+assert.match(adminRecoveryUI,/if\(verified===null\)throw new Error\("A lista de aulas recebida é inválida/,"editor: malformed 200 response is an error");
+assert.match(adminRecoveryUI,/state\.lessonsReady=true;/,"editor: lesson state opened only after verified list");
+assert.match(adminRecoveryUI,/state\.course!==null&&!state\.lessonsReady/,"editor: prevent writes while selected course lessons unverified");
+console.log("PASS admin lessons: invalid 200 list never unlocks edits or publication");
+
 
 
 assert.ok(studentProgressUI.includes('if(receipt?.completed!==true)throw new Error('),"student: completion requires explicit server acknowledgment");

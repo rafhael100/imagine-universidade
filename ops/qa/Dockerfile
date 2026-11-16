@@ -33,6 +33,7 @@ COPY --chown=uniqa:uniqa content/ ./content/
 COPY --chown=uniqa:uniqa tests/ ./tests/
 COPY --chown=uniqa:uniqa scripts/ ./scripts/
 COPY --chown=uniqa:uniqa public/index.php ./public/index.php
+COPY --chown=uniqa:uniqa public/assets/logo-imagine.png public/assets/imagine-tokens.css ./public/assets/
 
 USER uniqa:uniqa
 

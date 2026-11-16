@@ -292,6 +292,12 @@ assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)r
 console.log("PASS preview editorial: conteúdo local sem HTML, confirmação humana explícita");
 
 
+const dockerIgnore=read(".dockerignore");
+const qaDockerfile=read("ops/qa/Dockerfile");
+for(const path of ["public/assets/logo-imagine.png","public/assets/imagine-tokens.css"]){
+  assert.ok(dockerIgnore.includes("!"+path),"Docker allowlist deve incluir "+path);
+  assert.ok(qaDockerfile.includes(path),"Docker QA deve copiar "+path);
+}
 const originalLogo=readFileSync(new URL("../public/assets/logo-imagine.png",import.meta.url));
 assert.equal(originalLogo.subarray(0,8).toString("hex"),"89504e470d0a1a0a","logo Imagine PNG válido");
 const gitBlobHash=createHash("sha1").update(Buffer.from("blob "+originalLogo.length+"\0")).update(originalLogo).digest("hex");

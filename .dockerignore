@@ -23,6 +23,9 @@
 !scripts/**
 !public/
 !public/index.php
+!public/assets/
+!public/assets/logo-imagine.png
+!public/assets/imagine-tokens.css
 !ops/
 !ops/qa/
 !ops/qa/Dockerfile

@@ -230,6 +230,20 @@ async function inspect(page,name){
     check(!(await admin.locator("#publication-readiness").isVisible()),
       "editing a lesson immediately invalidates the previous readiness review");
     await inspect(admin,"admin");
+    const deniedDiscards=[];
+    admin.on("dialog",async dialog=>{
+      deniedDiscards.push(dialog.message());
+      await dialog.dismiss();
+    });
+    const unsavedLessonText="Alteração fictícia ainda não salva";
+    await admin.locator("#new-course").click();
+    check((await admin.locator("#lesson-body").inputValue())===unsavedLessonText,
+      "cancelled course navigation preserves unsaved lesson edits");
+    await admin.locator("#clear-lesson").click();
+    check((await admin.locator("#lesson-body").inputValue())===unsavedLessonText,
+      "cancelled new-lesson navigation preserves unsaved lesson edits");
+    check(deniedDiscards.length===2&&deniedDiscards.every(text=>text.includes("não salvas")),
+      "both unsaved-change confirmations are explicit");
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));
     console.log("PASS synthetic Chromium browser: "+results.assertions+" checks, student/admin UI, progress, revocation, draft preview, audit, widths 320/390/768/1440 and WCAG serious/critical scan.");

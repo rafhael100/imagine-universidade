@@ -84,6 +84,9 @@
     .status{padding:12px 17px;border-radius:10px;background:#FFF6E8;border:1px solid #F0D7AD;color:#75501D;margin:18px 0}
     .status[hidden]{display:none}
     .empty{padding:25px;color:var(--muted)}
+    .library-recovery{margin:0 12px 14px;padding:16px;border:1px solid #E8C99F;background:#FFF8F0;border-radius:12px}
+    .library-recovery p{font-size:13px;color:#65431B;margin:0 0 10px}
+    .library-recovery[hidden]{display:none}
     .footer{color:#565D56;font-size:12px;margin-top:28px}
     @media(max-width:800px){.sim-inputs{grid-template-columns:1fr}.path-cards{grid-template-columns:1fr}.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
   </style>
@@ -135,6 +138,10 @@
     <section class="panel" aria-labelledby="courses-title">
       <div class="panel-head"><h2 id="courses-title">Seus cursos</h2><p>Escolha um tema para começar.</p></div>
       <div id="course-list" class="courses"><p class="empty">Carregando cursos autorizados...</p></div>
+      <div id="library-recovery" class="library-recovery" hidden>
+        <p role="alert">A biblioteca não pôde ser carregada. Verifique a conexão e tente novamente. Se a sessão expirou, volte ao Portal.</p>
+        <button id="retry-library" type="button" class="secondary">Tentar carregar novamente</button>
+      </div>
     </section>
     <section class="panel" aria-labelledby="lesson-panel-title">
       <div class="panel-head"><h2 id="lesson-panel-title">Sua aprendizagem</h2><p>Aulas curtas, sem provas, notas ou certificados.</p></div>
@@ -151,7 +158,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:""};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -205,6 +212,8 @@ function lockAccess(message){
   document.getElementById("course-search").disabled=true;
   document.getElementById("resume-course").disabled=true;
   document.getElementById("export-progress").disabled=true;
+  document.getElementById("library-recovery").hidden=true;
+  document.getElementById("retry-library").disabled=true;
   document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
   say(message);
 }
@@ -514,17 +523,39 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
   document.querySelectorAll("[data-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));
   lessonsBox.replaceChildren();content.replaceChildren();content.append(el("p","Escolha um curso para ver as aulas.","empty"));renderCourses();
 }));
-(async()=>{
+// Recovery is manual and single-flight. Never retry a 403/419 automatically
+// or retain a previous list after a failed initial authorization request.
+async function loadLibrary(){
+  if(state.accessDenied||state.libraryLoading)return;
+  state.libraryLoading=true;
+  const recovery=document.getElementById("library-recovery");
+  const retry=document.getElementById("retry-library");
+  recovery.hidden=true;retry.disabled=true;
+  list.replaceChildren();
+  list.append(el("p","Verificando acesso e carregando cursos...", "empty"));
   try{
-    // Post estritamente autorizado pelo Portal; cria somente o tenant técnico.
+    // POST only creates the tenant after the Portal has authorized it.
     await api("/initialize",{method:"POST"});
     const payload=await api("/courses");
     if(state.accessDenied)return;
     state.courses=Array.isArray(payload.courses)?payload.courses:[];
     document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=false;});
-    renderSimulator();renderCourses();
-  }catch(error){say(error.message);if(!state.accessDenied){list.replaceChildren();list.append(el("p","A biblioteca permanece indisponível.","empty"));}}
-})();
+    renderSimulator();renderCourses();say("");
+  }catch(error){
+    if(!state.accessDenied){
+      state.courses=[];state.courseId=null;state.lessonId=null;
+      list.replaceChildren();
+      list.append(el("p","Cursos temporariamente indisponíveis.","empty"));
+      say(error.message);
+      recovery.hidden=false;
+    }
+  }finally{
+    state.libraryLoading=false;
+    if(!state.accessDenied)retry.disabled=false;
+  }
+}
+document.getElementById("retry-library").addEventListener("click",loadLibrary);
+loadLibrary();
 </script>
 </body>
 </html>

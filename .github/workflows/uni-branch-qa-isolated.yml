@@ -1,21 +1,31 @@
 name: UNI isolated branch QA (test-only, no deploy)
 
-# C-82 revalidation checkpoint: test all ten private write paths with synthetic data.
-# One-shot: this job is triggered ONLY when this exact workflow file changes
-# on the authorized review branch. Never push, merge, deploy or use credentials.
+# Continuous *test-only* review branch QA, with no production credentials.
+# Runs on relevant code pushes only; docs/preview changes are excluded.
+# Requires Actions permission on this repository; no merge/deploy event.
 on:
   push:
     branches:
       - feat/uni-c70-archive-offline-preview-on-success-2026-11-15
     paths:
-      - .github/workflows/uni-branch-qa-isolated.yml
+      - '.github/workflows/uni-branch-qa-isolated.yml'
+      - 'app/**'
+      - 'bootstrap/**'
+      - 'database/**'
+      - 'routes/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'ops/staging/**'
+      - 'ops/release-gates.json'
+      - 'composer.json'
+      - 'composer.lock'
 
 permissions:
   contents: read
 
 concurrency:
   group: uni-branch-qa-isolated-review
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validation:

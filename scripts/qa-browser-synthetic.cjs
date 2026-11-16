@@ -44,7 +44,7 @@ const lessonRows=()=>[
 let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,invalidAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,invalidAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
 let requests=0,progressReads=0,completionPosts=0,exportReads=0;
 let editorialCoursePosts=0,uncertainCourseWriteOnce=false,createdCourseInLab=false;
-let lessonSearchReads=0,failLessonSearchOnce=false,denyLessonSearchOnce=false,malformedLessonSearchOnce=false;
+let lessonSearchReads=0,failLessonSearchOnce=false,denyLessonSearchOnce=false,malformedLessonSearchOnce=false,staleLessonSearchOnce=false;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
  {id:1,action:"course.created",resource_kind:"course",resource_id:1,occurred_at:"2026-11-15T11:00:00"}
@@ -77,6 +77,7 @@ const server=http.createServer((req,res)=>{
     if(denyLessonSearchOnce){denyLessonSearchOnce=false;return send(res,403,{error:"access_denied"});}
     if(failLessonSearchOnce){failLessonSearchOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     if(malformedLessonSearchOnce){malformedLessonSearchOnce=false;return send(res,200,{results:[{course_id:999,lesson_id:999,course_title:"Vazamento sintético",lesson_title:"Proibido",snippet:""}]});}
+    if(staleLessonSearchOnce){staleLessonSearchOnce=false;return send(res,200,{results:[{course_id:1,lesson_id:99,course_title:"Exemplo sintético",lesson_title:"Aula retirada",snippet:"A versão atual não contém esta aula."}]});}
     return send(res,200,{results:[{course_id:1,course_title:"Visitas, Leads e Clientes — Exemplo sintético",
       lesson_id:12,lesson_title:"Leads fictícios",snippet:"Entenda a jornada do lead."}]});
   }
@@ -358,6 +359,15 @@ async function inspect(page,name){
     await page.waitForFunction(()=>document.querySelector("#lesson-search-results").textContent.includes("indisponível"));
     check((await page.locator("#lesson-search-results [data-search-lesson]").count())===0,
       "unknown course from 200 response never creates a forged result");
+
+    staleLessonSearchOnce=true;
+    await sbox.fill("clientes");
+    await sgo.click();
+    await page.locator("#lesson-search-results [data-search-lesson='99']").waitFor({state:"visible",timeout:8000});
+    await page.locator("#lesson-search-results [data-search-lesson='99']").click();
+    await page.waitForFunction(()=>document.querySelector("#lesson-content").textContent.includes("não está mais disponível"));
+    check((await page.locator("#lesson-content h3").count())===0,
+      "stale result must not open an unrelated authorized lesson");
 
     const beforeBadQuery=lessonSearchReads;
     await sbox.fill("%");

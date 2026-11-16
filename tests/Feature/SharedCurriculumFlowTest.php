@@ -512,6 +512,46 @@ final class SharedCurriculumFlowTest extends TestCase
         $this->getJson('/universidade/private/progress/export')->assertForbidden();
     }
 
+
+    public function test_editorial_audit_is_private_bounded_paged_and_excludes_actor_key(): void
+    {
+        $orgId = (int) DB::table('educational_organizations')
+            ->where('synthetic_key', 'imagine-editorial')->value('id');
+        $now = now();
+        foreach (range(1, 55) as $index) {
+            DB::table('educational_audit_events')->insert([
+                'educational_organization_id' => $orgId,
+                'actor_key' => 'synthetic-editor-secret',
+                'action' => 'course.updated',
+                'resource_kind' => 'course',
+                'resource_id' => $index,
+                'authority_revision' => 1,
+                'occurred_at' => $now,
+            ]);
+        }
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->getJson('/universidade/private/admin/audit')->assertForbidden();
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $first = $this->getJson('/universidade/private/admin/audit')
+            ->assertOk()->assertJsonCount(50, 'events');
+        self::assertIsInt($first->json('next_before_id'));
+        self::assertArrayNotHasKey('actor_key', $first->json('events.0'));
+        $first->assertDontSee('synthetic-editor-secret');
+        self::assertSame(55, $first->json('events.0.resource_id'));
+
+        $second = $this->getJson('/universidade/private/admin/audit?before_id='.
+            $first->json('next_before_id'))
+            ->assertOk()->assertJsonCount(5, 'events')
+            ->assertJsonPath('next_before_id', null);
+        self::assertSame(5, $second->json('events.0.resource_id'));
+        $this->getJson('/universidade/private/admin/audit?before_id=not-a-number')
+            ->assertUnprocessable();
+        $this->getJson('/universidade/private/admin/audit?before_id=-1')
+            ->assertUnprocessable();
+    }
+
     public function test_course_version_and_lesson_references_reject_cascading_deletion(): void
     {
         $this->asPortal('demo-editor', 'imagine-editorial');

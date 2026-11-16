@@ -179,6 +179,17 @@ final class UniversityController
             : response()->json(['error' => 'not_found'], 404);
     }
 
+    public function adminAudit(Request $request): JsonResponse
+    {
+        $input = $request->validate([
+            'before_id' => ['sometimes', 'integer', 'min:1', 'max:2147483647'],
+        ]);
+        return response()->json($this->catalog->adminAudit(
+            $this->grant($request),
+            isset($input['before_id']) ? (int) $input['before_id'] : null,
+        ));
+    }
+
     public function adminCourses(Request $request): JsonResponse
     {
         return response()->json(['courses' => $this->catalog->adminCourses($this->grant($request))]);

@@ -31,6 +31,7 @@ Route::prefix('universidade/private')->group(function (): void {
     Route::middleware('university.grant:manage')->prefix('admin')->group(function (): void {
         Route::view('/app', 'university.admin');
         Route::get('/courses', [UniversityController::class, 'adminCourses']);
+        Route::get('/audit', [UniversityController::class, 'adminAudit']);
         Route::post('/courses', [UniversityController::class, 'createCourse']);
         Route::patch('/courses/{courseId}', [UniversityController::class, 'updateCourse'])
             ->whereNumber('courseId');

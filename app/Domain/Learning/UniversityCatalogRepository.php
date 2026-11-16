@@ -389,6 +389,43 @@ final class UniversityCatalogRepository
     }
 
     /** @return array<int, stdClass> */
+    /**
+     * Bounded read-only editorial history scoped to the authorized operator.
+     * Actor identifier is intentionally never included in the HTTP response.
+     *
+     * @return array{events:array<int,stdClass>,next_before_id:int|null}
+     */
+    public function adminAudit(PortalGrant $grant, ?int $beforeId = null): array
+    {
+        $empty = ['events' => [], 'next_before_id' => null];
+        $org = $this->adminOrgId($grant);
+        if ($org === null) {
+            return $empty;
+        }
+
+        $query = DB::table('educational_audit_events')
+            ->where('educational_organization_id', $org);
+        if ($beforeId !== null) {
+            $query->where('id', '<', $beforeId);
+        }
+        $rows = $query->orderByDesc('id')->limit(51)
+            ->get(['id', 'action', 'resource_kind', 'resource_id',
+                'authority_revision', 'occurred_at'])->all();
+
+        if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            return $empty;
+        }
+
+        $more = count($rows) > 50;
+        $events = array_slice($rows, 0, 50);
+        return [
+            'events' => $events,
+            'next_before_id' => $more && $events !== []
+                ? (int) $events[count($events) - 1]->id
+                : null,
+        ];
+    }
+
     public function adminCourses(PortalGrant $grant): array
     {
         $org = $this->adminOrgId($grant);

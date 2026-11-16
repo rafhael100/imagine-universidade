@@ -41,6 +41,7 @@ final class PrivateUniversityRoutesTest extends TestCase
     public function test_admin_endpoints_reject_anonymous_access(): void
     {
         $this->getJson('/universidade/private/admin/courses')->assertForbidden();
+        $this->getJson('/universidade/private/admin/audit')->assertForbidden();
         $this->get('/universidade/private/admin/app')->assertForbidden();
         $this->postJson('/universidade/private/admin/courses', ['title' => 'Demo'])->assertForbidden();
         $this->patchJson('/universidade/private/admin/courses/1', ['title' => 'Demo'])->assertForbidden();
@@ -63,6 +64,7 @@ final class PrivateUniversityRoutesTest extends TestCase
         $this->getJson('/universidade/private/courses')->assertForbidden();
         $this->postJson('/universidade/private/lessons/1/complete')->assertForbidden();
         $this->getJson('/universidade/private/admin/courses')->assertForbidden();
+        $this->getJson('/universidade/private/admin/audit')->assertForbidden();
         $this->postJson('/universidade/private/admin/courses/1/publish')->assertForbidden();
     }
 

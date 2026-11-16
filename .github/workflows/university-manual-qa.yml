@@ -105,6 +105,7 @@ jobs:
           node ops/staging/check-inventory.mjs
           node ops/staging/check-release-gates.mjs
           node ops/staging/check-compose-static.mjs
+          bash ops/staging/check-compose-syntax.sh
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |

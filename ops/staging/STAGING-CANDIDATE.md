@@ -16,3 +16,7 @@ Arquivos candidatos para futura homologação MANUAL na VPS Leaseweb: `ops/stagi
 `node ops/staging/check-compose-static.mjs`
 
 O teste CI lê o YAML como texto, confere a restrição de porta, redes, limites, papéis e bindings deny-all, mas NÃO inicia os contêineres. A verificação sintática futura de Docker Compose deve ser executada com `docker compose --env-file .env.staging -f compose.yaml config --quiet` **somente** no ambiente autorizado, sem imprimir segredos. Template contém marcadores que impedem uso inadvertido. Não reutilizar portas (especialmente 18081), volumes, banco ou credenciais do CRM/Sites/Portal.
+
+## Validação de configuração do Compose
+
+O CI executa `bash ops/staging/check-compose-syntax.sh` com variáveis e segredos estritamente **fictícios**, em um arquivo transitório apagado ao final. O único comando Docker é `docker compose config --quiet` (parsing), sem acessar a VPS, iniciar serviços ou reservar porta; `18123` é só um exemplo de sintaxe e não deve ser usada como porta escolhida. A validação de recursos reais e segurança continua bloqueada.

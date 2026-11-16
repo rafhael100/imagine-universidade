@@ -149,14 +149,14 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
   note.hidden=!shown;note.textContent=shown||"";
 }
 function beginWrite(){
-  if(state.accessDenied||state.writePending||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
+  if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
   state.writePending=true;
   ++state.courseRequest;++state.lessonRequest;
   const layout=document.querySelector(".layout");
@@ -170,6 +170,26 @@ function finishWrite(){
   const layout=document.querySelector(".layout");
   layout.setAttribute("aria-busy","false");
   layout.inert=state.accessDenied;
+}
+// A server may commit an editorial mutation before its HTTP response is
+// lost. Do not let a rejected/ambiguous response unlock a second write.
+// Keep unsaved fields visible (but disabled) until an explicit fresh read;
+// never make an automatic second POST/DELETE/PATCH to reconcile.
+function freezeUncertainEditorialWrite(){
+  if(state.accessDenied)return;
+  state.writeOutcomeUnknown=true;
+  state.catalogReady=false;state.lessonsReady=false;
+  ++state.courseRequest;++state.lessonRequest;
+  for(const id of ["new-course","course-save","lesson-save","delete-course",
+      "delete-lesson","publish","unpublish","check-publication",
+      "course-title","course-category","course-summary","course-sort",
+      "lesson-title","lesson-slug","lesson-body","lesson-sort"]){
+    const element=$(id);if(element)element.disabled=true;
+  }
+  $("catalog-recovery").hidden=false;
+  $("retry-catalog").disabled=false;
+  clearPublicationCheck();hideLessonPreview();
+  say("O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
 }
 function clearPublicationCheck(){
   ++state.preflightRequest;
@@ -218,7 +238,7 @@ async function api(path,method="GET",payload=null){
   return data;
 }
 const intField=id=>Number.parseInt($(id).value,10)||0;
-const draft=()=>!state.accessDenied&&state.catalogReady&&(state.course===null||(state.lessonsReady&&!Boolean(state.course.is_published)));
+const draft=()=>!state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&(state.course===null||(state.lessonsReady&&!Boolean(state.course.is_published)));
 function fillCourse(){
   if(state.accessDenied)return;
   const c=state.course;
@@ -402,7 +422,7 @@ async function refreshLessons(){
   }
 }
 $("course-items").addEventListener("click",async event=>{
-  const b=event.target.closest("[data-course]");if(!b||state.accessDenied||state.writePending)return;
+  const b=event.target.closest("[data-course]");if(!b||state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady)return;
   const nextId=Number(b.dataset.course);
   if(state.course?.id===nextId)return;
   if(!confirmDiscardCourseAndLesson())return;
@@ -412,7 +432,7 @@ $("course-items").addEventListener("click",async event=>{
   try{await refreshLessons();}catch(error){say(error.message);}
 });
 $("new-course").addEventListener("click",()=>{
-  if(state.accessDenied||state.writePending||!state.catalogReady)return;
+  if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady)return;
   if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;++state.lessonRequest;
   state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
@@ -669,6 +689,7 @@ $("load-more-audit").addEventListener("click",()=>{
 });
 async function loadAdminCatalog(){
   if(state.accessDenied||state.writePending||state.catalogLoading)return;
+  if(state.writeOutcomeUnknown&&!confirm("O resultado da última alteração editorial não foi confirmado. Consultar novamente o servidor poderá substituir os campos não salvos desta tela. Continuar?"))return;
   state.catalogLoading=true;
   if(!state.catalogReady)$("new-course").disabled=true;
   const retry=$("retry-catalog"),recovery=$("catalog-recovery");
@@ -677,7 +698,10 @@ async function loadAdminCatalog(){
   $("course-items").append(el("p","Verificando acesso editorial e cursos...", "help"));
   try{
     await refreshCourses();
-    if(!state.accessDenied)say("");
+    if(!state.accessDenied){
+      state.writeOutcomeUnknown=false;
+      say("");
+    }
   }catch(error){
     if(!state.accessDenied){
       // A failed catalog read cannot keep stale editorial data on screen.

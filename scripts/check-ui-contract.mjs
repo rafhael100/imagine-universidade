@@ -219,7 +219,7 @@ assert.equal(otherCourseFixture([{id:1,lessons_total:1,lessons_completed:0}],1),
 assert.equal(otherCourseFixture(null,1),null,"dados inválidos");
 assert.match(studentProgressUI,/nextCourse.dataset.nextCourse=""/,"aluno: botão de próximo curso");
 assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>openCourseWithAllFilters\(nextCourseId\)\)/,"aluno: troca segura de curso");
-assert.match(studentProgressUI,/function openCourseWithAllFilters\(target\)/,"aluno: caminho comum de transição");
+assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null\)/,"aluno: navegação segura por curso e aula selecionada");
 assert.match(studentProgressUI,/if\(state.accessDenied\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
 console.log("PASS cross-course resume: próximo curso incompleto, sem voltar ao atual");
 

@@ -380,10 +380,15 @@ async function selectCourse(id,preferredLessonId=null){
       btn.append(el("strong",item.title),statusLabel);
       lessonsBox.append(btn);
     }
-    // Retomar pela primeira aula ainda pendente. Se todas estiverem
-    // concluídas, abrir a última para permitir revisar o conteúdo.
-    const next=lessons.find(item=>item.id===preferredLessonId)||
-      lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
+    // A search result can become stale after a course is republished.
+    // Never silently open another lesson in place of the requested result.
+    const selected=preferredLessonId===null?null:lessons.find(item=>item.id===preferredLessonId);
+    if(preferredLessonId!==null&&!selected){
+      content.append(el("p","Esta aula não está mais disponível na versão publicada atual.","empty"));
+      return;
+    }
+    // With no search target, resume the first unfinished authorized lesson.
+    const next=selected||lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
     await selectLesson(Number(next.id));
   }catch(error){
     if(state.courseRequest===request&&!state.accessDenied){

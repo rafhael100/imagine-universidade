@@ -1,5 +1,6 @@
 name: UNI isolated branch QA (test-only, no deploy)
 
+# UNI C-98: full test-only private export schema, browser downloads and PG18 safety checks.
 # UNI C-97: full safe completion-reconciliation Chromium, PG18, Docker and staging regression.
 # UNI C-96: repeat full QA after updating stale-read assertion to current safe implementation.
 # UNI C-93–C-95: full synthetic QA after lesson, draft-exit and catalog-authority hardening.

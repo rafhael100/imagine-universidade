@@ -130,6 +130,57 @@ final class PortalAccessGateTest extends TestCase
         }
     }
 
+    public function test_slow_portal_reply_cannot_grant_access_even_with_future_expiry(): void
+    {
+        $authority = new class implements PortalAuthority {
+            public int $calls = 0;
+            public function verify(
+                string $serverSessionCredential,
+                string $companyId,
+                string $permission,
+            ): PortalGrant {
+                $this->calls++;
+                usleep(20_000);
+                return PortalGrant::allow(
+                    'synthetic-company', 'synthetic-person',
+                    PortalAccessGate::VIEW, 1, 1794750030
+                );
+            }
+        };
+        $gate = new PortalAccessGate($authority, 2);
+        $result = $gate->authorize(
+            'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
+        );
+        self::assertFalse($result->allowed);
+        self::assertSame('authority_timeout', $result->reasonCode);
+        self::assertSame(1, $authority->calls);
+    }
+
+    public function test_grant_expiring_during_verification_is_not_accepted(): void
+    {
+        $gate = $this->gate(PortalGrant::allow(
+            'synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 1,
+            self::NOW + 1,
+        ));
+        $result = $gate->authorize(
+            'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
+        );
+        self::assertFalse($result->allowed);
+        self::assertSame('expired', $result->reasonCode);
+    }
+
+    public function test_authority_budget_outside_safe_range_is_rejected(): void
+    {
+        foreach ([0, -1, 5001] as $budget) {
+            try {
+                new PortalAccessGate(new UnavailablePortalAuthority(), $budget);
+                self::fail('Invalid Portal read budget was accepted.');
+            } catch (\InvalidArgumentException) {
+                self::assertTrue(true);
+            }
+        }
+    }
+
     public function test_invalid_context_is_rejected_before_consulting_portal_authority(): void
     {
         $authority = new class implements PortalAuthority {

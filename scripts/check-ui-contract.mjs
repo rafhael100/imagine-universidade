@@ -484,6 +484,15 @@ assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|
 assert.match(adminRecoveryUI,/const draft=\(\)=>!state\.accessDenied&&state\.catalogReady/,"admin: draft controls disabled until catalog success");
 console.log("PASS editorial catalog authority: do not mutate during unavailable service list");
 
+assert.ok(studentProgressUI.includes('if(receipt?.completed!==true)throw new Error('),"student: completion requires explicit server acknowledgment");
+assert.ok(studentProgressUI.includes('const verified=await api("/lessons/"+encodeURIComponent(String(id))+"/progress")'),"student: uncertain completion must be reconciled via authoritative GET");
+assert.ok(studentProgressUI.includes('if(verified?.completed===true)'),"student: committed-but-lost response is confirmed");
+assert.ok(studentProgressUI.includes('}else if(verified?.completed===false){'),"student: retry only after verified not completed");
+assert.ok(studentProgressUI.includes('action.disabled=true;\n          say("Não foi possível confirmar o resultado.'),"student: unverified completion outcome forbids blind replay");
+assert.ok(studentProgressUI.includes('if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;'),"student: reconciliation cannot bypass revoked or stale lesson context");
+console.log("PASS completion uncertainty: GET reconciliation before any repeated POST");
+
+
 
 
 

@@ -360,7 +360,7 @@ const result=new Script(writeStart+"\n"+writeEnd+"\n"+
   "({first,duplicate,retry,locked:document.querySelector('.layout').inert,"+
   "courseRequest:state.courseRequest,lessonRequest:state.lessonRequest})",
   {filename:"admin-write-serialization"}).runInNewContext({
-    state:{accessDenied:false,writePending:false,courseRequest:0,lessonRequest:0},
+    state:{accessDenied:false,writePending:false,catalogReady:true,courseRequest:0,lessonRequest:0},
     document:{querySelector:()=>fakeLayout},say:()=>{}
   });
 assert.equal(result.first,true);
@@ -477,6 +477,13 @@ assert.match(adminRecoveryUI,/state\.writePending\|\|courseHasUnsavedEdits\(\)\|
 assert.match(adminRecoveryUI,/window\.addEventListener\("beforeunload",event=>\{/,"admin: window exit protection");
 assert.match(adminRecoveryUI,/if\(!mustConfirmBrowserExit\(\)\)return;/,"admin: clean or revoked session does not block exit");
 console.log("PASS editor browser exit: warn on unsaved drafts/write, no lock after Portal revocation");
+
+assert.ok(adminRecoveryUI.includes('state.catalogReady=false;'),"admin: catalog begins and fails closed");
+assert.ok(adminRecoveryUI.includes('state.catalogReady=true;'),"admin: only successful authoritative catalog load permits writes");
+assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|!state\.catalogReady\)return false;/,"admin: mutations denied while catalog unavailable");
+assert.match(adminRecoveryUI,/const draft=\(\)=>!state\.accessDenied&&state\.catalogReady/,"admin: draft controls disabled until catalog success");
+console.log("PASS editorial catalog authority: do not mutate during unavailable service list");
+
 
 
 

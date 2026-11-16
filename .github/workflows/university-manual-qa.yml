@@ -180,3 +180,51 @@ jobs:
 
       - name: Confirmar que nenhuma imagem foi publicada
         run: echo "Docker local de QA concluído sem push, SSH, publicação ou deploy."
+
+  browser-laboratory:
+    needs: isolated-tests
+    if: needs.isolated-tests.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      UNI_BROWSER_LAB: synthetic
+
+    steps:
+      - name: Checkout de revisão — interface de teste, sem credenciais
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Confirmar origem de teste e ausência de segredos
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$UNI_BROWSER_LAB" = "synthetic"
+          test "$CI" = "true"
+          test ! -f .env
+          test ! -f .env.production
+          test -f public/assets/logo-imagine.png
+          test -f public/assets/imagine-tokens.css
+          test -f scripts/qa-browser-synthetic.cjs
+          node --check scripts/qa-browser-synthetic.cjs
+
+      - name: Chromium real, navegação fictícia e WCAG automatizado
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uni-browser-packages" "$RUNNER_TEMP/uni-browser-evidence"
+          cd "$RUNNER_TEMP/uni-browser-packages"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          cd "$GITHUB_WORKSPACE"
+          NODE_PATH="$RUNNER_TEMP/uni-browser-packages/node_modules"           UNI_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-browser-evidence"             node scripts/qa-browser-synthetic.cjs
+
+      - name: Evidência sintética sem credenciais (retida por 7 dias)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: universidade-qa-navegador-ficticio
+          path: ${{ runner.temp }}/uni-browser-evidence
+          retention-days: 7

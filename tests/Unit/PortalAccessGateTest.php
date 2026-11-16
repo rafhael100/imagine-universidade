@@ -91,17 +91,42 @@ final class PortalAccessGateTest extends TestCase
         self::assertFalse($result->allowed);
         self::assertSame('authority_unavailable', $result->reasonCode);
     }
-    public function test_overlong_grants_and_excessive_ttl_are_denied(): void
+    public function test_oversized_grants_and_excessive_ttl_are_denied(): void
     {
         foreach ([
             PortalGrant::allow('synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 61),
-            PortalGrant::allow(str_repeat('a', 81), 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 60),
             PortalGrant::allow('synthetic-company', str_repeat('b', 121), PortalAccessGate::VIEW, 1, self::NOW + 60),
         ] as $grant) {
-            $requestedCompany = strlen($grant->companyId) > 80 ? $grant->companyId : 'synthetic-company';
             self::assertSame('invalid_grant', $this->gate($grant)->authorize(
-                'synthetic-session', $requestedCompany, PortalAccessGate::VIEW, self::NOW
+                'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
             )->reasonCode);
+        }
+
+        self::assertSame('invalid_context', $this->gate(
+            PortalGrant::allow(str_repeat('a', 81), 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 60)
+        )->authorize(
+            'synthetic-session', str_repeat('a', 81), PortalAccessGate::VIEW, self::NOW
+        )->reasonCode);
+    }
+
+    public function test_noncanonical_tenant_or_subject_ids_fail_closed(): void
+    {
+        $valid = PortalGrant::allow(
+            'synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 30
+        );
+        foreach (['invalid company', 'tenant@invalid', '.leading-dot', "tenant\nbreak"] as $company) {
+            self::assertSame('invalid_context', $this->gate($valid)->authorize(
+                'synthetic-session', $company, PortalAccessGate::VIEW, self::NOW
+            )->reasonCode, $company);
+        }
+
+        foreach (['bad subject', '.leading-dot', "subject\nbreak", 'sübject'] as $subject) {
+            $grant = PortalGrant::allow(
+                'synthetic-company', $subject, PortalAccessGate::VIEW, 1, self::NOW + 30
+            );
+            self::assertSame('invalid_grant', $this->gate($grant)->authorize(
+                'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
+            )->reasonCode, $subject);
         }
     }
 

@@ -41,7 +41,7 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
+let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,invalidAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
 let requests=0,progressReads=0,completionPosts=0,exportReads=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
@@ -109,6 +109,14 @@ const server=http.createServer((req,res)=>{
   }
   if(p==="/universidade/private/admin/courses"){
     if(failAdminCoursesOnce){failAdminCoursesOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    if(invalidAdminCoursesOnce){
+      invalidAdminCoursesOnce=false;
+      return send(res,200,{courses:[{id:1,slug:"curso-sintetico",
+        title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho",
+        sort_order:0,is_published:false},{id:1,slug:"curso-duplicado",
+        title:"Curso duplicado",category:"negocios",summary:null,
+        sort_order:1,is_published:false}]});
+    }
     return send(res,200,{courses:[{id:1,slug:"curso-sintetico",title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho exclusivo de QA",sort_order:0,is_published:false}]});
   }
   if(p==="/universidade/private/admin/courses/1/lessons"){
@@ -345,6 +353,26 @@ async function inspect(page,name){
     check(!(await page.locator("#sim-results").isVisible()),"simulator response purged after revocation");
     check(await page.getByText("Visitas fictícias",{exact:true}).count()===0,"private lesson title must be removed");
     denyStudent=false;
+
+    invalidAdminCoursesOnce=true;
+    const malformedAdmin=await context.newPage();
+    await ensureLocalPage(malformedAdmin);
+    malformedAdmin.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+    await malformedAdmin.goto(base+"/admin");
+    await malformedAdmin.locator("#retry-catalog").waitFor({state:"visible",timeout:8000});
+    check((await malformedAdmin.locator("#course-items [data-course]").count())===0,
+      "duplicate-ID catalogue response must never render an editable item");
+    check(await malformedAdmin.locator("#new-course").isDisabled(),
+      "malformed HTTP 200 catalogue must not allow new editorial writes");
+    check(await malformedAdmin.locator("#course-save").isDisabled(),
+      "malformed HTTP 200 catalogue must not allow saving drafts");
+    check((await malformedAdmin.locator("#course-items").innerText()).includes("temporariamente indisponíveis"),
+      "malformed 200 must be shown as failure, never an empty catalogue");
+    await malformedAdmin.locator("#retry-catalog").click();
+    await malformedAdmin.locator("#course-items [data-course='1']").waitFor({state:"visible",timeout:8000});
+    check(!(await malformedAdmin.locator("#new-course").isDisabled()),
+      "subsequent valid catalogue response can restore editorial editing");
+    await malformedAdmin.close();
 
     failAdminCoursesOnce=true;
     const recoveringAdmin=await context.newPage();

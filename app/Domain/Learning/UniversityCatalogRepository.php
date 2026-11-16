@@ -165,6 +165,78 @@ final class UniversityCatalogRepository
         return $courses;
     }
 
+    /**
+     * Private read-only lesson search for current eligible clients.
+     * No external AI, user query storage, per-user search history or client IDs.
+     * All search hits originate ONLY from the live published editorial version.
+     *
+     * @return list<array{course_id:int,course_title:string,lesson_id:int,lesson_title:string,snippet:string}>|null
+     */
+    public function searchPublishedLessons(PortalGrant $grant, string $query): ?array
+    {
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return null;
+        }
+
+        $normalized = trim(preg_replace('/\s+/u', ' ', $query) ?? '');
+        // Reject SQL wildcards and controls rather than interpolating raw LIKE.
+        // This is a bounded literal phrase, never a full-text SQL expression.
+        if (preg_match('/\A[\p{L}\p{N} -]{3,60}\z/u', $normalized) !== 1) {
+            return null;
+        }
+
+        $pattern = '%'.mb_strtolower($normalized, 'UTF-8').'%';
+        $rows = DB::table('educational_lessons as l')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
+            ->where('c.is_published', true)
+            ->where('v.status', 'published')
+            ->where('l.is_published', true)
+            ->where(function ($builder) use ($pattern): void {
+                $builder->whereRaw('LOWER(l.title) LIKE ?', [$pattern])
+                    ->orWhereRaw('LOWER(l.body) LIKE ?', [$pattern])
+                    ->orWhereRaw('LOWER(c.title) LIKE ?', [$pattern]);
+            })
+            ->orderBy('c.sort_order')->orderBy('c.id')
+            ->orderBy('l.sort_order')->orderBy('l.id')
+            ->limit(9)
+            ->get(['l.id as lesson_id', 'l.title as lesson_title',
+                'l.body', 'c.id as course_id', 'c.title as course_title'])
+            ->all();
+
+        // Permission can expire or be revoked while the database is read.
+        // Controller ALSO rechecks the actual Portal authority before output.
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return null;
+        }
+
+        $results = [];
+        foreach (array_slice($rows, 0, 8) as $row) {
+            $body = trim(preg_replace('/\s+/u', ' ', (string) $row->body) ?? '');
+            $start = mb_stripos($body, $normalized, 0, 'UTF-8');
+            $offset = $start === false ? 0 : max(0, $start - 40);
+            $snippet = mb_substr($body, $offset, 150, 'UTF-8');
+            if ($offset > 0) {
+                $snippet = '…'.$snippet;
+            }
+            if ($offset + 150 < mb_strlen($body, 'UTF-8')) {
+                $snippet .= '…';
+            }
+            $results[] = [
+                'course_id' => (int) $row->course_id,
+                'course_title' => (string) $row->course_title,
+                'lesson_id' => (int) $row->lesson_id,
+                'lesson_title' => (string) $row->lesson_title,
+                'snippet' => $snippet,
+            ];
+        }
+        return $results;
+    }
+
     public function lesson(PortalGrant $grant, int $lessonId): ?stdClass
     {
         $org = $this->orgId($grant);

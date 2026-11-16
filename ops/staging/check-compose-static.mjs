@@ -22,7 +22,7 @@ assert.match(php,/USER www-data/);
 assert.match(php,/composer install --no-dev/);
 assert.match(php,/--no-plugins --no-autoloader/);
 assert.match(nginx,/location = \/index\.php/);
-assert.match(nginx,/location ~ \\\\.php\$ \{ return 404; \}/);
+assert.ok(nginx.includes("location ~ "+String.fromCharCode(92)+".php$ { return 404; }"),"reject arbitrary PHP execution");
 assert.match(nginx,/X-Robots-Tag "noindex, nofollow"/);
 assert.match(env,/REPLACE_WITH_PRIVATE_LARAVEL_KEY/);
 assert.match(ignore,/!ops\/staging\/Dockerfile\.php/);

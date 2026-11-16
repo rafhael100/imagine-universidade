@@ -316,7 +316,25 @@ async function refreshLessons(){
   const courseId=state.course?.id??null;
   state.lessons=[];state.lesson=null;renderLessons();resetLesson();fillCourse();
   if(courseId===null||state.accessDenied)return;
-  const result=await api("/courses/"+encodeURIComponent(String(courseId))+"/lessons");
+  let result;
+  try{
+    result=await api("/courses/"+encodeURIComponent(String(courseId))+"/lessons");
+  }catch(error){
+    if(!state.accessDenied&&state.lessonRequest===request&&state.course?.id===courseId){
+      // The selected course remains authoritative; no stale lesson data is
+      // shown. A human may retry this read without abandoning the course.
+      const panel=$("lesson-items");panel.replaceChildren();
+      panel.append(el("p","Aulas temporariamente indisponíveis.", "help"));
+      const retry=el("button","Tentar carregar aulas","secondary");
+      retry.id="retry-lessons";retry.type="button";
+      retry.addEventListener("click",()=>{
+        if(!state.accessDenied&&!state.writePending&&state.course?.id===courseId)
+          refreshLessons().catch(failure=>say(failure.message));
+      });
+      panel.append(retry);
+    }
+    throw error;
+  }
   if(state.accessDenied||state.lessonRequest!==request||state.course?.id!==courseId)return;
   state.lessons=Array.isArray(result.lessons)?result.lessons:[];renderLessons();
 }

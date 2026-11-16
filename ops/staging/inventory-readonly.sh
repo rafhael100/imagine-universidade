@@ -27,7 +27,8 @@ docker ps --format '{{.Names}}' >/dev/null 2>&1 ||
 
 # A stopped or newly created service may reserve this port later.
 # A successful preflight is NOT a reservation or deployment permission.
-if ss -H -ltn | awk -v port="$PORT" '{
+SOCKETS="$(ss -H -ltn 2>/dev/null)" || fail "Socket inventory is unavailable."
+if printf '%s\n' "$SOCKETS" | awk -v port="$PORT" '{
     n=split($4,fields,":");
     if (fields[n]==port) found=1;
   } END { exit(found?0:1); }'; then

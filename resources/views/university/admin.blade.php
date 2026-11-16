@@ -304,6 +304,10 @@ function renderLessons(){
 }
 async function refreshCourses(preferredId=state.course?.id??null){
   const request=++state.courseRequest;
+  // A failed refresh after an editorial write must never leave the old
+  // catalog eligible for another mutation merely because it was once valid.
+  state.catalogReady=false;
+  $("new-course").disabled=true;
   const result=await api("/courses");
   if(state.accessDenied||state.courseRequest!==request)return;
   state.courses=Array.isArray(result.courses)?result.courses:[];

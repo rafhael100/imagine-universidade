@@ -108,6 +108,8 @@ jobs:
           bash ops/staging/check-compose-syntax.sh
           bash -n scripts/qa-staging-image-build.sh
           php -l scripts/qa-staging-runtime-deny.php
+          bash -n scripts/qa-staging-private-http.sh
+          php -l scripts/qa-staging-private-http-probe.php
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |

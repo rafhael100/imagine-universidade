@@ -331,6 +331,24 @@ assert.match(adminUI,/\+\+state.auditRequest;state.auditEvents=\[\]/,"admin: zer
 assert.match(adminUI,/el\("strong",String\(item.action\|\|"alteração"\)\)/,"admin: somente texto na tela");
 console.log("PASS private audit: painel, filtro de acesso, paginação e limpeza por revogação");
 
+
+function contrastRatio(foreground, background) {
+  const luminance = h => {
+    const channels=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255);
+    const linear=channels.map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4);
+    return linear[0]*0.2126+linear[1]*0.7152+linear[2]*0.0722;
+  };
+  const a=luminance(foreground),b=luminance(background);
+  return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
+}
+for(const [role,source] of [["aluno",studentProgressUI],["editor",adminUI]]){
+  const footer=source.match(/\.footer\{[^}]*color:(#[0-9a-fA-F]{6})/);
+  assert.ok(footer,role+": CSS footer not found");
+  assert.ok(contrastRatio(footer[1],"#F7F7F8")>=4.5,
+    role+": footer WCAG AA must be at least 4.5:1");
+}
+console.log("PASS WCAG AA footer contrast: student/editor text remains legible");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

@@ -41,7 +41,7 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false,failInitializeOnce=false;
+let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false;
 let requests=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
@@ -77,7 +77,10 @@ const server=http.createServer((req,res)=>{
   if(p==="/universidade/private/lessons/12/progress")return send(res,200,{completed:false});
   if(p==="/universidade/private/lessons/11/complete"&&req.method==="POST"){completed=true;return send(res,200,{completed:true});}
   if(p==="/universidade/private/progress/export")return send(res,200,{schema_version:1,scope:"current_authenticated_student",completions:completed?[{course_slug:"qa",lesson_slug:"visitantes",course_version:1,completed_at:"2026-11-15"}]:[]});
-  if(p==="/universidade/private/admin/courses")return send(res,200,{courses:[{id:1,slug:"curso-sintetico",title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho exclusivo de QA",sort_order:0,is_published:false}]});
+  if(p==="/universidade/private/admin/courses"){
+    if(failAdminCoursesOnce){failAdminCoursesOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    return send(res,200,{courses:[{id:1,slug:"curso-sintetico",title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho exclusivo de QA",sort_order:0,is_published:false}]});
+  }
   if(p==="/universidade/private/admin/courses/1/lessons")return send(res,200,{lessons:[{id:11,slug:"aula-ficticia",title:"Aula fictícia de revisão",body:"Texto fictício de revisão sem dados reais.\n\nEXEMPLO FICTÍCIO\nCaso demonstrativo.",sort_order:0,status:"draft",is_published:false}]});
   if(p==="/universidade/private/admin/courses/1/publication-check")
     return send(res,200,{course_id:1,version:1,lesson_count:1,ready:true,issues:[],
@@ -169,6 +172,20 @@ async function inspect(page,name){
     check(!(await page.locator("#sim-results").isVisible()),"simulator response purged after revocation");
     check(await page.getByText("Visitas fictícias",{exact:true}).count()===0,"private lesson title must be removed");
     denyStudent=false;
+
+    failAdminCoursesOnce=true;
+    const recoveringAdmin=await context.newPage();
+    await ensureLocalPage(recoveringAdmin);
+    recoveringAdmin.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+    await recoveringAdmin.goto(base+"/admin");
+    await recoveringAdmin.locator("#retry-catalog").waitFor({state:"visible",timeout:8000});
+    check((await recoveringAdmin.locator("#course-items [data-course]").count())===0,
+      "temporary admin outage must not expose stale courses");
+    await recoveringAdmin.locator("#retry-catalog").click();
+    await recoveringAdmin.locator("#course-items [data-course='1']").waitFor({state:"visible",timeout:8000});
+    check(!(await recoveringAdmin.locator("#catalog-recovery").isVisible()),
+      "successful admin catalog retry hides error state");
+    await recoveringAdmin.close();
 
     const admin=await context.newPage();
     await ensureLocalPage(admin);

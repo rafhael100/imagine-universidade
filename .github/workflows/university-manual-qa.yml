@@ -242,6 +242,29 @@ jobs:
           path: ${{ runner.temp }}/uni-browser-evidence
           retention-days: 7
 
+      - name: Conferir prévia offline sem qualquer dado real
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$UNI_BROWSER_LAB" = "synthetic"
+          test "$CI" = "true"
+          test ! -e .env
+          test ! -e .env.production
+          test -f preview/current.html
+          test -f preview/logo-imagine.png
+          node preview/current-check.mjs
+
+      - name: Arquivo ZIP navegável da prévia sintética (14 dias)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: universidade-imagine-previa-offline
+          path: |
+            preview/current.html
+            preview/logo-imagine.png
+          if-no-files-found: error
+          retention-days: 14
+
   staging-image-laboratory:
     needs: isolated-tests
     if: needs.isolated-tests.result == 'success' && github.event_name == 'pull_request'

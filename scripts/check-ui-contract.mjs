@@ -253,6 +253,27 @@ assert.match(routes,/Route::post\('\/lessons\/\{lessonId\}\/tutor', \[University
 assert.match(provider,/TutorGateway::class, DisabledTutorGateway::class/,"tutor: provider default disabled");
 console.log("PASS tutor policy: no model provider activated in application");
 
+
+const splitLessonFn=studentProgressUI.match(/function splitLessonSections\(body\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(splitLessonFn,"aula: parser puro de seções educacionais");
+const sampleText="Aprenda a jornada.\n\nEXEMPLO FICTÍCIO\nUm caso imaginário.\n\nAPLICAÇÃO OPCIONAL\nFaça no seu negócio fictício.\n\nCUIDADO IMPORTANTE\nNunca prometa resultado.";
+const parsedSections=new Script(splitLessonFn+"\nsplitLessonSections(input)",{
+  filename:"lesson-section-safety",
+}).runInNewContext({input:sampleText});
+assert.equal(parsedSections.length,4,"aula: quatro blocos sem perder a introdução");
+assert.equal(parsedSections.map(x=>x.heading??"INTRO").join("|"),
+  "INTRO|EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE");
+assert.equal(parsedSections[2].text,"Faça no seu negócio fictício.");
+const malicious="<img src=x onerror=alert(1)>";
+const maliciousBlocks=new Script(splitLessonFn+"\nsplitLessonSections(input)").runInNewContext({input:malicious});
+assert.equal(maliciousBlocks[0].text,malicious,"aula: conteúdo potencialmente hostil preservado como texto, não HTML");
+assert.match(studentProgressUI,/function lessonTextFragment\(body\)/,"aula: construção de DOM");
+assert.match(studentProgressUI,/wrapper.append\(el\("h4",section.heading\)\)/,"aula: estrutura semântica");
+assert.match(studentProgressUI,/wrapper.append\(el\("p",section.text\)\)/,"aula: texto seguro");
+assert.match(studentProgressUI,/content.append\(el\("h3",lesson.title\),lessonTextFragment\(lesson.body\)\)/);
+assert.doesNotMatch(studentProgressUI,/\.innerHTML\s*=/,"aula: nunca interpretar HTML de currículo");
+console.log("PASS lesson sections: semântica acessível e texto seguro sem HTML");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

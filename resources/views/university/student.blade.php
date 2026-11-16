@@ -46,7 +46,9 @@
     .lesson-items{border-bottom:1px solid var(--line);padding:10px}
     .lesson-content{padding:25px}
     .lesson-content h3{font-size:22px;letter-spacing:-.5px;margin:0 0 12px}
-    .lesson-text{white-space:pre-wrap;overflow-wrap:anywhere;color:#4B5769;margin:12px 0 20px}
+    .lesson-text{overflow-wrap:anywhere;color:#4B5769;margin:12px 0 20px}
+    .lesson-text h4{font-size:15px;color:#70410C;font-weight:800;letter-spacing:.2px;margin:20px 0 8px}
+    .lesson-text p{white-space:pre-wrap;margin:0 0 17px}
     .primary{background:var(--orange);border:1px solid var(--orange);padding:11px 16px;border-radius:10px;font-weight:850;color:#3D290F}
     .primary:hover{background:#FFAC48}
     .secondary{margin-left:9px;background:#fff;color:#70410C;border:1px solid #E5B56D;padding:11px 16px;border-radius:10px;font-weight:750}
@@ -248,6 +250,29 @@ function markLessonStatus(id,completed){
     btn.dataset.completed=completed?"1":"0";
   });
 }
+function splitLessonSections(body){
+  // The only structural labels recognized are editorial labels authored
+  // in the approved fixture. Every body is still displayed as plain text.
+  const input=String(body||"").slice(0,30000);
+  const parts=input.split(/\n\n(?=(?:EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE)\n)/);
+  const headings=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
+  return parts.map((part,index)=>{
+    const newline=part.indexOf("\n");
+    const header=newline>=0?part.slice(0,newline):"";
+    if(index>0&&headings.includes(header)){
+      return {heading:header,text:part.slice(newline+1).trim()};
+    }
+    return {heading:null,text:part.trim()};
+  }).filter(section=>section.text.length>0);
+}
+function lessonTextFragment(body){
+  const wrapper=el("div",undefined,"lesson-text");
+  for(const section of splitLessonSections(body)){
+    if(section.heading)wrapper.append(el("h4",section.heading));
+    wrapper.append(el("p",section.text));
+  }
+  return wrapper;
+}
 function nextPendingLessonId(currentId){
   const items=Array.from(lessonsBox.querySelectorAll("[data-lesson-id]"));
   const currentIndex=items.findIndex(btn=>Number(btn.dataset.lessonId)===currentId);
@@ -291,7 +316,7 @@ async function selectLesson(id){
     const lesson=lessonPayload.lesson;
     markLessonStatus(id,!!progressPayload.completed);
     content.replaceChildren();
-    content.append(el("h3",lesson.title),el("p",lesson.body,"lesson-text"));
+    content.append(el("h3",lesson.title),lessonTextFragment(lesson.body));
     const action=el("button",progressPayload.completed?"✓ Aula concluída":"Marcar como concluída","primary");
     action.type="button";action.disabled=!!progressPayload.completed;
     action.addEventListener("click",async()=>{

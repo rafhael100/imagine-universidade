@@ -35,6 +35,9 @@ $invalid = [
     ['synthetic-session', "company\tinvalid", PortalAccessGate::VIEW, $now],
     ['synthetic-session', 'synthetic-company', 'owner', $now],
     ['synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, 0],
+    ['synthetic-session', 'tenant with spaces', PortalAccessGate::VIEW, $now],
+    ['synthetic-session', '.tenant-leading-dot', PortalAccessGate::VIEW, $now],
+    ['synthetic-session', 'tenant@invalid', PortalAccessGate::VIEW, $now],
 ];
 foreach ($invalid as $index => [$credential, $company, $permission, $epoch]) {
     $result = $gate->authorize($credential, $company, $permission, $epoch);
@@ -52,4 +55,22 @@ if (!$allowed->allowed || $authority->calls !== 1) {
     fwrite(STDERR, 'FAIL valid context was incorrectly denied'.PHP_EOL);
     exit(1);
 }
-echo "PASS 10 Portal context smoke scenarios (9 denied before authority, 1 accepted by synthetic authority).\n";
+foreach (['subject with spaces', '.leading-subject', "subject\nbreak", 'sübject'] as $badSubject) {
+    $badAuthority = new class($badSubject) implements PortalAuthority {
+        public function __construct(private string $subject) {}
+        public function verify(string $serverSessionCredential, string $companyId, string $permission): PortalGrant
+        {
+            return PortalGrant::allow(
+                $companyId, $this->subject, $permission, 1, 1794750030
+            );
+        }
+    };
+    $result = (new PortalAccessGate($badAuthority))->authorize(
+        'synthetic-session', 'synthetic-company', PortalAccessGate::VIEW, $now
+    );
+    if ($result->allowed || $result->reasonCode !== 'invalid_grant') {
+        fwrite(STDERR, 'FAIL malformed subject grant was allowed'.PHP_EOL);
+        exit(1);
+    }
+}
+echo "PASS 17 Portal context smoke scenarios (12 invalid requests, 4 bad grants, 1 synthetic allow).\n";

@@ -422,18 +422,25 @@ async function inspect(page,name){
     check(downloads.length===fileCount,"HTTP 503 may not expose stale exported data");
 
     await inspect(page,"student");
-    // A private search may be denied after the interface was loaded.
-    // 403 must close the authorized session and purge results and inputs.
+    // Use a separate authorized page for search revocation, so existing
+    // export-revocation tests can independently provoke their own HTTP 403.
+    const deniedSearch=await context.newPage();
+    await ensureLocalPage(deniedSearch);
+    deniedSearch.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+    await deniedSearch.goto(base+"/student");
+    await deniedSearch.locator("#lesson-search-query").waitFor({state:"visible",timeout:8000});
+    await deniedSearch.waitForFunction(()=>!document.querySelector("#lesson-search-query").disabled);
     denyLessonSearchOnce=true;
-    await page.locator("#lesson-search-query").fill("clientes");
-    await page.locator("#lesson-search-submit").click();
-    await page.waitForFunction(()=>document.querySelector("#overall-progress").textContent.includes("Acesso à Universidade encerrado"));
-    check(await page.locator("#lesson-search-query").isDisabled(),
+    await deniedSearch.locator("#lesson-search-query").fill("clientes");
+    await deniedSearch.locator("#lesson-search-submit").click();
+    await deniedSearch.waitForFunction(()=>document.querySelector("#overall-progress").textContent.includes("Acesso à Universidade encerrado"));
+    check(await deniedSearch.locator("#lesson-search-query").isDisabled(),
       "rejected search locks input after Portal 403");
-    check((await page.locator("#lesson-search-results [data-search-lesson]").count())===0,
+    check((await deniedSearch.locator("#lesson-search-results [data-search-lesson]").count())===0,
       "rejected search never preserves prior result buttons");
-    check(await page.locator("#lesson-search-submit").isDisabled(),
+    check(await deniedSearch.locator("#lesson-search-submit").isDisabled(),
       "search submit forbidden after revocation");
+    await deniedSearch.close();
 
     denyStudent=true;
     await page.locator("#export-progress").click();

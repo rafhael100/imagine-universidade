@@ -167,7 +167,7 @@ for(const word of ["Curso fictício","histórico anterior","nova versão","progr
   assert.ok(warning.includes(word),"admin: aviso omite "+word);
 }
 assert.match(adminUI,/if\(!confirm\(unpublishWarning\(state.course.title\)\)\)return;/,"admin: exigência de confirmação antes do POST");
-assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)return;/,"admin: revalidar seleção após confirmação");
+assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\|\|!beginWrite\(\)\)return;/,"admin: revalidar seleção após confirmação");
 assert.match(adminUI,/await api\("\/courses\/".*\+courseId\+"\/unpublish","POST"\)/,"admin: endpoint de despublicação com ID capturado");
 console.log("PASS unpublish: confirmação explícita, histórico e novo progresso declarados");
 
@@ -290,7 +290,7 @@ assert.match(adminUI,/id="preview-lesson"/,"editor: ação disponível para rasc
 assert.match(adminUI,/\$\("preview-body"\)\.append\(el\("p",section.text\)\)/,"editor: conteúdo apenas texto");
 assert.match(adminUI,/function hideLessonPreview\(\)/,"editor: limpar conteúdo na navegação");
 assert.match(adminUI,/if\(!confirm\("Publicar este curso para os clientes elegíveis/,"editor: publicação exige confirmação");
-assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)return;/,"editor: evitar troca de curso no diálogo");
+assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\|\|!beginWrite\(\)\)return;/,"editor: evitar troca de curso no diálogo");
 console.log("PASS preview editorial: conteúdo local sem HTML, confirmação humana explícita");
 
 

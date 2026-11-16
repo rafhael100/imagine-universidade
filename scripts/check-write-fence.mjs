@@ -5,6 +5,7 @@ import {readFileSync} from "node:fs";
 const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8");
 const repository = read("app/Domain/Learning/UniversityCatalogRepository.php");
 const controller = read("app/Http/Controllers/UniversityController.php");
+const provisioner = read("app/Domain/Learning/UniversityTenantProvisioner.php");
 const bindings = read("app/Providers/AppServiceProvider.php");
 const feature = read("tests/Feature/PortalBoundaryFlowTest.php");
 
@@ -49,6 +50,18 @@ for (const [method, next, capability] of writes) {
     "authority must be checked before first mutation: " + method);
 }
 
+const provisioningFence = section(provisioner, "public function initialize(", null);
+assert.ok(provisioningFence.includes("DB::transaction"));
+assert.ok(provisioningFence.includes("$verifyFreshGrant === null"));
+assert.ok(provisioningFence.includes("$latest->companyId !== $grant->companyId"));
+assert.ok(provisioningFence.includes("$latest->subjectId !== $grant->subjectId"));
+assert.ok(provisioningFence.includes("$latest->revision !== $grant->revision"));
+assert.ok(provisioningFence.indexOf("$latest = $verifyFreshGrant()") <
+  provisioningFence.indexOf("->insertOrIgnore("));
+const initialization = section(controller, "public function initialize(", "public function courses(");
+assert.ok(initialization.includes("PortalAccessGate $gate"));
+assert.ok(initialization.includes("freshGrant($request, $gate, $grant)"));
+
 const controllers = [
   ["complete", "adminAudit"],
   ["createCourse", "updateCourse"],
@@ -75,4 +88,4 @@ for (const regression of [
 ]) {
   assert.ok(feature.includes(regression), "missing negative regression: " + regression);
 }
-console.log("PASS: all 9 HTTP write paths use transaction-scoped Portal validation, including 2 publish actions.");
+console.log("PASS: all 10 HTTP write paths use transaction-scoped Portal validation, including tenant provisioning and 2 publish actions.");

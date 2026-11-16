@@ -17,12 +17,13 @@ docker build --file ops/staging/Dockerfile.nginx --tag "${tag}-nginx" .
 # No open ports, no network or access to real data.
 docker run --rm --network none --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp \
-  --tmpfs /var/www/html/storage --tmpfs /var/www/html/bootstrap/cache \
+  --tmpfs /var/www/html/storage:mode=1777 --tmpfs /var/www/html/bootstrap/cache:mode=1777 \
   --env APP_ENV=testing --env APP_DEBUG=false \
   --env APP_KEY='base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
   --env SESSION_DRIVER=array --env CACHE_STORE=array \
   "${tag}-php" sh -ec '
   test ! -f .env
+  mkdir -p storage/logs storage/framework/sessions storage/framework/views storage/framework/cache/data
   php -r '\''foreach (["sodium","pdo_pgsql"] as $ext) {
     if (!extension_loaded($ext)) {fwrite(STDERR,"FAIL missing runtime extension: ".$ext.PHP_EOL);exit(2);}
   }'\''
@@ -37,11 +38,11 @@ docker run --rm --network none --read-only --cap-drop ALL \
 # Portal-approved server session. The smoke file stays OUTSIDE the image.
 docker run --rm -i --network none --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp \
-  --tmpfs /var/www/html/storage --tmpfs /var/www/html/bootstrap/cache \
+  --tmpfs /var/www/html/storage:mode=1777 --tmpfs /var/www/html/bootstrap/cache:mode=1777 \
   --env APP_ENV=testing --env APP_DEBUG=false \
   --env APP_KEY='base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
   --env SESSION_DRIVER=array --env CACHE_STORE=array \
-  "${tag}-php" php < scripts/qa-staging-runtime-deny.php
+  "${tag}-php" sh -c 'mkdir -p storage/logs storage/framework/sessions storage/framework/views storage/framework/cache/data && exec php' < scripts/qa-staging-runtime-deny.php
 docker run --rm --network none --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
   --tmpfs /var/cache/nginx --tmpfs /var/run --tmpfs /tmp \

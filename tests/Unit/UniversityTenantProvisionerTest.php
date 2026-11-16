@@ -40,6 +40,11 @@ final class UniversityTenantProvisionerTest extends TestCase
             PortalGrant::allow('   ', 'person', PortalAccessGate::VIEW, 1, $now + 30),
             PortalGrant::allow('company', '  ', PortalAccessGate::VIEW, 1, $now + 30),
             PortalGrant::allow(str_repeat('x', 81), 'person', PortalAccessGate::VIEW, 1, $now + 30),
+            PortalGrant::allow('company with spaces', 'person', PortalAccessGate::VIEW, 1, $now + 30),
+            PortalGrant::allow('.leading-dot', 'person', PortalAccessGate::VIEW, 1, $now + 30),
+            PortalGrant::allow('company', 'person with spaces', PortalAccessGate::VIEW, 1, $now + 30),
+            PortalGrant::allow('company', '.leading-subject', PortalAccessGate::VIEW, 1, $now + 30),
+            PortalGrant::allow('company', "subject\nwith-newline", PortalAccessGate::VIEW, 1, $now + 30),
         ] as $invalidGrant) {
             self::assertFalse($provisioner->initialize($invalidGrant, $now));
         }

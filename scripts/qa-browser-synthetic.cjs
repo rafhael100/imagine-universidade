@@ -41,8 +41,8 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false;
-let requests=0;
+let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false;
+let requests=0,progressReads=0,completionPosts=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
  {id:1,action:"course.created",resource_kind:"course",resource_id:1,occurred_at:"2026-11-15T11:00:00"}
@@ -81,11 +81,19 @@ const server=http.createServer((req,res)=>{
   }
   if(p==="/universidade/private/lessons/12"&&req.method==="GET")return send(res,200,{lesson:{id:12,title:"Leads fictícios",body:"Todo interesse deve ser tratado com responsabilidade."}});
   if(p==="/universidade/private/lessons/11/progress"){
+    progressReads++;
     if(failLessonProgressOnce){failLessonProgressOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    if(failReconcileProgressOnce){failReconcileProgressOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     return send(res,200,{completed});
   }
   if(p==="/universidade/private/lessons/12/progress")return send(res,200,{completed:false});
-  if(p==="/universidade/private/lessons/11/complete"&&req.method==="POST"){completed=true;return send(res,200,{completed:true});}
+  if(p==="/universidade/private/lessons/11/complete"&&req.method==="POST"){
+    completionPosts++;
+    const fault=completionFault;completionFault="none";
+    if(fault==="after_commit"){completed=true;return send(res,503,{error:"response_lost_after_commit"});}
+    if(fault==="before_commit")return send(res,503,{error:"write_not_committed"});
+    completed=true;return send(res,200,{completed:true});
+  }
   if(p==="/universidade/private/progress/export")return send(res,200,{schema_version:1,scope:"current_authenticated_student",completions:completed?[{course_slug:"qa",lesson_slug:"visitantes",course_version:1,completed_at:"2026-11-15"}]:[]});
   if(p==="/universidade/private/admin/courses"){
     if(failAdminCoursesOnce){failAdminCoursesOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
@@ -219,6 +227,47 @@ async function inspect(page,name){
     check((await deniedDetail.locator("#lesson-content button.primary").count())===0,
       "403 in individual lesson cannot leave completion enabled");
     await deniedDetail.close();
+
+    // An uncertain POST may already have committed. Compare read-only
+    // authoritative progress before any second write is available.
+    for(const fault of ["after_commit","before_commit","unverifiable"]){
+      completed=false;
+      completionFault=fault==="unverifiable"?"after_commit":fault;
+      const retrying=await context.newPage();
+      await ensureLocalPage(retrying);
+      retrying.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+      await retrying.goto(base+"/student");
+      await retrying.locator("#course-list [data-course-id='1']").waitFor();
+      await retrying.locator("#course-list [data-course-id='1']").click();
+      await retrying.locator("#lesson-content button.primary").waitFor({state:"visible",timeout:8000});
+      const beforePost=completionPosts,beforeRead=progressReads;
+      if(fault==="unverifiable")failReconcileProgressOnce=true;
+      await retrying.locator("#lesson-content button.primary").click();
+      await retrying.waitForFunction(fault==="after_commit"
+        ?()=>document.querySelector("#status").textContent.includes("Conclusão confirmada")
+        :fault==="before_commit"
+        ?()=>document.querySelector("#status").textContent.includes("não foi registrada")
+        :()=>document.querySelector("#status").textContent.includes("Não foi possível confirmar o resultado"));
+      check(completionPosts===beforePost+1,
+        "exactly one POST sent during an ambiguous "+fault+" completion");
+      check(progressReads===beforeRead+1,
+        "ambiguous "+fault+" completion must reconcile with a GET");
+      if(fault==="before_commit"){
+        check(!(await retrying.locator("#lesson-content button.primary").isDisabled()),
+          "confirmed not-committed write may be explicitly retried");
+        check((await retrying.locator("#lesson-content button.primary").innerText()).includes("Marcar"),
+          "uncommitted write must not falsely claim completion");
+      }else{
+        check(await retrying.locator("#lesson-content button.primary").isDisabled(),
+          "committed or uncertain write must not be submitted twice");
+        if(fault==="after_commit"){
+          check((await retrying.locator("#lesson-content button.primary").innerText()).includes("concluída"),
+            "committed write is confirmed by independent progress GET");
+        }
+      }
+      await retrying.close();
+    }
+    completed=false;
 
     await page.goto(base+"/student");
     await page.waitForFunction(()=>!document.querySelector("#resume-course").disabled);

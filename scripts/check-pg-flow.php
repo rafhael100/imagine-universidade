@@ -112,6 +112,20 @@ try {
         'draft course not yet publicly listed'
     );
 
+    // Mirror the real search repository's PostgreSQL LOWER/LIKE joins and
+    // publication fences. Everything is rolled back with this CI transaction.
+    $searchSql = "SELECT COUNT(*) FROM educational_lessons l
+        JOIN educational_course_versions v ON v.id=l.educational_course_version_id
+        JOIN educational_courses c ON c.id=v.educational_course_id
+        WHERE c.educational_organization_id=? AND c.is_shared=true
+          AND c.is_published=true AND v.status='published' AND l.is_published=true
+          AND (LOWER(l.title) LIKE ? OR LOWER(l.body) LIKE ? OR LOWER(c.title) LIKE ?)";
+    requireCondition(
+        countWhere($pdo, $searchSql, [$editorial, '%schema%', '%schema%', '%schema%']) === 0,
+        'private PostgreSQL lesson search hides every unpublished draft'
+    );
+
+
     $stmt = $pdo->prepare("UPDATE educational_lessons SET is_published=true WHERE id=?");
     $stmt->execute([$lesson]);
     $stmt = $pdo->prepare("UPDATE educational_course_versions SET status='published' WHERE id=?");
@@ -131,6 +145,16 @@ try {
         ) === 1,
         'shared published lesson visible from editorial catalog'
     );
+
+    requireCondition(
+        countWhere($pdo, $searchSql, [$editorial, '%schema%', '%schema%', '%schema%']) === 1,
+        'private PostgreSQL lesson search finds published lesson content'
+    );
+    requireCondition(
+        countWhere($pdo, $searchSql, [$companyA, '%schema%', '%schema%', '%schema%']) === 0,
+        'private PostgreSQL search never reads customer-owned non-editorial material'
+    );
+
 
     $addProgress = $pdo->prepare(
         "INSERT INTO educational_lesson_progress
@@ -176,6 +200,11 @@ try {
     $stmt = $pdo->prepare("UPDATE educational_courses SET is_published=false WHERE id=?");
     $stmt->execute([$course]);
 
+    requireCondition(
+        countWhere($pdo, $searchSql, [$editorial, '%schema%', '%schema%', '%schema%']) === 0,
+        'private PostgreSQL search hides content immediately after unpublish'
+    );
+
     $nextVersion = insertId($pdo,
         "INSERT INTO educational_course_versions
          (educational_course_id,version,status,created_at,updated_at)
@@ -199,7 +228,7 @@ try {
     );
 
     $pdo->rollBack();
-    echo "\nPASS: eight PostgreSQL synthetic relational checks; entire transaction ROLLED BACK.\n";
+    echo "\nPASS: PostgreSQL synthetic relational and private lesson search checks; entire transaction ROLLED BACK.\n";
 } catch (Throwable $error) {
     if ($pdo instanceof PDO && $pdo->inTransaction()) {
         $pdo->rollBack();

@@ -294,7 +294,7 @@ console.log("PASS preview editorial: conteúdo local sem HTML, confirmação hum
 
 const originalLogo=readFileSync(new URL("../public/assets/logo-imagine.png",import.meta.url));
 assert.equal(originalLogo.subarray(0,8).toString("hex"),"89504e470d0a1a0a","logo Imagine PNG válido");
-const gitBlobHash=createHash("sha1").update(Buffer.from("blob "+originalLogo.length+"\\0")).update(originalLogo).digest("hex");
+const gitBlobHash=createHash("sha1").update(Buffer.from("blob "+originalLogo.length+"\0")).update(originalLogo).digest("hex");
 assert.equal(gitBlobHash,"678adeceb3a8ecdaeb6b576b9ee18d1bf0396f77","logo idêntico ao original do Portal Node");
 const imagineTokens=read("public/assets/imagine-tokens.css");
 for(const token of ["--imagine-orange: #f9941d","--imagine-ink: #171b19","--imagine-surface: #f7f7f8","--imagine-touch-target: 44px"]){

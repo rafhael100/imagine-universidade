@@ -512,7 +512,7 @@ console.log("PASS editor browser exit: warn on unsaved drafts/write, no lock aft
 
 assert.ok(adminRecoveryUI.includes('state.catalogReady=false;'),"admin: catalog begins and fails closed");
 assert.ok(adminRecoveryUI.includes('state.catalogReady=true;'),"admin: only successful authoritative catalog load permits writes");
-assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|!state\.catalogReady\)return false;/,"admin: mutations denied while catalog unavailable");
+assert.match(adminRecoveryUI,/if\(state\.accessDenied\|\|state\.writePending\|\|!state\.catalogReady\|\|\(state\.course!==null&&!state\.lessonsReady\)\)return false;/,"admin: mutations denied while catalogue or course lessons are unavailable");
 assert.match(adminRecoveryUI,/const draft=\(\)=>!state\.accessDenied&&state\.catalogReady/,"admin: draft controls disabled until catalog success");
 console.log("PASS editorial catalog authority: do not mutate during unavailable service list");
 

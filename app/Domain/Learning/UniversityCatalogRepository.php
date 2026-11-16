@@ -272,7 +272,7 @@ final class UniversityCatalogRepository
         return $this->grantUsable($grant, PortalAccessGate::VIEW) ? $completed : null;
     }
 
-    public function complete(PortalGrant $grant, int $lessonId): bool
+    public function complete(PortalGrant $grant, int $lessonId, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->orgId($grant);
         if ($org === null || $lessonId < 1) {
@@ -284,7 +284,7 @@ final class UniversityCatalogRepository
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $lessonId, $org, $editorialOrg): bool {
+        return DB::transaction(function () use ($grant, $lessonId, $org, $editorialOrg, $verifyFreshGrant): bool {
             // Descobrir o curso sem confiar em course_id enviado pelo navegador.
             $courseId = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
@@ -330,7 +330,26 @@ final class UniversityCatalogRepository
             }
 
             // A permissão pode expirar enquanto o banco espera por lock.
-            if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            if (!$this->grantUsable($grant, PortalAccessGate::VIEW) || $verifyFreshGrant === null) {
+                // Internal callers cannot bypass the live Portal fence by omitting it.
+                return false;
+            }
+
+            // Reconsultar autoridade Portal com lock do curso mantido, antes
+            // de qualquer INSERT. Não confiar apenas no grant da borda HTTP.
+            // A integração operacional ainda exige fonte oficial e análise
+            // de concorrência/limites de timeout entre serviços.
+            try {
+                $latest = $verifyFreshGrant();
+            } catch (\Throwable) {
+                return false;
+            }
+            if (!$latest instanceof PortalGrant
+                || !$this->grantUsable($latest, PortalAccessGate::VIEW)
+                || $latest->companyId !== $grant->companyId
+                || $latest->subjectId !== $grant->subjectId
+                || $latest->permission !== $grant->permission
+                || $latest->revision !== $grant->revision) {
                 return false;
             }
 

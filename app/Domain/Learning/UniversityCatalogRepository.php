@@ -591,16 +591,16 @@ final class UniversityCatalogRepository
     }
 
     /** @param array{slug:string,title:string,category:string,summary?:string|null,sort_order?:int} $input */
-    public function createCourse(PortalGrant $grant, array $input): ?int
+    public function createCourse(PortalGrant $grant, array $input, ?callable $verifyFreshGrant = null): ?int
     {
         $org = $this->adminOrgId($grant);
         if ($org === null) {
             return null;
         }
 
-        return DB::transaction(function () use ($grant, $org, $input): ?int {
+        return DB::transaction(function () use ($grant, $org, $input, $verifyFreshGrant): ?int {
             // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return null;
             }
 
@@ -630,14 +630,14 @@ final class UniversityCatalogRepository
     }
 
     /** @param array{title:string,summary?:string|null,category:string,sort_order?:int} $input */
-    public function updateCourse(PortalGrant $grant, int $courseId, array $input): bool
+    public function updateCourse(PortalGrant $grant, int $courseId, array $input, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $courseId, $input): bool {
+        return DB::transaction(function () use ($grant, $org, $courseId, $input, $verifyFreshGrant): bool {
             // Lock igual ao utilizado por publish/unpublish e operações de aula:
             // a verificação de rascunho e a edição devem ser atômicas.
             $course = DB::table('educational_courses')
@@ -653,7 +653,7 @@ final class UniversityCatalogRepository
             }
 
             // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return false;
             }
 
@@ -679,14 +679,14 @@ final class UniversityCatalogRepository
     }
 
     /** @param array{slug:string,title:string,body:string,sort_order?:int} $input */
-    public function addLesson(PortalGrant $grant, int $courseId, array $input): ?int
+    public function addLesson(PortalGrant $grant, int $courseId, array $input, ?callable $verifyFreshGrant = null): ?int
     {
         $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return null;
         }
 
-        return DB::transaction(function () use ($grant, $org, $courseId, $input): ?int {
+        return DB::transaction(function () use ($grant, $org, $courseId, $input, $verifyFreshGrant): ?int {
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
@@ -706,7 +706,7 @@ final class UniversityCatalogRepository
             }
 
             // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return null;
             }
 
@@ -727,14 +727,14 @@ final class UniversityCatalogRepository
     }
 
     /** @param array{title:string,body:string,sort_order?:int} $input */
-    public function updateLesson(PortalGrant $grant, int $lessonId, array $input): bool
+    public function updateLesson(PortalGrant $grant, int $lessonId, array $input, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->adminOrgId($grant);
         if ($org === null || $lessonId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $lessonId, $input): bool {
+        return DB::transaction(function () use ($grant, $org, $lessonId, $input, $verifyFreshGrant): bool {
             $courseId = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
@@ -772,7 +772,7 @@ final class UniversityCatalogRepository
             }
 
             // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return false;
             }
 
@@ -793,14 +793,14 @@ final class UniversityCatalogRepository
      * Exclui somente aula de rascunho editorial ainda não publicada e sem
      * progresso. Mantém versões publicadas/arquivadas e histórico intactos.
      */
-    public function deleteDraftLesson(PortalGrant $grant, int $lessonId): bool
+    public function deleteDraftLesson(PortalGrant $grant, int $lessonId, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->adminOrgId($grant);
         if ($org === null || $lessonId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $lessonId): bool {
+        return DB::transaction(function () use ($grant, $org, $lessonId, $verifyFreshGrant): bool {
             $courseId = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
@@ -850,7 +850,7 @@ final class UniversityCatalogRepository
             }
 
             // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return false;
             }
 
@@ -872,14 +872,14 @@ final class UniversityCatalogRepository
      * draft, sem aulas publicadas, versões históricas nem progresso registrado.
      * A ordem das exclusões respeita as FKs RESTRICT e a auditoria é atômica.
      */
-    public function deleteNeverPublishedCourse(PortalGrant $grant, int $courseId): bool
+    public function deleteNeverPublishedCourse(PortalGrant $grant, int $courseId, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $courseId): bool {
+        return DB::transaction(function () use ($grant, $org, $courseId, $verifyFreshGrant): bool {
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
@@ -922,7 +922,7 @@ final class UniversityCatalogRepository
             // If foreign key constraints or concurrent writes disagree,
             // the transaction throws and rolls back everything.
             // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return false;
             }
 

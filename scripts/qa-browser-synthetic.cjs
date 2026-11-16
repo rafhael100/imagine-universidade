@@ -256,10 +256,18 @@ async function inspect(page,name){
     await recoveringAdmin.locator("#retry-catalog").waitFor({state:"visible",timeout:8000});
     check((await recoveringAdmin.locator("#course-items [data-course]").count())===0,
       "temporary admin outage must not expose stale courses");
+    check(await recoveringAdmin.locator("#new-course").isDisabled(),
+      "new course disabled while verified editorial catalog is unavailable");
+    check(await recoveringAdmin.locator("#course-save").isDisabled(),
+      "editorial write disabled while current catalog has not been verified");
+    check((await recoveringAdmin.locator("#course-items").innerText()).includes("temporariamente indisponíveis"),
+      "admin outage notice distinguishes failure from truly empty library");
     await recoveringAdmin.locator("#retry-catalog").click();
     await recoveringAdmin.locator("#course-items [data-course='1']").waitFor({state:"visible",timeout:8000});
     check(!(await recoveringAdmin.locator("#catalog-recovery").isVisible()),
       "successful admin catalog retry hides error state");
+    check(!(await recoveringAdmin.locator("#new-course").isDisabled()),
+      "successful verified catalog reload re-enables editorial creation");
     await recoveringAdmin.close();
 
     failAdminLessonsOnce=true;

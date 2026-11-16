@@ -8,7 +8,7 @@
  * This protects source-level invariants only. It is NOT an auth or browser test.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { Script } from "node:vm";
 import { createHash } from "node:crypto";
 
@@ -292,11 +292,15 @@ assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)r
 console.log("PASS preview editorial: conteúdo local sem HTML, confirmação humana explícita");
 
 
-const dockerIgnore=read(".dockerignore");
-const qaDockerfile=read("ops/qa/Dockerfile");
-for(const path of ["public/assets/logo-imagine.png","public/assets/imagine-tokens.css"]){
-  assert.ok(dockerIgnore.includes("!"+path),"Docker allowlist deve incluir "+path);
-  assert.ok(qaDockerfile.includes(path),"Docker QA deve copiar "+path);
+// The test runner image intentionally excludes its Docker build metadata.
+// Validate that allowlist in source checkouts; verify copied assets in BOTH.
+if(existsSync(new URL("../.dockerignore",import.meta.url))){
+  const dockerIgnore=read(".dockerignore");
+  const qaDockerfile=read("ops/qa/Dockerfile");
+  for(const path of ["public/assets/logo-imagine.png","public/assets/imagine-tokens.css"]){
+    assert.ok(dockerIgnore.includes("!"+path),"Docker allowlist deve incluir "+path);
+    assert.ok(qaDockerfile.includes(path),"Docker QA deve copiar "+path);
+  }
 }
 const originalLogo=readFileSync(new URL("../public/assets/logo-imagine.png",import.meta.url));
 assert.equal(originalLogo.subarray(0,8).toString("hex"),"89504e470d0a1a0a","logo Imagine PNG válido");

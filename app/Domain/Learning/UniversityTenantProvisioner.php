@@ -26,10 +26,8 @@ final class UniversityTenantProvisioner
             $grant->expiresAtEpoch <= $nowEpoch ||
             $grant->expiresAtEpoch > $nowEpoch + 60 ||
             $grant->companyId === 'imagine-editorial' ||
-            trim($grant->companyId) === '' ||
-            trim($grant->subjectId) === '' ||
-            strlen($grant->companyId) > 80 ||
-            strlen($grant->subjectId) > 120
+            preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,79}\z/D', $grant->companyId) !== 1 ||
+            preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,119}\z/D', $grant->subjectId) !== 1
         ) {
             return false;
         }

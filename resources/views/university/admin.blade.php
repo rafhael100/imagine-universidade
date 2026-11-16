@@ -31,6 +31,9 @@
     .panel{background:#fff;border:1px solid var(--line);border-radius:var(--imagine-radius-panel);box-shadow:var(--imagine-shadow-panel);overflow:hidden}
     .panel-header{padding:19px 21px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}
     .panel-body{padding:21px}.items{padding:9px;display:grid;gap:6px}
+    .catalog-recovery{margin:0 10px 13px;padding:15px;border:1px solid #E8C99F;background:#FFF8F0;border-radius:12px}
+    .catalog-recovery p{font-size:13px;color:#65431B;margin:0 0 10px}
+    .catalog-recovery[hidden]{display:none}
     .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%}
     .item:hover{background:#F8F9FB}.item[aria-current="true"]{background:#FFF3E2;border-color:#F2D2AA}
     .item strong{display:block;font-size:14px}.item small{display:block;color:#505650;font-size:12px;margin-top:3px}
@@ -80,6 +83,10 @@
     <section class="panel" aria-labelledby="courses-title">
       <div class="panel-header"><h2 id="courses-title">Cursos</h2><button type="button" class="primary" id="new-course">+ Novo</button></div>
       <div id="course-items" class="items"><p>Carregando cursos...</p></div>
+      <div id="catalog-recovery" class="catalog-recovery" hidden>
+        <p role="alert">Não foi possível consultar os cursos. Verifique a conexão e tente novamente. Uma sessão expirada exige novo acesso pelo Portal.</p>
+        <button type="button" id="retry-catalog" class="secondary">Tentar carregar cursos</button>
+      </div>
     </section>
     <section class="panel" aria-labelledby="edit-title">
       <div class="panel-header"><h2 id="edit-title">Editar conteúdo</h2><span id="publication-status" class="chip">Rascunho</span></div>
@@ -142,7 +149,7 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:""};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
@@ -176,6 +183,8 @@ function lockAccess(message){
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
+  $("catalog-recovery").hidden=true;
+  $("retry-catalog").disabled=true;
   hideLessonPreview();
   clearPublicationCheck();
   ++state.auditRequest;state.auditEvents=[];state.auditNextBeforeId=null;
@@ -526,7 +535,35 @@ $("load-more-audit").addEventListener("click",()=>{
     refreshAudit(state.auditNextBeforeId).catch(error=>say(error.message));
   }
 });
-(async()=>{try{await refreshCourses();}catch(error){say(error.message);if(!state.accessDenied)$("course-items").replaceChildren();}})();
+async function loadAdminCatalog(){
+  if(state.accessDenied||state.writePending||state.catalogLoading)return;
+  state.catalogLoading=true;
+  const retry=$("retry-catalog"),recovery=$("catalog-recovery");
+  retry.disabled=true;recovery.hidden=true;
+  $("course-items").replaceChildren();
+  $("course-items").append(el("p","Verificando acesso editorial e cursos...", "help"));
+  try{
+    await refreshCourses();
+    if(!state.accessDenied)say("");
+  }catch(error){
+    if(!state.accessDenied){
+      // A failed catalog read cannot keep stale editorial data on screen.
+      state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
+      ++state.lessonRequest;
+      $("course-items").replaceChildren();
+      $("course-items").append(el("p","Cursos temporariamente indisponíveis.", "help"));
+      $("lesson-items").replaceChildren();
+      hideLessonPreview();clearPublicationCheck();
+      say(error.message);
+      recovery.hidden=false;
+    }
+  }finally{
+    state.catalogLoading=false;
+    if(!state.accessDenied)retry.disabled=false;
+  }
+}
+$("retry-catalog").addEventListener("click",loadAdminCatalog);
+loadAdminCatalog();
 (async()=>{try{await refreshAudit();}catch(error){say(error.message);}})();
 </script>
 </body>

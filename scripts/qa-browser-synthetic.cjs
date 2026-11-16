@@ -290,8 +290,10 @@ async function inspect(page,name){
     await admin.locator("#clear-lesson").click();
     check((await admin.locator("#lesson-body").inputValue())===unsavedLessonText,
       "cancelled new-lesson navigation preserves unsaved lesson edits");
-    check(deniedDiscards.length===2&&deniedDiscards.every(text=>text.includes("Descartar")),
-      "both unsaved-change confirmations are explicit");
+    check(deniedDiscards.length===2,
+      "course and lesson navigation must each request one confirmation");
+    check(deniedDiscards.every(text=>text.includes("alterações")),
+      "both confirmation messages must clearly describe unsaved changes");
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));
     console.log("PASS synthetic Chromium browser: "+results.assertions+" checks, student/admin UI, progress, revocation, draft preview, audit, widths 320/390/768/1440 and WCAG serious/critical scan.");

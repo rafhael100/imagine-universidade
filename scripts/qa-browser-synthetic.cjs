@@ -76,6 +76,9 @@ const server=http.createServer((req,res)=>{
   if(p==="/universidade/private/progress/export")return send(res,200,{schema_version:1,scope:"current_authenticated_student",completions:completed?[{course_slug:"qa",lesson_slug:"visitantes",course_version:1,completed_at:"2026-11-15"}]:[]});
   if(p==="/universidade/private/admin/courses")return send(res,200,{courses:[{id:1,slug:"curso-sintetico",title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho exclusivo de QA",sort_order:0,is_published:false}]});
   if(p==="/universidade/private/admin/courses/1/lessons")return send(res,200,{lessons:[{id:11,slug:"aula-ficticia",title:"Aula fictícia de revisão",body:"Texto fictício de revisão sem dados reais.\n\nEXEMPLO FICTÍCIO\nCaso demonstrativo.",sort_order:0,status:"draft",is_published:false}]});
+  if(p==="/universidade/private/admin/courses/1/publication-check")
+    return send(res,200,{course_id:1,version:1,lesson_count:1,ready:true,issues:[],
+      warnings:[],advisory_only:true,content_hash:"a".repeat(64)});
   if(p==="/universidade/private/admin/audit")return send(res,200,{events:audit,next_before_id:null});
   send(res,404,{error:"not_found"});
 });
@@ -146,6 +149,16 @@ async function inspect(page,name){
     check(await admin.locator("#lesson-preview").isVisible(),"admin preview must open");
     check(await admin.locator("#preview-body h4").count()===1,"preview must show real sections");
     check((await admin.locator("#audit-items").innerText()).includes("lesson.created"),"staff audit visible");
+    await admin.locator("#course-title").fill("Alteração local não salva");
+    await admin.locator("#check-publication").click();
+    check((await admin.locator("#status").innerText()).includes("Salve"),
+      "editor cannot publish unsaved form changes");
+    await admin.locator("#course-title").fill("Curso editorial fictício");
+    await admin.locator("#check-publication").click();
+    check(await admin.locator("#publication-readiness").isVisible(),
+      "manager sees real read-only readiness state");
+    check((await admin.locator("#publication-readiness").innerText()).includes("1 aula"),
+      "readiness shows lesson count without publishing");
     await inspect(admin,"admin");
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));

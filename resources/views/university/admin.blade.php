@@ -142,7 +142,7 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,writePending:false,accessDenied:false,accessMessage:""};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:""};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
@@ -164,6 +164,11 @@ function finishWrite(){
   layout.setAttribute("aria-busy","false");
   layout.inert=state.accessDenied;
 }
+function clearPublicationCheck(){
+  ++state.preflightRequest;
+  $("publication-readiness").replaceChildren();
+  $("publication-readiness").hidden=true;
+}
 function lockAccess(message){
   if(state.accessDenied)return;
   state.accessDenied=true;state.accessMessage=message;
@@ -172,6 +177,7 @@ function lockAccess(message){
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
   hideLessonPreview();
+  clearPublicationCheck();
   ++state.auditRequest;state.auditEvents=[];state.auditNextBeforeId=null;
   $("audit-items").replaceChildren();
   $("course-items").append(el("p","Cursos indisponíveis até novo acesso autorizado.","help"));
@@ -220,7 +226,7 @@ function fillCourse(){
   $("course-save").disabled=!editable;
   $("publish").disabled=!c||!!c.is_published;
   $("check-publication").disabled=!c||!!c.is_published;
-  $("publication-readiness").replaceChildren();$("publication-readiness").hidden=true;
+  clearPublicationCheck();
   $("unpublish").disabled=!c||!c.is_published;
   $("delete-course").disabled=!c||!!c.is_published;
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
@@ -431,11 +437,15 @@ async function publicationCheck(){
     say("Salve todas as alterações do curso e das aulas antes de verificar a publicação.");
     return null;
   }
+  const request=++state.preflightRequest;
   const snapshot=await api("/courses/"+courseId+"/publication-check");
-  if(state.accessDenied||state.writePending||state.course?.id!==courseId)return null;
+  if(state.accessDenied||state.writePending||state.course?.id!==courseId||
+    state.preflightRequest!==request||editorialHasUnsavedChanges())return null;
   renderPublicationCheck(snapshot);
   return snapshot;
 }
+$("course-form").addEventListener("input",clearPublicationCheck);
+$("lesson-form").addEventListener("input",clearPublicationCheck);
 $("check-publication").addEventListener("click",async()=>{
   try{await publicationCheck();}catch(error){say(error.message);}
 });

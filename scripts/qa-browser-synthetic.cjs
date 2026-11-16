@@ -161,6 +161,9 @@ async function inspect(page,name){
       "manager sees real read-only readiness state");
     check((await admin.locator("#publication-readiness").innerText()).includes("1 aula"),
       "readiness shows lesson count without publishing");
+    await admin.locator("#lesson-body").fill("Alteração fictícia ainda não salva");
+    check(!(await admin.locator("#publication-readiness").isVisible()),
+      "editing a lesson immediately invalidates the previous readiness review");
     await inspect(admin,"admin");
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));

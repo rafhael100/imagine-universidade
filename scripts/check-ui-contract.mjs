@@ -389,6 +389,14 @@ assert.match(adminUI,/if\(editorialHasUnsavedChanges\(\)\)/,"admin: unsaved work
 assert.match(adminUI,/expected_content_hash:reviewed.content_hash/,"admin: publish exact checked version");
 console.log("PASS publication preflight: manager-only, review hash, unsaved form guard");
 
+
+assert.match(adminUI,/function clearPublicationCheck\(\)/,"editor: invalidate stale preview");
+assert.match(adminUI,/state\.preflightRequest!==request/,"editor: ignore out-of-order readiness");
+assert.match(adminUI,/\$\("course-form"\)\.addEventListener\("input",clearPublicationCheck\)/);
+assert.match(adminUI,/\$\("lesson-form"\)\.addEventListener\("input",clearPublicationCheck\)/);
+assert.match(adminUI,/clearPublicationCheck\(\);\s*\+\+state\.auditRequest/,"editor: clear on 403/419");
+console.log("PASS editorial readiness: pending GET invalidated by edits and revocation");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

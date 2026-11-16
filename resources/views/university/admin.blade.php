@@ -149,14 +149,14 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
   note.hidden=!shown;note.textContent=shown||"";
 }
 function beginWrite(){
-  if(state.accessDenied||state.writePending||!state.catalogReady)return false;
+  if(state.accessDenied||state.writePending||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
   state.writePending=true;
   ++state.courseRequest;++state.lessonRequest;
   const layout=document.querySelector(".layout");
@@ -178,9 +178,9 @@ function clearPublicationCheck(){
 }
 function lockAccess(message){
   if(state.accessDenied)return;
-  state.accessDenied=true;state.accessMessage=message;state.catalogReady=false;
+  state.accessDenied=true;state.accessMessage=message;state.catalogReady=false;state.lessonsReady=false;
   document.querySelector(".layout").inert=true;
-  state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
+  state.courses=[];state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
   $("catalog-recovery").hidden=true;
@@ -218,7 +218,7 @@ async function api(path,method="GET",payload=null){
   return data;
 }
 const intField=id=>Number.parseInt($(id).value,10)||0;
-const draft=()=>!state.accessDenied&&state.catalogReady&&(state.course===null||!Boolean(state.course.is_published));
+const draft=()=>!state.accessDenied&&state.catalogReady&&(state.course===null||(state.lessonsReady&&!Boolean(state.course.is_published)));
 function fillCourse(){
   if(state.accessDenied)return;
   const c=state.course;
@@ -233,11 +233,11 @@ function fillCourse(){
   const editable=draft();
   for(const id of ["course-title","course-category","course-summary","course-sort"]){$(id).disabled=!editable;}
   $("course-save").disabled=!editable;
-  $("publish").disabled=!c||!!c.is_published;
-  $("check-publication").disabled=!c||!!c.is_published;
+  $("publish").disabled=!c||!!c.is_published||!state.lessonsReady;
+  $("check-publication").disabled=!c||!!c.is_published||!state.lessonsReady;
   clearPublicationCheck();
-  $("unpublish").disabled=!c||!c.is_published;
-  $("delete-course").disabled=!c||!!c.is_published;
+  $("unpublish").disabled=!c||!c.is_published||!state.lessonsReady;
+  $("delete-course").disabled=!c||!!c.is_published||!state.lessonsReady;
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
 }
 function previewLessonParts(body){
@@ -294,7 +294,7 @@ function renderCourses(){
 function renderLessons(){
   if(state.accessDenied)return;
   $("lesson-items").replaceChildren();
-  if(!state.lessons.length){$("lesson-items").append(el("p","Nenhuma aula cadastrada.","help"));return;}
+  if(!state.lessons.length){$("lesson-items").append(el("p",state.course&&!state.lessonsReady?"Verificando aulas autorizadas...":"Nenhuma aula cadastrada.","help"));return;}
   for(const l of state.lessons){
     const btn=el("button",undefined,"item");btn.type="button";btn.dataset.lesson=String(l.id);
     btn.setAttribute("aria-current",String(l.id===state.lesson?.id));
@@ -345,14 +345,45 @@ async function refreshCourses(preferredId=state.course?.id??null){
   renderCourses();fillCourse();
   await refreshLessons();
 }
+// A course is not editable until its current lesson-version list is
+// authenticated and structurally consistent. Invalid 200 responses must
+// never be interpreted as "zero lessons" and unlock publishing.
+function validatedAdminLessons(payload){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)||
+     !Array.isArray(payload.lessons)||payload.lessons.length>5000)return null;
+  const ids=new Set(),slugs=new Set(),lessons=[];
+  for(const item of payload.lessons){
+    if(!item||typeof item!=="object"||Array.isArray(item)||
+       !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
+       typeof item.slug!=="string"||item.slug.length>120||
+       !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug)||slugs.has(item.slug)||
+       typeof item.title!=="string"||!item.title.trim()||item.title.length>200||
+       typeof item.body!=="string"||item.body.length>30000||
+       !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
+       !["draft","published","archived"].includes(item.status)||
+       ![true,false,0,1].includes(item.is_published))return null;
+    ids.add(item.id);slugs.add(item.slug);
+    lessons.push({id:item.id,slug:item.slug,title:item.title,
+      body:item.body,sort_order:item.sort_order,status:item.status,
+      is_published:Boolean(item.is_published)});
+  }
+  return lessons;
+}
 async function refreshLessons(){
   const request=++state.lessonRequest;
   const courseId=state.course?.id??null;
+  state.lessonsReady=false;
   state.lessons=[];state.lesson=null;renderLessons();resetLesson();fillCourse();
   if(courseId===null||state.accessDenied)return;
   let result;
   try{
     result=await api("/courses/"+encodeURIComponent(String(courseId))+"/lessons");
+    if(state.accessDenied||state.lessonRequest!==request||state.course?.id!==courseId)return;
+    const verified=validatedAdminLessons(result);
+    if(verified===null)throw new Error("A lista de aulas recebida é inválida. Tente novamente.");
+    state.lessons=verified;
+    state.lessonsReady=true;
+    renderLessons();fillCourse();
   }catch(error){
     if(!state.accessDenied&&state.lessonRequest===request&&state.course?.id===courseId){
       // The selected course remains authoritative; no stale lesson data is
@@ -369,8 +400,6 @@ async function refreshLessons(){
     }
     throw error;
   }
-  if(state.accessDenied||state.lessonRequest!==request||state.course?.id!==courseId)return;
-  state.lessons=Array.isArray(result.lessons)?result.lessons:[];renderLessons();
 }
 $("course-items").addEventListener("click",async event=>{
   const b=event.target.closest("[data-course]");if(!b||state.accessDenied||state.writePending)return;
@@ -386,7 +415,7 @@ $("new-course").addEventListener("click",()=>{
   if(state.accessDenied||state.writePending||!state.catalogReady)return;
   if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;++state.lessonRequest;
-  state.course=null;state.lessons=[];state.lesson=null;
+  state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
   renderCourses();renderLessons();fillCourse();resetLesson();$("course-title").focus();say("");
 });
 $("course-form").addEventListener("submit",async event=>{

@@ -14,7 +14,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 GRANT SELECT, INSERT
   ON public.educational_lesson_progress,
      public.educational_audit_events TO uni_stage_runtime;
-GRANT SELECT, INSERT, DELETE
+-- Replay nonce deletion requires a SEPARATE audited maintenance role.
+-- Runtime can only atomically reserve new nonces; it cannot erase evidence.
+GRANT INSERT
   ON public.educational_portal_replay_nonces TO uni_stage_runtime;
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON public.sessions TO uni_stage_runtime;

@@ -9,3 +9,7 @@ As sequências enumeradas são apenas as explicitamente necessárias, sem GRANT 
 `php scripts/check-pg-runtime-roles.php` comprova o contrato em **PostgreSQL18 descartável** sob as condições fixas `APP_ENV=testing`, DB `uni_ci` e credenciais *fictícias*, criando uma role transitória, aplicando uma versão substituída do SQL, verificando DML e negação de CREATE/DELETE/UPDATE perigosos, e descartando role no final. Testes rodam tanto no CI PHP quanto no contêiner QA.
 
 **Não é isolamento de linhas/tenants pelo SQL**: a aplicação precisa validar empresas por grant Portal e recursos; RLS futuro requer decisão técnica independente. Também não demonstra credenciais oficiais, contrato ativo, SSO, revogação, AppSec/DBA/LGPD ou homologação na VPS. Treze gates permanecem HOLD_NO_GO.
+
+## Revisão C-69 de menor privilégio para nonces
+
+O runtime deve apenas **inserir hashes de nonces** após validação criptográfica. Seu papel SQL **não deve ter SELECT ou DELETE** no ledger, pois apagar registros antes do vencimento abre risco de replay. A classe `PortalNonceReplayRetention` permanece sem agendamento/binding operacional e exige um papel de manutenção DBA *distinto*, com limites e trilha de auditoria aprovados pela AppSec e LGPD. O teste C-69 verifica INSERT permitido e SELECT/DELETE negados contra uma role real de laboratório PostgreSQL18.

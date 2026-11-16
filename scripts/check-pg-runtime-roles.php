@@ -72,7 +72,9 @@ try {
         ['public.educational_audit_events', 'INSERT', true],
         ['public.educational_audit_events', 'UPDATE', false],
         ['public.educational_audit_events', 'DELETE', false],
-        ['public.educational_portal_replay_nonces', 'DELETE', true],
+        ['public.educational_portal_replay_nonces', 'INSERT', true],
+        ['public.educational_portal_replay_nonces', 'SELECT', false],
+        ['public.educational_portal_replay_nonces', 'DELETE', false],
         ['public.sessions', 'DELETE', true],
         ['public.migrations', 'SELECT', false],
     ];
@@ -126,7 +128,7 @@ try {
             }
         }
     }
-    echo 'PASS: PG18 fake runtime role, 14 privilege assertions, no schema CREATE, audit DELETE or progress UPDATE.'."\n";
+    echo 'PASS: PG18 fake runtime role, 16 privilege assertions, no schema CREATE, audit DELETE or progress UPDATE.'."\n";
 } finally {
     $runtime = null;
     if ($roleCreated) {

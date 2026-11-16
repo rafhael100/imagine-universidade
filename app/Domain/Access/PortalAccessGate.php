@@ -31,7 +31,7 @@ final readonly class PortalAccessGate
             preg_match('/[\x00-\x1F\x7F]/', $serverSessionCredential) === 1 ||
             trim($companyId) === '' ||
             strlen($companyId) > 80 ||
-            preg_match('/[\x00-\x1F\x7F]/', $companyId) === 1 ||
+            preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,79}\z/D', $companyId) !== 1 ||
             $nowEpoch <= 0 ||
             !in_array($permission, [self::VIEW, self::MANAGE], true)
         ) {
@@ -66,7 +66,10 @@ final readonly class PortalAccessGate
         }
 
         // Limites compatíveis com schema candidato e concessões curtas.
-        if (strlen($grant->companyId) > 80 || strlen($grant->subjectId) > 120) {
+        if (
+            preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,79}\z/D', $grant->companyId) !== 1 ||
+            preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,119}\z/D', $grant->subjectId) !== 1
+        ) {
             return PortalGrant::deny('invalid_grant');
         }
 

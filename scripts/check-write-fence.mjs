@@ -36,7 +36,7 @@ const writes = [
 ];
 for (const [method, next, capability] of writes) {
   const body = section(repository, "public function " + method + "(",
-    next ? "public function " + next + "(" : null);
+    next === "audit" ? "private function audit(" : (next ? "public function " + next + "(" : null));
   assert.ok(body.includes("DB::transaction"), "write must be transactional: " + method);
   assert.ok(body.includes("$verifyFreshGrant"), "missing live grant callback: " + method);
   assert.ok(body.includes("freshWriteGrantMatches($grant, PortalAccessGate::" +

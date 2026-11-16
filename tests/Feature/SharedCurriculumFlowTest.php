@@ -721,4 +721,84 @@ final class SharedCurriculumFlowTest extends TestCase
             ->where('educational_lesson_id', $lessonId)->count());
     }
 
+    public function test_private_lesson_search_only_returns_published_content_with_fresh_portal_grant(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-de-busca', 'title' => 'Presença digital clara',
+            'category' => 'metodologia', 'summary' => 'Orientações práticas',
+        ])->assertCreated()->json('id');
+        $lessonId = $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'vitrine-digital', 'title' => 'Organize sua vitrine digital',
+            'body' => "Uma vitrine simples ajuda as pessoas a encontrar informações úteis.\n\nUse uma página clara e evite promessas comerciais.",
+        ])->assertCreated()->json('id');
+
+        // Unpublished drafts must never appear through private search.
+        $draftId = $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'curso-secreto', 'title' => 'Segredo do material ainda não aprovado',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+        $this->postJson("/universidade/private/admin/courses/{$draftId}/lessons", [
+            'slug' => 'segredo-privado', 'title' => 'Segredo editorial',
+            'body' => 'Conteúdo secreto de laboratório aguardando publicação.',
+        ])->assertCreated();
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson('/universidade/private/search', ['query' => 'vitrine'])
+            ->assertOk()->assertJsonCount(0, 'results');
+        $this->postJson('/universidade/private/search', ['query' => 'segredo'])
+            ->assertOk()->assertJsonCount(0, 'results');
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish")
+            ->assertOk()->assertJsonPath('published', true);
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $found = $this->postJson('/universidade/private/search', ['query' => 'vitrine'])
+            ->assertOk()->assertJsonCount(1, 'results')
+            ->assertJsonPath('results.0.course_id', $courseId)
+            ->assertJsonPath('results.0.lesson_id', $lessonId)
+            ->assertJsonPath('results.0.lesson_title', 'Organize sua vitrine digital')
+            ->assertHeader('Cache-Control', 'private, no-store');
+        self::assertSame(
+            ['course_id', 'course_title', 'lesson_id', 'lesson_title', 'snippet'],
+            array_keys($found->json('results.0')),
+        );
+        $found->assertDontSee('synthetic-person-a')
+            ->assertDontSee('synthetic-company-a')
+            ->assertDontSee('portal_server_credential');
+        $this->postJson('/universidade/private/search', ['query' => 'SEGREDO'])
+            ->assertOk()->assertJsonCount(0, 'results');
+
+        // Content is universal for eligible clients, progress/private data is not.
+        $this->asPortal('demo-b', 'synthetic-company-b');
+        $this->postJson('/universidade/private/search', ['query' => 'vitrine'])
+            ->assertOk()->assertJsonCount(1, 'results');
+
+        // Reject wildcard/symbol attempts and oversize queries; do not
+        // log the searched phrase into an unauthenticated GET URL.
+        $this->postJson('/universidade/private/search', ['query' => '%'])
+            ->assertUnprocessable();
+        $this->postJson('/universidade/private/search', ['query' => '_'])
+            ->assertUnprocessable();
+        $this->postJson('/universidade/private/search', ['query' => '<script>'])
+            ->assertUnprocessable();
+        $this->postJson('/universidade/private/search', ['query' => str_repeat('a', 61)])
+            ->assertUnprocessable();
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->postJson('/universidade/private/search', ['query' => 'vitrine'])
+            ->assertForbidden();
+        $this->asPortal('no-verified-session', 'synthetic-company-a');
+        $this->postJson('/universidade/private/search', ['query' => 'vitrine'])
+            ->assertForbidden();
+
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/unpublish")
+            ->assertOk();
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->postJson('/universidade/private/search', ['query' => 'vitrine'])
+            ->assertOk()->assertJsonCount(0, 'results');
+    }
+
 }

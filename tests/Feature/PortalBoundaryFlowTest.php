@@ -10,6 +10,7 @@ use App\Domain\Access\PortalGrant;
 use App\Domain\Tutor\TutorGateway;
 use App\Domain\Tutor\TutorQuestion;
 use App\Domain\Tutor\TutorReply;
+use App\Domain\Learning\UniversityCatalogRepository;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Tests\TestCase;
@@ -147,6 +148,25 @@ final class PortalBoundaryFlowTest extends TestCase
         return [$courseId, $lessonId];
     }
 
+
+    public function test_learning_repository_rejects_noncanonical_grant_ids_defensively(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $repository = $this->app->make(UniversityCatalogRepository::class);
+
+        foreach ([
+            PortalGrant::allow('test-client-a', 'subject with spaces', PortalAccessGate::VIEW, 1, time() + 30),
+            PortalGrant::allow('test-client-a', '.leading-subject', PortalAccessGate::VIEW, 1, time() + 30),
+            PortalGrant::allow('.invalid-company', 'synthetic-person-a', PortalAccessGate::VIEW, 1, time() + 30),
+            PortalGrant::allow('test-client-a', "subject\nbreak", PortalAccessGate::VIEW, 1, time() + 30),
+        ] as $malformed) {
+            self::assertSame([], $repository->catalog($malformed));
+            self::assertNull($repository->lesson($malformed, $lessonId));
+            self::assertNull($repository->exportProgress($malformed));
+            self::assertFalse($repository->complete($malformed, $lessonId));
+        }
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
 
     public function test_tutor_is_unavailable_by_default_without_blocking_static_learning(): void
     {

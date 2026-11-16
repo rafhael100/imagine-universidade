@@ -45,9 +45,16 @@ progress{display:block;width:100%;height:8px;accent-color:var(--orange);margin-t
 .lesson-body p{white-space:pre-wrap;line-height:1.8;margin:0 0 17px}
 .status{margin:16px 0;padding:11px 14px;background:#fff4e6;border:1px solid #edcfaa;border-radius:8px}
 .status[hidden]{display:none}
+.demo-calculator{grid-column:1/-1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px}
+.demo-calculator h2{margin:0 0 7px;font-size:20px}
+.demo-calculator p{font-size:13px;color:#555;margin:0 0 13px}
+.demo-calculator .inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.demo-calculator label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
+.demo-calculator input{min-height:44px;width:100%;border:1px solid #bbb;border-radius:9px;padding:9px;font:inherit;color:var(--ink)}
+.demo-calculator .calc-result{margin:14px 0 8px;background:#FFF6EB;padding:12px;border-radius:9px;font-weight:700;min-height:44px}
 .metrics{display:flex;gap:17px;flex-wrap:wrap;font-size:13px;font-weight:700}
 footer{grid-column:1/-1;color:#6d6d6d;font-size:12px;padding-bottom:20px}
-@media(max-width:820px){.layout{grid-template-columns:1fr;padding:14px;gap:14px}.hero,.banner,footer{grid-column:1}.top{padding:12px 15px}.brand img{width:145px}.hero{padding:24px}.side,.main{padding:17px}}
+@media(max-width:820px){.demo-calculator .inputs{grid-template-columns:1fr}.layout{grid-template-columns:1fr;padding:14px;gap:14px}.hero,.banner,footer{grid-column:1}.top{padding:12px 15px}.brand img{width:145px}.hero{padding:24px}.side,.main{padding:17px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
 </style>
 </head>
@@ -65,6 +72,17 @@ footer{grid-column:1/-1;color:#6d6d6d;font-size:12px;padding-bottom:20px}
     <p>Aprenda os três pilares para transformar presença digital em atendimento organizado. Conteúdo demonstrativo, sem provas, notas, certificados ou resultados comerciais garantidos.</p>
     <div id="metrics" class="metrics" aria-live="polite"></div>
     <div class="actions"><button class="btn primary" id="resume" type="button">Retomar aulas pendentes</button><button class="btn" id="reset" type="button">Limpar progresso fictício</button></div>
+  </section>
+  <section class="demo-calculator" aria-labelledby="calculator-title">
+    <h2 id="calculator-title">Exercício: de visitas a clientes</h2>
+    <p>Simule números hipotéticos para estudar a metodologia. Não é estimativa comercial e não coleta contatos.</p>
+    <div class="inputs">
+      <div><label for="demo-visits">Visitas semanais fictícias</label><input id="demo-visits" type="number" min="0" max="1000000" step="1" value="1000" autocomplete="off"></div>
+      <div><label for="demo-lead-rate">Taxa hipotética de leads (%)</label><input id="demo-lead-rate" type="number" min="0" max="100" step="0.1" value="5" autocomplete="off"></div>
+      <div><label for="demo-client-rate">Taxa hipotética de clientes (%)</label><input id="demo-client-rate" type="number" min="0" max="100" step="0.1" value="10" autocomplete="off"></div>
+    </div>
+    <div id="demo-calc-result" class="calc-result" aria-live="polite"></div>
+    <p>Números arredondados, apenas para aprender: não representam promessa de visitas, leads, faturamento ou contratos.</p>
   </section>
   <aside class="side" id="biblioteca" aria-labelledby="library-title">
     <h2 id="library-title">Biblioteca de cursos</h2>
@@ -221,6 +239,26 @@ byId("reset").addEventListener("click",()=>{
   if(!confirm("Limpar somente o progresso fictício deste navegador?"))return;
   progress.clear();persist();showStatus("Progresso de demonstração limpo.");renderAll();
 });
+function demoFunnel(visits,leadRate,clientRate){
+  const n=Number(visits),a=Number(leadRate),b=Number(clientRate);
+  if(String(visits).trim()===""||String(leadRate).trim()===""||
+    String(clientRate).trim()===""||!Number.isInteger(n)||n<0||n>1000000||
+    !Number.isFinite(a)||!Number.isFinite(b)||a<0||a>100||b<0||b>100)return null;
+  const leads=Math.round(n*a/100);
+  return {visits:n,leads,clients:Math.round(leads*b/100)};
+}
+function renderDemoFunnel(){
+  const result=demoFunnel(byId("demo-visits").value,byId("demo-lead-rate").value,
+    byId("demo-client-rate").value);
+  if(!result){byId("demo-calc-result").textContent="Informe valores válidos para simular.";return;}
+  const fmt=n=>new Intl.NumberFormat("pt-BR").format(n);
+  byId("demo-calc-result").textContent=fmt(result.visits)+" visitas → "+
+    fmt(result.leads)+" leads → "+fmt(result.clients)+" clientes hipotéticos.";
+}
+document.querySelectorAll(".demo-calculator input").forEach(input=>{
+  input.addEventListener("input",renderDemoFunnel);
+});
+renderDemoFunnel();
 renderAll();
 </script>
 </body>

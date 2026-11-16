@@ -203,4 +203,5 @@ jobs:
           name: uni-offline-preview-screenshots
           path: preview/.qa-shots/*.png
           retention-days: 1
+          include-hidden-files: true
           if-no-files-found: error

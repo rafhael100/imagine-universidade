@@ -697,7 +697,12 @@ async function loadAdminCatalog(){
   try{
     await refreshCourses();
     if(!state.accessDenied){
+      // Only a fully successful course + lesson read resolves uncertainty.
+      // Re-render after clearing the fence: controls were intentionally
+      // disabled while reconciliation was in progress.
       state.writeOutcomeUnknown=false;
+      fillCourse();
+      $("new-course").disabled=false;
       say("");
     }
   }catch(error){

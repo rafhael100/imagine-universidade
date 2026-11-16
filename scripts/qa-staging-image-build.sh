@@ -3,7 +3,16 @@ set -euo pipefail
 # Disposable GitHub Actions only. Never touch real secrets, VPS or any listener.
 fail(){ printf 'HOLD image build: %s\n' "$1" >&2; exit 2; }
 [[ "${CI:-}" == "true" && "${GITHUB_ACTIONS:-}" == "true" ]] || fail "CI only"
-[[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]] || fail "PR only"
+if [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
+  [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" &&
+     "${GITHUB_REF:-}" == "refs/heads/feat/uni-c70-archive-offline-preview-on-success-2026-11-15" ]] ||
+    fail "push QA only on authorized review branch"
+elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+  [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" ]] ||
+    fail "PR QA only on original repository"
+else
+  fail "CI event not authorized"
+fi
 [[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" ]] || fail "local Docker only"
 [[ "$(docker context show)" == "default" ]] || fail "default context required"
 test ! -e .env && test ! -e .env.production &&

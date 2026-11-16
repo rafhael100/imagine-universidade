@@ -41,7 +41,7 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false;
+let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false;
 let requests=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
@@ -75,6 +75,7 @@ const server=http.createServer((req,res)=>{
     return send(res,200,{lessons:lessonRows()});
   }
   if(p==="/universidade/private/lessons/11"&&req.method==="GET"){
+    if(denyLessonDetailOnce){denyLessonDetailOnce=false;return send(res,403,{error:"access_denied"});}
     if(failLessonDetailOnce){failLessonDetailOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     return send(res,200,{lesson:{id:11,title:"Visitas fictícias",body:"Contexto da aula.\n\nEXEMPLO FICTÍCIO\nUm visitante fictício.\n\nAPLICAÇÃO OPCIONAL\nDesenhar a jornada.\n\nCUIDADO IMPORTANTE\nSem promessas de vendas."}});
   }
@@ -203,6 +204,21 @@ async function inspect(page,name){
         "successful "+failedRead+" retry clears the recovery state");
       await recoveringDetail.close();
     }
+
+    denyLessonDetailOnce=true;
+    const deniedDetail=await context.newPage();
+    await ensureLocalPage(deniedDetail);
+    deniedDetail.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+    await deniedDetail.goto(base+"/student");
+    await deniedDetail.locator("#course-list [data-course-id='1']").waitFor();
+    await deniedDetail.locator("#course-list [data-course-id='1']").click();
+    await deniedDetail.waitForFunction(()=>document.querySelector("#resume-course").disabled &&
+      document.querySelector("#course-list").textContent.includes("Biblioteca indisponível"));
+    check((await deniedDetail.locator("#lesson-content .lesson-detail-retry").count())===0,
+      "403 in individual lesson must not offer an unauthorized retry");
+    check((await deniedDetail.locator("#lesson-content button.primary").count())===0,
+      "403 in individual lesson cannot leave completion enabled");
+    await deniedDetail.close();
 
     await page.goto(base+"/student");
     await page.waitForFunction(()=>!document.querySelector("#resume-course").disabled);

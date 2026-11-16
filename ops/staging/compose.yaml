@@ -48,12 +48,13 @@ services:
       context: ../..
       dockerfile: ops/staging/Dockerfile.nginx
     ports:
-      - '127.0.0.1:${UNI_STAGING_LOOPBACK_PORT:?explicit-free-port-required}:80'
+      - '127.0.0.1:${UNI_STAGING_LOOPBACK_PORT:?explicit-free-port-required}:8080'
     read_only: true
     tmpfs:
       - /var/cache/nginx:mode=1777
       - /var/run:mode=1777
       - /tmp:mode=1777
+    cap_drop: ['ALL']
     security_opt: ['no-new-privileges:true']
     mem_limit: 256m
     pids_limit: 64

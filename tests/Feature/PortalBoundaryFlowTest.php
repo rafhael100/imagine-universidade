@@ -260,6 +260,56 @@ final class PortalBoundaryFlowTest extends TestCase
             $admin->baseResponse->headers->get('Content-Security-Policy', ''));
     }
 
+
+    public function test_revocation_during_catalog_query_never_releases_stale_content(): void
+    {
+        $this->createPublishedCourse();
+        $this->asClientA();
+        $authority = $this->fakeAuthority;
+        $before = $authority->verificationCount;
+        $revoked = false;
+
+        DB::listen(static function (\Illuminate\Database\Events\QueryExecuted $query) use (
+            $authority, &$revoked,
+        ): void {
+            if (!$revoked
+                && str_contains($query->sql, 'educational_courses')
+                && str_contains($query->sql, 'educational_course_versions')) {
+                $revoked = true;
+                $authority->clientAEligible = false;
+            }
+        });
+
+        $this->getJson('/universidade/private/courses')
+            ->assertForbidden()
+            ->assertDontSee('Metodologia Imagine')
+            ->assertDontSee('teste-revogacao-tenant');
+
+        self::assertTrue($revoked, 'The synthetic revocation must occur during the read.');
+        self::assertGreaterThanOrEqual($before + 2, $authority->verificationCount);
+    }
+
+    public function test_portal_outage_during_admin_audit_read_hides_response(): void
+    {
+        $this->asEditor();
+        $authority = $this->fakeAuthority;
+        $offline = false;
+        DB::listen(static function (\Illuminate\Database\Events\QueryExecuted $query) use (
+            $authority, &$offline,
+        ): void {
+            if (!$offline && str_contains($query->sql, 'educational_audit_events')) {
+                $offline = true;
+                $authority->online = false;
+            }
+        });
+
+        $this->getJson('/universidade/private/admin/audit')
+            ->assertForbidden()
+            ->assertJsonPath('error', 'access_denied');
+
+        self::assertTrue($offline);
+    }
+
     public function test_headers_and_body_cannot_create_a_server_session(): void
     {
         $headers = [

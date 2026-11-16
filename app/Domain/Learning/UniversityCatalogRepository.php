@@ -151,7 +151,7 @@ final class UniversityCatalogRepository
             return null;
         }
 
-        return DB::table('educational_lessons as l')
+        $lesson = DB::table('educational_lessons as l')
             ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
             ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
             ->where('l.id', $lessonId)
@@ -163,6 +163,8 @@ final class UniversityCatalogRepository
             ->select('l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order', 'c.id as course_id',
                 'v.version as course_version')
             ->first();
+
+        return $this->grantUsable($grant, PortalAccessGate::VIEW) ? $lesson : null;
     }
 
     /**
@@ -263,11 +265,13 @@ final class UniversityCatalogRepository
             return null;
         }
 
-        return DB::table('educational_lesson_progress')
+        $completed = DB::table('educational_lesson_progress')
             ->where('educational_organization_id', $org)
             ->where('subject_key', $grant->subjectId)
             ->where('educational_lesson_id', $lessonId)
             ->exists();
+
+        return $this->grantUsable($grant, PortalAccessGate::VIEW) ? $completed : null;
     }
 
     public function complete(PortalGrant $grant, int $lessonId): bool
@@ -433,12 +437,14 @@ final class UniversityCatalogRepository
             return [];
         }
 
-        return DB::table('educational_courses')
+        $courses = DB::table('educational_courses')
             ->where('educational_organization_id', $org)
             ->where('is_shared', true)
             ->orderBy('sort_order')->orderBy('id')
             ->select('id', 'slug', 'title', 'summary', 'category', 'sort_order', 'is_published')
             ->get()->all();
+
+        return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? $courses : [];
     }
 
     public function adminLessons(PortalGrant $grant, int $courseId): array
@@ -466,12 +472,14 @@ final class UniversityCatalogRepository
             return [];
         }
 
-        return DB::table('educational_lessons as l')
+        $lessons = DB::table('educational_lessons as l')
             ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
             ->where('v.id', $versionId)
             ->orderBy('l.sort_order')->orderBy('l.id')
             ->select('l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order', 'l.is_published', 'v.status')
             ->get()->all();
+
+        return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? $lessons : [];
     }
 
     /** @param array{slug:string,title:string,category:string,summary?:string|null,sort_order?:int} $input */

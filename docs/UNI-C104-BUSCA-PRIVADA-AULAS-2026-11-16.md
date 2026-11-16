@@ -20,6 +20,7 @@ Além da busca existente pelo nome/resumo de cursos, o aluno passa a localizar u
 
 - PHPUnit: rascunhos invisíveis antes da publicação, busca na aula publicada, mesma biblioteca para empresas elegíveis independentes sem conteúdo privado, caracteres inválidos, acesso administrativo fora de VIEW proibido, ausência de sessão e retirada do ar.
 - Chromium sintético: busca real por POST, navegação até a aula encontrada, falha temporária sem resultados antigos, payload forjado e revogação que apaga as ações.
+- PostgreSQL 18 em transação descartável: query real `LOWER/LIKE` com joins testa rascunho invisível, aula publicada encontrável, vínculo exclusivo da organização editorial e retirada do ar, sempre revertendo os dados sintéticos.
 - Contrato estático: comparação da rota privada com filtros do repositório, limitação de resultados, revalidação do Portal e ausência de API externa.
 
 ## Restrições de lançamento

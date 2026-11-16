@@ -467,6 +467,12 @@ assert.ok(adminRecoveryUI.includes('retry.id="retry-lessons"'),"admin: failed le
 assert.ok(adminRecoveryUI.includes('if(!state.accessDenied&&!state.writePending&&state.course?.id===courseId)'),"admin: retry forbidden after revocation or concurrent edit");
 console.log("PASS both private lesson lists: fail-closed manual recovery without stale data");
 
+assert.ok(studentProgressUI.includes('"secondary lesson-detail-retry"'),"student: a failed detail or progress read offers deliberate retry");
+assert.ok(studentProgressUI.includes('if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id)'),"student: stale or revoked lesson responses do not show retry");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id)selectLesson(id);'),"student: retry only while same lesson and permission context remains active");
+console.log("PASS individual lesson read: no partial body or progress and no revoked retry");
+
+
 
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);

@@ -28,10 +28,10 @@ final readonly class PortalAccessGate
         if (
             trim($serverSessionCredential) === '' ||
             strlen($serverSessionCredential) > 4096 ||
-            preg_match('/[\\x00-\\x1F\\x7F]/', $serverSessionCredential) === 1 ||
+            preg_match('/[\x00-\x1F\x7F]/', $serverSessionCredential) === 1 ||
             trim($companyId) === '' ||
             strlen($companyId) > 80 ||
-            preg_match('/[\\x00-\\x1F\\x7F]/', $companyId) === 1 ||
+            preg_match('/[\x00-\x1F\x7F]/', $companyId) === 1 ||
             $nowEpoch <= 0 ||
             !in_array($permission, [self::VIEW, self::MANAGE], true)
         ) {

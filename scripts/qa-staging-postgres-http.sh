@@ -3,8 +3,17 @@ set -euo pipefail
 # Disposable 3-service staging topology: internal-only PHP, Nginx, PG18.
 # No real Portal, active contracts, secrets, VPS, bind mounts, or host ports.
 fail(){ echo "HOLD synthetic 3-container staging: $1" >&2;exit 2; }
-[[ "${CI:-}" == "true" && "${GITHUB_ACTIONS:-}" == "true" &&
-   "${GITHUB_EVENT_NAME:-}" == "pull_request" ]] || fail "CI PR only"
+[[ "${CI:-}" == "true" && "${GITHUB_ACTIONS:-}" == "true" ]] || fail "CI only"
+if [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
+  [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" &&
+     "${GITHUB_REF:-}" == "refs/heads/feat/uni-c70-archive-offline-preview-on-success-2026-11-15" ]] ||
+    fail "push QA only on authorized review branch"
+elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
+  [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" ]] ||
+    fail "PR QA only on original repository"
+else
+  fail "CI event not authorized"
+fi
 [[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" ]] || fail "local Docker only"
 [[ "$(docker context show)" == "default" ]] || fail "default Docker context required"
 test ! -e .env && test ! -e ops/staging/.env.staging || fail "environment files prohibited"

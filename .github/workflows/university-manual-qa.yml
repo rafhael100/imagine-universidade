@@ -181,3 +181,26 @@ jobs:
 
       - name: Confirmar que nenhuma imagem foi publicada
         run: echo "Docker local de QA concluído sem push, SSH, publicação ou deploy."
+
+  browser-preview:
+    needs: isolated-tests
+    if: needs.isolated-tests.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout somente da prévia aprovada
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Navegador headless offline · 360 / 768 / 1440
+        shell: bash
+        run: bash scripts/qa-preview-browser.sh
+
+      - name: Guardar capturas sintéticas por um dia para revisão visual
+        uses: actions/upload-artifact@v4
+        with:
+          name: uni-offline-preview-screenshots
+          path: preview/.qa-shots/*.png
+          retention-days: 1
+          if-no-files-found: error

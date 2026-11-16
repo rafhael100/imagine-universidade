@@ -100,6 +100,8 @@ jobs:
           sh -n scripts/qa-pg-backup-restore.sh
           node scripts/check-ui-contract.mjs
           node preview/current-check.mjs
+          bash -n ops/staging/inventory-readonly.sh
+          node ops/staging/check-inventory.mjs
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |

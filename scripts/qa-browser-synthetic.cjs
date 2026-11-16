@@ -41,7 +41,7 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,invalidAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
+let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,invalidAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,invalidAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
 let requests=0,progressReads=0,completionPosts=0,exportReads=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
@@ -121,6 +121,13 @@ const server=http.createServer((req,res)=>{
   }
   if(p==="/universidade/private/admin/courses/1/lessons"){
     if(failAdminLessonsOnce){failAdminLessonsOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    if(invalidAdminLessonsOnce){
+      invalidAdminLessonsOnce=false;
+      return send(res,200,{lessons:[{id:11,slug:"aula-ficticia",title:"Aula fictícia de revisão",
+        body:"Texto sintético aprovado.",sort_order:0,status:"draft",is_published:false},
+        {id:11,slug:"aula-duplicada",title:"Aula duplicada",
+        body:"Texto sintético duplicado.",sort_order:1,status:"draft",is_published:false}]});
+    }
     return send(res,200,{lessons:[{id:11,slug:"aula-ficticia",title:"Aula fictícia de revisão",body:"Texto fictício de revisão sem dados reais.\n\nEXEMPLO FICTÍCIO\nCaso demonstrativo.",sort_order:0,status:"draft",is_published:false}]});
   }
   if(p==="/universidade/private/admin/courses/1/publication-check")
@@ -395,6 +402,28 @@ async function inspect(page,name){
     check(!(await recoveringAdmin.locator("#new-course").isDisabled()),
       "successful verified catalog reload re-enables editorial creation");
     await recoveringAdmin.close();
+
+    invalidAdminLessonsOnce=true;
+    const malformedLessons=await context.newPage();
+    await ensureLocalPage(malformedLessons);
+    malformedLessons.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+    await malformedLessons.goto(base+"/admin");
+    await malformedLessons.locator("#course-items [data-course='1']").waitFor();
+    await malformedLessons.locator("#course-items [data-course='1']").click();
+    await malformedLessons.locator("#retry-lessons").waitFor({state:"visible",timeout:8000});
+    check((await malformedLessons.locator("#lesson-items [data-lesson]").count())===0,
+      "malformed HTTP 200 lesson list must not render an editable lesson");
+    check(await malformedLessons.locator("#course-save").isDisabled(),
+      "malformed lesson list must block course edits");
+    check(await malformedLessons.locator("#publish").isDisabled(),
+      "malformed lesson list must block publication");
+    check(await malformedLessons.locator("#lesson-save").isDisabled(),
+      "malformed lesson list must block lesson creation");
+    await malformedLessons.locator("#retry-lessons").click();
+    await malformedLessons.locator("#lesson-items [data-lesson='11']").waitFor({state:"visible",timeout:8000});
+    check(!(await malformedLessons.locator("#course-save").isDisabled()),
+      "verified lesson list restores editor after an invalid response");
+    await malformedLessons.close();
 
     failAdminLessonsOnce=true;
     const adminLessonRetry=await context.newPage();

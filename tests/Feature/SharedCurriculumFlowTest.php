@@ -623,6 +623,65 @@ final class SharedCurriculumFlowTest extends TestCase
             ->where('action', 'course.deleted')->where('resource_id', $courseId)->count());
     }
 
+
+    public function test_publication_preflight_is_advisory_scoped_and_prevents_stale_revision(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = (int) $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'preflight-editorial',
+            'title' => 'Curso candidato a revisão',
+            'category' => 'metodologia',
+        ])->assertCreated()->json('id');
+
+        $check = "/universidade/private/admin/courses/{$courseId}/publication-check";
+        $this->getJson($check)->assertOk()
+            ->assertJsonPath('ready', false)
+            ->assertJsonPath('issues.0', 'missing_lessons')
+            ->assertJsonPath('warnings.0', 'missing_optional_summary')
+            ->assertJsonPath('lesson_count', 0)
+            ->assertJsonPath('advisory_only', true);
+
+        $lessonId = (int) $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'primeira-aula',
+            'title' => 'Aula sintética',
+            'body' => 'Texto fictício com orientações simples para o aluno.',
+        ])->assertCreated()->json('id');
+
+        $before = $this->getJson($check)->assertOk()
+            ->assertJsonPath('ready', true)->assertJsonPath('lesson_count', 1)->json();
+        self::assertSame([], $before['issues']);
+        self::assertSame(64, strlen($before['content_hash']));
+        self::assertSame(0, DB::table('educational_courses')
+            ->where('id', $courseId)->where('is_published', true)->count());
+
+        $this->patchJson("/universidade/private/admin/lessons/{$lessonId}", [
+            'title' => 'Aula alterada depois da prévia',
+            'body' => 'Texto novo de outro editor, ainda somente em laboratório.',
+        ])->assertOk();
+
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish", [
+            'expected_content_hash' => $before['content_hash'],
+        ])->assertStatus(409);
+        self::assertSame(0, DB::table('educational_courses')
+            ->where('id', $courseId)->where('is_published', true)->count());
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('resource_id', $courseId)->where('action', 'course.published')->count());
+
+        $after = $this->getJson($check)->assertOk()->assertJsonPath('ready', true)->json();
+        self::assertNotSame($before['content_hash'], $after['content_hash']);
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/publish", [
+            'expected_content_hash' => $after['content_hash'],
+        ])->assertOk()->assertJsonPath('published', true);
+        $this->getJson($check)->assertOk()
+            ->assertJsonPath('ready', false)->assertJsonPath('issues.0', 'not_draft');
+
+        $this->asPortal('demo-a', 'synthetic-company-a');
+        $this->getJson($check)->assertForbidden();
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $this->getJson('/universidade/private/admin/courses/999999/publication-check')
+            ->assertNotFound();
+    }
+
     public function test_course_version_and_lesson_references_reject_cascading_deletion(): void
     {
         $this->asPortal('demo-editor', 'imagine-editorial');

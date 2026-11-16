@@ -302,6 +302,32 @@ function renderLessons(){
     $("lesson-items").append(btn);
   }
 }
+// Validate the catalogue as a whole BEFORE setting catalogReady. A 200
+// response containing missing/duplicate IDs or invalid editorial metadata
+// must never silently become an "empty catalogue" that permits writes.
+// This is supplementary UI validation; the server remains the authority.
+function validatedAdminCourses(payload){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)||
+     !Array.isArray(payload.courses)||payload.courses.length>5000)return null;
+  const ids=new Set(),courses=[];
+  for(const item of payload.courses){
+    if(!item||typeof item!=="object"||Array.isArray(item)||
+       !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
+       typeof item.slug!=="string"||item.slug.length>120||
+       !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug)||
+       typeof item.title!=="string"||!item.title.trim()||item.title.length>200||
+       !["metodologia","negocios","sistemas"].includes(item.category)||
+       !(item.summary===null||typeof item.summary==="string")||
+       (typeof item.summary==="string"&&item.summary.length>500)||
+       !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
+       ![true,false,0,1].includes(item.is_published))return null;
+    ids.add(item.id);
+    courses.push({id:item.id,slug:item.slug,title:item.title,
+      category:item.category,summary:item.summary??"",sort_order:item.sort_order,
+      is_published:Boolean(item.is_published)});
+  }
+  return courses;
+}
 async function refreshCourses(preferredId=state.course?.id??null){
   const request=++state.courseRequest;
   // A failed refresh after an editorial write must never leave the old
@@ -310,7 +336,9 @@ async function refreshCourses(preferredId=state.course?.id??null){
   $("new-course").disabled=true;
   const result=await api("/courses");
   if(state.accessDenied||state.courseRequest!==request)return;
-  state.courses=Array.isArray(result.courses)?result.courses:[];
+  const verified=validatedAdminCourses(result);
+  if(verified===null)throw new Error("O catálogo editorial recebido é inválido. Tente novamente.");
+  state.courses=verified;
   state.course=state.courses.find(c=>c.id===preferredId)||null;
   state.catalogReady=true;
   $("new-course").disabled=false;

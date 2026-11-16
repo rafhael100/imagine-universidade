@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "project": "Imagine Universidade",
+  "release_decision": "HOLD_NO_GO",
+  "explanation": "A green synthetic laboratory is not evidence of active-contract identity, editorial authority or permission for real customers.",
+  "blocking_evidence": {
+    "portal_official_active_services": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "portal_independent_revocation": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "portal_business_sso_identity": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "portal_editorial_staff_authority": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "tenant_and_resource_authorization": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "private_s2s_security_and_key_rotation": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "appsec_independent_review": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "dba_independent_review": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "lgpd_independent_review": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "educational_editorial_signoff": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "private_vps_staging_functional_homologation": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "real_backup_restoration_and_rollback": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    },
+    "production_deployment_approval": {
+      "status": "NOT_VERIFIED",
+      "evidence_ref": null
+    }
+  },
+  "source_issue": "https://github.com/rafhael100/imagine-portal/issues/886",
+  "reference_pr": "https://github.com/rafhael100/imagine-universidade/pull/65"
+}

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Universidade Imagine — Administração (prévia offline)</title>
+  <style>
+    :root{--orange:#F9941D;--ink:#232938;--muted:#667085;--line:#E2E7EE;--bg:#F7F8FA;--soft:#FFF1DE}
+    *{box-sizing:border-box}
+    body{font:14px/1.55 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0}
+    button,input,select,textarea{font:inherit}button{cursor:pointer}
+    :focus-visible{outline:3px solid #D57500;outline-offset:2px}
+    .header{background:white;border-bottom:1px solid var(--line);padding:18px 24px}
+    .head-inner{max-width:1180px;margin:auto;display:flex;justify-content:space-between;gap:15px;align-items:center;flex-wrap:wrap}
+    .brand{font-weight:800;font-size:20px;letter-spacing:-.7px}.brand span{color:#CE7200}
+    .warning{background:var(--soft);color:#815016;border-radius:9px;padding:7px 12px;font-size:12px;font-weight:700}
+    .container{max-width:1180px;margin:0 auto;padding:28px 24px}
+    h1{font-size:31px;margin:0 0 7px;letter-spacing:-1px}h2{font-size:19px;margin:0 0 5px}h3{font-size:15px;margin:0}
+    p{color:var(--muted);margin:0 0 14px}
+    .topline{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:24px}
+    .grid{display:grid;grid-template-columns:310px minmax(0,1fr);gap:21px}
+    .panel{background:white;border:1px solid var(--line);border-radius:18px;overflow:hidden}
+    .panel-head{padding:20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .panel-body{padding:21px}
+    .course-list{padding:10px;display:flex;flex-direction:column;gap:6px}
+    .course-item{text-align:left;width:100%;background:white;border:1px solid transparent;border-radius:11px;padding:12px 13px}
+    .course-item:hover{background:#FAFAFC}.course-item.active{background:#FFF5E8;border-color:#F3CD9B}
+    .course-item strong{display:block;font-size:14px}
+    .course-item small{font-size:12px;color:var(--muted)}
+    .course-item em{font-style:normal;color:#9C5700;font-size:11px;font-weight:800}
+    .primary{background:var(--orange);border:1px solid var(--orange);color:#39230C;padding:10px 15px;border-radius:9px;font-weight:800}
+    .secondary{background:#fff;border:1px solid #D9DFE7;border-radius:9px;padding:10px 15px;color:#344054;font-weight:750}
+    .danger{color:#A02C24}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+    .field{display:flex;flex-direction:column;gap:5px;margin-bottom:15px;min-width:0}
+    .field label{font-size:12px;font-weight:800;color:#465266}
+    input,select,textarea{width:100%;border:1px solid #D5DAE2;border-radius:10px;padding:11px 12px;color:var(--ink);background:#fff}
+    textarea{min-height:100px;resize:vertical}
+    .full{grid-column:1/-1}
+    .tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .small{font-size:12px;color:var(--muted)}
+    .chip{padding:4px 9px;border-radius:999px;background:#F2F4F7;color:#586174;font-size:11px;font-weight:800;display:inline-block}
+    .chip.live{background:#E5F6EB;color:#236643}
+    .lesson-list{list-style:none;padding:0;margin:16px 0 20px;display:flex;flex-direction:column;gap:8px}
+    .lesson-item{border:1px solid var(--line);padding:12px;border-radius:10px;display:flex;justify-content:space-between;gap:12px;align-items:start}
+    .lesson-item strong{display:block}.lesson-item p{font-size:12px;margin:3px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+    .lesson-item button{font-size:12px;padding:5px 9px;border-radius:8px;border:1px solid #E5E7EB;background:#fff;flex-shrink:0}
+    .divider{border:0;border-top:1px solid var(--line);margin:22px 0}
+    .notice{border:1px dashed #E8C48F;background:#FFFAF2;padding:13px 16px;border-radius:12px;color:#75521B;font-size:12px}
+    .notice strong{color:#6A460F}
+    .status{font-weight:750;color:#2C6C48;min-height:24px;margin:11px 0}
+    a{color:#975300;text-decoration:none;font-weight:750}
+    @media(max-width:760px){.container{padding:18px 14px}.grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.header{padding:14px}.topline{align-items:start}h1{font-size:25px}}
+  </style>
+</head>
+<body>
+<header class="header"><div class="head-inner">
+  <div class="brand">imagine<span> ✦</span> <small>universidade</small></div>
+  <span class="warning">Administração DEMO · sem login, servidor ou publicação real</span>
+</div></header>
+<main class="container">
+  <div class="topline">
+    <div><h1>Gerenciar conteúdos</h1><p>Um painel simples para organizar cursos e aulas da Universidade Imagine.</p></div>
+    <div class="tools"><a href="./index.html">← Biblioteca demonstrativa</a><button class="secondary" id="reset" type="button">Restaurar dados fictícios</button></div>
+  </div>
+  <div class="grid">
+    <section class="panel" aria-labelledby="catalog-title">
+      <div class="panel-head"><div><h2 id="catalog-title">Cursos</h2><span class="small" id="counter"></span></div><button class="primary" id="new-course" type="button">+ Novo</button></div>
+      <div class="course-list" id="course-list" aria-label="Cursos demonstrativos"></div>
+    </section>
+    <section class="panel" aria-labelledby="editor-title">
+      <div class="panel-head"><div><h2 id="editor-title">Editar curso</h2><span class="small" id="editor-status">Selecione um curso</span></div><span class="chip" id="publication-label">Rascunho</span></div>
+      <div class="panel-body">
+        <form id="course-form">
+          <div class="form-grid">
+            <div class="field full"><label for="course-title">Nome do curso</label><input id="course-title" maxlength="160" required placeholder="Ex.: Conheça nossa metodologia"></div>
+            <div class="field"><label for="course-category">Categoria</label><select id="course-category"><option value="metodologia">Metodologia</option><option value="negocios">Negócios</option><option value="sistemas">Treinamentos Imagine</option></select></div>
+            <div class="field"><label for="course-order">Ordem de exibição</label><input id="course-order" type="number" min="0" max="9999" step="1" value="0" required></div>
+            <div class="field full"><label for="course-summary">Descrição curta</label><textarea id="course-summary" maxlength="500" placeholder="O que o cliente vai aprender?"></textarea></div>
+          </div>
+          <div class="tools"><button type="submit" class="primary">Salvar rascunho</button><button id="toggle-publication" class="secondary" type="button">Publicar na demonstração</button></div>
+        </form>
+        <div role="status" aria-live="polite" id="status" class="status"></div>
+        <hr class="divider">
+        <h3>Aulas deste curso</h3><p class="small">Textos curtos, diretos e sem avaliações.</p>
+        <ul class="lesson-list" id="lesson-list"></ul>
+        <form id="lesson-form">
+          <div class="field"><label for="lesson-title">Título da nova aula</label><input id="lesson-title" maxlength="160" required placeholder="Ex.: Como transformar visitas em leads?"></div>
+          <div class="field"><label for="lesson-body">Conteúdo da aula</label><textarea id="lesson-body" maxlength="5000" required placeholder="Escreva orientações práticas para o cliente."></textarea></div>
+          <button class="secondary" type="submit">+ Adicionar aula</button>
+        </form>
+        <hr class="divider">
+        <div class="notice"><strong>Ambiente demonstrativo.</strong> Todas as ações ocorrem apenas neste navegador, com dados fictícios. O botão “Publicar” não disponibiliza nada para clientes e não configura permissão administrativa. A administração real dependerá de autenticação do Portal, aprovação editorial e auditoria.</div>
+      </div>
+    </section>
+  </div>
+</main>
+<script>
+"use strict";
+// EXCLUSIVAMENTE para prévia local. Nenhuma API, credencial ou dado de cliente.
+const storageKey="imagine-universidade-admin-preview-v1";
+const categories={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
+const seeds=[
+  {id:"example-1",title:"Visitas → Leads → Clientes",category:"metodologia",order:0,summary:"Três pilares para melhorar a jornada do seu negócio.",published:false,lessons:[{id:"lesson-a",title:"Entenda os três pilares",body:"Visitas não são leads, e leads não são clientes. Cada etapa exige ações específicas."}]},
+  {id:"example-2",title:"Noções do Imagine CRM",category:"sistemas",order:1,summary:"Conceitos para acompanhar oportunidades.",published:false,lessons:[{id:"lesson-b",title:"Funil e oportunidades",body:"Um CRM organiza contatos e próximos passos. Detalhes reais dependem da versão homologada."}]},
+  {id:"example-3",title:"Presença digital para negócios",category:"negocios",order:2,summary:"Seu site como ponto de partida do atendimento.",published:false,lessons:[{id:"lesson-c",title:"Uma mensagem clara",body:"Explique o que oferece, para quem e como o visitante pode entrar em contato."}]}
+];
+function clone(value){return JSON.parse(JSON.stringify(value));}
+function validCourse(c){
+  return c&&typeof c.id==="string"&&typeof c.title==="string"&&typeof c.category==="string"&&
+    Object.hasOwn(categories,c.category)&&typeof c.summary==="string"&&Number.isInteger(c.order)&&
+    typeof c.published==="boolean"&&Array.isArray(c.lessons)&&c.lessons.every(l=>l&&typeof l.id==="string"&&typeof l.title==="string"&&typeof l.body==="string");
+}
+function read(){
+  try{
+    const raw=localStorage.getItem(storageKey);
+    if(!raw)return clone(seeds);
+    const data=JSON.parse(raw);
+    if(Array.isArray(data)&&data.length<=50&&data.every(validCourse))return data;
+  }catch(_){}
+  return clone(seeds);
+}
+let courses=read(),selectedId=courses[0]?.id||null;
+const $=id=>document.getElementById(id);
+const selected=()=>courses.find(c=>c.id===selectedId)||null;
+function persist(){
+  try{localStorage.setItem(storageKey,JSON.stringify(courses));}catch(_){status("Seu navegador não permitiu salvar dados locais.");}
+}
+function status(message){$("status").textContent=message;}
+function el(tag,text,className){
+  const node=document.createElement(tag);
+  if(text!==undefined)node.textContent=text;
+  if(className)node.className=className;
+  return node;
+}
+function renderList(){
+  $("course-list").replaceChildren();
+  const sorted=[...courses].sort((a,b)=>a.order-b.order||a.title.localeCompare(b.title,"pt-BR"));
+  for(const c of sorted){
+    const btn=el("button",undefined,"course-item"+(c.id===selectedId?" active":""));
+    btn.type="button";btn.dataset.id=c.id;
+    btn.append(el("strong",c.title),el("small",categories[c.category]+" · "+c.lessons.length+" aula(s) · "));
+    btn.append(el("em",c.published?"Publicado (demo)":"Rascunho"));$("course-list").append(btn);
+  }
+  if(!courses.length)$("course-list").append(el("p","Nenhum curso. Crie um para começar."));
+  $("counter").textContent=courses.length+" curso(s) · somente demonstração";
+}
+function renderEditor(){
+  const c=selected();
+  const disabled=!c;
+  for(const field of ["course-title","course-category","course-order","course-summary","lesson-title","lesson-body"]){$(field).disabled=disabled;}
+  $("course-form").querySelectorAll("button").forEach(b=>b.disabled=disabled);
+  $("lesson-form").querySelectorAll("button").forEach(b=>b.disabled=disabled);
+  $("lesson-list").replaceChildren();
+  if(!c){
+    $("course-title").value="";$("course-summary").value="";$("editor-status").textContent="Sem curso selecionado";
+    $("publication-label").textContent="Rascunho";return;
+  }
+  $("course-title").value=c.title;$("course-summary").value=c.summary;
+  $("course-category").value=c.category;$("course-order").value=String(c.order);
+  $("editor-status").textContent=c.lessons.length+" aula(s) · "+categories[c.category];
+  $("publication-label").textContent=c.published?"Publicado (demo)":"Rascunho";
+  $("publication-label").className="chip"+(c.published?" live":"");
+  $("toggle-publication").textContent=c.published?"Retirar da demonstração":"Publicar na demonstração";
+  for(const lesson of c.lessons){
+    const li=el("li",undefined,"lesson-item"),body=el("div");
+    body.append(el("strong",lesson.title),el("p",lesson.body));
+    const remove=el("button","Excluir", "danger");remove.type="button";remove.dataset.remove=lesson.id;
+    li.append(body,remove);$("lesson-list").append(li);
+  }
+  if(!c.lessons.length)$("lesson-list").append(el("li","Nenhuma aula cadastrada.","small"));
+}
+function render(){renderList();renderEditor();}
+function newId(){return "demo-"+Math.random().toString(36).slice(2,12)+"-"+Date.now().toString(36);}
+$("course-list").addEventListener("click",e=>{
+ const btn=e.target.closest("[data-id]");if(!btn)return;
+ selectedId=btn.dataset.id;status("");render();
+});
+$("new-course").addEventListener("click",()=>{
+ const c={id:newId(),title:"Novo curso",summary:"",category:"metodologia",order:courses.length,published:false,lessons:[]};
+ courses.push(c);selectedId=c.id;persist();render();$("course-title").focus();status("Curso demonstrativo criado. Edite e salve o título.");
+});
+$("course-form").addEventListener("submit",e=>{
+ e.preventDefault();const c=selected();if(!c)return;
+ const title=$("course-title").value.trim(),summary=$("course-summary").value.trim();
+ const order=Number($("course-order").value),category=$("course-category").value;
+ if(!title||title.length>160||summary.length>500||!Number.isInteger(order)||order<0||order>9999||!Object.hasOwn(categories,category)){
+  status("Revise o nome, a categoria e a ordem do curso.");return;
+ }
+ c.title=title;c.summary=summary;c.order=order;c.category=category;
+ // Alterações de conteúdo remetem o curso ao rascunho para revisão editorial.
+ c.published=false;persist();render();status("Rascunho salvo neste navegador.");
+});
+$("toggle-publication").addEventListener("click",()=>{
+ const c=selected();if(!c)return;
+ if(!c.published && (!c.title.trim()||!c.lessons.length||c.lessons.some(l=>!l.title.trim()||!l.body.trim()))){
+   status("Para publicar na demonstração, inclua ao menos uma aula com título e conteúdo.");return;
+ }
+ c.published=!c.published;persist();render();
+ status(c.published?"Curso marcado como publicado SOMENTE nesta demonstração.":"Curso retirado da demonstração.");
+});
+$("lesson-form").addEventListener("submit",e=>{
+ e.preventDefault();const c=selected();if(!c)return;
+ const title=$("lesson-title").value.trim(),body=$("lesson-body").value.trim();
+ if(!title||!body||title.length>160||body.length>5000){status("Preencha título e conteúdo válidos.");return;}
+ c.lessons.push({id:newId(),title,body});c.published=false;
+ persist();render();$("lesson-form").reset();status("Aula incluída; curso voltou a rascunho.");
+});
+$("lesson-list").addEventListener("click",e=>{
+ const btn=e.target.closest("[data-remove]"),c=selected();if(!btn||!c)return;
+ c.lessons=c.lessons.filter(l=>l.id!==btn.dataset.remove);
+ c.published=false;persist();render();status("Aula excluída da demonstração; curso voltou a rascunho.");
+});
+$("reset").addEventListener("click",()=>{
+ if(!confirm("Restaurar todos os dados fictícios desta prévia administrativa?"))return;
+ courses=clone(seeds);selectedId=courses[0].id;persist();status("");render();
+});
+render();
+</script>
+</body>
+</html>

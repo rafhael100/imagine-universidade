@@ -1,0 +1,341 @@
+name: UNI isolated branch QA (test-only, no deploy)
+
+# UNI C-101: repeat all isolated browser and Docker labs with updated course+lesson gate assertions.
+# UNI C-100: full malformed 200 lesson list, no-write/publish and authorized recovery regressions.
+# UNI C-99: full 200-malformed editor catalogue fail-closed and privacy export regressions.
+# UNI C-98: full test-only private export schema, browser downloads and PG18 safety checks.
+# UNI C-97: full safe completion-reconciliation Chromium, PG18, Docker and staging regression.
+# UNI C-96: repeat full QA after updating stale-read assertion to current safe implementation.
+# UNI C-93–C-95: full synthetic QA after lesson, draft-exit and catalog-authority hardening.
+# UNI C-92: recheck both translated unsaved-change dialogs under Chromium.
+# UNI C-91: preserve 320/390/768/1440 synthetic screenshots and 200%-scale layout checks.
+# UNI C-87/C-90: full QA of student/admin retry and unsaved editorial guards.
+# UNI C-85: revalidate timed Portal authority and expiring grants in all isolated labs.
+# UNI C-103: reject stale/forged editorial claims; never derive release authority from CSV.
+# UNI C-102: export immutable full-text review package for the existing 35 draft lessons.
+# UNI C-101: test lost editorial POST response after commit, no auto-replay, manual revalidation.
+# UNI C-106: actual PG18 search SQL draft/published/unpublished checks in disposable rollback.
+# UNI C-105: rerun full browser labs with isolated search-revocation page and unchanged export smoke.
+# UNI C-104: full private search PHP/PG18, Chromium, Portal parity, staging and editorial regression.
+# Continuous *test-only* review branch QA, with no production credentials.
+# Runs on relevant code pushes only; docs/preview changes are excluded.
+# Requires Actions permission on this repository; no merge/deploy event.
+on:
+  push:
+    branches:
+      - feat/uni-c70-archive-offline-preview-on-success-2026-11-15
+    paths:
+      - '.github/workflows/uni-branch-qa-isolated.yml'
+      - 'app/**'
+      - 'bootstrap/**'
+      - 'database/**'
+      - 'routes/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'ops/staging/**'
+      - 'ops/release-gates.json'
+      - 'composer.json'
+      - 'composer.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-branch-qa-isolated-review
+  cancel-in-progress: true
+
+jobs:
+  validation:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: uni_ci
+          POSTGRES_USER: uni_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uni_ci -d uni_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: uni_ci
+      DB_USERNAME: uni_ci
+      DB_PASSWORD: synthetic_ci_only
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    steps:
+      - name: Checkout review branch without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify synthetic and non-production boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$APP_ENV" = "testing"
+          test "$DB_DATABASE" = "uni_ci"
+          test ! -e .env
+          test ! -e .env.production
+          test -f composer.lock
+
+      - name: PHP 8.3 testing runtime
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, xml, pdo_sqlite, pdo_pgsql, sqlite3, openssl, fileinfo, sodium
+          tools: composer:v2
+          coverage: none
+
+      - name: Lint all PHP and run standalone domain checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          find app bootstrap database routes tests scripts -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l > /dev/null
+          php scripts/check-access-domain.php
+          php scripts/check-portal-context.php
+          php scripts/check-tenant-guard.php
+          php scripts/check-provisioner-contract.php
+          php scripts/check-learning-mock.php
+          node ops/staging/check-release-gates.mjs
+          node scripts/check-release-gate-policy.mjs
+          node scripts/check-write-fence.mjs
+          node scripts/check-ui-contract.mjs
+          node scripts/check-learning-content.mjs
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-validation.mjs
+          node preview/current-check.mjs
+          python3 scripts/check-sqlite-contract.py
+
+      - name: Validate and install locked dependencies without scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+
+      - name: Unit and feature tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor/bin/phpunit --testsuite Unit
+          vendor/bin/phpunit --testsuite Feature
+
+      - name: PostgreSQL migration and synthetic database checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$APP_ENV" = "testing"
+          test "$DB_DATABASE" = "uni_ci"
+          php artisan migrate:fresh --database=pgsql --force
+          php scripts/check-pg-schema.php
+          php scripts/check-pg-flow.php
+          php scripts/check-pg-nonce.php
+          php scripts/check-pg-concurrency.php
+          php scripts/check-pg-runtime-roles.php
+
+      - name: Confirm no publication occurred
+        run: echo 'QA finished on disposable runner; no merge, VPS, DNS, billing, API keys or deployment.'
+
+  editorial-review-pack:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact reviewed editorial source without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare reviewer-only package for all 35 draft lessons
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -e .env && test ! -e .env.production
+          test -f content/mvp-cursos-v1.json
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-validation.mjs
+          node scripts/build-editorial-review-pack.mjs --out "$RUNNER_TEMP/universidade-editorial-review"
+          node scripts/validate-editorial-review.mjs \
+            --csv "$RUNNER_TEMP/universidade-editorial-review/revisao.csv" \
+            > "$RUNNER_TEMP/universidade-editorial-review/revisao-validacao-estrutural.json"
+          grep -Fq '"publishable": false' "$RUNNER_TEMP/universidade-editorial-review/revisao-validacao-estrutural.json"
+          grep -Fq 'NÃO É APROVAÇÃO NEM PUBLICAÇÃO' "$RUNNER_TEMP/universidade-editorial-review/LEIA-PRIMEIRO.md"
+          test "$(find "$RUNNER_TEMP/universidade-editorial-review/cursos" -type f -name '*.md' | wc -l)" -eq 10
+          echo "PASS editorial review evidence only; no approval, deploy, grant or publication."
+
+      - name: Upload unapproved editorial handoff for human review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-revisao-editorial-PENDENTE
+          path: ${{ runner.temp }}/universidade-editorial-review/
+          retention-days: 14
+          if-no-files-found: error
+
+  portal-contract-parity:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout University candidate without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout exact reviewed Portal V4 contract, read-only
+        uses: actions/checkout@v4
+        with:
+          repository: rafhael100/imagine-portal
+          ref: 8f469b7079467098337568178637cc989420a102
+          path: portal-contract-source
+          persist-credentials: false
+
+      - name: PHP 8.3 pure cross-repository contract probe
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Assert pinned revision, ID compatibility and default denial
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -f .env && test ! -f portal-contract-source/apps/portal/.env
+          test "$(git -C portal-contract-source rev-parse HEAD)" = "8f469b7079467098337568178637cc989420a102"
+          php -l scripts/check-portal-university-contract.php
+          PORTAL_CONTRACT_DIR="$GITHUB_WORKSPACE/portal-contract-source" \
+            php scripts/check-portal-university-contract.php
+          echo "PASS pinned public Portal source checked against real University code; no SSO, grant or deploy."
+
+  # Expensive laboratories only on an explicit QA-marked commit. Avoid
+  # repeated Docker/browser downloads on every subsequent code change.
+  docker-lab:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade' && contains(github.event.head_commit.message, '[uni-full-qa]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require disposable local Docker only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -e .env
+          test ! -e .env.production
+          test -f composer.lock
+          test -f compose.qa.yml
+          test -z "${DOCKER_HOST:-}"
+          test "$(docker context show)" = "default"
+          ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
+          ! grep -Fq '/var/run/docker.sock' compose.qa.yml
+      - name: Synthetic PHP and PostgreSQL Docker Compose tests, automatic cleanup
+        shell: bash
+        run: bash scripts/run-qa-compose.sh
+
+  browser-lab:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade' && contains(github.event.head_commit.message, '[uni-full-qa]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify offline synthetic browser origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test ! -e .env
+          test ! -e .env.production
+          test -f public/assets/logo-imagine.png
+          test -f public/assets/imagine-tokens.css
+          test -f preview/current.html
+          node --check scripts/qa-browser-synthetic.cjs
+          node preview/current-check.mjs
+      - name: Real Chromium and accessibility QA with synthetic fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uni-browser-packages" "$RUNNER_TEMP/uni-browser-evidence"
+          cd "$RUNNER_TEMP/uni-browser-packages"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          cd "$GITHUB_WORKSPACE"
+          NODE_PATH="$RUNNER_TEMP/uni-browser-packages/node_modules" \
+          UNI_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-browser-evidence" \
+            node scripts/qa-browser-synthetic.cjs
+      - name: Upload synthetic UI screenshots and accessibility checks
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: imagine-universidade-synthetic-ui-evidence
+          path: ${{ runner.temp }}/uni-browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Downloadable offline educational preview (test-only)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: imagine-universidade-offline-previa-revisao
+          path: |
+            preview/current.html
+            preview/logo-imagine.png
+          if-no-files-found: error
+          retention-days: 7
+
+  staging-image-lab:
+    needs: validation
+    if: github.repository == 'rafhael100/imagine-universidade' && contains(github.event.head_commit.message, '[uni-full-qa]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Deny production files, host Docker and uncontrolled branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REPOSITORY" = "rafhael100/imagine-universidade"
+          test ! -e .env
+          test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          test -f composer.lock
+          test -z "${DOCKER_HOST:-}"
+          test "$(docker context show)" = "default"
+          bash -n scripts/qa-staging-image-build.sh
+          bash -n scripts/qa-staging-private-http.sh
+          bash -n scripts/qa-staging-postgres-http.sh
+      - name: Build PHP/Nginx staging images and verify private HTTP/PG topology
+        shell: bash
+        run: bash scripts/qa-staging-image-build.sh

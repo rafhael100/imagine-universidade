@@ -1,0 +1,284 @@
+name: Universidade Imagine — QA manual isolado (sem deploy)
+
+# Somente o evento rotulado com autorização explícita pode acionar QA.
+# Sem gatilho de push, criação de PR, synchronize ou deploy.
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Confirme execução em runner descartável, sem deploy"
+        type: choice
+        required: true
+        options:
+          - test-only
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-manual-qa-disposable
+  cancel-in-progress: false
+
+jobs:
+  isolated-tests:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.confirm == 'test-only') ||
+      (github.event_name == 'pull_request' &&
+       github.event.action == 'labeled' &&
+       github.event.label.name == 'uni-qa-approved' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.base.ref == 'main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: uni_ci
+          POSTGRES_USER: uni_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uni_ci -d uni_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_KEY: "base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_DATABASE: uni_ci
+      DB_USERNAME: uni_ci
+      DB_PASSWORD: synthetic_ci_only
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+
+    steps:
+      - name: Checkout de revisão — não tocar main
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: PHP 8.3 + extensões de teste
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, dom, xml, pdo_sqlite, pdo_pgsql, sqlite3, openssl, fileinfo, sodium
+          tools: composer:v2
+          coverage: none
+
+      - name: Verificar fronteira descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "pull_request" || test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$DB_DATABASE" = "uni_ci"
+          test "$DB_USERNAME" = "uni_ci"
+          test "$DB_HOST" = "127.0.0.1"
+          test "$APP_ENV" = "testing"
+          test ! -f .env
+          echo "QA isolado permitido; nenhum deploy ou servidor exposto."
+
+      - name: Verificações independentes sem Composer
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/check-access-domain.php
+          php scripts/check-portal-context.php
+          php scripts/check-provisioner-contract.php
+          php scripts/check-learning-mock.php
+          php scripts/check-tenant-guard.php
+          python3 scripts/check-sqlite-contract.py
+          bash -n scripts/run-qa-compose.sh
+          sh -n scripts/qa-pg-backup-restore.sh
+          node scripts/check-ui-contract.mjs
+          node preview/current-check.mjs
+          node scripts/check-learning-content.mjs
+          bash -n ops/staging/inventory-readonly.sh
+          node ops/staging/check-inventory.mjs
+          node ops/staging/check-release-gates.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-compose-static.mjs
+          bash ops/staging/check-compose-syntax.sh
+          bash -n scripts/qa-staging-image-build.sh
+          php -l scripts/qa-staging-runtime-deny.php
+          bash -n scripts/qa-staging-private-http.sh
+          php -l scripts/qa-staging-private-http-probe.php
+          bash -n scripts/qa-staging-postgres-http.sh
+
+      - name: Instalar dependências travadas de PHP 8.3
+        run: |
+          set -euo pipefail
+          test -f composer.lock
+          composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+
+      - name: Validar composer.json e composer.lock versionados
+        run: composer validate --no-check-publish
+
+      - name: PHPUnit Unit e Feature com SQLite em memória
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor/bin/phpunit --testsuite Unit
+          vendor/bin/phpunit --testsuite Feature
+
+      - name: Migrações reais Laravel em PostgreSQL 18 descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DB_DATABASE" = "uni_ci"
+          test "$APP_ENV" = "testing"
+          php artisan migrate:fresh --database=pgsql --force
+          php artisan migrate:status --database=pgsql
+          php scripts/check-pg-schema.php
+          php scripts/check-pg-flow.php
+          php scripts/check-pg-nonce.php
+          php scripts/check-pg-concurrency.php
+          php scripts/check-pg-runtime-roles.php
+          # Carga sintética EXCLUSIVA do PostgreSQL descartável de CI.
+          first=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
+          echo "$first" | grep -Fq '10 courses created; 35 lessons created; 0 courses preserved.'
+          second=$(php artisan university:load-synthetic-editorial --confirm-synthetic --no-interaction)
+          echo "$second" | grep -Fq '0 courses created; 0 lessons created; 10 courses preserved.'
+          echo 'PASS: catálogo sintético PostgreSQL preparado e reexecutado sem duplicação.'
+
+      - name: Confirmar que autorizações de produção continuam negadas
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq "UnavailablePortalAuthority::class" app/Providers/AppServiceProvider.php
+          grep -Fq "university.grant:view" routes/web.php
+          grep -Fq "university.grant:manage" routes/web.php
+          echo "Sem deploy, SSO real ou grants operacionais."
+
+  docker-laboratory:
+    needs: isolated-tests
+    if: needs.isolated-tests.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout somente da revisão autorizada
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verificar limites do laboratório descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .env
+          test ! -e .env.production
+          test -f composer.lock
+          test -f compose.qa.yml
+          test -f scripts/run-qa-compose.sh
+          # Sem portas publicadas, volumes/bind mounts ou host remoto.
+          ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
+          grep -Fq 'pgdata:/var/lib/postgresql' compose.qa.yml
+          # Named QA volume is safe; never allow host path bind mounts.
+          ! grep -Eq '^[[:space:]]+-[[:space:]]+(/|[.]|~|\$\{)' compose.qa.yml
+          ! grep -Fq '/var/run/docker.sock' compose.qa.yml
+          ! grep -Eq '^[[:space:]]+privileged:' compose.qa.yml
+          echo "QA Docker com dados e rede descartáveis autorizado."
+
+      - name: Executar PHP 8.3 e PostgreSQL18 em Docker Compose descartável
+        shell: bash
+        run: bash scripts/run-qa-compose.sh
+
+      - name: Confirmar que nenhuma imagem foi publicada
+        run: echo "Docker local de QA concluído sem push, SSH, publicação ou deploy."
+
+  browser-laboratory:
+    needs: isolated-tests
+    if: needs.isolated-tests.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      UNI_BROWSER_LAB: synthetic
+
+    steps:
+      - name: Checkout de revisão — interface de teste, sem credenciais
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Confirmar origem de teste e ausência de segredos
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$UNI_BROWSER_LAB" = "synthetic"
+          test "$CI" = "true"
+          test ! -f .env
+          test ! -f .env.production
+          test -f public/assets/logo-imagine.png
+          test -f public/assets/imagine-tokens.css
+          test -f scripts/qa-browser-synthetic.cjs
+          node --check scripts/qa-browser-synthetic.cjs
+
+      - name: Chromium real, navegação fictícia e WCAG automatizado
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uni-browser-packages" "$RUNNER_TEMP/uni-browser-evidence"
+          cd "$RUNNER_TEMP/uni-browser-packages"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+          cd "$GITHUB_WORKSPACE"
+          NODE_PATH="$RUNNER_TEMP/uni-browser-packages/node_modules"           UNI_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-browser-evidence"             node scripts/qa-browser-synthetic.cjs
+
+      - name: Evidência sintética sem credenciais (retida por 7 dias)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: universidade-qa-navegador-ficticio
+          path: ${{ runner.temp }}/uni-browser-evidence
+          retention-days: 7
+
+      - name: Conferir prévia offline sem qualquer dado real
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$UNI_BROWSER_LAB" = "synthetic"
+          test "$CI" = "true"
+          test ! -e .env
+          test ! -e .env.production
+          test -f preview/current.html
+          test -f preview/logo-imagine.png
+          node preview/current-check.mjs
+
+      - name: Arquivo ZIP navegável da prévia sintética (14 dias)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: universidade-imagine-previa-offline
+          path: |
+            preview/current.html
+            preview/logo-imagine.png
+          if-no-files-found: error
+          retention-days: 14
+
+  staging-image-laboratory:
+    needs: isolated-tests
+    if: needs.isolated-tests.result == 'success' && github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout somente da revisão autorizada
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compilar e validar imagens candidatas PHP e Nginx sem deploy
+        env:
+          CI: 'true'
+        run: bash scripts/qa-staging-image-build.sh

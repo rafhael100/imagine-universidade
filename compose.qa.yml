@@ -1,0 +1,63 @@
+# QA local/na VPS de desenvolvimento. Explicitly run; no auto-start.
+# Contains only synthetic data. No host ports/bind mounts or production secrets.
+# The named storage volume is removed at the end of each authorized QA run.
+services:
+  db:
+    image: postgres:18-alpine
+    restart: "no"
+    environment:
+      POSTGRES_DB: uni_ci
+      POSTGRES_USER: uni_ci
+      POSTGRES_PASSWORD: synthetic_ci_only
+    # Volume nomeado efêmero: o entrypoint oficial PostgreSQL18
+    # prepara permissões do diretório antes de criar o cluster.
+    # O script de QA remove este volume com down --volumes ao final.
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uni_ci -d uni_ci"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - university_qa
+
+  qa:
+    build:
+      context: .
+      dockerfile: ops/qa/Dockerfile
+    profiles: ["manual-qa"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Share DB namespace so hardcoded guard 127.0.0.1:5432 refers only
+    # to this container's own disposable PostgreSQL, not a remote server.
+    network_mode: "service:db"
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_KEY: "base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+      APP_URL: "http://127.0.0.1"
+      DB_CONNECTION: pgsql
+      DB_HOST: "127.0.0.1"
+      DB_PORT: "5432"
+      DB_DATABASE: uni_ci
+      DB_USERNAME: uni_ci
+      DB_PASSWORD: synthetic_ci_only
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      HOME: /home/uniqa
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 3g
+    pids_limit: 160
+
+volumes:
+  pgdata:
+
+networks:
+  university_qa:
+    driver: bridge

@@ -1,6 +1,6 @@
 # Universidade Imagine — Documentação oficial de planejamento
 
-> **Repositório privado de documentação.** Não contém implementação da plataforma, vídeos publicados, contratos de fornecedores ou homologação de ambiente.
+> **Contexto atualizado da branch de revisão:** a `main` mantém o planejamento documental; esta branch contém código candidato em PRs DRAFT, não homologado nem implantado. Não há vídeos publicados, clientes com acesso operacional, contratos adicionais nem homologação de ambiente.
 
 **Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. **O Gate D foi encerrado documentalmente em 04/11/2026 por aprovação expressa do D15**; orçamento/teto do desenvolvimento, contratações e programação **não foram autorizados**.
 
@@ -89,3 +89,8 @@ O documento [UNI-001 original](docs/09-fontes-historicas/UNI-001-original-imagin
 - `docs/10-modulos/` — apresentação por módulo das 84 capacidades da base v5.
 
 **Esta publicação registra documentação, não é autorização para programar, contratar, publicar cursos ou homologar fornecedores.**
+
+
+## Prévia offline atual do currículo (somente demonstração)
+
+Abra `preview/current.html` junto de `preview/logo-imagine.png` num navegador local. Inclui **10 cursos/35 aulas**, os roteiros Visitas → Leads → Clientes, pesquisa, filtros e progresso fictício local. Sem login, API, clientes reais ou publicação. **Nunca hospedá-la na internet ou VPS.** O teste `node preview/current-check.mjs` valida integridade do catálogo e identidade original.

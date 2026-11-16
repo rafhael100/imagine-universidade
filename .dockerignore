@@ -1,0 +1,47 @@
+# QA-only build context: send source/test files, never environment secrets.
+**
+!composer.json
+!composer.lock
+!phpunit.xml
+!artisan
+!app/
+!app/**
+!bootstrap/
+!bootstrap/**
+!database/
+!database/**
+!routes/
+!routes/**
+!resources/
+!resources/views/
+!resources/views/**
+!content/
+!content/**
+!tests/
+!tests/**
+!scripts/
+!scripts/**
+!public/
+!public/index.php
+!public/assets/
+!public/assets/logo-imagine.png
+!public/assets/imagine-tokens.css
+!ops/
+!ops/qa/
+!ops/qa/Dockerfile
+!ops/staging/
+!ops/staging/Dockerfile.php
+!ops/staging/Dockerfile.nginx
+!ops/staging/nginx.conf
+# Disposable QA role-matrix test only; image Dockerfiles do not copy this SQL.
+!ops/staging/role-grants-candidate.sql
+
+# Even if they occur inside an allowed directory, exclude confidential data.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*secret*
+**/vendor/**
+**/node_modules/**
+**/.git/**

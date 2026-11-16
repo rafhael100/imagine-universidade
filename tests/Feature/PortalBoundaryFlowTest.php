@@ -289,6 +289,31 @@ final class PortalBoundaryFlowTest extends TestCase
         self::assertGreaterThanOrEqual($before + 2, $authority->verificationCount);
     }
 
+
+    public function test_revocation_during_progress_export_does_not_reveal_completions(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertOk()->assertJsonPath('completed', true);
+
+        $revoked = false;
+        $authority = $this->fakeAuthority;
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $query
+        ) use ($authority, &$revoked): void {
+            if (!$revoked && str_contains($query->sql, 'educational_lesson_progress')) {
+                $authority->clientAEligible = false;
+                $revoked = true;
+            }
+        });
+
+        $this->getJson('/universidade/private/progress/export')
+            ->assertForbidden()->assertDontSee('teste-aula-um');
+        self::assertTrue($revoked, 'The fake authority must revoke during the read.');
+        self::assertSame(1, DB::table('educational_lesson_progress')->count());
+    }
+
     public function test_portal_outage_during_admin_audit_read_hides_response(): void
     {
         $this->asEditor();

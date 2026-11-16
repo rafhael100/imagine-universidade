@@ -454,6 +454,13 @@ assert.match(adminRecoveryUI,/state\.courses=\[\];state\.course=null;state\.less
 assert.match(adminRecoveryUI,/\$\("catalog-recovery"\)\.hidden=true;/,"admin: access revocation hides retry");
 console.log("PASS manual recovery UI: transient errors retry once; denial purges and disables both panels");
 
+assert.match(adminRecoveryUI,/function courseHasUnsavedEdits\(\)/,"admin: course dirty-state guard");
+assert.match(adminRecoveryUI,/function lessonHasUnsavedEdits\(\)/,"admin: lesson dirty-state guard");
+assert.match(adminRecoveryUI,/if\(!confirmDiscardCourseAndLesson\(\)\)return;/,"admin: switching courses does not discard edits silently");
+assert.match(adminRecoveryUI,/if\(!confirmDiscardLesson\(\)\)return;/,"admin: switching lessons does not discard edits silently");
+assert.match(adminRecoveryUI,/state\.lesson\?\.id===Number\(b\.dataset\.lesson\)/,"admin: same-lesson selection preserves edits");
+console.log("PASS editorial navigation: unsaved course and lesson changes require explicit discard");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

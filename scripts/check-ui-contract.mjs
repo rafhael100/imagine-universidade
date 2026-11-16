@@ -649,4 +649,36 @@ for(const course of trackCourses){
 }
 console.log("PASS 6 trilhas / 24 microaulas com caso fictício, prática e salvaguarda");
 
+
+const searchBackend=read("app/Domain/Learning/UniversityCatalogRepository.php");
+const searchController=read("app/Http/Controllers/UniversityController.php");
+const searchRoutes=read("routes/web.php");
+assert.match(searchRoutes,/Route::post\('\/search',[^\n]+\n\s+->middleware\('throttle:20,1'\)/,
+  "private lesson search must be a rate-limited VIEW POST");
+assert.match(searchBackend,/function searchPublishedLessons\(PortalGrant \$grant, string \$query\)/,
+  "search must derive tenant from verified Portal grant");
+for(const fence of [
+  "where('c.educational_organization_id', $editorialOrg)",
+  "where('c.is_shared', true)",
+  "where('c.is_published', true)",
+  "where('v.status', 'published')",
+  "where('l.is_published', true)"
+])assert.ok(searchBackend.includes(fence),"search must hide draft/archived material: "+fence);
+assert.match(searchBackend,/->limit\(9\)/,"server search must be bounded");
+assert.match(searchBackend,/preg_match\('\/\\A\[\\p\{L\}/,
+  "reject wildcard and control characters, accept literal Unicode terms");
+assert.match(searchController,/function searchLessons\(Request \$request, PortalAccessGate \$gate\)/,
+  "controller must verify live Portal authority");
+assert.match(searchController,/if \(\$this->freshGrant\(\$request, \$gate, \$grant\) === null\)/,
+  "search results cannot be emitted after grant revocation");
+assert.match(studentProgressUI,/id="lesson-search-form"/,"student must expose private lesson search");
+assert.match(studentProgressUI,/function validLessonSearchResults\(payload\)/,"student must check result shape");
+assert.match(studentProgressUI,/api\("\/search",\{method:"POST",body:\{query:phrase\}\}\)/,
+  "student must never place search terms in query URL");
+assert.match(studentProgressUI,/if\(!state\.accessDenied\)openCourseWithAllFilters\(hit\.course_id,hit\.lesson_id\)/,
+  "result must open an authorized selected lesson");
+assert.match(studentProgressUI,/document\.getElementById\("lesson-search-results"\)\.replaceChildren\(\)/,
+  "search results must be purged on Portal denial");
+console.log("PASS private lesson search: 8-hit bounded, published-only, CSRF, tenant, revocation and no external AI");
+
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

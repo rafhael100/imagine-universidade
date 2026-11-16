@@ -37,7 +37,13 @@
     .chip{font-size:11px;border-radius:999px;padding:5px 9px;background:#F0F2F5;color:#536071;font-weight:800}
     .chip.published{background:#E7F5ED;color:#23684A}
     hr{border:0;border-top:1px solid var(--line);margin:26px 0}
-    .help{font-size:12px}.footer{font-size:12px;color:#8F98A4;margin-top:28px}
+    .help{font-size:12px}
+    .editorial-preview{border:1px solid #E7BF88;background:#FFFAF4;border-radius:12px;padding:20px;margin:20px 0 0;overflow-wrap:anywhere}
+    .editorial-preview[hidden]{display:none}
+    .editorial-preview h3{font-size:19px;color:#263044}
+    .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
+    .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
+    .footer{font-size:12px;color:#8F98A4;margin-top:28px}
     @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px}.grid{grid-template-columns:1fr}}
   </style>
 </head>
@@ -86,8 +92,14 @@
             <div class="field"><label for="lesson-sort">Ordem</label><input id="lesson-sort" type="number" min="0" max="9999" step="1" value="0"></div>
             <div class="field span"><label for="lesson-body">Conteúdo (texto simples)</label><textarea id="lesson-body" minlength="10" maxlength="30000" required></textarea></div>
           </div>
-          <div class="actions"><button class="primary" id="lesson-save" type="submit">Salvar aula</button><button class="secondary" type="button" id="clear-lesson">Nova aula</button><button class="secondary danger" type="button" id="delete-lesson" disabled>Excluir rascunho</button></div>
+          <div class="actions"><button class="primary" id="lesson-save" type="submit">Salvar aula</button><button class="secondary" type="button" id="clear-lesson">Nova aula</button><button class="secondary" type="button" id="preview-lesson">Pré-visualizar aula</button><button class="secondary danger" type="button" id="delete-lesson" disabled>Excluir rascunho</button></div>
         </form>
+        <section id="lesson-preview" class="editorial-preview" role="region" aria-labelledby="preview-title" hidden>
+          <div class="eyebrow">Prévia local do rascunho · não publicada</div>
+          <h3 id="preview-title">Pré-visualização de aula</h3>
+          <div id="preview-body"></div>
+          <p class="help">A prévia exibe os valores atuais do formulário. Não envia conteúdo nem substitui revisão editorial independente.</p>
+        </section>
       </div>
     </section>
   </div>
@@ -110,6 +122,7 @@ function lockAccess(message){
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
+  hideLessonPreview();
   $("course-items").append(el("p","Cursos indisponíveis até novo acesso autorizado.","help"));
   $("lesson-items").append(el("p","Retorne ao Portal para verificar a sessão.","help"));
   document.querySelectorAll(".layout button,.layout input,.layout select,.layout textarea")
@@ -159,8 +172,39 @@ function fillCourse(){
   $("delete-course").disabled=!c||!!c.is_published;
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
 }
+function previewLessonParts(body){
+  const markers=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
+  return String(body||"").slice(0,30000)
+    .split(/\n\n(?=(?:EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE)\n)/)
+    .map((chunk,index)=>{
+      const nl=chunk.indexOf("\n");
+      const heading=nl>=0?chunk.slice(0,nl):"";
+      return index>0&&markers.includes(heading)
+        ?{title:heading,text:chunk.slice(nl+1).trim()}
+        :{title:null,text:chunk.trim()};
+    }).filter(section=>section.text.length>0);
+}
+function hideLessonPreview(){
+  $("preview-body").replaceChildren();
+  $("lesson-preview").hidden=true;
+}
+function showLessonPreview(){
+  if(state.accessDenied||!state.course||state.course.is_published)return;
+  const title=$("lesson-title").value.trim();
+  const body=$("lesson-body").value.trim();
+  if(!title||body.length<10){say("Informe título e conteúdo antes de pré-visualizar.");return;}
+  hideLessonPreview();
+  $("preview-title").textContent=title;
+  for(const section of previewLessonParts(body)){
+    if(section.title)$("preview-body").append(el("h4",section.title));
+    $("preview-body").append(el("p",section.text));
+  }
+  $("lesson-preview").hidden=false;
+  $("lesson-preview").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
 function resetLesson(){
   if(state.accessDenied)return;
+  hideLessonPreview();
   state.lesson=null;
   $("lesson-form").reset();
   $("lesson-title-heading").textContent="Nova aula";
@@ -237,6 +281,7 @@ $("course-form").addEventListener("submit",async event=>{
 $("lesson-items").addEventListener("click",event=>{
   const b=event.target.closest("[data-lesson]");if(!b||state.accessDenied)return;
   state.lesson=state.lessons.find(l=>l.id===Number(b.dataset.lesson))||null;
+  hideLessonPreview();
   if(!state.lesson)return;
   $("lesson-title").value=state.lesson.title;$("lesson-slug").value=state.lesson.slug;
   $("lesson-slug").disabled=true;$("lesson-sort").value=String(state.lesson.sort_order);
@@ -245,6 +290,7 @@ $("lesson-items").addEventListener("click",event=>{
   renderLessons();
 });
 $("clear-lesson").addEventListener("click",()=>{if(state.accessDenied)return;resetLesson();renderLessons();});
+$("preview-lesson").addEventListener("click",showLessonPreview);
 $("delete-lesson").addEventListener("click",async()=>{
   const lesson=state.lesson,course=state.course;
   if(state.accessDenied||!course||course.is_published||!lesson||lesson.is_published||lesson.status!=="draft")return;
@@ -289,8 +335,15 @@ $("delete-course").addEventListener("click",async()=>{
 });
 $("publish").addEventListener("click",async()=>{
   if(state.accessDenied||!state.course||state.course.is_published)return;
-  try{await api("/courses/"+state.course.id+"/publish","POST");await refreshCourses(state.course.id);say("Curso publicado para clientes autorizados.");}
-  catch(error){say(error.message);}
+  const courseId=state.course.id;
+  if(!confirm("Publicar este curso para os clientes elegíveis? Confirme somente após revisão editorial independente do conteúdo e da versão. A publicação não libera o SSO ou o Portal por si só."))return;
+  if(state.accessDenied||state.course?.id!==courseId)return;
+  try{
+    await api("/courses/"+courseId+"/publish","POST");
+    if(state.accessDenied)return;
+    await refreshCourses(state.course?.id===courseId?courseId:state.course?.id??null);
+    say("Versão do curso publicada no catálogo privado; elegibilidade continua decidida pelo Portal.");
+  }catch(error){say(error.message);}
 });
 function unpublishWarning(title){
   const name=String(title||"este curso").slice(0,200);

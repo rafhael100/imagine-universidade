@@ -274,6 +274,22 @@ assert.match(studentProgressUI,/content.append\(el\("h3",lesson.title\),lessonTe
 assert.doesNotMatch(studentProgressUI,/\.innerHTML\s*=/,"aula: nunca interpretar HTML de currículo");
 console.log("PASS lesson sections: semântica acessível e texto seguro sem HTML");
 
+
+const previewFn=adminUI.match(/function previewLessonParts\(body\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(previewFn,"editor: parser de prévia acessível");
+const previewText="Introdução.\n\nEXEMPLO FICTÍCIO\nCaso de teste.\n\nAPLICAÇÃO OPCIONAL\nAtividade livre.\n\nCUIDADO IMPORTANTE\nNão prometer resultados.";
+const previewParts=new Script(previewFn+"\npreviewLessonParts(body)",{filename:"editorial-preview"}).runInNewContext({body:previewText});
+assert.equal(previewParts.length,4);
+assert.equal(previewParts[1].title,"EXEMPLO FICTÍCIO");
+assert.equal(previewParts[2].text,"Atividade livre.");
+assert.match(adminUI,/id="lesson-preview" class="editorial-preview".*hidden>/,"editor: preview oculta inicialmente");
+assert.match(adminUI,/id="preview-lesson"/,"editor: ação disponível para rascunho");
+assert.match(adminUI,/\$\("preview-body"\)\.append\(el\("p",section.text\)\)/,"editor: conteúdo apenas texto");
+assert.match(adminUI,/function hideLessonPreview\(\)/,"editor: limpar conteúdo na navegação");
+assert.match(adminUI,/if\(!confirm\("Publicar este curso para os clientes elegíveis/,"editor: publicação exige confirmação");
+assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\)return;/,"editor: evitar troca de curso no diálogo");
+console.log("PASS preview editorial: conteúdo local sem HTML, confirmação humana explícita");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

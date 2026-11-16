@@ -89,3 +89,8 @@ O documento [UNI-001 original](docs/09-fontes-historicas/UNI-001-original-imagin
 - `docs/10-modulos/` — apresentação por módulo das 84 capacidades da base v5.
 
 **Esta publicação registra documentação, não é autorização para programar, contratar, publicar cursos ou homologar fornecedores.**
+
+
+## Prévia offline atual do currículo (somente demonstração)
+
+Abra `preview/current.html` junto de `preview/logo-imagine.png` num navegador local. Inclui **10 cursos/35 aulas**, os roteiros Visitas → Leads → Clientes, pesquisa, filtros e progresso fictício local. Sem login, API, clientes reais ou publicação. **Nunca hospedá-la na internet ou VPS.** O teste `node preview/current-check.mjs` valida integridade do catálogo e identidade original.

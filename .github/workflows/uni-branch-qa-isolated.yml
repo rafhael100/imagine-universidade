@@ -1,5 +1,6 @@
 name: UNI isolated branch QA (test-only, no deploy)
 
+# UNI C-100: full malformed 200 lesson list, no-write/publish and authorized recovery regressions.
 # UNI C-99: full 200-malformed editor catalogue fail-closed and privacy export regressions.
 # UNI C-98: full test-only private export schema, browser downloads and PG18 safety checks.
 # UNI C-97: full safe completion-reconciliation Chromium, PG18, Docker and staging regression.

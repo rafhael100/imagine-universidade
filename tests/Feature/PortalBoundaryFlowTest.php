@@ -412,6 +412,32 @@ final class PortalBoundaryFlowTest extends TestCase
         self::assertSame(1, DB::table('educational_courses')->count());
     }
 
+    public function test_export_is_denied_when_last_service_is_revoked_during_database_read(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertOk()->assertJsonPath('completed', true);
+
+        $revoked = false;
+        $authority = $this->fakeAuthority;
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $query
+        ) use ($authority, &$revoked): void {
+            if (!$revoked && str_contains($query->sql, 'educational_lesson_progress')) {
+                // The read already succeeded, but the *next* Portal decision
+                // must withhold every completion from the HTTP response.
+                $authority->clientAEligible = false;
+                $revoked = true;
+            }
+        });
+
+        $this->getJson('/universidade/private/progress/export')
+            ->assertForbidden()->assertDontSee('teste-aula-um');
+        self::assertTrue($revoked, 'The fake authority must revoke access during the read.');
+        self::assertSame(1, DB::table('educational_lesson_progress')->count());
+    }
+
     public function test_progress_export_follows_service_revocation_portal_outage_and_reactivation(): void
     {
         [, $lessonId] = $this->createPublishedCourse();

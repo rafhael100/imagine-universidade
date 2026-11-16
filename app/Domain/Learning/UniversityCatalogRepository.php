@@ -652,8 +652,9 @@ final class UniversityCatalogRepository
                 return false;
             }
 
-            // Recheck expiry after locks and reads, before first mutation.
-            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            // Conferir autoridade viva após locks e leituras e antes de
+            // publicar/arquivar aulas. Um grant inicial não basta.
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
                 return false;
             }
 
@@ -954,14 +955,14 @@ final class UniversityCatalogRepository
         });
     }
 
-    public function setPublished(PortalGrant $grant, int $courseId, bool $publish, ?string $expectedContentHash = null): bool
+    public function setPublished(PortalGrant $grant, int $courseId, bool $publish, ?string $expectedContentHash = null, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $courseId, $publish, $expectedContentHash): bool {
+        return DB::transaction(function () use ($grant, $org, $courseId, $publish, $expectedContentHash, $verifyFreshGrant): bool {
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)

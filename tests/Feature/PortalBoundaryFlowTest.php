@@ -379,6 +379,51 @@ final class PortalBoundaryFlowTest extends TestCase
         $this->get('/universidade/private/app')->assertForbidden();
     }
 
+    public function test_last_service_revoked_during_completion_lookup_does_not_commit_progress(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $this->asClientA();
+        $authority = $this->fakeAuthority;
+        $revoked = false;
+        $before = $authority->verificationCount;
+
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $query
+        ) use ($authority, &$revoked): void {
+            // Trigger after middleware's first Portal check, during the
+            // student's server-side course lookup and before any INSERT.
+            if (!$revoked
+                && str_contains($query->sql, 'educational_lessons')
+                && str_contains($query->sql, 'educational_course_versions')) {
+                $revoked = true;
+                $authority->clientAEligible = false;
+            }
+        });
+
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertNotFound();
+
+        self::assertTrue($revoked, 'The synthetic cancellation must occur during the write flow.');
+        self::assertGreaterThanOrEqual($before + 2, $authority->verificationCount,
+            'Portal must be rechecked before completion INSERT.');
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
+    public function test_internal_completion_without_fresh_portal_fence_is_denied(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+
+        $grant = PortalGrant::allow(
+            'test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 1, time() + 30
+        );
+        $repository = $this->app->make(UniversityCatalogRepository::class);
+
+        // A constructed object must not be a write authorization.
+        self::assertFalse($repository->complete($grant, $lessonId));
+        self::assertFalse($repository->complete($grant, $lessonId, static fn (): ?PortalGrant => null));
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
     public function test_revoking_last_service_blocks_next_read_and_write_without_removing_history(): void
     {
         [, $lessonId] = $this->createPublishedCourse();

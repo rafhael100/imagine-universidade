@@ -327,21 +327,33 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_protected'], 404);
     }
 
-    public function publish(Request $request, int $courseId): JsonResponse
+    public function publish(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
     {
         $input = $request->validate([
             'expected_content_hash' => ['sometimes', 'string', 'size:64', 'regex:/\A[a-f0-9]{64}\z/'],
         ]);
+        $grant = $this->grant($request);
         return $this->catalog->setPublished(
-            $this->grant($request), $courseId, true, $input['expected_content_hash'] ?? null,
+            $grant,
+            $courseId,
+            true,
+            $input['expected_content_hash'] ?? null,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
         )
             ? response()->json(['published' => true])
             : response()->json(['error' => 'missing_lesson_or_changed_draft'], 409);
     }
 
-    public function unpublish(Request $request, int $courseId): JsonResponse
+    public function unpublish(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
     {
-        return $this->catalog->setPublished($this->grant($request), $courseId, false)
+        $grant = $this->grant($request);
+        return $this->catalog->setPublished(
+            $grant,
+            $courseId,
+            false,
+            null,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        )
             ? response()->json(['published' => false])
             : response()->json(['error' => 'not_found'], 404);
     }

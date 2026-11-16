@@ -81,8 +81,8 @@ const server=http.createServer((req,res)=>{
 });
 const results={screenshots:[],accessibility:[],assertions:0};
 function check(value,message){assert.ok(value,message);results.assertions++;}
-function ensureLocalPage(page){
-  page.route("**/*",route=>{
+async function ensureLocalPage(page){
+  await page.route("**/*",route=>{
     const url=route.request().url();
     if(url.startsWith(base+"/"))return route.continue();
     return route.abort();
@@ -112,7 +112,7 @@ async function inspect(page,name){
   try{
     const context=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:"reduce"});
     const page=await context.newPage();
-    ensureLocalPage(page);
+    await ensureLocalPage(page);
     const pageErrors=[];
     page.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
 
@@ -135,7 +135,7 @@ async function inspect(page,name){
     denyStudent=false;
 
     const admin=await context.newPage();
-    ensureLocalPage(admin);
+    await ensureLocalPage(admin);
     admin.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
     await admin.goto(base+"/admin");
     await admin.locator("#course-items [data-course='1']").waitFor();

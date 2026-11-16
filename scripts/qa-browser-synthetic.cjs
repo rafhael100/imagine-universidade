@@ -41,8 +41,8 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false;
-let requests=0,progressReads=0,completionPosts=0;
+let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
+let requests=0,progressReads=0,completionPosts=0,exportReads=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
  {id:1,action:"course.created",resource_kind:"course",resource_id:1,occurred_at:"2026-11-15T11:00:00"}
@@ -94,7 +94,19 @@ const server=http.createServer((req,res)=>{
     if(fault==="before_commit")return send(res,503,{error:"write_not_committed"});
     completed=true;return send(res,200,{completed:true});
   }
-  if(p==="/universidade/private/progress/export")return send(res,200,{schema_version:1,scope:"current_authenticated_student",completions:completed?[{course_slug:"qa",lesson_slug:"visitantes",course_version:1,completed_at:"2026-11-15"}]:[]});
+  if(p==="/universidade/private/progress/export"){
+    exportReads++;
+    const fault=exportFault;exportFault="none";
+    if(fault==="bad_schema")return send(res,200,{schema_version:2,scope:"current_authenticated_student",completions:[]});
+    if(fault==="network_error")return send(res,503,{error:"temporarily_unavailable"});
+    const payload={schema_version:1,scope:"current_authenticated_student",
+      completions:completed?[{course_slug:"qa",lesson_slug:"visitantes",course_version:1,completed_at:"2026-11-15"}]:[]};
+    if(fault==="extra"){
+      payload.subject_key="private-subject-must-not-be-downloaded";
+      payload.completions[0].email="private-email-must-not-be-downloaded";
+    }
+    return send(res,200,payload);
+  }
   if(p==="/universidade/private/admin/courses"){
     if(failAdminCoursesOnce){failAdminCoursesOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     return send(res,200,{courses:[{id:1,slug:"curso-sintetico",title:"Curso editorial fictício",category:"metodologia",summary:"Rascunho exclusivo de QA",sort_order:0,is_published:false}]});
@@ -286,6 +298,44 @@ async function inspect(page,name){
     await page.waitForFunction(()=>document.querySelector("#overall-progress").textContent.includes("1 de 2"));
     check(await page.getByText("✓ Aula concluída",{exact:true}).count()>=1,"student completion persisted in synthetic API");
     check(await page.getByRole("heading",{name:"EXEMPLO FICTÍCIO"}).count()===1,"lesson sections rendered");
+
+    // A compromised/upgraded backend may accidentally return subject or
+    // tenant metadata. The export file must NEVER serialize those extras.
+    exportFault="extra";
+    const exportBefore=exportReads;
+    const downloads=[];
+    page.on("download",d=>downloads.push(d));
+    await page.evaluate(()=>{
+      const button=document.getElementById("export-progress");
+      button.click();button.click();
+    });
+    await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("Arquivo de progresso preparado"));
+    check(exportReads===exportBefore+1,"double-click exports use exactly one private API read");
+    await page.waitForTimeout(250);
+    check(downloads.length===1,"double-click causes exactly one file download");
+    check(downloads[0].suggestedFilename()==="imagine-universidade-progresso.json",
+      "student export keeps fixed and predictable file name");
+    const exported=JSON.parse(fs.readFileSync(await downloads[0].path(),"utf8"));
+    check(JSON.stringify(exported)==JSON.stringify({
+      schema_version:1,scope:"current_authenticated_student",
+      completions:[{course_slug:"qa",course_version:1,lesson_slug:"visitantes",completed_at:"2026-11-15"}],
+    }),"download contains only allowlisted fields and current student data");
+    check(!JSON.stringify(exported).includes("private-"),"export strips simulated confidential fields");
+
+    exportFault="bad_schema";
+    const fileCount=downloads.length;
+    await page.locator("#export-progress").click();
+    await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("validação de privacidade"));
+    check(downloads.length===fileCount,"malformed schema must never create a download");
+    check(!(await page.locator("#export-progress").isDisabled()),
+      "invalid schema error still allows a later deliberate retry");
+
+    exportFault="network_error";
+    await page.locator("#export-progress").click();
+    await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("Operação") ||
+      document.querySelector("#status").textContent.includes("indisponível"));
+    check(downloads.length===fileCount,"HTTP 503 may not expose stale exported data");
+
     await inspect(page,"student");
     denyStudent=true;
     await page.locator("#export-progress").click();

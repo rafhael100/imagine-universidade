@@ -1,5 +1,6 @@
 name: UNI isolated branch QA (test-only, no deploy)
 
+# UNI C-91: preserve 320/390/768/1440 synthetic screenshots and 200%-scale layout checks.
 # UNI C-87/C-90: full QA of student/admin retry and unsaved editorial guards.
 # UNI C-85: revalidate timed Portal authority and expiring grants in all isolated labs.
 # Continuous *test-only* review branch QA, with no production credentials.
@@ -236,6 +237,15 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/uni-browser-packages/node_modules" \
           UNI_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-browser-evidence" \
             node scripts/qa-browser-synthetic.cjs
+      - name: Upload synthetic UI screenshots and accessibility checks
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: imagine-universidade-synthetic-ui-evidence
+          path: ${{ runner.temp }}/uni-browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Downloadable offline educational preview (test-only)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: success()

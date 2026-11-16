@@ -155,6 +155,8 @@ async function inspect(page,name){
       "editor cannot publish unsaved form changes");
     await admin.locator("#course-title").fill("Curso editorial fictício");
     await admin.locator("#check-publication").click();
+    // Readiness is an asynchronous GET: wait for the server response.
+    await admin.locator("#publication-readiness").waitFor({state:"visible",timeout:8000});
     check(await admin.locator("#publication-readiness").isVisible(),
       "manager sees real read-only readiness state");
     check((await admin.locator("#publication-readiness").innerText()).includes("1 aula"),

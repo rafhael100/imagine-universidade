@@ -33,6 +33,8 @@
 !ops/staging/Dockerfile.php
 !ops/staging/Dockerfile.nginx
 !ops/staging/nginx.conf
+# Disposable QA role-matrix test only; image Dockerfiles do not copy this SQL.
+!ops/staging/role-grants-candidate.sql
 
 # Even if they occur inside an allowed directory, exclude confidential data.
 **/.env

@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class UniversityTenantProvisioner
 {
-    public function initialize(PortalGrant $grant, int $nowEpoch): bool
+    public function initialize(PortalGrant $grant, int $nowEpoch, ?callable $verifyFreshGrant = null): bool
     {
         if (
             !$grant->allowed ||
@@ -32,11 +32,34 @@ final class UniversityTenantProvisioner
             return false;
         }
 
-        return DB::transaction(function () use ($grant): bool {
+        return DB::transaction(function () use ($grant, $verifyFreshGrant): bool {
             // Pode ter havido espera no banco depois do primeiro check.
             $nowEpoch = time();
             if ($grant->expiresAtEpoch <= $nowEpoch ||
                 $grant->expiresAtEpoch > $nowEpoch + 60) {
+                return false;
+            }
+
+            // A sessão, contrato e revisão devem continuar válidos no
+            // limite da transação. Nenhuma chamada interna pode criar tenant
+            // apenas apresentando um PortalGrant construído localmente.
+            if ($verifyFreshGrant === null) {
+                return false;
+            }
+            try {
+                $latest = $verifyFreshGrant();
+            } catch (\Throwable) {
+                return false;
+            }
+
+            if (!$latest instanceof PortalGrant
+                || !$latest->allowed
+                || $latest->permission !== PortalAccessGate::VIEW
+                || $latest->companyId !== $grant->companyId
+                || $latest->subjectId !== $grant->subjectId
+                || $latest->revision !== $grant->revision
+                || $latest->expiresAtEpoch <= time()
+                || $latest->expiresAtEpoch > time() + 60) {
                 return false;
             }
 

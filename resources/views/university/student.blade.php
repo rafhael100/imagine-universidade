@@ -53,6 +53,16 @@
     .searchbar{display:grid;gap:7px;margin:0 0 18px;max-width:460px}
     .searchbar label{font-weight:750;font-size:13px;color:#465369}
     .searchbar input{font:inherit;width:100%;padding:11px 14px;border:1px solid #C9D1DC;border-radius:11px;background:#fff;color:var(--ink)}
+        .lesson-search-panel{background:#fff;border:1px solid var(--line);border-radius:var(--imagine-radius-panel);padding:17px 19px;margin-bottom:18px}
+    .lesson-search-panel h2{font-size:18px;margin:0 0 6px}
+    .lesson-search-panel p{font-size:13px;color:var(--muted);margin:0 0 10px}
+    .lesson-search-fields{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+    .lesson-search-fields input{font:inherit;flex:1 1 210px;min-width:0;padding:11px 14px;border:1px solid #C9D1DC;border-radius:11px}
+    .lesson-search-results{display:grid;gap:7px;margin-top:12px}
+    .lesson-search-result{border:1px solid var(--line);background:#fff;border-radius:10px;text-align:left;padding:11px 13px;width:100%}
+    .lesson-search-result:hover{background:#FFF5E8}
+    .lesson-search-result strong,.lesson-search-result small{display:block}
+    .lesson-search-result small{color:var(--muted);margin-top:3px;font-size:12px}
     .pill{border:1px solid var(--line);background:white;border-radius:999px;padding:9px 14px;font-weight:750;font-size:13px}
     .pill[aria-pressed="true"]{background:#FFF0D9;border-color:#F0BD7C;color:#8A4700}
     .main{display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start}
@@ -134,6 +144,18 @@
     <label for="course-search">Buscar cursos</label>
     <input id="course-search" type="search" placeholder="Busque pelo nome ou assunto" maxlength="80" autocomplete="off">
   </div>
+  <section class="lesson-search-panel" aria-labelledby="lesson-search-title">
+    <h2 id="lesson-search-title">Encontre um assunto dentro das aulas</h2>
+    <p>Busca privada somente nos materiais publicados. As palavras pesquisadas não são enviadas a ferramentas externas.</p>
+    <form id="lesson-search-form" role="search">
+      <label for="lesson-search-query" class="sr-only">Palavra ou expressão da aula</label>
+      <div class="lesson-search-fields">
+        <input id="lesson-search-query" aria-label="Pesquisar texto das aulas" maxlength="60" minlength="3" required placeholder="Ex.: atendimento respeitoso" autocomplete="off" disabled>
+        <button id="lesson-search-submit" type="submit" class="secondary" disabled>Pesquisar aulas</button>
+      </div>
+    </form>
+    <div id="lesson-search-results" class="lesson-search-results" role="status" aria-live="polite"></div>
+  </section>
   <div class="main">
     <section class="panel" aria-labelledby="courses-title">
       <div class="panel-head"><h2 id="courses-title">Seus cursos</h2><p>Escolha um tema para começar.</p></div>
@@ -158,7 +180,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,exportLoading:false};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,exportLoading:false,searchRequest:0,searchBusy:false};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -199,7 +221,11 @@ function lockAccess(message){
   if(state.accessDenied)return;
   state.accessDenied=true;state.accessMessage=message;
   state.courses=[];state.courseId=null;state.lessonId=null;
-  ++state.courseRequest;++state.lessonRequest;
+  ++state.courseRequest;++state.lessonRequest;++state.searchRequest;
+  document.getElementById("lesson-search-query").value="";
+  document.getElementById("lesson-search-query").disabled=true;
+  document.getElementById("lesson-search-submit").disabled=true;
+  document.getElementById("lesson-search-results").replaceChildren();
   list.replaceChildren();lessonsBox.replaceChildren();content.replaceChildren();
   document.getElementById("pillar-cards").replaceChildren();
   document.getElementById("pillar-cards").append(el("p","Jornada indisponível. Volte ao Portal.","empty"));
@@ -229,7 +255,9 @@ async function api(path,options={}){
     method:options.method||"GET",
     credentials:"same-origin",
     cache:"no-store",
-    headers:{"Accept":"application/json","X-Requested-With":"XMLHttpRequest","X-CSRF-TOKEN":csrf},
+    headers:{"Accept":"application/json","X-Requested-With":"XMLHttpRequest","X-CSRF-TOKEN":csrf,
+      ...(options.body===undefined?{}:{"Content-Type":"application/json"})},
+    body:options.body===undefined?undefined:JSON.stringify(options.body),
   });
   if(response.status===403)lockAccess("Seu acesso não está autorizado. Retorne ao Portal do Cliente.");
   if(response.status===419)lockAccess("Sua sessão expirou. Acesse novamente pelo Portal.");
@@ -332,7 +360,7 @@ function renderCourses(){
     list.append(btn);
   }
 }
-async function selectCourse(id){
+async function selectCourse(id,preferredLessonId=null){
   // Invalidate prior course requests and lesson reads, including same-course clicks.
   const request=++state.courseRequest;
   ++state.lessonRequest;
@@ -354,7 +382,8 @@ async function selectCourse(id){
     }
     // Retomar pela primeira aula ainda pendente. Se todas estiverem
     // concluídas, abrir a última para permitir revisar o conteúdo.
-    const next=lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
+    const next=lessons.find(item=>item.id===preferredLessonId)||
+      lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
     await selectLesson(Number(next.id));
   }catch(error){
     if(state.courseRequest===request&&!state.accessDenied){
@@ -514,7 +543,7 @@ async function selectLesson(id){
     }
   }
 }
-function openCourseWithAllFilters(target){
+function openCourseWithAllFilters(target,preferredLessonId=null){
   if(state.accessDenied||!Number.isSafeInteger(target)||target<1)return;
   if(!state.courses.some(course=>course.id===target))return;
   state.filter="todos";state.query="";
@@ -523,8 +552,73 @@ function openCourseWithAllFilters(target){
     btn.setAttribute("aria-pressed",String(btn.dataset.filter==="todos"));
   });
   say("");
-  selectCourse(target);
+  selectCourse(target,preferredLessonId);
 }
+// Read-only search results are rendered with textContent, never HTML.
+// A 403/419 revokes and purges them; late responses cannot restore results.
+function validLessonSearchResults(payload){
+  if(!payload||!Array.isArray(payload.results)||payload.results.length>8)return null;
+  const unique=new Set(),results=[];
+  for(const item of payload.results){
+    if(!item||!Number.isSafeInteger(item.course_id)||item.course_id<1||
+       !Number.isSafeInteger(item.lesson_id)||item.lesson_id<1||
+       typeof item.course_title!=="string"||item.course_title.length>200||
+       typeof item.lesson_title!=="string"||item.lesson_title.length>200||
+       typeof item.snippet!=="string"||item.snippet.length>180||
+       unique.has(item.lesson_id))return null;
+    unique.add(item.lesson_id);
+    // Only link to a course already in the authorized local library.
+    if(!state.courses.some(c=>c.id===item.course_id))return null;
+    results.push({course_id:item.course_id,lesson_id:item.lesson_id,
+      course_title:item.course_title,lesson_title:item.lesson_title,
+      snippet:item.snippet});
+  }
+  return results;
+}
+document.getElementById("lesson-search-form").addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(state.accessDenied||state.searchBusy||state.libraryLoading)return;
+  const input=document.getElementById("lesson-search-query");
+  const phrase=input.value.trim().replace(/ +/g," ");
+  const results=document.getElementById("lesson-search-results");
+  const button=document.getElementById("lesson-search-submit");
+  if(phrase.length<3||phrase.length>60||!/^[\p{L}\p{N} -]+$/u.test(phrase)){
+    results.replaceChildren(el("p","Informe de 3 a 60 letras ou números para pesquisar.","empty"));
+    return;
+  }
+  const request=++state.searchRequest;
+  state.searchBusy=true;button.disabled=true;
+  results.replaceChildren(el("p","Procurando aulas publicadas...","empty"));
+  try{
+    const payload=await api("/search",{method:"POST",body:{query:phrase}});
+    if(state.accessDenied||request!==state.searchRequest)return;
+    const hits=validLessonSearchResults(payload);
+    if(hits===null)throw new Error("A pesquisa retornou dados inesperados. Tente novamente.");
+    results.replaceChildren();
+    if(!hits.length){
+      results.append(el("p","Nenhuma aula publicada encontrada para esta expressão.","empty"));
+      return;
+    }
+    for(const hit of hits){
+      const b=el("button",undefined,"lesson-search-result");
+      b.type="button";b.dataset.searchLesson=String(hit.lesson_id);
+      b.append(el("strong",hit.lesson_title),
+        el("small","Curso: "+hit.course_title),el("small",hit.snippet));
+      b.addEventListener("click",()=>{
+        if(!state.accessDenied)openCourseWithAllFilters(hit.course_id,hit.lesson_id);
+      });
+      results.append(b);
+    }
+  }catch(error){
+    if(!state.accessDenied&&request===state.searchRequest)
+      results.replaceChildren(el("p","A pesquisa está indisponível. Tente novamente.","empty"));
+  }finally{
+    if(request===state.searchRequest){
+      state.searchBusy=false;
+      if(!state.accessDenied)button.disabled=false;
+    }
+  }
+});
 document.querySelectorAll(".sim-inputs input").forEach(field=>{
   field.addEventListener("input",renderSimulator);
 });
@@ -629,10 +723,16 @@ async function loadLibrary(){
     if(state.accessDenied)return;
     state.courses=Array.isArray(payload.courses)?payload.courses:[];
     document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=false;});
+    document.getElementById("lesson-search-query").disabled=false;
+    document.getElementById("lesson-search-submit").disabled=false;
     renderSimulator();renderCourses();say("");
   }catch(error){
     if(!state.accessDenied){
       state.courses=[];state.courseId=null;state.lessonId=null;
+      ++state.searchRequest;
+      document.getElementById("lesson-search-query").disabled=true;
+      document.getElementById("lesson-search-submit").disabled=true;
+      document.getElementById("lesson-search-results").replaceChildren();
       list.replaceChildren();
       list.append(el("p","Cursos temporariamente indisponíveis.","empty"));
       say(error.message);

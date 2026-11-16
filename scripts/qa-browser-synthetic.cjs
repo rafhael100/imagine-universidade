@@ -41,7 +41,7 @@ const lessonRows=()=>[
  {id:11,title:"Visitas fictícias",completed:completed?1:0},
  {id:12,title:"Leads fictícios",completed:0}
 ];
-let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false;
+let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false;
 let requests=0;
 const audit=[
  {id:2,action:"lesson.created",resource_kind:"lesson",resource_id:11,occurred_at:"2026-11-15T12:00:00"},
@@ -74,9 +74,15 @@ const server=http.createServer((req,res)=>{
     if(failStudentLessonsOnce){failStudentLessonsOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     return send(res,200,{lessons:lessonRows()});
   }
-  if(p==="/universidade/private/lessons/11"&&req.method==="GET")return send(res,200,{lesson:{id:11,title:"Visitas fictícias",body:"Contexto da aula.\n\nEXEMPLO FICTÍCIO\nUm visitante fictício.\n\nAPLICAÇÃO OPCIONAL\nDesenhar a jornada.\n\nCUIDADO IMPORTANTE\nSem promessas de vendas."}});
+  if(p==="/universidade/private/lessons/11"&&req.method==="GET"){
+    if(failLessonDetailOnce){failLessonDetailOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    return send(res,200,{lesson:{id:11,title:"Visitas fictícias",body:"Contexto da aula.\n\nEXEMPLO FICTÍCIO\nUm visitante fictício.\n\nAPLICAÇÃO OPCIONAL\nDesenhar a jornada.\n\nCUIDADO IMPORTANTE\nSem promessas de vendas."}});
+  }
   if(p==="/universidade/private/lessons/12"&&req.method==="GET")return send(res,200,{lesson:{id:12,title:"Leads fictícios",body:"Todo interesse deve ser tratado com responsabilidade."}});
-  if(p==="/universidade/private/lessons/11/progress")return send(res,200,{completed});
+  if(p==="/universidade/private/lessons/11/progress"){
+    if(failLessonProgressOnce){failLessonProgressOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
+    return send(res,200,{completed});
+  }
   if(p==="/universidade/private/lessons/12/progress")return send(res,200,{completed:false});
   if(p==="/universidade/private/lessons/11/complete"&&req.method==="POST"){completed=true;return send(res,200,{completed:true});}
   if(p==="/universidade/private/progress/export")return send(res,200,{schema_version:1,scope:"current_authenticated_student",completions:completed?[{course_slug:"qa",lesson_slug:"visitantes",course_version:1,completed_at:"2026-11-15"}]:[]});
@@ -176,6 +182,27 @@ async function inspect(page,name){
     check((await recoveringLessons.locator("#lesson-content .lesson-retry").count())===0,
       "successful lesson retry removes error button and reloads authorized lessons");
     await recoveringLessons.close();
+
+    for(const failedRead of ["detail","progress"]){
+      if(failedRead==="detail")failLessonDetailOnce=true;
+      else failLessonProgressOnce=true;
+      const recoveringDetail=await context.newPage();
+      await ensureLocalPage(recoveringDetail);
+      recoveringDetail.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+      await recoveringDetail.goto(base+"/student");
+      await recoveringDetail.locator("#course-list [data-course-id='1']").waitFor();
+      await recoveringDetail.locator("#course-list [data-course-id='1']").click();
+      await recoveringDetail.locator("#lesson-content .lesson-detail-retry").waitFor({state:"visible",timeout:8000});
+      check((await recoveringDetail.locator("#lesson-content button.primary").count())===0,
+        "failure to read "+failedRead+" must not show a completion action");
+      await recoveringDetail.locator("#lesson-content .lesson-detail-retry").click();
+      await recoveringDetail.locator("#lesson-content h3").waitFor({state:"visible",timeout:8000});
+      check((await recoveringDetail.getByRole("heading",{name:"Visitas fictícias"}).count())===1,
+        "manual retry after "+failedRead+" reloads authorized lesson");
+      check((await recoveringDetail.locator("#lesson-content .lesson-detail-retry").count())===0,
+        "successful "+failedRead+" retry clears the recovery state");
+      await recoveringDetail.close();
+    }
 
     await page.goto(base+"/student");
     await page.waitForFunction(()=>!document.querySelector("#resume-course").disabled);

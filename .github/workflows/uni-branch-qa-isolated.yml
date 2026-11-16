@@ -1,5 +1,6 @@
 name: UNI isolated branch QA (test-only, no deploy)
 
+# UNI C-85: revalidate timed Portal authority and expiring grants in all isolated labs.
 # Continuous *test-only* review branch QA, with no production credentials.
 # Runs on relevant code pushes only; docs/preview changes are excluded.
 # Requires Actions permission on this repository; no merge/deploy event.

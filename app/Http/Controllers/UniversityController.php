@@ -210,7 +210,7 @@ final class UniversityController
 
         return $ok
             ? response()->json(['completed' => true])
-            : response()->json(['error' => 'not_found_or_access_revoked'], 404);
+            : response()->json(['error' => 'not_found'], 404);
     }
 
     public function adminAudit(Request $request): JsonResponse

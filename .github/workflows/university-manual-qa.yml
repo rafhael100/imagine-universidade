@@ -102,6 +102,7 @@ jobs:
           node preview/current-check.mjs
           bash -n ops/staging/inventory-readonly.sh
           node ops/staging/check-inventory.mjs
+          node ops/staging/check-release-gates.mjs
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |

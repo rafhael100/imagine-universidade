@@ -430,6 +430,87 @@ final class UniversityCatalogRepository
         ];
     }
 
+    /**
+     * Advisory editorial readiness. This hash is only a concurrency fence,
+     * never proof of human review, active services or Portal authorization.
+     */
+    private function publicationHash(stdClass $course, stdClass $version, iterable $lessons): string
+    {
+        $rows = [];
+        foreach ($lessons as $lesson) {
+            $rows[] = [
+                (int) $lesson->id, (string) $lesson->slug,
+                (string) $lesson->title, (string) $lesson->body,
+                (int) $lesson->sort_order,
+            ];
+        }
+        return hash('sha256', json_encode([
+            (int) $course->id, (string) $course->slug,
+            (string) $course->title, (string) $course->category,
+            (string) ($course->summary ?? ''), (int) $course->sort_order,
+            (int) $version->id, (int) $version->version, $rows,
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+    }
+
+    /** @return array<string, mixed>|null */
+    public function publicationPreflight(PortalGrant $grant, int $courseId): ?array
+    {
+        $org = $this->adminOrgId($grant);
+        if ($org === null || $courseId < 1) {
+            return null;
+        }
+        $course = DB::table('educational_courses')
+            ->where('id', $courseId)
+            ->where('educational_organization_id', $org)
+            ->where('is_shared', true)
+            ->first(['id', 'slug', 'title', 'category', 'summary', 'sort_order', 'is_published']);
+        if ($course === null) {
+            return null;
+        }
+        $version = DB::table('educational_course_versions')
+            ->where('educational_course_id', $courseId)
+            ->orderByDesc('version')
+            ->first(['id', 'version', 'status']);
+        if ($version === null) {
+            return null;
+        }
+        $lessons = DB::table('educational_lessons')
+            ->where('educational_course_version_id', $version->id)
+            ->orderBy('sort_order')->orderBy('id')
+            ->get(['id', 'slug', 'title', 'body', 'sort_order']);
+
+        if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            return null;
+        }
+
+        $issues = [];
+        if ($course->is_published || $version->status !== 'draft') {
+            $issues[] = 'not_draft';
+        }
+        if ($lessons->isEmpty()) {
+            $issues[] = 'missing_lessons';
+        }
+        foreach ($lessons as $lesson) {
+            if (trim((string) $lesson->title) === '' || trim((string) $lesson->body) === '') {
+                $issues[] = 'invalid_lesson';
+                break;
+            }
+        }
+        $warnings = trim((string) ($course->summary ?? '')) === ''
+            ? ['missing_optional_summary'] : [];
+
+        return [
+            'course_id' => $courseId,
+            'version' => (int) $version->version,
+            'lesson_count' => $lessons->count(),
+            'ready' => $issues === [],
+            'issues' => $issues,
+            'warnings' => $warnings,
+            'content_hash' => $this->publicationHash($course, $version, $lessons),
+            'advisory_only' => true,
+        ];
+    }
+
     public function adminCourses(PortalGrant $grant): array
     {
         $org = $this->adminOrgId($grant);
@@ -846,20 +927,20 @@ final class UniversityCatalogRepository
         });
     }
 
-    public function setPublished(PortalGrant $grant, int $courseId, bool $publish): bool
+    public function setPublished(PortalGrant $grant, int $courseId, bool $publish, ?string $expectedContentHash = null): bool
     {
         $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $courseId, $publish): bool {
+        return DB::transaction(function () use ($grant, $org, $courseId, $publish, $expectedContentHash): bool {
             $course = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
             ->where('is_shared', true)
                 ->where('is_published', !$publish)
-                ->lockForUpdate()->first(['id']);
+                ->lockForUpdate()->first(['id', 'slug', 'title', 'category', 'summary', 'sort_order']);
             if ($course === null) {
                 return false;
             }
@@ -868,7 +949,7 @@ final class UniversityCatalogRepository
                 ->where('educational_course_id', $courseId)
                 ->where('status', $publish ? 'draft' : 'published')
                 ->orderByDesc('version')
-                ->lockForUpdate()->first(['id', 'version']);
+                ->lockForUpdate()->first(['id', 'version', 'status']);
             if ($version === null) {
                 return false;
             }
@@ -876,7 +957,7 @@ final class UniversityCatalogRepository
             $lessons = DB::table('educational_lessons')
                 ->where('educational_course_version_id', $version->id)
                 ->orderBy('sort_order')->orderBy('id')
-                ->get(['slug', 'title', 'body', 'sort_order']);
+                ->get(['id', 'slug', 'title', 'body', 'sort_order']);
 
             if ($publish) {
                 if ($lessons->isEmpty()) {
@@ -891,6 +972,15 @@ final class UniversityCatalogRepository
 
             // Recheck expiry after locks and reads, before first mutation.
             if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+                return false;
+            }
+
+            // Compare the exact course/version/lesson snapshot under lock.
+            if ($publish && $expectedContentHash !== null &&
+                !hash_equals(
+                    $this->publicationHash($course, $version, $lessons),
+                    $expectedContentHash
+                )) {
                 return false;
             }
 

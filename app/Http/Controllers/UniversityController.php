@@ -218,6 +218,14 @@ final class UniversityController
         ));
     }
 
+    public function publicationPreflight(Request $request, int $courseId): JsonResponse
+    {
+        $result = $this->catalog->publicationPreflight($this->grant($request), $courseId);
+        return $result === null
+            ? response()->json(['error' => 'not_found'], 404)
+            : response()->json($result);
+    }
+
     public function adminCourses(Request $request): JsonResponse
     {
         return response()->json(['courses' => $this->catalog->adminCourses($this->grant($request))]);
@@ -315,9 +323,14 @@ final class UniversityController
 
     public function publish(Request $request, int $courseId): JsonResponse
     {
-        return $this->catalog->setPublished($this->grant($request), $courseId, true)
+        $input = $request->validate([
+            'expected_content_hash' => ['sometimes', 'string', 'size:64', 'regex:/\A[a-f0-9]{64}\z/'],
+        ]);
+        return $this->catalog->setPublished(
+            $this->grant($request), $courseId, true, $input['expected_content_hash'] ?? null,
+        )
             ? response()->json(['published' => true])
-            : response()->json(['error' => 'missing_lesson_or_not_found'], 409);
+            : response()->json(['error' => 'missing_lesson_or_changed_draft'], 409);
     }
 
     public function unpublish(Request $request, int $courseId): JsonResponse

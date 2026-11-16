@@ -161,6 +161,7 @@ async function inspect(page,name){
     check(await studentJourney.locator("#pillar-cards button:disabled").count()===2,
       "unpublished pillar courses must stay disabled");
     await studentJourney.locator("#pillar-cards [data-pillar-course='1']").click();
+    await studentJourney.locator("#lesson-items [data-lesson-id='11']").waitFor({state:"visible",timeout:8000});
     check(await studentJourney.locator("#lesson-items [data-lesson-id='11']").count()>0,
       "authorized pillar takes student to actual course");
     await studentJourney.close();

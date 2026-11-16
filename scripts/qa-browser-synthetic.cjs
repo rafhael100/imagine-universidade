@@ -121,6 +121,13 @@ async function inspect(page,name){
 
     await page.goto(base+"/student");
     await page.waitForFunction(()=>!document.querySelector("#resume-course").disabled);
+    await page.locator("#sim-visits").fill("1000");
+    await page.locator("#sim-leads-rate").fill("5");
+    await page.locator("#sim-clients-rate").fill("10");
+    check((await page.locator("#sim-results").innerText()).includes("50 leads"),
+      "simulator calculates fictional leads on the client");
+    check((await page.locator("#sim-results").innerText()).includes("5 clientes"),
+      "simulator calculates fictional clients on the client");
     check((await page.locator("#course-list [data-course-id]").count())===1,"student must show authorized synthetic course");
     await page.locator("#course-list [data-course-id='1']").click();
     await page.waitForFunction(()=>document.querySelector("#lesson-content h3")!==null);
@@ -134,6 +141,8 @@ async function inspect(page,name){
     await page.locator("#export-progress").click();
     await page.waitForFunction(()=>document.querySelector("#resume-course").disabled && document.querySelector("#export-progress").disabled);
     check((await page.locator("#lesson-content").innerText()).includes("Volte ao Portal"),"revoke must purge lesson");
+    check(await page.locator("#sim-visits").isDisabled(),"revoked student cannot use simulator");
+    check(!(await page.locator("#sim-results").isVisible()),"simulator response purged after revocation");
     check(await page.getByText("Visitas fictícias",{exact:true}).count()===0,"private lesson title must be removed");
     denyStudent=false;
 

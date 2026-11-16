@@ -41,6 +41,14 @@
     .path-card small{font-size:12px;color:#535A55;margin:8px 0}
     .path-card[aria-current="true"]{border-color:#F9941D;background:#FFF6EC}
     .path-card progress{display:block;width:100%;height:8px;accent-color:#F9941D;margin:9px 0}
+    .simulator{background:#fff;border:1px solid var(--line);border-radius:var(--imagine-radius-panel);box-shadow:var(--imagine-shadow-panel);padding:22px;margin:0 0 22px}
+    .simulator h2{font-size:19px;margin:0 0 7px}
+    .simulator p{font-size:13px;color:#535A55;margin:0 0 15px}
+    .sim-inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+    .sim-inputs label{display:block;font-weight:750;font-size:13px;margin-bottom:6px}
+    .sim-inputs input{width:100%;min-height:44px;border:1px solid #C9D1DC;border-radius:9px;padding:9px;font:inherit;color:var(--ink)}
+    .sim-results{margin-top:16px;padding:12px;background:#FFF6EC;border-radius:10px;border:1px solid #F2D5AC;font-weight:700;font-size:14px}
+    .sim-results[hidden]{display:none}
     .pills{display:flex;gap:7px;flex-wrap:wrap;margin:27px 0 18px}
     .searchbar{display:grid;gap:7px;margin:0 0 18px;max-width:460px}
     .searchbar label{font-weight:750;font-size:13px;color:#465369}
@@ -77,7 +85,7 @@
     .status[hidden]{display:none}
     .empty{padding:25px;color:var(--muted)}
     .footer{color:#565D56;font-size:12px;margin-top:28px}
-    @media(max-width:800px){.path-cards{grid-template-columns:1fr}.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
+    @media(max-width:800px){.sim-inputs{grid-template-columns:1fr}.path-cards{grid-template-columns:1fr}.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>
 <body>
@@ -100,6 +108,17 @@
     <h2 id="path-title">Sua jornada: Visitas → Leads → Clientes</h2>
     <p>Cada pilar conecta a teoria à prática. Cursos aparecem aqui somente quando publicados e autorizados.</p>
     <div id="pillar-cards" class="path-cards" aria-live="polite"></div>
+  </section>
+  <section class="simulator" aria-labelledby="sim-title">
+    <h2 id="sim-title">Simulador educativo: visitas, leads e clientes</h2>
+    <p>Use números hipotéticos para compreender as taxas da jornada. Os resultados não são previsões nem garantias comerciais; nenhum valor é enviado ao servidor.</p>
+    <div class="sim-inputs">
+      <div><label for="sim-visits">Visitas semanais hipotéticas</label><input id="sim-visits" type="number" min="0" max="1000000" step="1" value="1000" inputmode="numeric" disabled></div>
+      <div><label for="sim-leads-rate">Visitas que viram leads (%)</label><input id="sim-leads-rate" type="number" min="0" max="100" step="0.1" value="5" disabled></div>
+      <div><label for="sim-clients-rate">Leads que viram clientes (%)</label><input id="sim-clients-rate" type="number" min="0" max="100" step="0.1" value="10" disabled></div>
+    </div>
+    <p id="sim-results" class="sim-results" aria-live="polite" hidden></p>
+    <p>Exemplo: 1.000 visitas × 5% = 50 leads; 50 leads × 10% = 5 clientes hipotéticos. Pessoas reais podem agir de forma diferente.</p>
   </section>
   <div id="status" role="status" aria-live="polite" class="status" hidden></div>
   <nav class="pills" aria-label="Categorias dos cursos">
@@ -135,6 +154,30 @@ const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:""};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
+function illustrativeFunnel(visits,leadRate,clientRate){
+  const n=Number(visits),a=Number(leadRate),b=Number(clientRate);
+  if(String(visits).trim()===""||String(leadRate).trim()===""||
+     String(clientRate).trim()===""||!Number.isInteger(n)||n<0||n>1000000||
+     !Number.isFinite(a)||!Number.isFinite(b)||a<0||a>100||b<0||b>100){
+    return null;
+  }
+  const leads=Math.round(n*a/100);
+  return {visits:n,leads,clients:Math.round(leads*b/100)};
+}
+function renderSimulator(){
+  const out=document.getElementById("sim-results");
+  if(state.accessDenied){out.hidden=true;out.textContent="";return;}
+  const result=illustrativeFunnel(
+    document.getElementById("sim-visits").value,
+    document.getElementById("sim-leads-rate").value,
+    document.getElementById("sim-clients-rate").value
+  );
+  out.hidden=false;
+  if(!result){out.textContent="Informe quantidades e taxas válidas para esta simulação.";return;}
+  const fmt=n=>new Intl.NumberFormat("pt-BR").format(n);
+  out.textContent=fmt(result.visits)+" visitas → "+fmt(result.leads)+" leads → "+
+    fmt(result.clients)+" clientes hipotéticos (valores arredondados).";
+}
 function progressLabel(course){
   const total=Number.isInteger(course.lessons_total)&&course.lessons_total>=0?course.lessons_total:0;
   const completed=Number.isInteger(course.lessons_completed)&&course.lessons_completed>=0
@@ -156,6 +199,9 @@ function lockAccess(message){
   list.append(el("p","Biblioteca indisponível até um novo acesso autorizado.","empty"));
   content.append(el("p","Volte ao Portal do Cliente para verificar seu acesso.","empty"));
   overall.textContent="Acesso à Universidade encerrado.";
+  document.querySelectorAll(".sim-inputs input").forEach(input=>{input.value="";input.disabled=true;});
+  document.getElementById("sim-results").textContent="";
+  document.getElementById("sim-results").hidden=true;
   document.getElementById("course-search").disabled=true;
   document.getElementById("resume-course").disabled=true;
   document.getElementById("export-progress").disabled=true;
@@ -419,6 +465,9 @@ function openCourseWithAllFilters(target){
   say("");
   selectCourse(target);
 }
+document.querySelectorAll(".sim-inputs input").forEach(field=>{
+  field.addEventListener("input",renderSimulator);
+});
 document.getElementById("export-progress").addEventListener("click",async()=>{
   if(state.accessDenied)return;
   const button=document.getElementById("export-progress");
@@ -472,7 +521,8 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
     const payload=await api("/courses");
     if(state.accessDenied)return;
     state.courses=Array.isArray(payload.courses)?payload.courses:[];
-    renderCourses();
+    document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=false;});
+    renderSimulator();renderCourses();
   }catch(error){say(error.message);if(!state.accessDenied){list.replaceChildren();list.append(el("p","A biblioteca permanece indisponível.","empty"));}}
 })();
 </script>

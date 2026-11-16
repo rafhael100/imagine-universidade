@@ -418,6 +418,26 @@ assert.match(studentProgressUI,/button\.disabled=!Number\.isSafeInteger\(pillar\
 assert.match(studentProgressUI,/openCourseWithAllFilters\(id\)/,"student: route through guarded course selection");
 console.log("PASS student three-pillar journey: only published authorized course IDs clickable");
 
+
+const simFn=studentProgressUI.match(/function illustrativeFunnel\(visits,leadRate,clientRate\)\{[\s\S]*?\n\}/)?.[0];
+assert.ok(simFn,"student: local educational funnel calculator");
+const simTest=values=>new Script(simFn+"\nillustrativeFunnel(v,a,b)",{
+  filename:"imagine-local-simulator"
+}).runInNewContext({v:values[0],a:values[1],b:values[2]});
+assert.equal(JSON.stringify(simTest(["1000","5","10"])),JSON.stringify({visits:1000,leads:50,clients:5}));
+assert.equal(JSON.stringify(simTest(["0","100","100"])),JSON.stringify({visits:0,leads:0,clients:0}));
+assert.equal(simTest(["-1","5","10"]),null);
+assert.equal(simTest(["10","101","10"]),null);
+assert.equal(simTest(["10","5","-1"]),null);
+assert.equal(simTest(["1.5","5","10"]),null);
+assert.equal(simTest(["","5","10"]),null);
+assert.match(studentProgressUI,/id="sim-visits"/);
+assert.match(studentProgressUI,/id="sim-leads-rate"/);
+assert.match(studentProgressUI,/id="sim-clients-rate"/);
+assert.match(studentProgressUI,/document.querySelectorAll\("\.sim-inputs input"\)\.forEach\(input=>\{input.value="";input.disabled=true;\}\)/);
+assert.doesNotMatch(studentProgressUI,/fetch\([^)]*sim-/,"simulator must not transmit fields");
+console.log("PASS educational simulator: hypothetical 1000→50→5, limits, no personal data");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");

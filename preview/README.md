@@ -1,5 +1,13 @@
 # Universidade Imagine — MVP simples, prévia offline
 
+## Prévia atualizada para aprovação visual — UNI C-48
+
+Abra **`preview/current.html`** (ou execute um servidor local preso a `127.0.0.1`, somente na pasta `preview`) para navegar pelo catálogo **atual de 10 cursos e 35 aulas** em conteúdo editorial sintético. A logomarca original foi copiada byte a byte; a prévia tem busca, filtros, leitura das 24 aulas práticas, retomada e conclusão **somente neste navegador**. Não chama APIs, não exige login e não prova integração Portal. **Nunca publique o diretório `preview/` na internet ou na VPS**: a prévia antiga `index.html`/`admin.html` também não possui autenticação operacional.
+
+O teste `node preview/current-check.mjs` valida estrutura, integridade do catálogo e SHA da logo e executa automaticamente no GitHub Actions isolado. O frontend Laravel real continua em `resources/views/university/` e segue deny-all até contrato ativo, sessão e revogação oficiais. **Os arquivos `preview/` não fazem parte da imagem Docker de execução nem do diretório público Laravel.**
+
+
+
 **Estado: demonstração visual e funcional local, com dados 100% fictícios. NÃO publicar na internet ou disponibilizar a clientes.**
 
 Este recorte dá forma à intenção de uma Universidade simples: um benefício de capacitação para clientes Imagine, não uma escola, marketplace de cursos ou novo SaaS. A identidade visual usa a cor-base laranja Imagine (#F9941D), visual claro e navegação enxuta. Logo/peças finais dependem da conferência com a identidade do Portal.

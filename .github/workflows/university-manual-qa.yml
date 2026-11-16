@@ -99,6 +99,7 @@ jobs:
           bash -n scripts/run-qa-compose.sh
           sh -n scripts/qa-pg-backup-restore.sh
           node scripts/check-ui-contract.mjs
+          node preview/current-check.mjs
 
       - name: Instalar dependências travadas de PHP 8.3
         run: |

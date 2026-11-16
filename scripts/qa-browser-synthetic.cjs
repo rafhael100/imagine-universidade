@@ -332,8 +332,7 @@ async function inspect(page,name){
 
     exportFault="network_error";
     await page.locator("#export-progress").click();
-    await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("Operação") ||
-      document.querySelector("#status").textContent.includes("indisponível"));
+    await page.waitForFunction(()=>document.querySelector("#status").textContent.includes("Não foi possível concluir esta operação"));
     check(downloads.length===fileCount,"HTTP 503 may not expose stale exported data");
 
     await inspect(page,"student");

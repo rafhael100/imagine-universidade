@@ -44,7 +44,7 @@
     .course-btn,.lesson-btn{display:block;text-align:left;border:1px solid transparent;background:white;width:100%;padding:13px 14px;border-radius:10px}
     .course-btn:hover,.lesson-btn:hover{background:#F7F8FA}
     .course-btn[aria-current="true"],.lesson-btn[aria-current="true"]{border-color:#F4D4A9;background:#FFF5E8}
-    .course-btn strong,.lesson-btn strong{display:block}.course-btn span,.lesson-btn span{display:block;font-size:12px;color:var(--muted);margin-top:4px}
+    .course-btn strong,.lesson-btn strong{display:block}.course-btn span,.lesson-btn span{display:block;font-size:12px;color:#505650;margin-top:4px}
     .overall-progress{font-size:13px;font-weight:700;color:#FFF0DC!important;margin-top:14px!important}
     .resume-btn{margin-top:16px}
     .course-progress{height:7px;width:100%;accent-color:#F9941D;display:block;margin-top:8px;border-radius:8px}
@@ -64,7 +64,7 @@
     .status{padding:12px 17px;border-radius:10px;background:#FFF6E8;border:1px solid #F0D7AD;color:#75501D;margin:18px 0}
     .status[hidden]{display:none}
     .empty{padding:25px;color:var(--muted)}
-    .footer{color:#8892A1;font-size:12px;margin-top:28px}
+    .footer{color:#565D56;font-size:12px;margin-top:28px}
     @media(max-width:800px){.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>

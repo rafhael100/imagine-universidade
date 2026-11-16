@@ -15,8 +15,14 @@ final readonly class PortalAccessGate
     public const VIEW = 'university:view';
     public const MANAGE = 'university:manage';
 
-    public function __construct(private PortalAuthority $authority)
-    {
+    public function __construct(
+        private PortalAuthority $authority,
+        // The production adapter must ALSO configure transport-level timeouts.
+        private int $maxAuthorityReadMs = 1500,
+    ) {
+        if ($maxAuthorityReadMs < 1 || $maxAuthorityReadMs > 5000) {
+            throw new \InvalidArgumentException('Invalid Portal verification budget.');
+        }
     }
 
     public function authorize(
@@ -38,11 +44,26 @@ final readonly class PortalAccessGate
             return PortalGrant::deny('invalid_context');
         }
 
+        // An authority can revoke or expire a grant WHILE verification is
+        // waiting. Never authorize from a result returned after the read
+        // budget, even if the candidate carries a future-looking expiry.
+        $startedAt = hrtime(true);
         try {
             $grant = $this->authority->verify($serverSessionCredential, $companyId, $permission);
         } catch (Throwable) {
             return PortalGrant::deny('authority_unavailable');
         }
+
+        $elapsedNs = hrtime(true) - $startedAt;
+        if ($elapsedNs > $this->maxAuthorityReadMs * 1_000_000) {
+            return PortalGrant::deny('authority_timeout');
+        }
+
+        // nowEpoch is the caller's start-of-read epoch. Advance it
+        // conservatively by elapsed monotonic seconds for expiry checks;
+        // this remains deterministic in synthetic tests with an injected
+        // epoch and rejects grants expiring during a slow response.
+        $checkedAt = $nowEpoch + intdiv($elapsedNs + 999_999_999, 1_000_000_000);
 
         if (!$grant->allowed) {
             // Não converter uma negação/inconsistência da autoridade em concessão.
@@ -77,7 +98,7 @@ final readonly class PortalAccessGate
             return PortalGrant::deny('invalid_grant');
         }
 
-        if ($grant->expiresAtEpoch <= $nowEpoch) {
+        if ($grant->expiresAtEpoch <= $checkedAt) {
             return PortalGrant::deny('expired');
         }
 

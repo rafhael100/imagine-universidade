@@ -289,7 +289,7 @@ assert.match(adminUI,/id="lesson-preview" class="editorial-preview".*hidden>/,"e
 assert.match(adminUI,/id="preview-lesson"/,"editor: ação disponível para rascunho");
 assert.match(adminUI,/\$\("preview-body"\)\.append\(el\("p",section.text\)\)/,"editor: conteúdo apenas texto");
 assert.match(adminUI,/function hideLessonPreview\(\)/,"editor: limpar conteúdo na navegação");
-assert.match(adminUI,/if\(!confirm\("Publicar este curso para os clientes elegíveis/,"editor: publicação exige confirmação");
+assert.match(adminUI,/if\(!confirm\("Publicar esta versão revisada para os clientes elegíveis/,"editor: publicação exige confirmação");
 assert.match(adminUI,/if\(state.accessDenied\|\|state.course\?\.id!==courseId\|\|!beginWrite\(\)\)return;/,"editor: evitar troca de curso no diálogo");
 console.log("PASS preview editorial: conteúdo local sem HTML, confirmação humana explícita");
 
@@ -373,6 +373,21 @@ assert.match(adminUI,/document.querySelector\("\.layout"\)\.inert=true/,"lock on
 assert.ok((adminUI.match(/finally\{finishWrite\(\);\}/g)||[]).length>=6,
   "all six write pathways must release busy fence");
 console.log("PASS admin single-flight: no duplicate submits, stale GET invalidation and fail-closed state");
+
+
+const publicationRoutes=read("routes/web.php");
+const publicationRepository=read("app/Domain/Learning/UniversityCatalogRepository.php");
+const publicationController=read("app/Http/Controllers/UniversityController.php");
+assert.match(publicationRoutes,/\/courses\/\{courseId\}\/publication-check/,"only manager route for readiness");
+assert.match(publicationRepository,/function publicationPreflight\(PortalGrant \$grant, int \$courseId\)/,"preflight stays tenant-scoped");
+assert.match(publicationRepository,/hash_equals\(/,"content snapshot compared under transaction");
+assert.match(publicationController,/expected_content_hash/,"publish accepts reviewed hash");
+assert.match(adminUI,/id="check-publication"/,"admin: explicit readiness button");
+assert.match(adminUI,/id="publication-readiness"/,"admin: read-only checklist");
+assert.match(adminUI,/function editorialHasUnsavedChanges\(\)/,"admin: do not publish unsaved form");
+assert.match(adminUI,/if\(editorialHasUnsavedChanges\(\)\)/,"admin: unsaved work blocks preflight");
+assert.match(adminUI,/expected_content_hash:reviewed.content_hash/,"admin: publish exact checked version");
+console.log("PASS publication preflight: manager-only, review hash, unsaved form guard");
 
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);

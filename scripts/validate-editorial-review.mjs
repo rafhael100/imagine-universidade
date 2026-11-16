@@ -9,9 +9,14 @@
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
+import {resolve} from "node:path";
+import {pathToFileURL} from "node:url";
 
 function parseCsv(text){
   assert.ok(typeof text==="string" && text.length<=1_000_000,"Oversized review CSV");
+  text=text.replace(/^\uFEFF/,""); // Excel UTF-8 export can add BOM
+  const header=text.split(/\r?\n/,1)[0];
+  const delimiter=header.includes('";"')?";":","; // Brazilian Excel uses semicolon
   const rows=[];let row=[],value="",quoted=false,fieldStart=true;
   for(let i=0;i<text.length;i++){
     const ch=text[i];
@@ -21,7 +26,7 @@ function parseCsv(text){
         else quoted=false;
       }else value+=ch;
     }else if(ch==='"'&&fieldStart){quoted=true;fieldStart=false;}
-    else if(ch===','){row.push(value);value="";fieldStart=true;}
+    else if(ch===delimiter){row.push(value);value="";fieldStart=true;}
     else if(ch==='\n'){
       row.push(value);rows.push(row);row=[];value="";fieldStart=true;
     }else if(ch==='\r'){
@@ -95,7 +100,7 @@ export function inspectEditorialReview(csvText,sourceText){
     note:"Local schema/hash check ONLY. GitHub evidence, reviewer identity and signoff are not verified by this tool."
   };
 }
-if(process.argv[1] && import.meta.url===new URL("file://"+process.argv[1]).href){
+if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   assert.equal(process.argv[2],"--csv","Usage: --csv <review spreadsheet>");
   assert.equal(process.argv.length,4);
   const csv=await readFile(process.argv[3],"utf8");

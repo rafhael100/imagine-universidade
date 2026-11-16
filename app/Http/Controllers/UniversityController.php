@@ -242,8 +242,9 @@ final class UniversityController
         return response()->json(['lessons' => $this->catalog->adminLessons($this->grant($request), $courseId)]);
     }
 
-    public function createCourse(Request $request): JsonResponse
+    public function createCourse(Request $request, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
         $input = $request->validate([
             'slug' => ['required', 'string', 'max:120', 'regex:/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/'],
             'title' => ['required', 'string', 'min:3', 'max:200'],
@@ -252,7 +253,11 @@ final class UniversityController
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
         try {
-            $id = $this->catalog->createCourse($this->grant($request), $input);
+            $id = $this->catalog->createCourse(
+            $grant,
+            $input,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        );
         } catch (QueryException) {
             return response()->json(['error' => 'conflict_or_unavailable'], 409);
         }
@@ -262,8 +267,9 @@ final class UniversityController
             : response()->json(['id' => $id, 'status' => 'draft'], 201);
     }
 
-    public function updateCourse(Request $request, int $courseId): JsonResponse
+    public function updateCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
         $input = $request->validate([
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'category' => ['required', 'in:metodologia,negocios,sistemas'],
@@ -271,13 +277,18 @@ final class UniversityController
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
 
-        return $this->catalog->updateCourse($this->grant($request), $courseId, $input)
+        return $this->catalog->updateCourse(
+            $grant,
+            $courseId, $input,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        )
             ? response()->json(['saved' => true])
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
-    public function createLesson(Request $request, int $courseId): JsonResponse
+    public function createLesson(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
         $input = $request->validate([
             'slug' => ['required', 'string', 'max:120', 'regex:/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/'],
             'title' => ['required', 'string', 'min:3', 'max:200'],
@@ -286,7 +297,11 @@ final class UniversityController
         ]);
 
         try {
-            $id = $this->catalog->addLesson($this->grant($request), $courseId, $input);
+            $id = $this->catalog->addLesson(
+            $grant,
+            $courseId, $input,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        );
         } catch (QueryException) {
             return response()->json(['error' => 'conflict_or_unavailable'], 409);
         }
@@ -295,30 +310,45 @@ final class UniversityController
             : response()->json(['id' => $id, 'status' => 'draft'], 201);
     }
 
-    public function updateLesson(Request $request, int $lessonId): JsonResponse
+    public function updateLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
         $input = $request->validate([
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'body' => ['required', 'string', 'min:10', 'max:30000'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
 
-        return $this->catalog->updateLesson($this->grant($request), $lessonId, $input)
+        return $this->catalog->updateLesson(
+            $grant,
+            $lessonId, $input,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        )
             ? response()->json(['saved' => true])
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
-    public function deleteDraftLesson(Request $request, int $lessonId): JsonResponse
+    public function deleteDraftLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
     {
-        return $this->catalog->deleteDraftLesson($this->grant($request), $lessonId)
+        $grant = $this->grant($request);
+        return $this->catalog->deleteDraftLesson(
+            $grant,
+            $lessonId,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        )
             ? response()->json(['deleted' => true])
             : response()->json(['error' => 'not_found_or_protected'], 404);
     }
 
-    public function deleteNeverPublishedCourse(Request $request, int $courseId): JsonResponse
+    public function deleteNeverPublishedCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
         try {
-            $deleted = $this->catalog->deleteNeverPublishedCourse($this->grant($request), $courseId);
+            $deleted = $this->catalog->deleteNeverPublishedCourse(
+            $grant,
+            $courseId,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        );
         } catch (QueryException) {
             return response()->json(['error' => 'protected_or_conflict'], 409);
         }

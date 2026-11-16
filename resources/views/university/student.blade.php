@@ -64,7 +64,7 @@
     .status{padding:12px 17px;border-radius:10px;background:#FFF6E8;border:1px solid #F0D7AD;color:#75501D;margin:18px 0}
     .status[hidden]{display:none}
     .empty{padding:25px;color:var(--muted)}
-    .footer{color:#8892A1;font-size:12px;margin-top:28px}
+    .footer{color:#545454;font-size:12px;margin-top:28px}
     @media(max-width:800px){.main{grid-template-columns:1fr}.container{padding:17px 14px 35px}.hero{padding:24px}.top-inner{padding:14px;flex-wrap:wrap}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>

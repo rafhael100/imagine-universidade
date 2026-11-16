@@ -56,7 +56,7 @@
     .editorial-preview h3{font-size:19px;color:#263044}
     .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
     .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
-    .footer{font-size:12px;color:#8F98A4;margin-top:28px}
+    .footer{font-size:12px;color:#545454;margin-top:28px}
     @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>

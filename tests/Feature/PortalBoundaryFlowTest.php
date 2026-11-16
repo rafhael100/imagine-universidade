@@ -231,6 +231,35 @@ final class PortalBoundaryFlowTest extends TestCase
         $this->getJson("/universidade/private/lessons/{$lessonId}")->assertNotFound();
     }
 
+
+    public function test_csp_nonce_rotates_and_matches_inline_script_and_style_for_client_and_admin(): void
+    {
+        $this->asClientA();
+        $first = $this->get('/universidade/private/app')->assertOk();
+        $html = $first->getContent();
+        self::assertIsString($html);
+        self::assertSame(2, preg_match_all('/nonce="([A-Za-z0-9+\/=]+)"/', $html, $matches));
+        self::assertSame($matches[1][0], $matches[1][1]);
+
+        $csp = $first->baseResponse->headers->get('Content-Security-Policy', '');
+        self::assertStringContainsString("default-src 'none'", $csp);
+        self::assertStringContainsString("script-src 'self' 'nonce-".$matches[1][0]."'", $csp);
+        self::assertStringContainsString("style-src 'self' 'nonce-".$matches[1][0]."'", $csp);
+        self::assertStringContainsString("frame-ancestors 'none'", $csp);
+        self::assertStringNotContainsString('unsafe-inline', $csp);
+
+        $second = $this->get('/universidade/private/app')->assertOk();
+        self::assertSame(1, preg_match('/nonce="([A-Za-z0-9+\/=]+)"/', $second->getContent(), $later));
+        self::assertNotSame($matches[1][0], $later[1], 'Each request must have a fresh CSP nonce.');
+
+        $this->asEditor();
+        $admin = $this->get('/universidade/private/admin/app')->assertOk();
+        self::assertSame(2, preg_match_all('/nonce="([A-Za-z0-9+\/=]+)"/', $admin->getContent(), $adminMatches));
+        self::assertSame($adminMatches[1][0], $adminMatches[1][1]);
+        self::assertStringContainsString("nonce-".$adminMatches[1][0],
+            $admin->baseResponse->headers->get('Content-Security-Policy', ''));
+    }
+
     public function test_headers_and_body_cannot_create_a_server_session(): void
     {
         $headers = [

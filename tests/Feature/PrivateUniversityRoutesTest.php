@@ -24,6 +24,7 @@ final class PrivateUniversityRoutesTest extends TestCase
         $json = $this->getJson('/universidade/private/courses');
         $json->assertForbidden()
             ->assertHeader('Cache-Control')
+            ->assertHeader('Content-Security-Policy')
             ->assertHeader('X-Frame-Options', 'DENY')
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow, noarchive')
             ->assertHeader('X-Content-Type-Options', 'nosniff');
@@ -35,6 +36,8 @@ final class PrivateUniversityRoutesTest extends TestCase
             $cache = $response->baseResponse->headers->get('Cache-Control', '');
             self::assertStringContainsString('private', $cache);
             self::assertStringContainsString('no-store', $cache);
+            self::assertStringContainsString("default-src 'none'",
+                $response->baseResponse->headers->get('Content-Security-Policy', ''));
         }
     }
 

@@ -448,25 +448,52 @@ async function selectLesson(id){
     content.append(el("h3",lesson.title),lessonTextFragment(lesson.body));
     const action=el("button",progressPayload.completed?"✓ Aula concluída":"Marcar como concluída","primary");
     action.type="button";action.disabled=!!progressPayload.completed;
+    async function confirmCompletion(message){
+      if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;
+      action.disabled=true;action.textContent="✓ Aula concluída";
+      markLessonStatus(id,true);offerNextLesson(id);say(message);
+      // A confirmed completion is never reversed merely because a secondary
+      // catalogue refresh fails or an older navigation response arrives.
+      try{
+        const latest=await api("/courses");
+        if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;
+        state.courses=Array.isArray(latest.courses)?latest.courses:[];
+        renderCourses();
+      }catch(refreshError){
+        if(!state.accessDenied&&state.lessonRequest===request&&state.lessonId===id)
+          say("Aula concluída. Atualize a página para conferir o resumo do progresso.");
+      }
+    }
     action.addEventListener("click",async()=>{
+      if(action.disabled||state.accessDenied||state.lessonId!==id)return;
       action.disabled=true;
       try{
-        await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
-        if(state.lessonRequest!==request)return;
-        action.textContent="✓ Aula concluída";say("Seu progresso foi registrado.");
-        markLessonStatus(id,true);
-        offerNextLesson(id);
-        // A conclusão já foi confirmada. A falha de atualização da lista
-        // não deve tornar o botão ativo nem sugerir conclusão malsucedida.
+        const receipt=await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
+        if(receipt?.completed!==true)throw new Error("Conclusão sem confirmação do servidor.");
+        await confirmCompletion("Seu progresso foi registrado.");
+      }catch(error){
+        if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;
+        // An HTTP error/timeout can occur AFTER the server committed the
+        // completion. Reconcile with an authoritative GET before another
+        // POST is possible; never blindly replay an uncertain mutation.
         try{
-          const latest=await api("/courses");
-          if(state.lessonRequest!==request)return;
-          state.courses=Array.isArray(latest.courses)?latest.courses:[];
-          renderCourses();
-        }catch(refreshError){
-          say("Aula concluída. Atualize a página para conferir o resumo do progresso.");
+          const verified=await api("/lessons/"+encodeURIComponent(String(id))+"/progress");
+          if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;
+          if(verified?.completed===true){
+            await confirmCompletion("Conclusão confirmada após consulta ao servidor.");
+          }else if(verified?.completed===false){
+            action.disabled=false;
+            say("A conclusão não foi registrada. Você pode tentar novamente.");
+          }else{
+            action.disabled=true;
+            say("O progresso não pôde ser confirmado. Reabra a aula antes de tentar novamente.");
+          }
+        }catch(reconcileError){
+          if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;
+          action.disabled=true;
+          say("Não foi possível confirmar o resultado. Reabra a aula para verificar o progresso antes de tentar novamente.");
         }
-      }catch(error){action.disabled=false;say(error.message);}
+      }
     });
     content.append(action);
     if(progressPayload.completed)offerNextLesson(id);

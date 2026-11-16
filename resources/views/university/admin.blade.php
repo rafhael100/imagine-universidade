@@ -48,6 +48,10 @@
     .help{font-size:12px}
     .editorial-preview{border:1px solid #E7BF88;background:#FFFAF4;border-radius:12px;padding:20px;margin:20px 0 0;overflow-wrap:anywhere}
     .editorial-preview[hidden]{display:none}
+    .readiness{border:1px solid #E6BC83;background:#FFF9F0;border-radius:10px;padding:13px 16px;margin:14px 0;overflow-wrap:anywhere}
+    .readiness[hidden]{display:none}
+    .readiness strong{display:block;color:#61380A;margin-bottom:6px}
+    .readiness p{color:#484848;margin:6px 0;font-size:13px}
     .audit-panel{margin-top:20px}
     .audit-list{padding:10px 20px;display:grid;gap:6px}
     .audit-row{padding:12px 0;border-bottom:1px solid var(--line)}
@@ -90,11 +94,14 @@
           </div>
           <div class="actions">
             <button type="submit" class="primary" id="course-save">Salvar rascunho</button>
+            <button type="button" class="secondary" id="check-publication">Verificar publicação</button>
             <button type="button" class="secondary" id="publish">Publicar curso</button>
             <button type="button" class="secondary" id="unpublish">Retirar do ar</button>
             <button type="button" class="secondary danger" id="delete-course" disabled>Excluir rascunho nunca publicado</button>
           </div>
           <p class="help">Retirar um curso do ar arquiva a versão publicada e cria um novo rascunho. O histórico anterior é preservado, mas o progresso da nova versão começa novamente.</p>
+          <div id="publication-readiness" class="readiness" aria-live="polite" role="status" hidden></div>
+          <p class="help">Antes de publicar, salve os campos e verifique a versão vigente. A conferência de conteúdo não substitui revisão editorial independente nem autorização oficial do Portal.</p>
         </form>
         <hr>
         <h3>Aulas do curso</h3>
@@ -212,6 +219,8 @@ function fillCourse(){
   for(const id of ["course-title","course-category","course-summary","course-sort"]){$(id).disabled=!editable;}
   $("course-save").disabled=!editable;
   $("publish").disabled=!c||!!c.is_published;
+  $("check-publication").disabled=!c||!!c.is_published;
+  $("publication-readiness").replaceChildren();$("publication-readiness").hidden=true;
   $("unpublish").disabled=!c||!c.is_published;
   $("delete-course").disabled=!c||!!c.is_published;
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
@@ -381,13 +390,69 @@ $("delete-course").addEventListener("click",async()=>{
   }catch(error){say(error.message);if(!state.accessDenied&&state.course?.id===courseId)$("delete-course").disabled=false;}
   finally{finishWrite();}
 });
+function editorialHasUnsavedChanges(){
+  const c=state.course;
+  if(!c)return true;
+  if($("course-title").value.trim()!==String(c.title||"")||
+     $("course-category").value!==String(c.category||"")||
+     $("course-summary").value.trim()!==String(c.summary||"")||
+     intField("course-sort")!==Number(c.sort_order||0))return true;
+  const lesson=state.lesson;
+  if(lesson){
+    return $("lesson-title").value.trim()!==String(lesson.title||"")||
+      $("lesson-body").value.trim()!==String(lesson.body||"")||
+      intField("lesson-sort")!==Number(lesson.sort_order||0);
+  }
+  return Boolean($("lesson-title").value.trim()||
+     $("lesson-slug").value.trim()||$("lesson-body").value.trim());
+}
+function renderPublicationCheck(snapshot){
+  const box=$("publication-readiness");box.replaceChildren();box.hidden=false;
+  box.append(el("strong",snapshot.ready?
+    "Rascunho tecnicamente pronto para revisão editorial":
+    "Pendências antes da publicação"));
+  box.append(el("p","Versão "+String(snapshot.version)+" · "+
+    String(snapshot.lesson_count)+" aula(s) · Diagnóstico informativo, sem publicar."));
+  const messages={
+    not_draft:"O curso não está em um rascunho publicável.",
+    missing_lessons:"Inclua pelo menos uma aula antes de publicar.",
+    invalid_lesson:"Revise títulos e conteúdo das aulas.",
+    missing_optional_summary:"Uma descrição curta facilita a compreensão do curso."
+  };
+  for(const key of [].concat(snapshot.issues||[],snapshot.warnings||[])){
+    box.append(el("p",messages[key]||"Revise os dados editoriais."));
+  }
+  if(snapshot.ready)box.append(el("p","A aprovação humana independente continua obrigatória."));
+}
+async function publicationCheck(){
+  const courseId=state.course?.id??null;
+  if(courseId===null||state.accessDenied||state.writePending||state.course.is_published)return null;
+  if(editorialHasUnsavedChanges()){
+    say("Salve todas as alterações do curso e das aulas antes de verificar a publicação.");
+    return null;
+  }
+  const snapshot=await api("/courses/"+courseId+"/publication-check");
+  if(state.accessDenied||state.writePending||state.course?.id!==courseId)return null;
+  renderPublicationCheck(snapshot);
+  return snapshot;
+}
+$("check-publication").addEventListener("click",async()=>{
+  try{await publicationCheck();}catch(error){say(error.message);}
+});
 $("publish").addEventListener("click",async()=>{
   if(state.accessDenied||!state.course||state.course.is_published)return;
   const courseId=state.course.id;
-  if(!confirm("Publicar este curso para os clientes elegíveis? Confirme somente após revisão editorial independente do conteúdo e da versão. A publicação não libera o SSO ou o Portal por si só."))return;
-  if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
+  let reviewed;
+  try{reviewed=await publicationCheck();}catch(error){say(error.message);return;}
+  if(!reviewed)return;
+  if(!reviewed.ready){
+    say("Existem pendências no rascunho. Consulte a verificação de publicação.");
+    return;
+  }
+  if(!confirm("Publicar esta versão revisada para os clientes elegíveis? Confirme somente após revisão editorial independente. A publicação não libera o SSO ou o Portal por si só."))return;
+  if(state.accessDenied||state.course?.id!==courseId||state.course.is_published||!beginWrite())return;
   try{
-    await api("/courses/"+courseId+"/publish","POST");
+    await api("/courses/"+courseId+"/publish","POST",{expected_content_hash:reviewed.content_hash});
     if(!state.accessDenied){
       await refreshCourses(courseId);
       say("Versão do curso publicada no catálogo privado; elegibilidade continua decidida pelo Portal.");

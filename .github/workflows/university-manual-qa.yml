@@ -93,6 +93,7 @@ jobs:
         run: |
           set -euo pipefail
           php scripts/check-access-domain.php
+          php scripts/check-portal-context.php
           php scripts/check-learning-mock.php
           php scripts/check-tenant-guard.php
           python3 scripts/check-sqlite-contract.py

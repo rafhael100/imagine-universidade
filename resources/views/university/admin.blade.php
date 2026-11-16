@@ -450,7 +450,7 @@ $("course-form").addEventListener("submit",async event=>{
       ? await api("/courses/"+courseId,"PATCH",(({slug,...withoutSlug})=>withoutSlug)(payload))
       : await api("/courses","POST",payload);
     if(!state.accessDenied){await refreshCourses(courseId??result.id);say("Rascunho salvo.");}
-  }catch(error){say(error.message);}
+  }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
 $("lesson-items").addEventListener("click",event=>{
@@ -480,10 +480,8 @@ $("delete-lesson").addEventListener("click",async()=>{
   try{
     await api("/lessons/"+encodeURIComponent(String(lesson.id)),"DELETE");
     if(!state.accessDenied){await refreshLessons();say("Aula em rascunho excluída. Histórico publicado foi preservado.");}
-  }catch(error){
-    if(!state.accessDenied)$("delete-lesson").disabled=false;
-    say(error.message);
-  }finally{finishWrite();}
+  }catch(error){freezeUncertainEditorialWrite();}
+  finally{finishWrite();}
 });
 $("lesson-form").addEventListener("submit",async event=>{
   event.preventDefault();if(!state.course||!draft())return;
@@ -500,7 +498,7 @@ $("lesson-form").addEventListener("submit",async event=>{
       await api("/courses/"+courseId+"/lessons","POST",payload);
     }
     if(!state.accessDenied){await refreshLessons();say("Aula salva em rascunho.");}
-  }catch(error){say(error.message);}
+  }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
 $("delete-course").addEventListener("click",async()=>{
@@ -512,7 +510,7 @@ $("delete-course").addEventListener("click",async()=>{
   try{
     await api("/courses/"+courseId,"DELETE");
     if(!state.accessDenied){await refreshCourses(null);say("Rascunho nunca publicado excluído com registro de auditoria.");}
-  }catch(error){say(error.message);if(!state.accessDenied&&state.course?.id===courseId)$("delete-course").disabled=false;}
+  }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
 function editorialHasUnsavedChanges(){
@@ -628,7 +626,7 @@ $("publish").addEventListener("click",async()=>{
       await refreshCourses(courseId);
       say("Versão do curso publicada no catálogo privado; elegibilidade continua decidida pelo Portal.");
     }
-  }catch(error){say(error.message);}
+  }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
 function unpublishWarning(title){
@@ -646,7 +644,7 @@ $("unpublish").addEventListener("click",async()=>{
       await refreshCourses(courseId);
       say("Versão anterior arquivada; novo rascunho criado. O progresso da versão nova começa separado.");
     }
-  }catch(error){say(error.message);}
+  }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
 function renderAudit(){

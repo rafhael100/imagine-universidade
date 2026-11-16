@@ -490,7 +490,12 @@ final class UniversityCatalogRepository
             return null;
         }
 
-        return DB::transaction(function () use ($grant, $org, $input): int {
+        return DB::transaction(function () use ($grant, $org, $input): ?int {
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+                return null;
+            }
+
             $now = now();
             $id = DB::table('educational_courses')->insertGetId([
                 'educational_organization_id' => $org,
@@ -539,6 +544,11 @@ final class UniversityCatalogRepository
                 return false;
             }
 
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+                return false;
+            }
+
             $changed = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
@@ -584,6 +594,11 @@ final class UniversityCatalogRepository
                 ->where('status', 'draft')
                 ->orderByDesc('version')->first(['id']);
             if ($version === null) {
+                return null;
+            }
+
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
                 return null;
             }
 
@@ -645,6 +660,11 @@ final class UniversityCatalogRepository
                 ->where('v.status', 'draft')
                 ->select('l.id')->first();
             if ($row === null) {
+                return false;
+            }
+
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
                 return false;
             }
 
@@ -721,6 +741,11 @@ final class UniversityCatalogRepository
                 return false;
             }
 
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+                return false;
+            }
+
             $deleted = DB::table('educational_lessons')
                 ->where('id', $lessonId)
                 ->where('is_published', false)
@@ -788,6 +813,11 @@ final class UniversityCatalogRepository
 
             // If foreign key constraints or concurrent writes disagree,
             // the transaction throws and rolls back everything.
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+                return false;
+            }
+
             $deletedLessons = DB::table('educational_lessons')
                 ->where('educational_course_version_id', $versionId)
                 ->where('is_published', false)->delete();
@@ -857,6 +887,11 @@ final class UniversityCatalogRepository
                         return false;
                     }
                 }
+            }
+
+            // Recheck expiry after locks and reads, before first mutation.
+            if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+                return false;
             }
 
             $now = now();

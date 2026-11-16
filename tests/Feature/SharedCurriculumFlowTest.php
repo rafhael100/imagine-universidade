@@ -552,6 +552,77 @@ final class SharedCurriculumFlowTest extends TestCase
             ->assertUnprocessable();
     }
 
+
+    public function test_editorial_publish_denies_grant_expired_during_version_read(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = (int) $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'teste-expiracao-editorial',
+            'title' => 'Trilha sintética aguardando lock',
+            'category' => 'metodologia',
+        ])->assertCreated()->json('id');
+        $this->postJson("/universidade/private/admin/courses/{$courseId}/lessons", [
+            'slug' => 'aula-antes-de-publicar',
+            'title' => 'Aula ainda não publicada',
+            'body' => 'Conteúdo fictício para demonstrar expiração sob lock.',
+        ])->assertCreated();
+
+        $grant = PortalGrant::allow(
+            'imagine-editorial', 'synthetic-editor', PortalAccessGate::MANAGE,
+            1, time() + 2,
+        );
+        $delayed = false;
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $event
+        ) use (&$delayed): void {
+            if (!$delayed && str_contains($event->sql, 'educational_course_versions')) {
+                $delayed = true;
+                sleep(3);
+            }
+        });
+
+        self::assertFalse((new \App\Domain\Learning\UniversityCatalogRepository())
+            ->setPublished($grant, $courseId, true));
+        self::assertTrue($delayed, 'Expire the grant while the transaction reads versions.');
+        self::assertSame(0, DB::table('educational_courses')
+            ->where('id', $courseId)->where('is_published', true)->count());
+        self::assertSame(1, DB::table('educational_course_versions')
+            ->where('educational_course_id', $courseId)->where('status', 'draft')->count());
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('action', 'course.published')->where('resource_id', $courseId)->count());
+    }
+
+    public function test_editorial_delete_denies_grant_expired_during_version_read(): void
+    {
+        $this->asPortal('demo-editor', 'imagine-editorial');
+        $courseId = (int) $this->postJson('/universidade/private/admin/courses', [
+            'slug' => 'teste-expiracao-exclusao',
+            'title' => 'Curso nunca publicado protegido',
+            'category' => 'negocios',
+        ])->assertCreated()->json('id');
+
+        $grant = PortalGrant::allow(
+            'imagine-editorial', 'synthetic-editor', PortalAccessGate::MANAGE,
+            1, time() + 2,
+        );
+        $delayed = false;
+        DB::listen(static function (
+            \Illuminate\Database\Events\QueryExecuted $event
+        ) use (&$delayed): void {
+            if (!$delayed && str_contains($event->sql, 'educational_course_versions')) {
+                $delayed = true;
+                sleep(3);
+            }
+        });
+
+        self::assertFalse((new \App\Domain\Learning\UniversityCatalogRepository())
+            ->deleteNeverPublishedCourse($grant, $courseId));
+        self::assertTrue($delayed);
+        self::assertSame(1, DB::table('educational_courses')->where('id', $courseId)->count());
+        self::assertSame(0, DB::table('educational_audit_events')
+            ->where('action', 'course.deleted')->where('resource_id', $courseId)->count());
+    }
+
     public function test_course_version_and_lesson_references_reject_cascading_deletion(): void
     {
         $this->asPortal('demo-editor', 'imagine-editorial');

@@ -23,11 +23,14 @@ docker run --rm --network none --read-only --cap-drop ALL \
   --env SESSION_DRIVER=array --env CACHE_STORE=array \
   "${tag}-php" sh -ec '
   test ! -f .env
-  php -m | grep -Fxq sodium
-  php -m | grep -Fxq pdo_pgsql
-  test -f vendor/autoload.php
-  php artisan route:list --path=universidade/private --except-vendor > /tmp/uni-routes.txt
-  grep -Fq universidade/private /tmp/uni-routes.txt
+  php -r '\''foreach (["sodium","pdo_pgsql"] as $ext) {
+    if (!extension_loaded($ext)) {fwrite(STDERR,"FAIL missing runtime extension: ".$ext.PHP_EOL);exit(2);}
+  }'\''
+  if [ ! -f vendor/autoload.php ]; then echo "FAIL no locked composer autoloader" >&2;exit 2;fi
+  php artisan route:list --path=universidade/private --except-vendor > /tmp/uni-routes.txt ||
+    { echo "FAIL Laravel route:list returned an error; diagnostic output:" >&2;cat /tmp/uni-routes.txt >&2;exit 2; }
+  grep -Fq universidade/private /tmp/uni-routes.txt ||
+    { echo "FAIL Laravel has no private route definitions" >&2;cat /tmp/uni-routes.txt >&2;exit 2; }
   echo "PASS staging PHP Laravel private route startup, no live authority"
   '
 # Execute a genuine Laravel HTTP kernel with forged client headers and no

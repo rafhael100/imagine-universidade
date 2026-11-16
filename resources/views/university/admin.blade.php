@@ -149,14 +149,14 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
   note.hidden=!shown;note.textContent=shown||"";
 }
 function beginWrite(){
-  if(state.accessDenied||state.writePending)return false;
+  if(state.accessDenied||state.writePending||!state.catalogReady)return false;
   state.writePending=true;
   ++state.courseRequest;++state.lessonRequest;
   const layout=document.querySelector(".layout");
@@ -178,7 +178,7 @@ function clearPublicationCheck(){
 }
 function lockAccess(message){
   if(state.accessDenied)return;
-  state.accessDenied=true;state.accessMessage=message;
+  state.accessDenied=true;state.accessMessage=message;state.catalogReady=false;
   document.querySelector(".layout").inert=true;
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
   ++state.courseRequest;++state.lessonRequest;
@@ -218,7 +218,7 @@ async function api(path,method="GET",payload=null){
   return data;
 }
 const intField=id=>Number.parseInt($(id).value,10)||0;
-const draft=()=>!state.accessDenied&&(state.course===null||!Boolean(state.course.is_published));
+const draft=()=>!state.accessDenied&&state.catalogReady&&(state.course===null||!Boolean(state.course.is_published));
 function fillCourse(){
   if(state.accessDenied)return;
   const c=state.course;
@@ -308,6 +308,8 @@ async function refreshCourses(preferredId=state.course?.id??null){
   if(state.accessDenied||state.courseRequest!==request)return;
   state.courses=Array.isArray(result.courses)?result.courses:[];
   state.course=state.courses.find(c=>c.id===preferredId)||null;
+  state.catalogReady=true;
+  $("new-course").disabled=false;
   renderCourses();fillCourse();
   await refreshLessons();
 }
@@ -349,7 +351,7 @@ $("course-items").addEventListener("click",async event=>{
   try{await refreshLessons();}catch(error){say(error.message);}
 });
 $("new-course").addEventListener("click",()=>{
-  if(state.accessDenied||state.writePending)return;
+  if(state.accessDenied||state.writePending||!state.catalogReady)return;
   if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;++state.lessonRequest;
   state.course=null;state.lessons=[];state.lesson=null;
@@ -607,6 +609,7 @@ $("load-more-audit").addEventListener("click",()=>{
 async function loadAdminCatalog(){
   if(state.accessDenied||state.writePending||state.catalogLoading)return;
   state.catalogLoading=true;
+  if(!state.catalogReady)$("new-course").disabled=true;
   const retry=$("retry-catalog"),recovery=$("catalog-recovery");
   retry.disabled=true;recovery.hidden=true;
   $("course-items").replaceChildren();
@@ -617,12 +620,14 @@ async function loadAdminCatalog(){
   }catch(error){
     if(!state.accessDenied){
       // A failed catalog read cannot keep stale editorial data on screen.
+      state.catalogReady=false;
+      $("new-course").disabled=true;
       state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
       ++state.lessonRequest;
+      renderCourses();renderLessons();fillCourse();resetLesson();
       $("course-items").replaceChildren();
       $("course-items").append(el("p","Cursos temporariamente indisponíveis.", "help"));
       $("lesson-items").replaceChildren();
-      renderCourses();renderLessons();fillCourse();resetLesson();
       hideLessonPreview();clearPublicationCheck();
       say(error.message);
       recovery.hidden=false;

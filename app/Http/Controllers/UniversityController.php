@@ -72,10 +72,15 @@ final class UniversityController
      * Só funciona após grant VIEW proveniente de sessão servidor do Portal.
      * Não recebe company_id nem subject_id do corpo da requisição.
      */
-    public function initialize(Request $request, UniversityTenantProvisioner $provisioner): JsonResponse
+    public function initialize(Request $request, UniversityTenantProvisioner $provisioner, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
         try {
-            $ready = $provisioner->initialize($this->grant($request), time());
+            $ready = $provisioner->initialize(
+                $grant,
+                time(),
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
         } catch (\Throwable) {
             return response()->json(['error' => 'temporarily_unavailable'], 503);
         }

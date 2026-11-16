@@ -24,7 +24,7 @@
     .skip-link:focus{top:8px}
     .eyebrow{color:#A85B00;font-size:11px;letter-spacing:1.6px;font-weight:850;text-transform:uppercase}
     .container{max-width:1180px;margin:auto;padding:27px 22px 55px}h1{margin:4px 0 8px;font-size:30px}h2{font-size:19px;margin:0}h3{font-size:16px;margin:0 0 10px}
-    p{color:var(--muted);margin:0 0 14px}
+    p{color:#505650;margin:0 0 14px}
     .notice{border-radius:12px;padding:12px 17px;background:#FFF5E6;border:1px solid #EED2A6;color:#7F521A;margin:20px 0}
     .notice[hidden]{display:none}
     .layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:19px;align-items:start}
@@ -33,7 +33,7 @@
     .panel-body{padding:21px}.items{padding:9px;display:grid;gap:6px}
     .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%}
     .item:hover{background:#F8F9FB}.item[aria-current="true"]{background:#FFF3E2;border-color:#F2D2AA}
-    .item strong{display:block;font-size:14px}.item small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+    .item strong{display:block;font-size:14px}.item small{display:block;color:#505650;font-size:12px;margin-top:3px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:5px;margin-bottom:14px}
     .field label{font-size:12px;font-weight:750;color:#465369}.span{grid-column:1/-1}
     input,select,textarea{padding:11px;border:1px solid #D7DDE5;border-radius:10px;min-width:0;width:100%;color:var(--ink);background:white}
@@ -52,11 +52,11 @@
     .audit-list{padding:10px 20px;display:grid;gap:6px}
     .audit-row{padding:12px 0;border-bottom:1px solid var(--line)}
     .audit-row strong{display:block;font-weight:750}
-    .audit-row small{display:block;color:var(--muted);font-size:12px}
+    .audit-row small{display:block;color:#505650;font-size:12px}
     .editorial-preview h3{font-size:19px;color:#263044}
     .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
     .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
-    .footer{font-size:12px;color:#8F98A4;margin-top:28px}
+    .footer{font-size:12px;color:#565D56;margin-top:28px}
     @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
   </style>
 </head>

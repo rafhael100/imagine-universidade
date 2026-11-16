@@ -11,6 +11,7 @@ name: UNI isolated branch QA (test-only, no deploy)
 # UNI C-91: preserve 320/390/768/1440 synthetic screenshots and 200%-scale layout checks.
 # UNI C-87/C-90: full QA of student/admin retry and unsaved editorial guards.
 # UNI C-85: revalidate timed Portal authority and expiring grants in all isolated labs.
+# UNI C-103: reject stale/forged editorial claims; never derive release authority from CSV.
 # UNI C-102: export immutable full-text review package for the existing 35 draft lessons.
 # UNI C-101: test lost editorial POST response after commit, no auto-replay, manual revalidation.
 # Continuous *test-only* review branch QA, with no production credentials.
@@ -113,6 +114,7 @@ jobs:
           node scripts/check-ui-contract.mjs
           node scripts/check-learning-content.mjs
           node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-validation.mjs
           node preview/current-check.mjs
           python3 scripts/check-sqlite-contract.py
 
@@ -165,7 +167,12 @@ jobs:
           test ! -e .env && test ! -e .env.production
           test -f content/mvp-cursos-v1.json
           node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-validation.mjs
           node scripts/build-editorial-review-pack.mjs --out "$RUNNER_TEMP/universidade-editorial-review"
+          node scripts/validate-editorial-review.mjs \
+            --csv "$RUNNER_TEMP/universidade-editorial-review/revisao.csv" \
+            > "$RUNNER_TEMP/universidade-editorial-review/revisao-validacao-estrutural.json"
+          grep -Fq '"publishable": false' "$RUNNER_TEMP/universidade-editorial-review/revisao-validacao-estrutural.json"
           grep -Fq 'NÃO É APROVAÇÃO NEM PUBLICAÇÃO' "$RUNNER_TEMP/universidade-editorial-review/LEIA-PRIMEIRO.md"
           test "$(find "$RUNNER_TEMP/universidade-editorial-review/cursos" -type f -name '*.md' | wc -l)" -eq 10
           echo "PASS editorial review evidence only; no approval, deploy, grant or publication."

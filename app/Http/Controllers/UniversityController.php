@@ -199,12 +199,18 @@ final class UniversityController
             : response()->json(['completed' => $completed]);
     }
 
-    public function complete(Request $request, int $lessonId): JsonResponse
+    public function complete(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
     {
-        $ok = $this->catalog->complete($this->grant($request), $lessonId);
+        $grant = $this->grant($request);
+        $ok = $this->catalog->complete(
+            $grant,
+            $lessonId,
+            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+        );
+
         return $ok
             ? response()->json(['completed' => true])
-            : response()->json(['error' => 'not_found'], 404);
+            : response()->json(['error' => 'not_found_or_access_revoked'], 404);
     }
 
     public function adminAudit(Request $request): JsonResponse

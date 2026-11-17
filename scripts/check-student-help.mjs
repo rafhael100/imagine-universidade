@@ -14,7 +14,7 @@ function actualFunction(name){
   return source;
 }
 const source=["studentRecord","studentText","studentSlug","normalizeSearchText","splitLessonSections",
-  "el","say","lockAccess","api","lessonTextFragment","validatedStudentHelp","lessonHelpExcerpts","lessonHelpPanel"]
+  "el","say","lockAccess","discardErrorBody","api","lessonTextFragment","validatedStudentHelp","lessonHelpExcerpts","lessonHelpPanel"]
   .map(actualFunction).join("\n");
 const lesson={id:11,slug:"visitas-ficticias",title:"Visitas fictícias",sort_order:0,course_id:1,course_version:2,
   body:"Visitas são pessoas que chegam ao conteúdo.\n\nEXEMPLO FICTÍCIO\nLeads demonstram interesse no exemplo fictício.\n\nAPLICAÇÃO OPCIONAL\nImagine uma jornada de atendimento respeitoso.\n\nCUIDADO IMPORTANTE\nUse dados fictícios e evite promessas de vendas."};

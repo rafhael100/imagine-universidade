@@ -15,7 +15,7 @@ const start=view.indexOf('document.getElementById("reload-favorites").addEventLi
 const end=view.indexOf("// Recovery is manual",start);
 assert.ok(start>=0&&end>start,"Actual favorites/filter handlers must exist");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentLessons",
-  "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","api","progressLabel",
+  "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","discardErrorBody","api","progressLabel",
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
   "renderCourses","loadFavorites","toggleCourseFavorite","selectCourse","openCourseWithAllFilters","loadLibrary"]
   .map(actual).join("\n")+"\n"+view.slice(start,end);

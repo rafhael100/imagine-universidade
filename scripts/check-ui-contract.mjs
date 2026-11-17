@@ -875,6 +875,7 @@ assert.match(studentProgressUI,/document\.getElementById\("lesson-search-results
   "search results must be purged on Portal denial");
 console.log("PASS private lesson search: 8-hit bounded, published-only, CSRF, tenant, revocation and no external AI");
 
+await import("./check-error-body-cleanup.mjs");
 await import("./check-publication-response.mjs");
 await import("./check-student-help.mjs");
 await import("./check-student-favorites.mjs");

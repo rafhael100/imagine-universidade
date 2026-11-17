@@ -300,6 +300,45 @@ function el(tag,text,className){
   if(className)node.className=className;
   return node;
 }
+// Error bodies do not contribute UI data, but their streams still need a
+// bounded cleanup. Discard chunks without decoding, retaining or logging them.
+// Never await this cleanup before revocation, fallback or an error action.
+async function discardErrorBody(response){
+  let reader=null,timer=null,cancelled=false;
+  const cancel=()=>{
+    if(cancelled||reader===null)return;
+    cancelled=true;
+    try{Promise.resolve(reader.cancel()).catch(()=>{});}catch{}
+  };
+  try{
+    const body=response?.body;
+    if(!body||typeof body.getReader!=="function")return;
+    reader=body.getReader();
+    if(!reader||typeof reader.read!=="function"){cancel();return;}
+    const expired={};
+    const deadline=new Promise(resolve=>{
+      timer=setTimeout(()=>{cancel();resolve(expired);},2000);
+    });
+    let bytes=0;
+    for(let reads=0;reads<64;reads++){
+      // Promise.race observes late read rejections too, after the deadline
+      // has won. Cancellation itself is deliberately never awaited.
+      const chunk=await Promise.race([reader.read(),deadline]);
+      if(chunk===expired)return;
+      if(!chunk||typeof chunk.done!=="boolean"){cancel();return;}
+      if(chunk.done)return;
+      const length=chunk.value?.byteLength;
+      if(!Number.isSafeInteger(length)||length<0){cancel();return;}
+      bytes+=length;
+      if(bytes>=16384){cancel();return;}
+    }
+    cancel();
+  }catch{cancel();}
+  finally{
+    if(timer!==null)clearTimeout(timer);
+    try{reader?.releaseLock();}catch{}
+  }
+}
 async function api(path,options={}){
   if(state.accessDenied)throw new Error(state.accessMessage);
   const response=await fetch(root+path,{
@@ -310,6 +349,7 @@ async function api(path,options={}){
       ...(options.body===undefined?{}:{"Content-Type":"application/json"})},
     body:options.body===undefined?undefined:JSON.stringify(options.body),
   });
+  if(!response.ok)void discardErrorBody(response);
   if(response.status===403)lockAccess("Seu acesso não está autorizado. Retorne ao Portal do Cliente.");
   if(response.status===419)lockAccess("Sua sessão expirou. Acesse novamente pelo Portal.");
   if(state.accessDenied)throw new Error(state.accessMessage);

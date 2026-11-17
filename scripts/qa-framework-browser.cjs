@@ -62,6 +62,8 @@ function setAuthority(profile,allowed){
 
 let checks=0,stage="health",browser;
 const pageErrors=[],businessRequests=[],contexts=[];
+// Only fixed lifecycle labels are retained; never request/response contents.
+const requestLifecycle=new WeakMap();
 function enterStage(value){stage=value;console.log("RUN framework browser stage: "+value);}
 const check=(condition,label)=>{
   if(!condition)throw new Error(label);
@@ -75,8 +77,10 @@ const json=async(response,label)=>{
       timer=setTimeout(()=>reject(new Error("response_body_timeout")),15000);
     })]);
   }catch(error){
+    const lifecycle=typeof response.request==="function"?requestLifecycle.get(response.request()):null;
+    const diagnostic=lifecycle?" (network="+lifecycle+")":"";
     throw new Error(label+(error.message==="response_body_timeout"
-      ?": response body did not finish within 15 seconds":": expected a JSON response"));
+      ?": response body did not finish within 15 seconds":": expected a JSON response")+diagnostic);
   }finally{clearTimeout(timer);}
 };
 async function awaitHealth(){
@@ -162,7 +166,11 @@ async function session(profile){
     "A fixed test profile must receive its server-owned session");
   const page=await context.newPage();
   page.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,200)));
+  page.on("requestfinished",request=>requestLifecycle.set(request,"finished"));
+  page.on("requestfailed",request=>requestLifecycle.set(request,
+    request.failure()?.errorText==="net::ERR_ABORTED"?"aborted":"failed"));
   page.on("request",request=>{
+    requestLifecycle.set(request,"pending");
     const route=new URL(request.url()).pathname;
     if(!route.startsWith("/universidade/private/"))return;
     businessRequests.push({profile,path:route,method:request.method(),

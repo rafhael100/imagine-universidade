@@ -1,0 +1,101 @@
+name: UNI C-107 — PostgreSQL negative search QA (draft only)
+
+# Dedicated verification of PR #84. No production events, deploys, secrets or release.
+on:
+  push:
+    branches:
+      - test/uni-c107-search-negative-pg-2026-11-16
+    paths:
+      - '.github/workflows/uni-c107-search-pg-negative.yml'
+      - 'scripts/check-pg-flow.php'
+      - 'database/migrations/**'
+      - 'composer.json'
+      - 'composer.lock'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-c107-pg-negative-only
+  cancel-in-progress: true
+
+jobs:
+  synthetic-pg-negative:
+    if: github.repository == 'rafhael100/imagine-universidade' && github.ref == 'refs/heads/test/uni-c107-search-negative-pg-2026-11-16'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: uni_ci
+          POSTGRES_USER: uni_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uni_ci -d uni_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: uni_ci
+      DB_USERNAME: uni_ci
+      DB_PASSWORD: synthetic_ci_only
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    steps:
+      - name: Checkout exact draft without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Deny non-disposable or non-synthetic execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = test/uni-c107-search-negative-pg-2026-11-16
+          test "$APP_ENV" = testing
+          test "$DB_CONNECTION" = pgsql
+          test "$DB_HOST" = 127.0.0.1
+          test "$DB_DATABASE" = uni_ci
+          test "$DB_USERNAME" = uni_ci
+          test ! -e .env
+          test ! -e .env.production
+          test -f composer.lock
+      - name: PHP 8.3 in isolated runner
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, xml, pdo_pgsql, pdo_sqlite, sqlite3, openssl, fileinfo, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Validate syntax and install locked open-source test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l scripts/check-pg-flow.php
+          composer validate --no-check-publish
+          composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+      - name: PostgreSQL 18 synthetic migration and negative C-107 assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$APP_ENV" = testing
+          test "$DB_DATABASE" = uni_ci
+          php -r '$p=new PDO("pgsql:host=127.0.0.1;port=5432;dbname=uni_ci;connect_timeout=3","uni_ci","synthetic_ci_only",[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);if($p->query("SELECT current_database()")->fetchColumn()!=="uni_ci")exit(2);echo "PASS disposable database name\n";'
+          php artisan migrate:fresh --database=pgsql --force
+          php scripts/check-pg-flow.php > "$RUNNER_TEMP/uni-c107-checks.txt"
+          grep -Fq 'PASS private PostgreSQL search rejects absent terms without false positives' "$RUNNER_TEMP/uni-c107-checks.txt"
+          grep -Fq 'PASS private PostgreSQL search keeps editorial owner distinct from both clients' "$RUNNER_TEMP/uni-c107-checks.txt"
+          grep -Fq 'PASS private PostgreSQL search hides lesson when published version becomes draft' "$RUNNER_TEMP/uni-c107-checks.txt"
+          grep -Fq 'PASS private PostgreSQL search restores only previously published version' "$RUNNER_TEMP/uni-c107-checks.txt"
+          grep -Fq 'entire transaction ROLLED BACK' "$RUNNER_TEMP/uni-c107-checks.txt"
+          echo 'PASS UNI C-107: four negative checks and rollback in disposable PostgreSQL; NOT Portal authorization or operational release.'

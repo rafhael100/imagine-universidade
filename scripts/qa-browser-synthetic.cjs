@@ -243,6 +243,9 @@ async function inspect(page,name){
   const issues=axe.violations.map(v=>({id:v.id,impact:v.impact,description:v.help,targets:v.nodes.map(n=>n.target)}));
   fs.writeFileSync(path.join(out,name+"-axe.json"),JSON.stringify({page:name,violations:issues},null,2));
   results.accessibility.push({page:name,seriousOrCritical:issues.filter(v=>v.impact==="serious"||v.impact==="critical").length});
+  if(results.accessibility.at(-1).seriousOrCritical>0){
+    console.error("Synthetic accessibility violations: "+JSON.stringify({page:name,violations:issues.filter(v=>v.impact==="serious"||v.impact==="critical")}));
+  }
   check(results.accessibility.at(-1).seriousOrCritical===0,name+" has serious/critical axe violations.");
 }
 (async()=>{

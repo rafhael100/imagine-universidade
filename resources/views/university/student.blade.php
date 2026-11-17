@@ -57,7 +57,7 @@
     .favorite-tools label{display:inline-flex;align-items:center;gap:9px;min-height:44px;font-weight:750;font-size:13px}
     .favorite-tools input{width:20px;height:20px;accent-color:var(--orange)}
     .favorite-tools .secondary{margin-left:0}
-    .favorite-status{flex-basis:100%;font-size:13px;color:var(--muted);margin:0}
+    .favorite-status{flex-basis:100%;font-size:13px;color:#565D56;margin:0}
     .course-favorite{padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
     .course-favorite p{font-size:13px;font-weight:750;margin:0 0 8px;overflow-wrap:anywhere}
     .course-favorite .secondary{margin-left:0}

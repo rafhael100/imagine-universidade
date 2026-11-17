@@ -63,9 +63,21 @@ function setAuthority(profile,allowed){
 let checks=0,stage="health",browser;
 const pageErrors=[],businessRequests=[],contexts=[];
 function enterStage(value){stage=value;console.log("RUN framework browser stage: "+value);}
-const check=(condition,label)=>{if(!condition)throw new Error(label);checks++;};
+const check=(condition,label)=>{
+  if(!condition)throw new Error(label);
+  checks++;
+  console.log("PASS framework check "+checks+": "+label);
+};
 const json=async(response,label)=>{
-  try{return await response.json();}catch{throw new Error(label+": expected a JSON response");}
+  let timer;
+  try{
+    return await Promise.race([response.json(),new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error("response_body_timeout")),15000);
+    })]);
+  }catch(error){
+    throw new Error(label+(error.message==="response_body_timeout"
+      ?": response body did not finish within 15 seconds":": expected a JSON response"));
+  }finally{clearTimeout(timer);}
 };
 async function awaitHealth(){
   const expected=crypto.createHash("sha256").update(token).digest("hex");
@@ -361,6 +373,7 @@ async function main(){
   enterStage("completion and disabled tutor");
   const completion=await clickResponse(studentA.page,"#lesson-content button.primary","POST",
     "/universidade/private/lessons/"+firstLessonId+"/complete");
+  enterStage("completion interface confirmation");
   await studentA.page.waitForFunction(()=>{
     const button=document.querySelector("#lesson-content button.primary");
     return button?.disabled===true&&button.textContent.includes("Aula concluída");
@@ -369,14 +382,17 @@ async function main(){
   check(completion.status()===200&&completed.completed===true&&
     (await studentA.page.locator("#lesson-content button.primary").innerText()).includes("Aula concluída"),
     "Student completion must be confirmed by the real database-backed API");
+  enterStage("completion isolation after student reload");
   await openStudent(studentB,courseId,firstTitle);
   check(!(await studentB.page.locator("#lesson-content button.primary").isDisabled())&&
     (await studentB.page.locator("#lesson-content button.primary").innerText()).includes("Marcar como concluída"),
     "Completion must not cross companies even when the synthetic person identifier is the same");
   const tutorWrites=countWrites("student-a");
+  enterStage("disabled tutor request");
   await studentA.page.locator("#lesson-help-question").fill("Explique o visitante fictício desta aula.");
   const tutor=await clickResponse(studentA.page,"#lesson-help-submit","POST",
     "/universidade/private/lessons/"+firstLessonId+"/tutor");
+  enterStage("disabled tutor static fallback");
   await waitText(studentA.page,"lesson-help-answer","A tutoria está indisponível");
   check(tutor.status()===503&&(await json(tutor,"Disabled tutor")).error==="tutor_unavailable"&&
     (await studentA.page.locator("#lesson-help-answer").innerText()).includes("Um visitante fictício"),

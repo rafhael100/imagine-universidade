@@ -156,6 +156,28 @@ try {
     );
 
 
+    // C-107: negative checks for literal LIKE matching and publication state.
+    // Do not infer app authorization from these DB-only checks.
+    requireCondition(
+        countWhere($pdo, $searchSql, [$editorial, '%not-present-token%', '%not-present-token%', '%not-present-token%']) === 0,
+        'private PostgreSQL search rejects absent terms without false positives'
+    );
+    requireCondition(
+        countWhere($pdo, $searchSql, [$editorial, '%schema%', '%schema%', '%schema%']) === 1 &&
+        countWhere($pdo, $searchSql, [$companyB, '%schema%', '%schema%', '%schema%']) === 0,
+        'private PostgreSQL search keeps editorial owner distinct from both clients'
+    );
+    $pdo->prepare("UPDATE educational_course_versions SET status='draft' WHERE id=?")->execute([$version]);
+    requireCondition(
+        countWhere($pdo, $searchSql, [$editorial, '%schema%', '%schema%', '%schema%']) === 0,
+        'private PostgreSQL search hides lesson when published version becomes draft'
+    );
+    $pdo->prepare("UPDATE educational_course_versions SET status='published' WHERE id=?")->execute([$version]);
+    requireCondition(
+        countWhere($pdo, $searchSql, [$editorial, '%schema%', '%schema%', '%schema%']) === 1,
+        'private PostgreSQL search restores only previously published version'
+    );
+
     $addProgress = $pdo->prepare(
         "INSERT INTO educational_lesson_progress
          (educational_organization_id,subject_key,educational_lesson_id,completed_at,created_at,updated_at)

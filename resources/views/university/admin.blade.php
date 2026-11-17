@@ -571,6 +571,30 @@ window.addEventListener("beforeunload",event=>{
   event.returnValue="";
 });
 
+// The UI always publishes the exact diagnostic it just checked. Legacy
+// API consumers may omit a hash, but an incomplete 200 response must never
+// silently send this interface down that compatibility path.
+function validatedPublicationCheck(payload,courseId){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)||
+     !Number.isSafeInteger(courseId)||courseId<1||
+     payload.course_id!==courseId||
+     !Number.isSafeInteger(payload.version)||payload.version<1||
+     !Number.isSafeInteger(payload.lesson_count)||payload.lesson_count<0||
+     typeof payload.ready!=="boolean"||payload.advisory_only!==true||
+     typeof payload.content_hash!=="string"||!/^[a-f0-9]{64}$/.test(payload.content_hash)||
+     !Array.isArray(payload.issues)||payload.issues.length>3||
+     !Array.isArray(payload.warnings)||payload.warnings.length>1)return null;
+  const issueCodes=["not_draft","missing_lessons","invalid_lesson"];
+  if(payload.issues.some(code=>!issueCodes.includes(code))||
+     new Set(payload.issues).size!==payload.issues.length||
+     payload.warnings.some(code=>code!=="missing_optional_summary")||
+     payload.ready!==(payload.issues.length===0)||
+     payload.issues.includes("missing_lessons")!==(payload.lesson_count===0)||
+     (payload.lesson_count===0&&payload.issues.includes("invalid_lesson")))return null;
+  return {course_id:courseId,version:payload.version,lesson_count:payload.lesson_count,
+    ready:payload.ready,issues:payload.issues.slice(),warnings:payload.warnings.slice(),
+    content_hash:payload.content_hash,advisory_only:true};
+}
 function renderPublicationCheck(snapshot){
   const box=$("publication-readiness");box.replaceChildren();box.hidden=false;
   box.append(el("strong",snapshot.ready?
@@ -597,11 +621,17 @@ async function publicationCheck(){
     return null;
   }
   const request=++state.preflightRequest;
+  // A failed or malformed new read must not leave the previous readiness
+  // visible. Only this diagnostic card is cleared; editor drafts stay intact.
+  $("publication-readiness").replaceChildren();
+  $("publication-readiness").hidden=true;
   const snapshot=await api("/courses/"+courseId+"/publication-check");
   if(state.accessDenied||state.writePending||state.course?.id!==courseId||
     state.preflightRequest!==request||editorialHasUnsavedChanges())return null;
-  renderPublicationCheck(snapshot);
-  return snapshot;
+  const verified=validatedPublicationCheck(snapshot,courseId);
+  if(verified===null)throw new Error("Não foi possível validar a conferência de publicação. Tente novamente.");
+  renderPublicationCheck(verified);
+  return verified;
 }
 $("course-form").addEventListener("input",clearPublicationCheck);
 $("lesson-form").addEventListener("input",clearPublicationCheck);

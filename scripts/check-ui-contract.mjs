@@ -220,7 +220,7 @@ assert.equal(otherCourseFixture(null,1),null,"dados inválidos");
 assert.match(studentProgressUI,/nextCourse.dataset.nextCourse=""/,"aluno: botão de próximo curso");
 assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>openCourseWithAllFilters\(nextCourseId\)\)/,"aluno: troca segura de curso");
 assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null\)/,"aluno: navegação segura por curso e aula selecionada");
-assert.match(studentProgressUI,/if\(state.accessDenied\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
+assert.match(studentProgressUI,/if\(state.accessDenied\|\|!state.libraryReady\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
 console.log("PASS cross-course resume: próximo curso incompleto, sem voltar ao atual");
 
 const routes = read("routes/web.php");
@@ -278,7 +278,7 @@ assert.equal(sanitizeExport({...safeExportFixture,completions:[{...safeExportFix
 assert.equal(JSON.stringify(sanitizeExport({...safeExportFixture,completions:[]})),JSON.stringify({
   schema_version:1,scope:"current_authenticated_student",completions:[],
 }),"export: an empty history is still valid");
-assert.match(studentProgressUI,/if\(state\.accessDenied\|\|state\.exportLoading\)return;/,"export: no duplicate requests or revoked download");
+assert.match(studentProgressUI,/if\(state\.accessDenied\|\|!state\.libraryReady\|\|state\.exportLoading\)return;/,"export: no duplicate requests or revoked download");
 assert.match(studentProgressUI,/const sanitized=sanitizedProgressExport\(progress\)/,"export: never serialize raw API payload");
 assert.match(studentProgressUI,/JSON\.stringify\(sanitized,null,2\)/,"export: download only allowlisted progress");
 console.log("PASS export privacy: versioned scope, max 5000 entries, allowlisted fields, single-flight and no foreign data");
@@ -612,6 +612,194 @@ console.log("PASS completion uncertainty: GET reconciliation before any repeated
 
 
 
+// C-110: execute the actual response normalizers and read/recovery flows.
+// These assertions supplement the real Chromium suite; no auth is simulated
+// by replacing production providers and no HTTP request leaves this process.
+const studentFunction=name=>{
+  const source=studentProgressUI.match(new RegExp("(?:async )?function "+name+"\\([^\\n]*\\)\\{[\\s\\S]*?\\n\\}"))?.[0];
+  assert.ok(source,"student function missing: "+name);return source;
+};
+const studentNormalizers=["studentRecord","studentText","studentSlug","validatedStudentCourses",
+  "validatedStudentLessons","validatedStudentLesson","validatedStudentProgress"].map(studentFunction).join("\n");
+const studentParsers=new Script(studentNormalizers+"\n({validatedStudentCourses,validatedStudentLessons,validatedStudentLesson,validatedStudentProgress,studentText})")
+  .runInNewContext({});
+const studentCourse={id:1,slug:"curso-ficticio",title:"Curso fictício",category:"metodologia",
+  summary:"Resumo fictício",lessons_total:2,lessons_completed:0};
+const studentRow={id:11,slug:"aula-ficticia",title:"Aula fictícia",sort_order:0,completed:0};
+const studentDetail={id:11,slug:"aula-ficticia",title:"Aula fictícia",body:"Corpo fictício para verificação.",
+  sort_order:0,course_id:1,course_version:1};
+const {validatedStudentCourses:parseStudentCourses,validatedStudentLessons:parseStudentRows,
+  validatedStudentLesson:parseStudentDetail,validatedStudentProgress:parseStudentProgress}=studentParsers;
+assert.equal(JSON.stringify(parseStudentCourses({courses:[{...studentCourse,private_identity:"excluded",version_id:4}]})),
+  JSON.stringify([studentCourse]),"student catalogue retains only allowed fields");
+assert.equal(JSON.stringify(parseStudentRows({lessons:[{...studentRow,subject_key:"excluded"}]})),
+  JSON.stringify([studentRow]),"student lesson list retains only allowed fields");
+assert.equal(JSON.stringify(parseStudentDetail({lesson:{...studentDetail,subject_key:"excluded"}},11,1)),
+  JSON.stringify(studentDetail),"student detail retains only allowed fields");
+assert.equal(JSON.stringify(parseStudentCourses({courses:[]})),"[]","verified empty catalogue remains empty");
+assert.equal(JSON.stringify(parseStudentRows({lessons:[]})),"[]","verified empty lesson list remains empty");
+for(const payload of [{},{courses:null},{courses:[studentCourse,{...studentCourse,slug:"different"}]},
+  {courses:[studentCourse,{...studentCourse,id:2}]},{courses:[{...studentCourse,id:"1"}]},
+  {courses:[{...studentCourse,lessons_completed:3}]},{courses:[{...studentCourse,lessons_total:"2"}]},
+  {courses:[{...studentCourse,category:"unknown"}]},
+  {courses:[{...studentCourse,lessons_total:Number.MAX_SAFE_INTEGER},{...studentCourse,id:2,slug:"second"}]}]){
+  assert.equal(parseStudentCourses(payload),null,"invalid student catalogue rejected as a whole");
+}
+for(const payload of [{},{lessons:null},{lessons:[studentRow,{...studentRow,slug:"different"}]},
+  {lessons:[studentRow,{...studentRow,id:12}]},{lessons:[{...studentRow,completed:"false"}]},
+  {lessons:[{...studentRow,completed:false}]},{lessons:[{...studentRow,sort_order:-1}]}]){
+  assert.equal(parseStudentRows(payload),null,"invalid student lesson list rejected as a whole");
+}
+assert.equal(parseStudentCourses({courses:Array.from({length:5001},(_,index)=>({
+  ...studentCourse,id:index+1,slug:"course-"+index}))}).length,5001,
+  "catalogue accepts backend-authorized lists without inventing a record limit");
+assert.equal(parseStudentRows({lessons:Array.from({length:5001},(_,index)=>({
+  ...studentRow,id:index+1,slug:"lesson-"+index}))}).length,5001,
+  "lessons accept backend-authorized lists without inventing a record limit");
+for(const payload of [{},{completed:"false"},{completed:0},{completed:1},{completed:null},[]]){
+  assert.equal(parseStudentProgress(payload),null,"individual progress requires a boolean");
+}
+assert.equal(parseStudentProgress({completed:false}).completed,false,"pending boolean preserved");
+assert.equal(parseStudentProgress({completed:true,subject_key:"excluded"}).completed,true,"completed boolean preserved");
+assert.equal(Object.keys(parseStudentProgress({completed:true,subject_key:"excluded"})).join(","),"completed");
+for(const payload of [{},{lesson:null},{lesson:{...studentDetail,id:12}},
+  {lesson:{...studentDetail,course_id:2}},{lesson:{...studentDetail,body:42}},
+  {lesson:{...studentDetail,course_version:0}}]){
+  assert.equal(parseStudentDetail(payload,11,1),null,"wrong or malformed detail cannot render for another lesson");
+}
+assert.ok(parseStudentCourses({courses:[{...studentCourse,title:"😀".repeat(200),summary:"😀".repeat(500)}]}),
+  "valid Unicode titles and summaries use Laravel character limits");
+assert.equal(parseStudentCourses({courses:[{...studentCourse,title:"😀".repeat(201)}]}),null);
+assert.ok(parseStudentDetail({lesson:{...studentDetail,body:"😀".repeat(30000)}},11,1),
+  "valid astral body is not rejected by UTF-16 length");
+assert.equal(parseStudentDetail({lesson:{...studentDetail,body:"😀".repeat(30001)}},11,1),null);
+const unicodeSections=new Script(studentFunction("splitLessonSections")+"\nsplitLessonSections(body)")
+  .runInNewContext({body:"😀".repeat(30000)});
+assert.equal(Array.from(unicodeSections[0].text).length,30000,"renderer does not halve valid astral body");
+
+function studentTestNode(tag,text,className){
+  return {tag,textContent:text??"",className:className??"",children:[],events:{},dataset:{},
+    hidden:false,disabled:false,append(...nodes){this.children.push(...nodes);},
+    replaceChildren(...nodes){this.children=nodes;},setAttribute(){},querySelectorAll(){return[];},
+    addEventListener(event,callback){this.events[event]=callback;}};
+}
+function studentFlowFixture(){
+  const nodes=new Map();
+  const get=id=>{if(!nodes.has(id)){const node=studentTestNode("div");node.disabled=true;nodes.set(id,node);}return nodes.get(id);};
+  const state={courses:[{...studentCourse}],filter:"todos",query:"",courseId:1,lessonId:null,courseRequest:0,lessonRequest:0,
+    searchRequest:0,accessDenied:false,libraryLoading:false,libraryReady:true,exportLoading:false};
+  const content=studentTestNode("article"),lessonsBox=studentTestNode("div"),list=studentTestNode("div");
+  const messages=[],marks=[],calls=[];
+  const filters=["todos","metodologia"].map(filter=>{const node=studentTestNode("button");node.dataset.filter=filter;return node;});
+  const context={state,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
+    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),renderCourses:()=>{},renderSimulator:()=>{},
+    markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
+  return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
+}
+for(const initial of [{},{ready:false},{ready:"true"}]){
+  const fixture=studentFlowFixture();
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});return path==="/initialize"?initial:{courses:[studentCourse]};};
+  const load=new Script(studentNormalizers+"\n"+studentFunction("loadLibrary")+"\nloadLibrary")
+    .runInNewContext(fixture.context);
+  await load();
+  assert.equal(fixture.calls.length,1,"invalid ready never causes a catalogue read or automatic replay");
+  assert.equal(fixture.get("library-recovery").hidden,false,"invalid ready exposes manual recovery");
+  assert.equal(fixture.get("lesson-search-query").disabled,true);
+  assert.equal(fixture.get("export-progress").disabled,true);
+}
+{
+  const fixture=studentFlowFixture();let fail=true;
+  fixture.context.api=async path=>path==="/initialize"?{ready:true}:fail?{courses:null}:{courses:[studentCourse]};
+  fixture.context.renderPillars=()=>{};
+  fixture.context.coursesFiltered=()=>fixture.state.courses;
+  fixture.context.labels={metodologia:"Metodologia"};
+  const filterEvents=studentProgressUI.match(/document\.getElementById\("course-search"\)\.addEventListener\("input",event=>\{[\s\S]*?\n\/\/ Recovery/)?.[0].replace(/\n\/\/ Recovery$/,"");
+  assert.ok(filterEvents,"actual course filter handlers must be available");
+  const flow=new Script(studentNormalizers+"\n"+
+    ["progressLabel","nextPendingCourseId","renderCourses","loadLibrary"].map(studentFunction).join("\n")+
+    "\n"+filterEvents+"\n({loadLibrary,renderCourses})").runInNewContext(fixture.context);
+  await flow.loadLibrary();assert.equal(fixture.get("library-recovery").hidden,false);
+  assert.equal(fixture.state.courses.length,0,"invalid catalogue has no partial courses");
+  assert.equal(fixture.state.libraryReady,false,"invalid catalogue cannot grant ready state");
+  const unavailable=fixture.context.overall.textContent;
+  fixture.get("course-search").events.input({target:{value:"ignored"}});
+  fixture.filters[1].events.click();
+  flow.renderCourses();
+  assert.equal(fixture.context.overall.textContent,unavailable,"filters cannot turn unavailable data into a valid empty state");
+  assert.equal(fixture.get("export-progress").disabled,true,"filters cannot unlock export after invalid catalogue");
+  assert.equal(fixture.get("course-search").disabled,true,"course search stays disabled after failure");
+  assert.ok(fixture.filters.every(button=>button.disabled),"category filters stay disabled after failure");
+  assert.equal(fixture.state.query,"");assert.equal(fixture.state.filter,"todos");
+  fail=false;await flow.loadLibrary();assert.equal(fixture.get("library-recovery").hidden,true);
+  assert.equal(fixture.state.courses.length,1,"manual recovery accepts later valid catalogue");
+  assert.equal(fixture.state.libraryReady,true,"only a verified catalogue grants ready state");
+  assert.equal(fixture.get("course-search").disabled,false);
+  assert.equal(fixture.get("export-progress").disabled,false);
+  assert.ok(fixture.filters.every(button=>!button.disabled));
+}
+for(const payload of [{},{lessons:null},{lessons:[studentRow,{...studentRow,slug:"another"}]},
+  {lessons:[{...studentRow,completed:"false"}]}]){
+  const fixture=studentFlowFixture();let fail=true;
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});
+    return fail?payload:{lessons:[studentRow]};};
+  const opened=[];fixture.context.selectLesson=async id=>opened.push(id);
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectCourse")+"\nselectCourse").runInNewContext(fixture.context);
+  await select(1,11);
+  assert.equal(fixture.lessonsBox.children.length,0,"malformed list never renders partial rows");
+  assert.equal(opened.length,0,"malformed list never selects a lesson");
+  assert.ok(fixture.content.children.some(node=>node.className.includes("lesson-retry")));
+  fail=false;await select(1,11);
+  assert.deepEqual(opened,[11],"valid recovery preserves the exact selected lesson");
+  assert.equal(fixture.calls.filter(call=>call.method==="POST").length,0);
+}
+for(const [lesson,progress] of [[studentDetail,{}],[studentDetail,{completed:"false"}],
+  [{...studentDetail,id:12},{completed:false}],[{...studentDetail,course_id:2},{completed:false}]]){
+  const fixture=studentFlowFixture();let fail=true;
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});
+    return path.endsWith("/progress")?(fail?progress:{completed:false}):{lesson:fail?lesson:studentDetail};};
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectLesson")+"\nselectLesson").runInNewContext(fixture.context);
+  await select(11);
+  assert.equal(fixture.content.children.some(n=>n.tag==="h3"),false,"invalid detail/progress never renders a partial lesson");
+  assert.equal(fixture.content.children.some(n=>n.className==="primary"),false,"invalid reads never enable completion");
+  assert.equal(fixture.marks.length,0,"invalid progress does not mark local completion");
+  const retry=fixture.content.children.find(n=>n.className.includes("lesson-detail-retry"));assert.ok(retry);
+  fail=false;await select(11);
+  assert.ok(fixture.content.children.some(n=>n.tag==="h3"),"later valid read recovers the lesson");
+  assert.equal(fixture.calls.filter(x=>x.method==="POST").length,0,"read recovery never writes completion");
+}
+{
+  const fixture=studentFlowFixture();
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});
+    if(options.method==="POST")return{completed:true};
+    if(path==="/courses")return{courses:null};
+    return path.endsWith("/progress")?{completed:false}:{lesson:studentDetail};};
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectLesson")+"\nselectLesson").runInNewContext(fixture.context);
+  await select(11);const action=fixture.content.children.find(n=>n.className==="primary");await action.events.click();
+  assert.equal(action.disabled,true,"confirmed completion remains closed after a catalogue failure");
+  assert.equal(action.textContent,"✓ Aula concluída");
+  assert.equal(fixture.calls.filter(x=>x.method==="POST").length,1,"catalogue failure never replays completion");
+  assert.equal(fixture.state.courses.length,1,"invalid refresh cannot replace known catalogue with false empty success");
+  assert.ok(fixture.messages.at(-1).includes("Aula concluída. Atualize"));
+}
+{
+  const fixture=studentFlowFixture();let resolveOld;
+  fixture.context.api=async(path,options={})=>{
+    fixture.calls.push({path,method:options.method??"GET"});
+    if(path==="/lessons/11")return new Promise(resolve=>{resolveOld=resolve;});
+    if(path.endsWith("/progress"))return{completed:false};
+    return{lesson:{...studentDetail,id:12,slug:"second-lesson",title:"Segunda aula"}};
+  };
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectLesson")+"\nselectLesson").runInNewContext(fixture.context);
+  const old=select(11);await select(12);
+  resolveOld({lesson:{...studentDetail,id:99}});await old;
+  assert.equal(fixture.content.children.find(node=>node.tag==="h3").textContent,"Segunda aula",
+    "malformed late response cannot replace a newer valid lesson or show its retry");
+  assert.equal(fixture.content.children.some(node=>node.className.includes("lesson-detail-retry")),false);
+  assert.equal(fixture.marks.length,1,"old response cannot mutate lesson progress");
+  assert.equal(fixture.calls.filter(call=>call.method==="POST").length,0);
+}
+console.log("PASS student response integrity: validated catalogue, lists, exact lesson, boolean progress, Unicode, recovery and no replay");
+
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
 assert.equal(manifest.status, "editorial_draft", "não publicar automaticamente");
@@ -682,4 +870,5 @@ assert.match(studentProgressUI,/document\.getElementById\("lesson-search-results
   "search results must be purged on Portal denial");
 console.log("PASS private lesson search: 8-hit bounded, published-only, CSRF, tenant, revocation and no external AI");
 
+await import("./check-publication-response.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

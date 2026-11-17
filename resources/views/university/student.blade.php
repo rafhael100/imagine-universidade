@@ -135,14 +135,14 @@
   </section>
   <div id="status" role="status" aria-live="polite" class="status" hidden></div>
   <nav class="pills" aria-label="Categorias dos cursos">
-    <button type="button" class="pill" data-filter="todos" aria-pressed="true">Todos</button>
-    <button type="button" class="pill" data-filter="metodologia" aria-pressed="false">Metodologia</button>
-    <button type="button" class="pill" data-filter="negocios" aria-pressed="false">Negócios</button>
-    <button type="button" class="pill" data-filter="sistemas" aria-pressed="false">Sistemas Imagine</button>
+    <button type="button" class="pill" data-filter="todos" aria-pressed="true" disabled>Todos</button>
+    <button type="button" class="pill" data-filter="metodologia" aria-pressed="false" disabled>Metodologia</button>
+    <button type="button" class="pill" data-filter="negocios" aria-pressed="false" disabled>Negócios</button>
+    <button type="button" class="pill" data-filter="sistemas" aria-pressed="false" disabled>Sistemas Imagine</button>
   </nav>
   <div class="searchbar">
     <label for="course-search">Buscar cursos</label>
-    <input id="course-search" type="search" placeholder="Busque pelo nome ou assunto" maxlength="80" autocomplete="off">
+    <input id="course-search" type="search" placeholder="Busque pelo nome ou assunto" maxlength="80" autocomplete="off" disabled>
   </div>
   <section class="lesson-search-panel" aria-labelledby="lesson-search-title">
     <h2 id="lesson-search-title">Encontre um assunto dentro das aulas</h2>
@@ -180,7 +180,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,exportLoading:false,searchRequest:0,searchBusy:false};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -195,7 +195,7 @@ function illustrativeFunnel(visits,leadRate,clientRate){
 }
 function renderSimulator(){
   const out=document.getElementById("sim-results");
-  if(state.accessDenied){out.hidden=true;out.textContent="";return;}
+  if(state.accessDenied||!state.libraryReady){out.hidden=true;out.textContent="";return;}
   const result=illustrativeFunnel(
     document.getElementById("sim-visits").value,
     document.getElementById("sim-leads-rate").value,
@@ -219,7 +219,7 @@ function say(message){
 }
 function lockAccess(message){
   if(state.accessDenied)return;
-  state.accessDenied=true;state.accessMessage=message;
+  state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
   ++state.courseRequest;++state.lessonRequest;++state.searchRequest;
   document.getElementById("lesson-search-query").value="";
@@ -267,6 +267,66 @@ async function api(path,options={}){
   if(state.accessDenied)throw new Error(state.accessMessage);
   return data;
 }
+// Validate complete server responses before granting them UI meaning. A
+// successful HTTP status is not proof of a valid catalogue or progress state.
+// Text limits count Unicode code points, matching Laravel's string limits.
+function studentRecord(value){
+  return value!==null&&typeof value==="object"&&!Array.isArray(value);
+}
+function studentText(value,min,max){
+  if(typeof value!=="string"||value.length>max*2)return false;
+  const length=Array.from(value).length;
+  return length>=min&&length<=max&&(min===0||value.trim().length>0);
+}
+function studentSlug(value){
+  return typeof value==="string"&&value.length<=120&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+function validatedStudentCourses(payload){
+  if(!studentRecord(payload)||!Array.isArray(payload.courses))return null;
+  const ids=new Set(),slugs=new Set(),courses=[];
+  let totalLessons=0;
+  for(const item of payload.courses){
+    if(!studentRecord(item)||!Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
+       !studentSlug(item.slug)||slugs.has(item.slug)||!studentText(item.title,3,200)||
+       !["metodologia","negocios","sistemas"].includes(item.category)||
+       !(item.summary===null||studentText(item.summary,0,500))||
+       !Number.isSafeInteger(item.lessons_total)||item.lessons_total<0||
+       !Number.isSafeInteger(item.lessons_completed)||item.lessons_completed<0||
+       item.lessons_completed>item.lessons_total||
+       !Number.isSafeInteger(totalLessons+item.lessons_total))return null;
+    totalLessons+=item.lessons_total;
+    ids.add(item.id);slugs.add(item.slug);
+    courses.push({id:item.id,slug:item.slug,title:item.title,category:item.category,
+      summary:item.summary??"",lessons_total:item.lessons_total,lessons_completed:item.lessons_completed});
+  }
+  return courses;
+}
+function validatedStudentLessons(payload){
+  if(!studentRecord(payload)||!Array.isArray(payload.lessons))return null;
+  const ids=new Set(),slugs=new Set(),lessons=[];
+  for(const item of payload.lessons){
+    if(!studentRecord(item)||!Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
+       !studentSlug(item.slug)||slugs.has(item.slug)||!studentText(item.title,3,200)||
+       !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
+       ![0,1].includes(item.completed))return null;
+    ids.add(item.id);slugs.add(item.slug);
+    lessons.push({id:item.id,slug:item.slug,title:item.title,sort_order:item.sort_order,completed:item.completed});
+  }
+  return lessons;
+}
+function validatedStudentLesson(payload,lessonId,courseId){
+  const item=studentRecord(payload)?payload.lesson:null;
+  if(!studentRecord(item)||!Number.isSafeInteger(item.id)||item.id<1||item.id!==lessonId||
+     !Number.isSafeInteger(item.course_id)||item.course_id<1||item.course_id!==courseId||
+     !studentSlug(item.slug)||!studentText(item.title,3,200)||!studentText(item.body,10,30000)||
+     !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
+     !Number.isSafeInteger(item.course_version)||item.course_version<1)return null;
+  return {id:item.id,slug:item.slug,title:item.title,body:item.body,sort_order:item.sort_order,
+    course_id:item.course_id,course_version:item.course_version};
+}
+function validatedStudentProgress(payload){
+  return studentRecord(payload)&&typeof payload.completed==="boolean"?{completed:payload.completed}:null;
+}
 function normalizeSearchText(text){
   return String(text||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
 }
@@ -309,7 +369,7 @@ function pillarCards(courses){
   });
 }
 function renderPillars(){
-  if(state.accessDenied)return;
+  if(state.accessDenied||!state.libraryReady)return;
   const box=document.getElementById("pillar-cards");box.replaceChildren();
   for(const pillar of pillarCards(state.courses)){
     const button=el("button",undefined,"path-card");button.type="button";
@@ -330,7 +390,7 @@ function renderPillars(){
   }
 }
 function renderCourses(){
-  if(state.accessDenied)return;
+  if(state.accessDenied||!state.libraryReady)return;
   renderPillars();
   list.replaceChildren();
   const totals=state.courses.reduce((memo,c)=>{
@@ -341,7 +401,7 @@ function renderCourses(){
     :"Nenhuma aula publicada disponível no momento.";
   const resume=document.getElementById("resume-course");
   resume.disabled=nextPendingCourseId(state.courses,state.courseId)===null;
-  document.getElementById("export-progress").disabled=false;
+  document.getElementById("export-progress").disabled=state.exportLoading;
   const items=coursesFiltered();
   if(!items.length){list.append(el("p","Nenhum curso publicado nesta categoria.","empty"));return;}
   for(const c of items){
@@ -361,6 +421,7 @@ function renderCourses(){
   }
 }
 async function selectCourse(id,preferredLessonId=null){
+  if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!state.courses.some(course=>course.id===id))return;
   // Invalidate prior course requests and lesson reads, including same-course clicks.
   const request=++state.courseRequest;
   ++state.lessonRequest;
@@ -370,7 +431,8 @@ async function selectCourse(id,preferredLessonId=null){
   try{
     const payload=await api("/courses/"+encodeURIComponent(String(id))+"/lessons");
     if(state.courseRequest!==request)return;
-    const lessons=Array.isArray(payload.lessons)?payload.lessons:[];
+    const lessons=validatedStudentLessons(payload);
+    if(lessons===null)throw new Error("A lista de aulas recebida é inválida. Tente novamente.");
     lessonsBox.replaceChildren();content.replaceChildren();
     if(!lessons.length){content.append(el("p","Ainda não existem aulas publicadas neste curso.","empty"));return;}
     for(const item of lessons){
@@ -419,7 +481,7 @@ function markLessonStatus(id,completed){
 function splitLessonSections(body){
   // The only structural labels recognized are editorial labels authored
   // in the approved fixture. Every body is still displayed as plain text.
-  const input=String(body||"").slice(0,30000);
+  const input=Array.from(String(body||"")).slice(0,30000).join("");
   const parts=input.split(/\n\n(?=(?:EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE)\n)/);
   const headings=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
   return parts.map((part,index)=>{
@@ -469,6 +531,8 @@ function offerNextLesson(id){
   content.append(advance);
 }
 async function selectLesson(id){
+  const courseId=state.courseId;
+  if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(courseId)||courseId<1)return;
   const request=++state.lessonRequest;
   state.lessonId=id;
   lessonsBox.querySelectorAll("[data-lesson-id]").forEach(btn=>btn.setAttribute("aria-current",String(Number(btn.dataset.lessonId)===id)));
@@ -479,12 +543,14 @@ async function selectLesson(id){
       api("/lessons/"+encodeURIComponent(String(id))+"/progress"),
     ]);
     if(state.lessonRequest!==request)return;
-    const lesson=lessonPayload.lesson;
-    markLessonStatus(id,!!progressPayload.completed);
+    const lesson=validatedStudentLesson(lessonPayload,id,courseId);
+    const progress=validatedStudentProgress(progressPayload);
+    if(lesson===null||progress===null)throw new Error("A aula ou o progresso recebido é inválido. Tente novamente.");
+    markLessonStatus(id,progress.completed);
     content.replaceChildren();
     content.append(el("h3",lesson.title),lessonTextFragment(lesson.body));
-    const action=el("button",progressPayload.completed?"✓ Aula concluída":"Marcar como concluída","primary");
-    action.type="button";action.disabled=!!progressPayload.completed;
+    const action=el("button",progress.completed?"✓ Aula concluída":"Marcar como concluída","primary");
+    action.type="button";action.disabled=progress.completed;
     async function confirmCompletion(message){
       if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;
       action.disabled=true;action.textContent="✓ Aula concluída";
@@ -494,7 +560,9 @@ async function selectLesson(id){
       try{
         const latest=await api("/courses");
         if(state.accessDenied||state.lessonRequest!==request||state.lessonId!==id)return;
-        state.courses=Array.isArray(latest.courses)?latest.courses:[];
+        const refreshed=validatedStudentCourses(latest);
+        if(refreshed===null)throw new Error("Resumo do progresso indisponível.");
+        state.courses=refreshed;
         renderCourses();
       }catch(refreshError){
         if(!state.accessDenied&&state.lessonRequest===request&&state.lessonId===id)
@@ -533,7 +601,7 @@ async function selectLesson(id){
       }
     });
     content.append(action);
-    if(progressPayload.completed)offerNextLesson(id);
+    if(progress.completed)offerNextLesson(id);
   }catch(error){
     if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id){
       // A transient failure loading EITHER body or progress must not render
@@ -552,7 +620,7 @@ async function selectLesson(id){
   }
 }
 function openCourseWithAllFilters(target,preferredLessonId=null){
-  if(state.accessDenied||!Number.isSafeInteger(target)||target<1)return;
+  if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(target)||target<1)return;
   if(!state.courses.some(course=>course.id===target))return;
   state.filter="todos";state.query="";
   document.getElementById("course-search").value="";
@@ -570,9 +638,8 @@ function validLessonSearchResults(payload){
   for(const item of payload.results){
     if(!item||!Number.isSafeInteger(item.course_id)||item.course_id<1||
        !Number.isSafeInteger(item.lesson_id)||item.lesson_id<1||
-       typeof item.course_title!=="string"||item.course_title.length>200||
-       typeof item.lesson_title!=="string"||item.lesson_title.length>200||
-       typeof item.snippet!=="string"||item.snippet.length>180||
+       !studentText(item.course_title,3,200)||!studentText(item.lesson_title,3,200)||
+       !studentText(item.snippet,0,180)||
        unique.has(item.lesson_id))return null;
     unique.add(item.lesson_id);
     // Only link to a course already in the authorized local library.
@@ -585,12 +652,12 @@ function validLessonSearchResults(payload){
 }
 document.getElementById("lesson-search-form").addEventListener("submit",async event=>{
   event.preventDefault();
-  if(state.accessDenied||state.searchBusy||state.libraryLoading)return;
+  if(state.accessDenied||!state.libraryReady||state.searchBusy||state.libraryLoading)return;
   const input=document.getElementById("lesson-search-query");
   const phrase=input.value.trim().replace(/ +/g," ");
   const results=document.getElementById("lesson-search-results");
   const button=document.getElementById("lesson-search-submit");
-  if(phrase.length<3||phrase.length>60||!/^[\p{L}\p{N} -]+$/u.test(phrase)){
+  if(!studentText(phrase,3,60)||!/^[\p{L}\p{N} -]+$/u.test(phrase)){
     results.replaceChildren(el("p","Informe de 3 a 60 letras ou números para pesquisar.","empty"));
     return;
   }
@@ -623,7 +690,7 @@ document.getElementById("lesson-search-form").addEventListener("submit",async ev
   }finally{
     if(request===state.searchRequest){
       state.searchBusy=false;
-      if(!state.accessDenied)button.disabled=false;
+      if(!state.accessDenied&&state.libraryReady)button.disabled=false;
     }
   }
 });
@@ -657,7 +724,7 @@ function sanitizedProgressExport(payload){
   return {schema_version:1,scope:"current_authenticated_student",completions:rows};
 }
 document.getElementById("export-progress").addEventListener("click",async()=>{
-  if(state.accessDenied||state.exportLoading)return;
+  if(state.accessDenied||!state.libraryReady||state.exportLoading)return;
   state.exportLoading=true;
   const button=document.getElementById("export-progress");
   button.disabled=true;
@@ -683,7 +750,7 @@ document.getElementById("export-progress").addEventListener("click",async()=>{
   }catch(error){if(!state.accessDenied)say(error.message);}
   finally{
     state.exportLoading=false;
-    if(!state.accessDenied)button.disabled=false;
+    if(!state.accessDenied&&state.libraryReady)button.disabled=false;
   }
 });
 document.getElementById("resume-course").addEventListener("click",()=>{
@@ -701,6 +768,7 @@ document.getElementById("pillar-cards").addEventListener("click",e=>{
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});
 document.getElementById("course-search").addEventListener("input",event=>{
+  if(state.accessDenied||!state.libraryReady)return;
   state.query=event.target.value.slice(0,80);
   ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
@@ -709,6 +777,7 @@ document.getElementById("course-search").addEventListener("input",event=>{
   renderCourses();
 });
 document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("click",()=>{
+  if(state.accessDenied||!state.libraryReady)return;
   state.filter=btn.dataset.filter;++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
   document.querySelectorAll("[data-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));
@@ -718,7 +787,14 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
 // or retain a previous list after a failed initial authorization request.
 async function loadLibrary(){
   if(state.accessDenied||state.libraryLoading)return;
-  state.libraryLoading=true;
+  state.libraryLoading=true;state.libraryReady=false;
+  document.getElementById("course-search").disabled=true;
+  document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
+  document.getElementById("resume-course").disabled=true;
+  document.getElementById("export-progress").disabled=true;
+  document.getElementById("lesson-search-query").disabled=true;
+  document.getElementById("lesson-search-submit").disabled=true;
+  document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=true;});
   const recovery=document.getElementById("library-recovery");
   const retry=document.getElementById("retry-library");
   recovery.hidden=true;retry.disabled=true;
@@ -726,18 +802,34 @@ async function loadLibrary(){
   list.append(el("p","Verificando acesso e carregando cursos...", "empty"));
   try{
     // POST only creates the tenant after the Portal has authorized it.
-    await api("/initialize",{method:"POST"});
+    const initialized=await api("/initialize",{method:"POST"});
+    if(!studentRecord(initialized)||initialized.ready!==true)
+      throw new Error("Não foi possível confirmar a preparação da biblioteca. Tente novamente.");
     const payload=await api("/courses");
     if(state.accessDenied)return;
-    state.courses=Array.isArray(payload.courses)?payload.courses:[];
+    const courses=validatedStudentCourses(payload);
+    if(courses===null)throw new Error("O catálogo recebido é inválido. Tente novamente.");
+    state.courses=courses;state.libraryReady=true;
+    document.getElementById("course-search").disabled=false;
+    document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=false;});
     document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=false;});
     document.getElementById("lesson-search-query").disabled=false;
     document.getElementById("lesson-search-submit").disabled=false;
     renderSimulator();renderCourses();say("");
   }catch(error){
     if(!state.accessDenied){
-      state.courses=[];state.courseId=null;state.lessonId=null;
-      ++state.searchRequest;
+      state.libraryReady=false;state.courses=[];state.courseId=null;state.lessonId=null;
+      document.getElementById("course-search").disabled=true;
+      document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
+      ++state.courseRequest;++state.lessonRequest;++state.searchRequest;
+      lessonsBox.replaceChildren();content.replaceChildren();
+      document.getElementById("pillar-cards").replaceChildren();
+      document.getElementById("resume-course").disabled=true;
+      document.getElementById("export-progress").disabled=true;
+      document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=true;});
+      document.getElementById("sim-results").hidden=true;
+      document.getElementById("sim-results").textContent="";
+      overall.textContent="Seu progresso está temporariamente indisponível.";
       document.getElementById("lesson-search-query").disabled=true;
       document.getElementById("lesson-search-submit").disabled=true;
       document.getElementById("lesson-search-results").replaceChildren();

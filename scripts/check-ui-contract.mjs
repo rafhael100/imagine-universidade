@@ -877,5 +877,6 @@ console.log("PASS private lesson search: 8-hit bounded, published-only, CSRF, te
 await import("./check-publication-response.mjs");
 await import("./check-student-help.mjs");
 await import("./check-student-favorites.mjs");
+await import("./check-student-favorites-export.mjs");
 await import("./check-editor-draft-preservation.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

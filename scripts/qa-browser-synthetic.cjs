@@ -466,6 +466,7 @@ async function inspect(page,name){
 
     await require("./qa-browser-student-help.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-favorites.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-favorites-export.cjs")({browser,base,ensureLocalPage,check,pageErrors});
 
     // An uncertain POST may already have committed. Compare read-only
     // authoritative progress before any second write is available.

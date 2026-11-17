@@ -16,7 +16,7 @@ elif [[ "${GITHUB_EVENT_NAME:-}" != pull_request ]]; then
   hold 'unsupported CI event.'
 fi
 
-for command_name in php node realpath mktemp; do
+for command_name in php node realpath mktemp timeout; do
   command -v "$command_name" >/dev/null || hold 'a required locked CI runtime is missing.'
 done
 framework_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -148,7 +148,8 @@ NODE
 
 php -r 'exit(PHP_VERSION_ID >= 80300 && PHP_VERSION_ID < 80400 ? 0 : 2);' \
   || hold 'the laboratory requires the workflow-pinned PHP 8.3 runtime.'
-if ! php tests/Browser/bootstrap.php setup > "$framework_directory/setup.log" 2>&1; then
+printf '%s\n' 'RUN framework-browser: isolated Laravel setup.'
+if ! timeout --signal=TERM --kill-after=5s 60s php tests/Browser/bootstrap.php setup > "$framework_directory/setup.log" 2>&1; then
   safe_bootstrap_diagnostic "$framework_directory/setup.log" || true
   hold 'isolated Laravel migrations/setup failed; private runtime logs are not exported.'
 fi
@@ -159,10 +160,12 @@ php -S "127.0.0.1:$framework_port" -t public tests/Browser/router.php \
 framework_server_pid=$!
 # The Node runner waits for health and checks SHA256 of the ephemeral token,
 # so a port collision cannot silently select a different HTTP process.
-node scripts/qa-framework-browser.cjs
+printf '%s\n' 'RUN framework-browser: real HTTP journey.'
+timeout --signal=TERM --kill-after=5s 180s node scripts/qa-framework-browser.cjs
 kill -0 "$framework_server_pid" 2>/dev/null \
   || hold 'the owned PHP server stopped before final persistence verification.'
-if ! php tests/Browser/bootstrap.php verify > "$framework_directory/verify.log" 2>&1; then
+printf '%s\n' 'RUN framework-browser: persistence verification.'
+if ! timeout --signal=TERM --kill-after=5s 30s php tests/Browser/bootstrap.php verify > "$framework_directory/verify.log" 2>&1; then
   safe_bootstrap_diagnostic "$framework_directory/verify.log" || true
   hold 'real SQLite/session verification failed; private runtime logs are not exported.'
 fi

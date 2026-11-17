@@ -190,6 +190,57 @@ final class UniversityCatalogRepository
         return $this->grantUsable($grant, PortalAccessGate::VIEW) ? $ids : [];
     }
 
+    /**
+     * Private preference export includes retained references after withdrawal,
+     * without granting access to a course's title or content. A publication
+     * must have existed; an injected preference cannot expose a new draft.
+     *
+     * @return array{schema_version:int,scope:string,favorites:list<array{course_slug:string,saved_at:string}>}|null
+     */
+    public function exportFavorites(PortalGrant $grant): ?array
+    {
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return null;
+        }
+
+        $entries = DB::table('educational_course_favorites as f')
+            ->join('educational_courses as c', 'c.id', '=', 'f.educational_course_id')
+            ->where('f.educational_organization_id', $org)
+            ->where('f.subject_key', $grant->subjectId)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
+            // EXISTS preserves one preference when several archived versions
+            // belong to the same course, without reading any lesson content.
+            ->whereExists(static function (\Illuminate\Database\Query\Builder $query): void {
+                $query->selectRaw('1')->from('educational_course_versions as v')
+                    ->whereColumn('v.educational_course_id', 'c.id')
+                    ->whereIn('v.status', ['published', 'archived']);
+            })
+            ->orderBy('f.educational_course_id')
+            ->limit(5001)
+            ->get(['c.slug as course_slug', 'f.created_at as saved_at'])
+            ->all();
+
+        // Refuse an incomplete file instead of silently truncating preferences.
+        if (count($entries) > 5000 || !$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return null;
+        }
+
+        return [
+            'schema_version' => 1,
+            'scope' => 'current_authenticated_student',
+            'favorites' => array_map(
+                static fn (stdClass $item): array => [
+                    'course_slug' => (string) $item->course_slug,
+                    'saved_at' => (string) $item->saved_at,
+                ],
+                $entries,
+            ),
+        ];
+    }
+
     public function favoriteCourse(PortalGrant $grant, int $courseId, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->orgId($grant);

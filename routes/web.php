@@ -16,6 +16,7 @@ Route::prefix('universidade/private')->group(function (): void {
         Route::post('/initialize', [UniversityController::class, 'initialize']);
         Route::get('/courses', [UniversityController::class, 'courses']);
         Route::get('/favorites', [UniversityController::class, 'favorites']);
+        Route::get('/favorites/export', [UniversityController::class, 'exportFavorites']);
         Route::put('/courses/{courseId}/favorite', [UniversityController::class, 'favoriteCourse'])
             ->whereNumber('courseId');
         Route::delete('/courses/{courseId}/favorite', [UniversityController::class, 'unfavoriteCourse'])

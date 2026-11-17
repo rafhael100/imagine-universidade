@@ -107,6 +107,28 @@ final class UniversityController
         return response()->json(['course_ids' => $ids]);
     }
 
+    public function exportFavorites(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $favorites = $this->catalog->exportFavorites($grant);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        if ($favorites === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
+        return response()->json($favorites, 200, [
+            'Content-Disposition' => 'attachment; filename="imagine-universidade-favoritos.json"',
+        ]);
+    }
+
     public function favoriteCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
     {
         $grant = $this->grant($request);

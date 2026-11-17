@@ -169,7 +169,9 @@
   <div class="favorite-tools">
     <label for="favorites-only"><input id="favorites-only" type="checkbox" disabled>Somente favoritos</label>
     <button id="reload-favorites" type="button" class="secondary" hidden disabled>Consultar favoritos novamente</button>
+    <button id="export-favorites" type="button" class="secondary" disabled>Exportar meus favoritos</button>
     <p id="favorites-status" class="favorite-status" role="status" aria-live="polite">Seus favoritos serão consultados após carregar a biblioteca.</p>
+    <p id="favorites-export-status" class="favorite-status" role="status" aria-live="polite" hidden></p>
   </div>
   <section class="lesson-search-panel" aria-labelledby="lesson-search-title">
     <h2 id="lesson-search-title">Encontre um assunto dentro das aulas</h2>
@@ -213,7 +215,8 @@ const list=document.getElementById("course-list"),lessonsBox=document.getElement
 const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
   favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,
-  favoriteWriting:false,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:""};
+  favoriteWriting:false,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",
+  favoriteExportLoading:false,favoriteExportRequest:0};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -262,6 +265,10 @@ function lockAccess(message){
   document.getElementById("reload-favorites").hidden=true;
   document.getElementById("reload-favorites").disabled=true;
   document.getElementById("favorites-status").textContent="";
+  ++state.favoriteExportRequest;
+  document.getElementById("export-favorites").disabled=true;
+  document.getElementById("favorites-export-status").textContent="";
+  document.getElementById("favorites-export-status").hidden=true;
   document.getElementById("course-favorite-panel").hidden=true;
   document.getElementById("favorite-course-title").textContent="";
   document.getElementById("course-favorite-toggle").disabled=true;
@@ -408,6 +415,9 @@ function renderFavoriteControls(){
   retry.hidden=!active||(!state.favoriteOutcomeUnknown&&state.favoritesReady)||state.favoritesLoading;
   retry.disabled=!active||state.favoritesLoading||state.favoriteWriting;
   document.getElementById("favorites-status").textContent=active?state.favoritesMessage:"";
+  // A personal export includes retained references, even when no favorite
+  // is visible in today's catalogue or the separate favorites list fails.
+  document.getElementById("export-favorites").disabled=!active||state.favoriteExportLoading===true;
   panel.hidden=!course;
   document.getElementById("favorite-course-title").textContent=course?"Favoritos · "+course.title:"";
   const saved=!!course&&known&&state.favoriteIds.includes(course.id);
@@ -1027,6 +1037,59 @@ function sanitizedProgressExport(payload){
   }
   return {schema_version:1,scope:"current_authenticated_student",completions:rows};
 }
+// Favorite references have their own format. A withdrawn course may still
+// appear here, but never its title, lesson content, IDs or student identity.
+function sanitizedFavoritesExport(payload){
+  if(!studentRecord(payload)||payload.schema_version!==1||
+     payload.scope!=="current_authenticated_student"||!Array.isArray(payload.favorites)||
+     payload.favorites.length>5000)return null;
+  const slug=/^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  const timestamp=/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?)?$/;
+  const rows=[],unique=new Set();
+  for(const item of payload.favorites){
+    if(!studentRecord(item)||typeof item.course_slug!=="string"||item.course_slug.length>120||
+       !slug.test(item.course_slug)||unique.has(item.course_slug)||
+       typeof item.saved_at!=="string"||item.saved_at.length>40||!timestamp.test(item.saved_at))return null;
+    unique.add(item.course_slug);
+    rows.push({course_slug:item.course_slug,saved_at:item.saved_at});
+  }
+  return {schema_version:1,scope:"current_authenticated_student",favorites:rows};
+}
+async function exportFavorites(){
+  if(state.accessDenied||!state.libraryReady||state.favoriteExportLoading)return;
+  state.favoriteExportLoading=true;
+  const request=++state.favoriteExportRequest;
+  const current=()=>!state.accessDenied&&state.libraryReady&&state.favoriteExportRequest===request;
+  const button=document.getElementById("export-favorites");
+  const message=document.getElementById("favorites-export-status");
+  button.disabled=true;message.hidden=false;message.textContent="Preparando seu arquivo de favoritos...";
+  try{
+    const payload=await api("/favorites/export");
+    if(!current())return;
+    const sanitized=sanitizedFavoritesExport(payload);
+    if(sanitized===null)throw new Error("invalid_favorites_export");
+    const data=new Blob([JSON.stringify(sanitized,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(data);
+    try{
+      if(!current())return;
+      const link=document.createElement("a");
+      link.href=url;link.download="imagine-universidade-favoritos.json";
+      document.body.append(link);
+      try{link.click();}finally{link.remove();}
+      if(current())message.textContent="Arquivo de favoritos preparado. Guarde seus dados com segurança.";
+    }finally{
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }
+  }catch(error){
+    if(current())message.textContent=error.message==="invalid_favorites_export"
+      ?"O arquivo de favoritos recebido não passou na validação de privacidade. Tente novamente mais tarde."
+      :"Não foi possível exportar seus favoritos. Você pode tentar novamente.";
+  }finally{
+    state.favoriteExportLoading=false;
+    button.disabled=state.accessDenied||!state.libraryReady;
+  }
+}
+document.getElementById("export-favorites").addEventListener("click",exportFavorites);
 document.getElementById("export-progress").addEventListener("click",async()=>{
   if(state.accessDenied||!state.libraryReady||state.exportLoading)return;
   state.exportLoading=true;
@@ -1106,6 +1169,11 @@ async function loadLibrary(){
   if(state.accessDenied||state.libraryLoading)return;
   state.libraryLoading=true;state.libraryReady=false;
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;++state.favoritesRequest;
+  // Keep an outstanding export single-flight, but invalidate its download
+  // when library authorization starts again, even if the new load succeeds.
+  ++state.favoriteExportRequest;
+  document.getElementById("favorites-export-status").textContent="";
+  document.getElementById("favorites-export-status").hidden=true;
   renderFavoriteControls();
   document.getElementById("course-search").disabled=true;
   document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});

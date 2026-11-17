@@ -62,6 +62,7 @@ function setAuthority(profile,allowed){
 
 let checks=0,stage="health",browser;
 const pageErrors=[],businessRequests=[],contexts=[];
+function enterStage(value){stage=value;console.log("RUN framework browser stage: "+value);}
 const check=(condition,label)=>{if(!condition)throw new Error(label);checks++;};
 const json=async(response,label)=>{
   try{return await response.json();}catch{throw new Error(label+": expected a JSON response");}
@@ -173,6 +174,28 @@ async function favorite(student,courseId,desired){
     document.getElementById("course-favorite-toggle").getAttribute("aria-pressed")===String(value)&&
     !document.getElementById("course-favorite-toggle").disabled,desired);
 }
+async function exportFavorites(student,expectedSlugs){
+  const [download,response]=await Promise.all([
+    student.page.waitForEvent("download"),
+    responseFor(student.page,"GET","/universidade/private/favorites/export"),
+    student.page.locator("#export-favorites").click(),
+  ]);
+  check(response.status()===200&&
+    (response.headers()["cache-control"]||"").includes("no-store")&&
+    response.headers()["content-disposition"]==='attachment; filename="imagine-universidade-favoritos.json"',
+    "The real favorites export must be private and use the fixed attachment name");
+  let payload;
+  try{payload=JSON.parse(fs.readFileSync(await download.path(),"utf8"));}
+  finally{await download.delete();}
+  check(download.suggestedFilename()==="imagine-universidade-favoritos.json"&&
+    payload.schema_version===1&&payload.scope==="current_authenticated_student"&&
+    JSON.stringify(Object.keys(payload).sort())===JSON.stringify(["favorites","schema_version","scope"])&&
+    Array.isArray(payload.favorites)&&
+    JSON.stringify(payload.favorites.map(row=>row.course_slug).sort())===JSON.stringify([...expectedSlugs].sort())&&
+    payload.favorites.every(row=>JSON.stringify(Object.keys(row).sort())===JSON.stringify(["course_slug","saved_at"])&&
+      typeof row.saved_at==="string"&&/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(row.saved_at)),
+    "The browser must download only this student's course references and original save timestamps");
+}
 async function publish(editor,courseId,version){
   const before=await clickResponse(editor.page,"#check-publication","GET",
     "/universidade/private/admin/courses/"+courseId+"/publication-check");
@@ -195,12 +218,13 @@ async function publish(editor,courseId,version){
 }
 
 async function main(){
+  enterStage("health");
   await awaitHealth();
   // Require/launch Chromium only after a token-bound health response proves
   // the randomly selected local port belongs to this test instance.
   const {chromium}=require("playwright");
   browser=await chromium.launch({headless:true});
-  stage="editorial session and CSRF";
+  enterStage("editorial session and CSRF");
   const editor=await session("editor");
   const adminRoot="/universidade/private/admin";
   const invalid=await editor.context.request.post(base+adminRoot+"/courses",{
@@ -216,7 +240,7 @@ async function main(){
   check(await editor.page.locator("#course-items [data-course]").count()===0,
     "Rejected CSRF request must not create a course in SQLite");
 
-  stage="course and lesson creation";
+  enterStage("course and lesson creation");
   await editor.page.locator("#course-title").fill("Curso sintético do laboratório HTTP");
   await editor.page.locator("#course-slug").fill("curso-framework-sintetico");
   await editor.page.locator("#course-summary").fill("Material fictício, sem clientes reais.");
@@ -249,7 +273,7 @@ async function main(){
   check(deletedLesson.status()===200&&await editor.page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"']").count()===0,
     "Confirmed UI deletion removes only the temporary draft lesson");
 
-  stage="independent course and lesson drafts";
+  enterStage("independent course and lesson drafts");
   await editor.page.locator("#lesson-items [data-lesson='"+firstLessonId+"']").click();
   await editor.page.locator("#course-title").fill("Curso sintético revisado");
   await editor.page.locator("#course-summary").fill("  Resumo fictício que deve sobreviver ao salvamento da aula.  ");
@@ -285,7 +309,7 @@ async function main(){
     "The real never-published course DELETE preserves the other course");
   await editor.page.locator("#course-items [data-course='"+courseId+"']").click();
   await editor.page.locator("#lesson-items [data-lesson='"+firstLessonId+"']").waitFor();
-  stage="publication and audit";
+  enterStage("publication and audit");
   await publish(editor,courseId,1);
   const audited=await clickResponse(editor.page,"#refresh-audit","GET",adminRoot+"/audit");
   const audit=await json(audited,"Editorial audit");
@@ -296,7 +320,7 @@ async function main(){
   await editor.page.locator("#audit-items .audit-row").first().waitFor({state:"visible"});
   await editor.page.screenshot({path:path.join(evidenceDir,"framework-editor.png"),fullPage:true});
 
-  stage="independent student sessions";
+  enterStage("independent student sessions");
   const studentA=await session("student-a"),studentB=await session("student-b");
   await openStudent(studentA,courseId,firstTitle);
   await openStudent(studentB,courseId,firstTitle);
@@ -318,7 +342,7 @@ async function main(){
     "Removing one company's favorite must preserve the same person's other-company preference");
   await favorite(studentA,courseId,true);
 
-  stage="completion and disabled tutor";
+  enterStage("completion and disabled tutor");
   const completion=await clickResponse(studentA.page,"#lesson-content button.primary","POST",
     "/universidade/private/lessons/"+firstLessonId+"/complete");
   await studentA.page.waitForFunction(()=>{
@@ -344,7 +368,7 @@ async function main(){
   check(countWrites("student-a")===tutorWrites+1&&await studentA.page.locator("#lesson-content button.primary").isDisabled(),
     "The tutor fallback must not create another completion or mutate learning state");
 
-  stage="withdrawal and retained private history";
+  enterStage("withdrawal and retained private history");
   const withdrawn=await confirmResponse(editor.page,"#unpublish","POST",
     adminRoot+"/courses/"+courseId+"/unpublish","Retirar ");
   await waitText(editor.page,"status","Versão anterior arquivada");
@@ -363,13 +387,15 @@ async function main(){
   const oldSource=await studentA.context.request.get(base+"/universidade/private/lessons/"+firstLessonId,
     {headers:{Accept:"application/json"}});
   check(oldSource.status()===404,"The archived lesson must be unavailable through its previous HTTP identity");
+  await exportFavorites(studentA,["curso-framework-sintetico"]);
   const removeWithdrawn=await studentB.context.request.delete(base+"/universidade/private/courses/"+courseId+"/favorite",
     {headers:await headers(studentB.page)});
   const removal=await json(removeWithdrawn,"Withdrawn favorite removal");
   check(removeWithdrawn.status()===200&&removal.course_id===courseId&&removal.favorite===false,
     "The owner may remove a retained withdrawn favorite through the real CSRF-protected API");
+  await exportFavorites(studentB,[]);
 
-  stage="republication and independent current progress";
+  enterStage("republication and independent current progress");
   await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"']").click();
   const revisedTitle="Primeira aula sintética revisada";
   await editor.page.locator("#lesson-title").fill(revisedTitle);
@@ -396,7 +422,7 @@ async function main(){
     history.completions[0].lesson_slug==="aula-principal-sintetica",
     "A real private export must preserve the original version's completion after republication");
 
-  stage="revocation, purge and retained preference";
+  enterStage("revocation, purge and retained preference");
   const readsBefore=businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length;
   setAuthority("student-a",false);
   const revoked=await clickResponse(studentA.page,"#course-favorite-toggle","DELETE",
@@ -422,7 +448,7 @@ async function main(){
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
-    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","private favorites",
+    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","private favorites","favorites export download",
       "completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");

@@ -7,9 +7,12 @@ services:
     build:
       context: ../..
       dockerfile: ops/staging/Dockerfile.php
-    env_file:
-      - .env.staging
+    # The CLI --env-file supplies interpolation only. Never inject that
+    # whole file: it also contains the migration owner's credentials.
     environment:
+      APP_NAME: '${APP_NAME:-Imagine Universidade Staging}'
+      APP_KEY: '${APP_KEY:?private-laravel-app-key-required}'
+      APP_URL: '${APP_URL:?approved-private-staging-url-required}'
       APP_ENV: staging
       APP_DEBUG: 'false'
       DB_CONNECTION: pgsql
@@ -23,8 +26,12 @@ services:
       SESSION_SECURE_COOKIE: 'true'
       SESSION_HTTP_ONLY: 'true'
       SESSION_SAME_SITE: lax
+      SESSION_COOKIE: imagine_universidade_staging_session
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: warning
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
+      MAIL_MAILER: array
     read_only: true
     tmpfs:
       - /tmp:mode=1777

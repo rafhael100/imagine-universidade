@@ -87,6 +87,19 @@
     .lesson-text{overflow-wrap:anywhere;color:#4B5769;margin:12px 0 20px}
     .lesson-text h4{font-size:15px;color:#70410C;font-weight:800;letter-spacing:.2px;margin:20px 0 8px}
     .lesson-text p{white-space:pre-wrap;margin:0 0 17px}
+    .lesson-help{margin-top:24px;padding:18px;border:1px solid var(--line);border-radius:12px;background:#FAFBFC}
+    .lesson-help h4{font-size:18px;margin:0 0 8px}
+    .lesson-help p{margin:8px 0}
+    .lesson-help label{display:block;font-weight:750;margin:14px 0 6px}
+    .lesson-help textarea{display:block;width:100%;min-height:100px;resize:vertical;padding:11px;border:1px solid #C9D1DC;border-radius:9px;font:inherit;color:var(--ink);background:#fff}
+    .help-actions{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}
+    .help-actions .secondary,.help-answer .secondary{margin-left:0}
+    .help-answer{overflow-wrap:anywhere}
+    .help-answer:empty{display:none}
+    .help-reply,.help-excerpt{white-space:pre-wrap}
+    .help-excerpt{margin:12px 0;padding:12px;border-left:3px solid var(--orange);background:#fff}
+    .help-excerpt h5{font-size:14px;margin:0 0 6px}
+    .help-source{font-size:12px;color:var(--muted)}
     .primary{background:var(--orange);border:1px solid var(--orange);padding:11px 16px;border-radius:10px;font-weight:850;color:#3D290F}
     .primary:hover{background:#FFAC48}
     .secondary{margin-left:9px;background:#fff;color:#70410C;border:1px solid #E5B56D;padding:11px 16px;border-radius:10px;font-weight:750}
@@ -262,7 +275,11 @@ async function api(path,options={}){
   if(response.status===403)lockAccess("Seu acesso não está autorizado. Retorne ao Portal do Cliente.");
   if(response.status===419)lockAccess("Sua sessão expirou. Acesse novamente pelo Portal.");
   if(state.accessDenied)throw new Error(state.accessMessage);
-  if(!response.ok){throw new Error("Não foi possível concluir esta operação. Tente novamente.");}
+  if(!response.ok){
+    const error=new Error("Não foi possível concluir esta operação. Tente novamente.");
+    error.httpStatus=response.status;
+    throw error;
+  }
   const data=await response.json();
   if(state.accessDenied)throw new Error(state.accessMessage);
   return data;
@@ -494,12 +511,144 @@ function splitLessonSections(body){
   }).filter(section=>section.text.length>0);
 }
 function lessonTextFragment(body){
-  const wrapper=el("div",undefined,"lesson-text");
+  const wrapper=el("div",undefined,"lesson-text");wrapper.tabIndex=-1;
   for(const section of splitLessonSections(body)){
     if(section.heading)wrapper.append(el("h4",section.heading));
     wrapper.append(el("p",section.text));
   }
   return wrapper;
+}
+// C-112: a grounded, optional help panel. Published lesson text remains
+// useful when the tutor gateway is unavailable; no answer is invented.
+function validatedStudentHelp(payload,lesson){
+  if(!studentRecord(payload)||!studentRecord(payload.source)||
+     typeof payload.reply!=="string"||payload.reply.trim()===""||payload.reply.length>12000||
+     new TextEncoder().encode(payload.reply).length>12000||
+     !studentSlug(payload.source.lesson_slug)||payload.source.lesson_slug!==lesson.slug||
+     !Number.isSafeInteger(payload.source.course_version)||
+     payload.source.course_version!==lesson.course_version)return null;
+  return {reply:payload.reply,source:{lesson_slug:payload.source.lesson_slug,course_version:payload.source.course_version}};
+}
+function lessonHelpExcerpts(body,question=""){
+  if(!studentText(body,10,30000)||typeof question!=="string"||!studentText(question,0,500))return[];
+  const hasQuestion=question.trim()!=="";
+  const ignored=new Set(["como","qual","quais","que","para","por","uma","uns","umas","dos","das","aos","com","sem","esta","este","essa","esse","aula","sobre","explique","explicar","entender"]);
+  const terms=Array.from(new Set((normalizeSearchText(question).match(/[\p{L}\p{N}]+/gu)||[])
+    .filter(term=>Array.from(term).length>=3&&!ignored.has(term))));
+  if(hasQuestion&&!terms.length)return[];
+  const excerpts=[];
+  for(const section of splitLessonSections(body)){
+    for(const paragraph of section.text.split(/\n\s*\n/)){
+      const characters=Array.from(paragraph.trim());
+      if(!characters.length)continue;
+      let best=null;
+      // Overlapping literal windows keep long paragraphs useful without
+      // fabricating a summary or cutting an astral character in half.
+      for(let offset=0;offset<characters.length;offset+=600){
+        const text=characters.slice(offset,offset+700).join("");
+        const normalized=normalizeSearchText(text);
+        const score=terms.filter(term=>normalized.includes(term)).length;
+        if(!best||score>best.score)best={heading:section.heading,text,score,
+          truncated:offset>0||offset+700<characters.length,order:excerpts.length};
+        if(!hasQuestion||offset+700>=characters.length)break;
+      }
+      if(best&&(!hasQuestion||best.score>0))excerpts.push(best);
+    }
+  }
+  return excerpts.sort((a,b)=>b.score-a.score||a.order-b.order).slice(0,hasQuestion?3:4)
+    .map(({heading,text,truncated})=>({heading,text,truncated}));
+}
+function lessonHelpPanel(lesson,lessonRequest){
+  const panel=el("section",undefined,"lesson-help");panel.dataset.lessonHelp="";
+  panel.setAttribute("aria-labelledby","lesson-help-title");
+  const title=el("h4","Ajuda desta aula");title.id="lesson-help-title";
+  panel.append(title,el("p","Revise o material e tire dúvidas educativas sobre esta aula."));
+  const guidance=el("p","Use exemplos fictícios. Deixe de fora dados de clientes, senhas e informações pessoais.","mini");
+  guidance.id="lesson-help-guidance";
+  const form=el("form");form.noValidate=true;
+  const label=el("label","Sua dúvida sobre esta aula");label.htmlFor="lesson-help-question";
+  const question=el("textarea");question.id="lesson-help-question";question.rows=3;
+  // HTML maxlength counts UTF-16 units. JavaScript enforces 500 Unicode
+  // characters, so 500 valid astral characters must still fit this field.
+  question.maxLength=1000;question.required=true;question.autocomplete="off";
+  question.placeholder="Ex.: Como diferenciar visitas e leads?";
+  question.setAttribute("aria-describedby","lesson-help-guidance lesson-help-limit");
+  const limit=el("p","Escreva de 3 a 500 caracteres. A consulta é opcional.","mini");limit.id="lesson-help-limit";
+  const actions=el("div",undefined,"help-actions");
+  const ask=el("button","Consultar ajuda","secondary");ask.type="submit";ask.id="lesson-help-submit";
+  const material=el("button","Rever trechos da aula","secondary");material.type="button";material.dataset.helpStatic="";
+  actions.append(ask,material);form.append(label,question,guidance,limit,actions);
+  const answer=el("div",undefined,"help-answer");answer.id="lesson-help-answer";
+  answer.setAttribute("role","status");answer.setAttribute("aria-live","polite");
+  panel.append(form,answer,el("p","Para falhas técnicas ou solicitações sobre sua conta, consulte o suporte oficial pelo Portal do Cliente.","mini"));
+  let busy=false,materialSelected=false;
+  const current=()=>!state.accessDenied&&state.libraryReady&&state.lessonRequest===lessonRequest&&
+    state.lessonId===lesson.id&&state.courseId===lesson.course_id&&
+    state.courses.some(course=>course.id===lesson.course_id);
+  const addSource=()=>{
+    answer.append(el("p","Fonte: "+lesson.title+" · versão "+lesson.course_version,"help-source"));
+    const source=el("button","Voltar ao texto desta aula","secondary");source.type="button";source.dataset.helpSource="";
+    source.addEventListener("click",()=>{
+      if(!current())return;
+      const text=content.querySelector(".lesson-text");
+      text?.scrollIntoView({block:"start"});text?.focus({preventScroll:true});
+    });
+    answer.append(source);
+  };
+  const showMaterial=message=>{
+    if(!current())return;
+    answer.replaceChildren(el("p",message),el("strong","Trechos do material desta aula"));
+    const excerpts=lessonHelpExcerpts(lesson.body,question.value.trim());
+    if(!excerpts.length)answer.append(el("p","Não encontrei um trecho correspondente nesta aula. Você pode rever o texto completo ou pesquisar outros materiais na biblioteca."));
+    for(const excerpt of excerpts){
+      const block=el("blockquote",undefined,"help-excerpt");
+      if(excerpt.heading)block.append(el("h5",excerpt.heading));
+      block.append(el("p",excerpt.text));
+      if(excerpt.truncated)block.append(el("small","Trecho parcial. O texto completo está na aula."));
+      answer.append(block);
+    }
+    addSource();
+  };
+  material.addEventListener("click",()=>{
+    if(!current())return;
+    materialSelected=true;
+    showMaterial("Consulta ao conteúdo da aula, disponível para sua revisão.");
+  });
+  form.addEventListener("submit",async event=>{
+    event.preventDefault();
+    if(!current()||busy)return;
+    const submitted=question.value.trim();
+    if(!studentText(submitted,3,500)){
+      answer.replaceChildren(el("p","Escreva uma dúvida de 3 a 500 caracteres sobre esta aula."));
+      question.focus();return;
+    }
+    busy=true;materialSelected=false;ask.disabled=true;question.disabled=true;
+    answer.replaceChildren(el("p","Consultando ajuda para esta aula..."));
+    try{
+      const payload=await api("/lessons/"+encodeURIComponent(String(lesson.id))+"/tutor",{method:"POST",body:{question:submitted}});
+      if(!current()||materialSelected)return;
+      const reply=validatedStudentHelp(payload,lesson);
+      if(reply===null)throw new Error("invalid_tutor_reply");
+      answer.replaceChildren(el("strong","Orientação do tutor"),el("p",reply.reply,"help-reply"));
+      addSource();
+    }catch(error){
+      if(!current())return;
+      if(error.httpStatus===404){
+        answer.replaceChildren(el("p","Esta aula não está disponível para consulta. Reabra as aulas do curso para verificar o material atual."));
+        const reload=el("button","Reabrir aulas do curso","secondary");reload.type="button";reload.dataset.helpReload="";
+        reload.addEventListener("click",()=>{if(current())selectCourse(lesson.course_id,lesson.id);});
+        answer.append(reload);
+      }else if(!materialSelected){
+        showMaterial(error.message==="invalid_tutor_reply"
+          ?"Não foi possível validar a orientação. Confira os trechos do material desta aula."
+          :"A tutoria está indisponível no momento. Confira os trechos do material desta aula.");
+      }
+    }finally{
+      busy=false;
+      if(current()){ask.disabled=false;question.disabled=false;}
+    }
+  });
+  return panel;
 }
 function nextPendingLessonId(currentId){
   const items=Array.from(lessonsBox.querySelectorAll("[data-lesson-id]"));
@@ -602,6 +751,7 @@ async function selectLesson(id){
     });
     content.append(action);
     if(progress.completed)offerNextLesson(id);
+    content.append(lessonHelpPanel(lesson,request));
   }catch(error){
     if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id){
       // A transient failure loading EITHER body or progress must not render

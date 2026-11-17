@@ -6,7 +6,9 @@ set -euo pipefail
 }
 test ! -e ops/staging/.env.staging || { echo "FAIL: unexpected staging env file." >&2; exit 2; }
 docker compose version >/dev/null
-trap 'rm -f ops/staging/.env.staging' EXIT
+umask 077
+model_file="$(mktemp)"
+trap 'rm -f ops/staging/.env.staging "$model_file"' EXIT
 cat > ops/staging/.env.staging <<'ONLY_FAKE_VALUES'
 APP_NAME="Imagine Universidade CI Syntax Only"
 APP_ENV=staging
@@ -24,6 +26,8 @@ SESSION_ENCRYPT=true
 SESSION_SECURE_COOKIE=true
 SESSION_HTTP_ONLY=true
 SESSION_SAME_SITE=lax
+UNRELATED_SECRET=CI_FAKE_MUST_NOT_REACH_ANY_SERVICE
 ONLY_FAKE_VALUES
-docker compose --env-file ops/staging/.env.staging -f ops/staging/compose.yaml config --quiet >/dev/null
-echo "PASS: staging Compose YAML/interpolation parses using only disposable placeholders; no service started."
+docker compose --env-file ops/staging/.env.staging -f ops/staging/compose.yaml config --format json > "$model_file"
+node ops/staging/check-compose-environment.mjs "$model_file"
+echo "PASS: staging Compose YAML/interpolation and credential isolation checked with disposable placeholders; no service started."

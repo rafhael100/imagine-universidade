@@ -180,6 +180,7 @@ final class UniversityController
             return response()->json(['error' => 'not_found'], 404);
         }
 
+        $reply = null;
         try {
             $reply = $gateway->explain(new TutorQuestion(
                 (string) $data['question'],
@@ -188,7 +189,9 @@ final class UniversityController
                 (string) $lesson->body,
             ));
         } catch (\Throwable) {
-            return response()->json(['error' => 'tutor_unavailable'], 503);
+            // Even an unavailable gateway must pass the live access/source
+            // checks below. The UI may offer already displayed lesson text
+            // after a 503; revoked access must instead receive a 403.
         }
 
         // A slow tutor response must satisfy the same live authority fence
@@ -212,7 +215,7 @@ final class UniversityController
             return response()->json(['error' => 'access_denied'], 403);
         }
 
-        if (trim($reply->message) === '' || strlen($reply->message) > 12000) {
+        if ($reply === null || trim($reply->message) === '' || strlen($reply->message) > 12000) {
             return response()->json(['error' => 'tutor_unavailable'], 503);
         }
 

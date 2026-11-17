@@ -222,6 +222,50 @@ final class PortalBoundaryFlowTest extends TestCase
     }
 
 
+    public function test_failed_tutor_still_detects_revoked_access_before_offering_unavailable_fallback(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $this->app->instance(TutorGateway::class, new class($this->fakeAuthority) implements TutorGateway {
+            public function __construct(private PortalAuthority $authority) {}
+
+            public function explain(TutorQuestion $question): TutorReply
+            {
+                $this->authority->clientAEligible = false;
+                throw new RuntimeException('Synthetic upstream detail must stay private.');
+            }
+        });
+
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/tutor", [
+            'question' => 'Explique a aula sem alterar meu progresso.',
+        ])->assertForbidden()->assertJsonPath('error', 'access_denied')
+            ->assertDontSee('Synthetic upstream detail');
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
+    public function test_failed_tutor_still_detects_withdrawn_source_before_offering_unavailable_fallback(): void
+    {
+        [$courseId, $lessonId] = $this->createPublishedCourse();
+        $this->app->instance(TutorGateway::class, new class($courseId) implements TutorGateway {
+            public function __construct(private int $courseId) {}
+
+            public function explain(TutorQuestion $question): TutorReply
+            {
+                DB::table('educational_courses')->where('id', $this->courseId)
+                    ->update(['is_published' => false]);
+                throw new RuntimeException('Synthetic source changed while gateway failed.');
+            }
+        });
+
+        $this->asClientA();
+        $this->postJson("/universidade/private/lessons/{$lessonId}/tutor", [
+            'question' => 'Explique este conteúdo.',
+        ])->assertForbidden()->assertJsonPath('error', 'access_denied')
+            ->assertDontSee('Synthetic source changed');
+        $this->getJson("/universidade/private/lessons/{$lessonId}")->assertNotFound();
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
     public function test_tutor_response_is_withheld_if_course_unpublished_during_inference(): void
     {
         [$courseId, $lessonId] = $this->createPublishedCourse();

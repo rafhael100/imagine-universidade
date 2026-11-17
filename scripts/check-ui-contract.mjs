@@ -125,7 +125,7 @@ assert.match(adminUI,/document.querySelectorAll\("\.layout button,.layout input,
 console.log("PASS revocation UI: student/admin fail-closed on HTTP 403/419, clear private state");
 
 
-const lessonsFn=adminUI.match(/async function refreshLessons\(\)\{[\s\S]*?\n\}/)?.[0];
+const lessonsFn=adminUI.match(/async function refreshLessons\([^\n]*\)\{[\s\S]*?\n\}/)?.[0];
 assert.ok(lessonsFn,"admin: função de atualização de aulas");
 const pendingLessons=[];
 const fakeState={course:{id:1},lessons:[],lesson:null,lessonRequest:0,accessDenied:false};
@@ -135,6 +135,8 @@ const fakeContext={
   renderLessons:()=>{},
   resetLesson:()=>{},
   fillCourse:()=>{},
+  updateEditorialControls:()=>{},
+  fillLesson:()=>{},
   // Race test isolates request ordering; the actual validator is tested below.
   validatedAdminLessons:response=>response.lessons
 };
@@ -692,7 +694,7 @@ function studentFlowFixture(){
   const messages=[],marks=[],calls=[];
   const filters=["todos","metodologia"].map(filter=>{const node=studentTestNode("button");node.dataset.filter=filter;return node;});
   const context={state,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
-    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),renderCourses:()=>{},renderSimulator:()=>{},
+    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),renderCourses:()=>{},renderSimulator:()=>{},
     markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
   return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
 }
@@ -871,4 +873,6 @@ assert.match(studentProgressUI,/document\.getElementById\("lesson-search-results
 console.log("PASS private lesson search: 8-hit bounded, published-only, CSRF, tenant, revocation and no external AI");
 
 await import("./check-publication-response.mjs");
+await import("./check-student-help.mjs");
+await import("./check-editor-draft-preservation.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

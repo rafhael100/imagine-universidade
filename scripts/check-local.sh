@@ -40,6 +40,8 @@ fi
 if command -v node >/dev/null 2>&1; then
   node scripts/check-ui-contract.mjs
   node ops/staging/check-release-gates.mjs
+  node ops/staging/check-inventory.mjs
+  node ops/staging/check-compose-static.mjs
   node scripts/check-release-gate-policy.mjs
   node scripts/check-write-fence.mjs
   echo '[PASS] Contratos de UI/rotas/catálogo em Node'

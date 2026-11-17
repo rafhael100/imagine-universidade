@@ -250,6 +250,13 @@ function fillCourse(){
   $("course-sort").value=String(c?.sort_order??0);
   $("publication-status").textContent=c?.is_published?"Publicado":"Rascunho";
   $("publication-status").className="chip"+(c?.is_published?" published":"");
+  updateEditorialControls();
+}
+// Refreshing lessons must update permissions without replacing the course
+// fields: the editor may still have an independent, unsaved course draft.
+function updateEditorialControls(){
+  if(state.accessDenied)return;
+  const c=state.course;
   const editable=draft();
   for(const id of ["course-title","course-category","course-summary","course-sort"]){$(id).disabled=!editable;}
   $("course-save").disabled=!editable;
@@ -259,6 +266,9 @@ function fillCourse(){
   $("unpublish").disabled=!c||!c.is_published||!state.lessonsReady;
   $("delete-course").disabled=!c||!!c.is_published||!state.lessonsReady;
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
+  $("lesson-slug").disabled=!c||!editable||state.lesson!==null;
+  $("delete-lesson").disabled=!c||!editable||!state.lesson||
+    state.lesson.is_published||state.lesson.status!=="draft";
 }
 function previewLessonParts(body){
   const markers=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
@@ -299,6 +309,15 @@ function resetLesson(){
   $("lesson-slug").disabled=false;
   $("lesson-sort").value="0";
   $("delete-lesson").disabled=true;
+}
+function fillLesson(){
+  if(state.accessDenied||!state.lesson)return;
+  const lesson=state.lesson;
+  hideLessonPreview();
+  $("lesson-title").value=lesson.title;$("lesson-slug").value=lesson.slug;
+  $("lesson-sort").value=String(lesson.sort_order);
+  $("lesson-body").value=lesson.body;$("lesson-title-heading").textContent="Editar aula";
+  updateEditorialControls();
 }
 function renderCourses(){
   if(state.accessDenied)return;
@@ -389,11 +408,11 @@ function validatedAdminLessons(payload){
   }
   return lessons;
 }
-async function refreshLessons(){
+async function refreshLessons(preferredLessonId=state.lesson?.id??null){
   const request=++state.lessonRequest;
   const courseId=state.course?.id??null;
   state.lessonsReady=false;
-  state.lessons=[];state.lesson=null;renderLessons();resetLesson();fillCourse();
+  state.lessons=[];state.lesson=null;renderLessons();resetLesson();updateEditorialControls();
   if(courseId===null||state.accessDenied)return;
   let result;
   try{
@@ -402,8 +421,12 @@ async function refreshLessons(){
     const verified=validatedAdminLessons(result);
     if(verified===null)throw new Error("A lista de aulas recebida é inválida. Tente novamente.");
     state.lessons=verified;
+    // Only a lesson present in this fresh, authorized list may remain selected.
+    // A removed lesson or a new version must never revive the old editor.
+    state.lesson=state.lessons.find(lesson=>lesson.id===preferredLessonId)||null;
     state.lessonsReady=true;
-    renderLessons();fillCourse();
+    if(state.lesson)fillLesson();
+    renderLessons();updateEditorialControls();
   }catch(error){
     if(!state.accessDenied&&state.lessonRequest===request&&state.course?.id===courseId){
       // The selected course remains authoritative; no stale lesson data is
@@ -440,6 +463,12 @@ $("new-course").addEventListener("click",()=>{
 });
 $("course-form").addEventListener("submit",async event=>{
   event.preventDefault();if(!draft())return;
+  // Save the lesson first: its refresh preserves these course fields. This
+  // prevents a course refresh from silently discarding the other form.
+  if(lessonHasUnsavedEdits()){
+    say("Salve a aula em edição antes de salvar o curso. Para descartá-la, use Nova aula. As alterações do curso foram mantidas.");
+    return;
+  }
   const payload={title:$("course-title").value.trim(),slug:$("course-slug").value.trim(),
     category:$("course-category").value,summary:$("course-summary").value.trim(),sort_order:intField("course-sort")};
   if(!payload.title){say("Informe o título.");return;}
@@ -460,10 +489,7 @@ $("lesson-items").addEventListener("click",event=>{
   state.lesson=state.lessons.find(l=>l.id===Number(b.dataset.lesson))||null;
   hideLessonPreview();
   if(!state.lesson)return;
-  $("lesson-title").value=state.lesson.title;$("lesson-slug").value=state.lesson.slug;
-  $("lesson-slug").disabled=true;$("lesson-sort").value=String(state.lesson.sort_order);
-  $("lesson-body").value=state.lesson.body;$("lesson-title-heading").textContent="Editar aula";
-  $("delete-lesson").disabled=!draft()||state.lesson.is_published||state.lesson.status!=="draft";
+  fillLesson();
   renderLessons();
 });
 $("clear-lesson").addEventListener("click",()=>{
@@ -491,13 +517,15 @@ $("lesson-form").addEventListener("submit",async event=>{
   const courseId=state.course.id,lessonId=state.lesson?.id??null;
   if(!beginWrite())return;
   try{
+    let savedLessonId=lessonId;
     if(lessonId!==null){
       const {slug,...data}=payload;
       await api("/lessons/"+lessonId,"PATCH",data);
     }else{
-      await api("/courses/"+courseId+"/lessons","POST",payload);
+      const result=await api("/courses/"+courseId+"/lessons","POST",payload);
+      savedLessonId=result?.id??null;
     }
-    if(!state.accessDenied){await refreshLessons();say("Aula salva em rascunho.");}
+    if(!state.accessDenied){await refreshLessons(savedLessonId);say("Aula salva em rascunho.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });

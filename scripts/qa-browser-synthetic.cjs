@@ -453,6 +453,8 @@ async function inspect(page,name){
       "invalid refresh retains known catalogue and never repeats the confirmed POST");
     await refreshFailure.close();completed=false;
 
+    await require("./qa-browser-student-help.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+
     // An uncertain POST may already have committed. Compare read-only
     // authoritative progress before any second write is available.
     for(const fault of ["after_commit","before_commit","unverifiable"]){
@@ -772,6 +774,8 @@ async function inspect(page,name){
       "server-side committed course is observed via GET, not replay");
     await uncertainAdmin.close();
     createdCourseInLab=false;
+
+    await require("./qa-browser-editor-drafts.cjs")({browser,base,ensureLocalPage,check,pageErrors});
 
     // C-111: the real publication handler must reject incomplete HTTP 200
     // diagnostics before confirmation or mutation. These per-page routes

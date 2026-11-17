@@ -226,6 +226,7 @@ console.log("PASS cross-course resume: próximo curso incompleto, sem voltar ao 
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");
+const privateResponsePolicy = read("app/Http/Middleware/ProtectPrivateUniversityResponses.php");
 assert.match(routes, /university\.grant:view/);
 assert.match(routes, /university\.grant:manage/);
 assert.match(routes, /Route::view\('\/app', 'university\.student'\)/);
@@ -233,7 +234,7 @@ assert.match(routes, /Route::view\('\/app', 'university\.admin'\)/);
 assert.match(routes, /Route::fallback/);
 assert.match(provider, /UnavailablePortalAuthority::class/, "provider padrão deve negar");
 assert.match(middleware, /university\.verified_grant/, "decisão do backend");
-assert.match(middleware, /Cache-Control/, "respostas privadas");
+assert.match(privateResponsePolicy, /Cache-Control/, "respostas privadas, inclusive erros anteriores ao grant");
 assert.doesNotMatch(middleware, /->header\(['"]X-(?:Company|Portal)/, "não aceitar prova em header");
 console.log("PASS routes: Cliente/Admin com grants separados, fallback e provider deny-all");
 
@@ -494,7 +495,7 @@ assert.match(adminRecoveryUI,/state\.lesson\?\.id===Number\(b\.dataset\.lesson\)
 console.log("PASS editorial navigation: unsaved course and lesson changes require explicit discard");
 
 assert.ok(studentProgressUI.includes('const retry=el("button","Tentar carregar aulas","secondary lesson-retry")'),"student: failed lesson read must offer manual retry");
-assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id)selectCourse(id);'),"student: lesson retry only with current authorized course");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId);'),"student: lesson retry preserves exact search target in current authorized course");
 assert.ok(adminRecoveryUI.includes('retry.id="retry-lessons"'),"admin: failed lesson read must offer manual retry");
 assert.ok(adminRecoveryUI.includes('if(!state.accessDenied&&!state.writePending&&state.course?.id===courseId)'),"admin: retry forbidden after revocation or concurrent edit");
 console.log("PASS both private lesson lists: fail-closed manual recovery without stale data");

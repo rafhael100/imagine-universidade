@@ -399,7 +399,10 @@ async function selectCourse(id,preferredLessonId=null){
       const retry=el("button","Tentar carregar aulas","secondary lesson-retry");
       retry.type="button";
       retry.addEventListener("click",()=>{
-        if(!state.accessDenied&&state.courseId===id)selectCourse(id);
+        // A search result keeps its exact lesson target across recovery.
+        // If it disappeared meanwhile, show unavailable instead of resuming
+        // an unrelated pending lesson from the same course.
+        if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId);
       });
       content.append(retry);
     }

@@ -346,6 +346,17 @@ async function inspect(page,name){
     check((await page.locator("#lesson-content h3").innerText())==="Leads fictícios",
       "search result opens its exact authorized lesson, not arbitrary next lesson");
 
+    // C-109: a transient list failure must not lose the search target.
+    failStudentLessonsOnce=true;
+    await page.locator("#lesson-search-results [data-search-lesson='12']").click();
+    await page.locator("#lesson-content .lesson-retry").waitFor({state:"visible",timeout:8000});
+    check((await page.locator("#lesson-content h3").count())===0,
+      "failed search-target navigation does not retain an old lesson");
+    await page.locator("#lesson-content .lesson-retry").click();
+    await page.locator("#lesson-content h3").waitFor({state:"visible",timeout:8000});
+    check((await page.locator("#lesson-content h3").innerText())==="Leads fictícios",
+      "retry after search-target list failure opens the selected lesson, not the first pending lesson");
+
     failLessonSearchOnce=true;
     await sbox.fill("visitas");
     await sgo.click();
@@ -368,6 +379,17 @@ async function inspect(page,name){
     await page.waitForFunction(()=>document.querySelector("#lesson-content").textContent.includes("não está mais disponível"));
     check((await page.locator("#lesson-content h3").count())===0,
       "stale result must not open an unrelated authorized lesson");
+
+    // The exact target remains mandatory when it vanished during a retry.
+    failStudentLessonsOnce=true;
+    await page.locator("#lesson-search-results [data-search-lesson='99']").click();
+    await page.locator("#lesson-content .lesson-retry").waitFor({state:"visible",timeout:8000});
+    await page.locator("#lesson-content .lesson-retry").click();
+    await page.waitForFunction(()=>document.querySelector("#lesson-content").textContent.includes("não está mais disponível"));
+    check((await page.locator("#lesson-content h3").count())===0,
+      "retry for a removed search target must not open another lesson");
+    check((await page.locator("#lesson-content button.primary").count())===0,
+      "retry for a removed search target must not offer completion for another lesson");
 
     const beforeBadQuery=lessonSearchReads;
     await sbox.fill("%");

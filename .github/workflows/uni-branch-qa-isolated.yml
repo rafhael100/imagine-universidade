@@ -1,5 +1,6 @@
-name: UNI isolated branch QA (test-only, no deploy)
+name: UNI C-108/C-109 private flow QA (test-only, no deploy)
 
+# UNI C-108/C-109: private error responses and exact search target after manual retry.
 # UNI C-101: repeat all isolated browser and Docker labs with updated course+lesson gate assertions.
 # UNI C-100: full malformed 200 lesson list, no-write/publish and authorized recovery regressions.
 # UNI C-99: full 200-malformed editor catalogue fail-closed and privacy export regressions.
@@ -23,11 +24,13 @@ name: UNI isolated branch QA (test-only, no deploy)
 on:
   push:
     branches:
-      - feat/uni-c70-archive-offline-preview-on-success-2026-11-15
+      - fix/uni-c108-private-flow-2026-11-17
     paths:
       - '.github/workflows/uni-branch-qa-isolated.yml'
       - 'app/**'
       - 'bootstrap/**'
+      - 'resources/views/**'
+      - 'public/assets/**'
       - 'database/**'
       - 'routes/**'
       - 'tests/**'
@@ -41,7 +44,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: uni-branch-qa-isolated-review
+  group: uni-private-flow-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -86,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test "$APP_ENV" = "testing"
           test "$DB_DATABASE" = "uni_ci"
           test ! -e .env
@@ -166,7 +169,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -e .env && test ! -e .env.production
           test -f content/mvp-cursos-v1.json
           node scripts/check-editorial-review-pack.mjs
@@ -217,7 +220,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -f .env && test ! -f portal-contract-source/apps/portal/.env
           test "$(git -C portal-contract-source rev-parse HEAD)" = "8f469b7079467098337568178637cc989420a102"
           php -l scripts/check-portal-university-contract.php
@@ -240,7 +243,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -e .env
           test ! -e .env.production
           test -f composer.lock
@@ -269,7 +272,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -e .env
           test ! -e .env.production
           test -f public/assets/logo-imagine.png
@@ -325,7 +328,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test "$GITHUB_REPOSITORY" = "rafhael100/imagine-universidade"
           test ! -e .env
           test ! -e .env.production

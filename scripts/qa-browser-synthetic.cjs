@@ -209,8 +209,11 @@ const server=http.createServer((req,res)=>{
   send(res,404,{error:"not_found"});
 });
 const results={screenshots:[],accessibility:[],assertions:0};
-function check(value,message){assert.ok(value,message);results.assertions++;}
+let lastCheck="browser startup";
+function check(value,message){assert.ok(value,message);results.assertions++;lastCheck=message;}
 async function ensureLocalPage(page){
+  page.setDefaultTimeout(15000);
+  page.setDefaultNavigationTimeout(20000);
   await page.route("**/*",route=>{
     const url=route.request().url();
     if(url.startsWith(base+"/"))return route.continue();
@@ -934,6 +937,7 @@ async function inspect(page,name){
     console.log("PASS synthetic Chromium browser: "+results.assertions+" checks, student/admin UI, progress, revocation, draft preview, audit, widths 320/390/768/1440 and WCAG serious/critical scan.");
   }finally{await browser.close();}
 })().catch(error=>{
+  console.error("Synthetic browser last completed check: "+lastCheck);
   console.error("Synthetic browser failure: "+String(error.message).slice(0,240));
   process.exitCode=1;
 }).finally(()=>server.close());

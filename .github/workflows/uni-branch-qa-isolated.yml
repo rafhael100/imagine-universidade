@@ -307,6 +307,37 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: PHP 8.3 for the real framework browser journey
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, mbstring, dom, xml, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Install locked framework dependencies without scripts or plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+      - name: Complete student and editor journey against real Laravel and SQLite
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uni-framework-browser-evidence"
+          NODE_PATH="$RUNNER_TEMP/uni-browser-packages/node_modules" \
+          UNI_FRAMEWORK_BROWSER_LAB=synthetic \
+          UNI_FRAMEWORK_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-framework-browser-evidence" \
+            bash scripts/qa-framework-browser.sh
+      - name: Upload real framework browser evidence with synthetic identities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: imagine-universidade-framework-browser-evidence
+          path: ${{ runner.temp }}/uni-framework-browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Downloadable offline educational preview (test-only)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: success()

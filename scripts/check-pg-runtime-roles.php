@@ -50,6 +50,7 @@ try {
     if (!is_string($candidate) ||
         substr_count($candidate, 'uni_stage_runtime') < 5 ||
         !str_contains($candidate, 'public.educational_audit_events') ||
+        !str_contains($candidate, 'public.educational_course_favorites') ||
         !str_contains($candidate, 'public.sessions')) {
         rejectRole('Runtime grant matrix is missing or incomplete.');
     }
@@ -69,6 +70,10 @@ try {
         ['public.educational_lesson_progress', 'INSERT', true],
         ['public.educational_lesson_progress', 'UPDATE', false],
         ['public.educational_lesson_progress', 'DELETE', false],
+        ['public.educational_course_favorites', 'SELECT', true],
+        ['public.educational_course_favorites', 'INSERT', true],
+        ['public.educational_course_favorites', 'DELETE', true],
+        ['public.educational_course_favorites', 'UPDATE', false],
         ['public.educational_audit_events', 'INSERT', true],
         ['public.educational_audit_events', 'UPDATE', false],
         ['public.educational_audit_events', 'DELETE', false],
@@ -106,6 +111,8 @@ try {
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     ]);
     $runtime->query('SELECT COUNT(*) FROM public.educational_courses')->fetchColumn();
+    $runtime->query('SELECT COUNT(*) FROM public.educational_course_favorites')->fetchColumn();
+    $runtime->exec('DELETE FROM public.educational_course_favorites WHERE 1 = 0');
     $runtime->exec(
         "INSERT INTO public.sessions (id, payload, last_activity)
          VALUES ('ci-runtime-role-session', 'synthetic', 1800000000)"
@@ -118,6 +125,7 @@ try {
         'CREATE TABLE public.ci_runtime_privilege_escape (id int)',
         'DELETE FROM public.educational_audit_events WHERE 1 = 0',
         'UPDATE public.educational_lesson_progress SET id = id WHERE 1 = 0',
+        'UPDATE public.educational_course_favorites SET subject_key = subject_key WHERE 1 = 0',
     ] as $forbidden) {
         try {
             $runtime->exec($forbidden);
@@ -128,7 +136,7 @@ try {
             }
         }
     }
-    echo 'PASS: PG18 fake runtime role, 16 privilege assertions, no schema CREATE, audit DELETE or progress UPDATE.'."\n";
+    echo 'PASS: PG18 fake runtime role, 20 privilege assertions, no schema CREATE, audit DELETE, progress/favorites UPDATE.'."\n";
 } finally {
     $runtime = null;
     if ($roleCreated) {

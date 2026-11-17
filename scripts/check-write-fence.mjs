@@ -8,6 +8,7 @@ const controller = read("app/Http/Controllers/UniversityController.php");
 const provisioner = read("app/Domain/Learning/UniversityTenantProvisioner.php");
 const bindings = read("app/Providers/AppServiceProvider.php");
 const feature = read("tests/Feature/PortalBoundaryFlowTest.php");
+const favoritesFeature = read("tests/Feature/FavoriteCoursesFlowTest.php");
 
 function section(text, start, end) {
   const first = text.indexOf(start);
@@ -26,6 +27,8 @@ assert.ok(repository.includes("$verifyFreshGrant === null"));
 assert.match(bindings, /bind\(PortalAuthority::class, UnavailablePortalAuthority::class\)/);
 
 const writes = [
+  ["favoriteCourse", "unfavoriteCourse", "VIEW"],
+  ["unfavoriteCourse", "searchPublishedLessons", "VIEW"],
   ["complete", "audit", "VIEW"],
   ["createCourse", "updateCourse", "MANAGE"],
   ["updateCourse", "addLesson", "MANAGE"],
@@ -63,6 +66,8 @@ assert.ok(initialization.includes("PortalAccessGate $gate"));
 assert.ok(initialization.includes("freshGrant($request, $gate, $grant)"));
 
 const controllers = [
+  ["favoriteCourse", "unfavoriteCourse"],
+  ["unfavoriteCourse", "searchLessons"],
   ["complete", "adminAudit"],
   ["createCourse", "updateCourse"],
   ["updateCourse", "createLesson"],
@@ -93,4 +98,11 @@ for (const regression of [
 ]) {
   assert.ok(feature.includes(regression), "missing negative regression: " + regression);
 }
-console.log("PASS: all 10 HTTP write paths use transaction-scoped Portal validation, including tenant provisioning and 2 publish actions.");
+for (const regression of [
+  "test_revocation_during_favorite_write_is_checked_inside_the_transaction",
+  "test_revocation_during_removal_preserves_the_students_preference",
+  "test_live_grant_must_match_for_add_remove_and_absent_removal",
+]) {
+  assert.ok(favoritesFeature.includes(regression), "missing private preference regression: " + regression);
+}
+console.log("PASS: all 12 HTTP write paths use transaction-scoped Portal validation, including private favorites, tenant provisioning and 2 publish actions.");

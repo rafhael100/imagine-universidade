@@ -95,6 +95,11 @@ const server=http.createServer((req,res)=>{
     if(fault==="empty")return send(res,200,{courses:[]});
     return send(res,200,{courses:rows});
   }
+  // Existing journeys have no saved courses. C-116 mutation scenarios use
+  // isolated per-page routes, never a write to this shared fixture.
+  if(p==="/universidade/private/favorites"&&req.method==="GET"){
+    return send(res,200,{course_ids:[]});
+  }
   if(p==="/universidade/private/search"&&req.method==="POST"){
     lessonSearchReads++;
     if(denyLessonSearchOnce){denyLessonSearchOnce=false;return send(res,403,{error:"access_denied"});}
@@ -454,6 +459,7 @@ async function inspect(page,name){
     await refreshFailure.close();completed=false;
 
     await require("./qa-browser-student-help.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-favorites.cjs")({browser,base,ensureLocalPage,check,pageErrors});
 
     // An uncertain POST may already have committed. Compare read-only
     // authoritative progress before any second write is available.

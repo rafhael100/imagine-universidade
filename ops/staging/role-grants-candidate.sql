@@ -14,6 +14,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 GRANT SELECT, INSERT
   ON public.educational_lesson_progress,
      public.educational_audit_events TO uni_stage_runtime;
+-- Preferences are scoped by tenant and subject in the application. Repeated
+-- PUTs do not refresh timestamps, so runtime needs no UPDATE or new sequence.
+GRANT SELECT, INSERT, DELETE
+  ON public.educational_course_favorites TO uni_stage_runtime;
 -- Replay nonce deletion requires a SEPARATE audited maintenance role.
 -- Runtime can only atomically reserve new nonces; it cannot erase evidence.
 GRANT INSERT

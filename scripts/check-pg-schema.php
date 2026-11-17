@@ -19,6 +19,8 @@ $expected = [
     'educational_lesson_progress|educational_organizations',
     'educational_lesson_progress|educational_lessons',
     'educational_audit_events|educational_organizations',
+    'educational_course_favorites|educational_organizations',
+    'educational_course_favorites|educational_courses',
 ];
 
 if (
@@ -93,7 +95,32 @@ try {
         echo "PASS partial UNIQUE {$indexName}\n";
     }
 
-    echo "\n8 PostgreSQL schema invariants verified. No records were mutated.\n";
+    $favoriteIndex = $pdo->query(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'
+         AND indexname = 'edu_favorites_org_subject_course_uq'"
+    )->fetchColumn();
+    if (!is_string($favoriteIndex) || !str_contains($favoriteIndex, 'UNIQUE INDEX')
+        || !str_contains($favoriteIndex, '(educational_organization_id, subject_key, educational_course_id)')) {
+        abortCheck('Favorites require the exact tenant/subject/course unique index.');
+    }
+    echo "PASS private favorites triple UNIQUE\n";
+
+    $favoriteColumns = $pdo->query(
+        "SELECT column_name, character_maximum_length, is_nullable
+         FROM information_schema.columns WHERE table_schema = 'public'
+         AND table_name = 'educational_course_favorites' ORDER BY column_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if (array_column($favoriteColumns, 'column_name') !== [
+        'created_at', 'educational_course_id', 'educational_organization_id', 'subject_key', 'updated_at',
+    ] || (int) $favoriteColumns[3]['character_maximum_length'] !== 120
+        || $favoriteColumns[1]['is_nullable'] !== 'NO'
+        || $favoriteColumns[2]['is_nullable'] !== 'NO'
+        || $favoriteColumns[3]['is_nullable'] !== 'NO') {
+        abortCheck('Favorites schema must contain only non-null identity/resource keys and timestamps.');
+    }
+    echo "PASS private favorites minimal columns and non-null scoped keys\n";
+
+    echo "\n12 PostgreSQL schema invariants verified. No records were mutated.\n";
 } catch (Throwable $e) {
     // The schema checker must never log connection secrets or exception trace.
     abortCheck('PostgreSQL connection/schema inspection failed.');

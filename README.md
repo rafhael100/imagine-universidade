@@ -1,6 +1,16 @@
-# Universidade Imagine — Documentação oficial de planejamento
+# Universidade Imagine — Desenvolvimento e documentação
 
 > **Contexto atualizado da branch de revisão:** a `main` mantém o planejamento documental; esta branch contém código candidato em PRs DRAFT, não homologado nem implantado. Não há vídeos publicados, clientes com acesso operacional, contratos adicionais nem homologação de ambiente.
+
+## Desenvolvimento em andamento — 17/11/2026
+
+O desenvolvimento contínuo foi solicitado pelo responsável, com execução das próximas atividades sem uma nova confirmação a cada entrega. A implementação e os testes descartáveis avançam na [PR #85](https://github.com/rafhael100/imagine-universidade/pull/85); os limites de merge, implantação, autoridade real do Portal e revisão editorial permanecem em [ops/release-gates.json](ops/release-gates.json).
+
+O ponto de entrada técnico atual é [README-DEV.md](README-DEV.md). Há catálogo e leitura privados, busca, progresso, favoritos, exportação, ajuda contextual, edição e versionamento editorial, além de testes PHP/PostgreSQL/Chromium e imagens candidatas. O Tutor externo e a fonte de autorização operacional continuam desativados.
+
+Os registros datados de 04/11 abaixo documentam a fase original. Referências históricas a código ou testes ainda não executados devem ser lidas na data correspondente; a evidência atual está na PR e na execução vinculada ao SHA analisado.
+
+## Histórico do planejamento
 
 **Situação em 04/11/2026:** a **versão-base substitutiva v5 foi aprovada funcionalmente** pelo responsável para organizar as especificações históricas que não foram integralmente recuperadas. As decisões-base P0-01 a P0-12 foram aprovadas em seus respectivos escopos; também foi aprovada a **alternativa A de R$ 0 em novas despesas da fase documental**. **O Gate D foi encerrado documentalmente em 04/11/2026 por aprovação expressa do D15**; orçamento/teto do desenvolvimento, contratações e programação **não foram autorizados**.
 

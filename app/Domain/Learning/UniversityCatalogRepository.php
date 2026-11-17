@@ -72,7 +72,7 @@ final class UniversityCatalogRepository
             && $latest->revision === $expected->revision;
     }
 
-    // O tenant do cliente contém APENAS seu progresso.
+    // O tenant do cliente contém apenas seu progresso e preferências privadas.
     private function orgId(PortalGrant $grant): ?int
     {
         if (!$this->grantUsable($grant, PortalAccessGate::VIEW) ||
@@ -163,6 +163,117 @@ final class UniversityCatalogRepository
         }
 
         return $courses;
+    }
+
+    /** @return list<int> Only the current student's currently published favorites. */
+    public function favoriteCourseIds(PortalGrant $grant): array
+    {
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return [];
+        }
+
+        $ids = DB::table('educational_course_favorites as f')
+            ->join('educational_courses as c', 'c.id', '=', 'f.educational_course_id')
+            ->join('educational_course_versions as v', 'v.educational_course_id', '=', 'c.id')
+            ->where('f.educational_organization_id', $org)
+            ->where('f.subject_key', $grant->subjectId)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
+            ->where('c.is_published', true)
+            ->where('v.status', 'published')
+            ->distinct()->orderBy('f.educational_course_id')
+            ->pluck('f.educational_course_id')
+            ->map(static fn ($id): int => (int) $id)->all();
+
+        return $this->grantUsable($grant, PortalAccessGate::VIEW) ? $ids : [];
+    }
+
+    public function favoriteCourse(PortalGrant $grant, int $courseId, ?callable $verifyFreshGrant = null): bool
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $courseId < 1) {
+            return false;
+        }
+        $editorialOrg = $this->contentOrgId();
+        if ($editorialOrg === null) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($grant, $courseId, $org, $editorialOrg, $verifyFreshGrant): bool {
+            // Serialize with publication in the same order: course, version.
+            $course = DB::table('educational_courses')
+                ->where('id', $courseId)
+                ->where('educational_organization_id', $editorialOrg)
+                ->where('is_shared', true)->where('is_published', true)
+                ->lockForUpdate()->first(['id']);
+            if ($course === null) {
+                return false;
+            }
+            $version = DB::table('educational_course_versions')
+                ->where('educational_course_id', $courseId)
+                ->where('status', 'published')
+                ->lockForUpdate()->first(['id']);
+            if ($version === null) {
+                return false;
+            }
+
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::VIEW, $verifyFreshGrant)) {
+                return false;
+            }
+
+            $now = now();
+            $inserted = DB::table('educational_course_favorites')->insertOrIgnore([
+                'educational_organization_id' => $org,
+                'subject_key' => $grant->subjectId,
+                'educational_course_id' => $courseId,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            if ($inserted === 1) {
+                return true;
+            }
+
+            // A duplicate is success only when this exact private row exists.
+            return DB::table('educational_course_favorites')
+                ->where('educational_organization_id', $org)
+                ->where('subject_key', $grant->subjectId)
+                ->where('educational_course_id', $courseId)->exists();
+        });
+    }
+
+    public function unfavoriteCourse(PortalGrant $grant, int $courseId, ?callable $verifyFreshGrant = null): bool
+    {
+        $org = $this->orgId($grant);
+        if ($org === null || $courseId < 1) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($grant, $courseId, $org, $verifyFreshGrant): bool {
+            $favorite = DB::table('educational_course_favorites')
+                ->where('educational_organization_id', $org)
+                ->where('subject_key', $grant->subjectId)
+                ->where('educational_course_id', $courseId);
+
+            // An absent preference is already removed. Do not inspect or lock
+            // another student's course merely to report the same receipt.
+            if (!$favorite->exists()) {
+                return $this->freshWriteGrantMatches($grant, PortalAccessGate::VIEW, $verifyFreshGrant);
+            }
+
+            // Only the student's existing preference authorizes this lookup.
+            // The course may have been withdrawn: read no editorial content.
+            $course = DB::table('educational_courses')->where('id', $courseId)
+                ->lockForUpdate()->first(['id']);
+            if ($course === null
+                || !$this->freshWriteGrantMatches($grant, PortalAccessGate::VIEW, $verifyFreshGrant)) {
+                return false;
+            }
+
+            $favorite->delete();
+            return true;
+        });
     }
 
     /**

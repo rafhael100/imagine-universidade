@@ -689,12 +689,14 @@ function studentFlowFixture(){
   const nodes=new Map();
   const get=id=>{if(!nodes.has(id)){const node=studentTestNode("div");node.disabled=true;nodes.set(id,node);}return nodes.get(id);};
   const state={courses:[{...studentCourse}],filter:"todos",query:"",courseId:1,lessonId:null,courseRequest:0,lessonRequest:0,
-    searchRequest:0,accessDenied:false,libraryLoading:false,libraryReady:true,exportLoading:false};
+    searchRequest:0,accessDenied:false,libraryLoading:false,libraryReady:true,exportLoading:false,
+    favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,favoriteWriting:false,
+    favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:""};
   const content=studentTestNode("article"),lessonsBox=studentTestNode("div"),list=studentTestNode("div");
   const messages=[],marks=[],calls=[];
   const filters=["todos","metodologia"].map(filter=>{const node=studentTestNode("button");node.dataset.filter=filter;return node;});
   const context={state,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
-    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),renderCourses:()=>{},renderSimulator:()=>{},
+    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),renderCourses:()=>{},renderSimulator:()=>{},renderFavoriteControls:()=>{},loadFavorites:async()=>false,
     markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
   return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
 }
@@ -874,5 +876,6 @@ console.log("PASS private lesson search: 8-hit bounded, published-only, CSRF, te
 
 await import("./check-publication-response.mjs");
 await import("./check-student-help.mjs");
+await import("./check-student-favorites.mjs");
 await import("./check-editor-draft-preservation.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

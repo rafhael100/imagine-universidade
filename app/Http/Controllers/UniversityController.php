@@ -95,6 +95,59 @@ final class UniversityController
         return response()->json(['courses' => $this->catalog->catalog($this->grant($request))]);
     }
 
+    public function favorites(Request $request): JsonResponse
+    {
+        try {
+            $ids = $this->catalog->favoriteCourseIds($this->grant($request));
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        // The private GET middleware revalidates Portal before releasing IDs.
+        return response()->json(['course_ids' => $ids]);
+    }
+
+    public function favoriteCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $saved = $this->catalog->favoriteCourse(
+                $grant,
+                $courseId,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        return $saved
+            ? response()->json(['course_id' => $courseId, 'favorite' => true])
+            : response()->json(['error' => 'not_found'], 404);
+    }
+
+    public function unfavoriteCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    {
+        if ($courseId < 1) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $grant = $this->grant($request);
+        try {
+            $removed = $this->catalog->unfavoriteCourse(
+                $grant,
+                $courseId,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        // Missing and already-removed favorites share the same receipt.
+        // No course content or ownership is disclosed by this operation.
+        return $removed
+            ? response()->json(['course_id' => $courseId, 'favorite' => false])
+            : response()->json(['error' => 'access_denied'], 403);
+    }
+
     /**
      * Student search is a POST only to avoid putting study terms in URL logs.
      * It is read-only, bounded, private and always rechecks Portal afterward.

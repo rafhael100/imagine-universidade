@@ -53,6 +53,15 @@
     .searchbar{display:grid;gap:7px;margin:0 0 18px;max-width:460px}
     .searchbar label{font-weight:750;font-size:13px;color:#465369}
     .searchbar input{font:inherit;width:100%;padding:11px 14px;border:1px solid #C9D1DC;border-radius:11px;background:#fff;color:var(--ink)}
+    .favorite-tools{margin:0 0 18px;display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap}
+    .favorite-tools label{display:inline-flex;align-items:center;gap:9px;min-height:44px;font-weight:750;font-size:13px}
+    .favorite-tools input{width:20px;height:20px;accent-color:var(--orange)}
+    .favorite-tools .secondary{margin-left:0}
+    .favorite-status{flex-basis:100%;font-size:13px;color:var(--muted);margin:0}
+    .course-favorite{padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
+    .course-favorite p{font-size:13px;font-weight:750;margin:0 0 8px;overflow-wrap:anywhere}
+    .course-favorite .secondary{margin-left:0}
+    .course-favorite[hidden]{display:none}
         .lesson-search-panel{background:#fff;border:1px solid var(--line);border-radius:var(--imagine-radius-panel);padding:17px 19px;margin-bottom:18px}
     .lesson-search-panel h2{font-size:18px;margin:0 0 6px}
     .lesson-search-panel p{font-size:13px;color:var(--muted);margin:0 0 10px}
@@ -157,6 +166,11 @@
     <label for="course-search">Buscar cursos</label>
     <input id="course-search" type="search" placeholder="Busque pelo nome ou assunto" maxlength="80" autocomplete="off" disabled>
   </div>
+  <div class="favorite-tools">
+    <label for="favorites-only"><input id="favorites-only" type="checkbox" disabled>Somente favoritos</label>
+    <button id="reload-favorites" type="button" class="secondary" hidden disabled>Consultar favoritos novamente</button>
+    <p id="favorites-status" class="favorite-status" role="status" aria-live="polite">Seus favoritos serão consultados após carregar a biblioteca.</p>
+  </div>
   <section class="lesson-search-panel" aria-labelledby="lesson-search-title">
     <h2 id="lesson-search-title">Encontre um assunto dentro das aulas</h2>
     <p>Busca privada somente nos materiais publicados. As palavras pesquisadas não são enviadas a ferramentas externas.</p>
@@ -180,6 +194,10 @@
     </section>
     <section class="panel" aria-labelledby="lesson-panel-title">
       <div class="panel-head"><h2 id="lesson-panel-title">Sua aprendizagem</h2><p>Aulas curtas, sem provas, notas ou certificados.</p></div>
+      <div id="course-favorite-panel" class="course-favorite" hidden>
+        <p id="favorite-course-title"></p>
+        <button id="course-favorite-toggle" type="button" class="secondary" disabled>Salvar curso nos favoritos</button>
+      </div>
       <div id="lesson-items" class="lesson-items"></div>
       <article id="lesson-content" class="lesson-content"><p class="empty">Selecione um curso para visualizar as aulas.</p></article>
     </section>
@@ -193,7 +211,9 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false};
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
+  favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,
+  favoriteWriting:false,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:""};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -234,6 +254,17 @@ function lockAccess(message){
   if(state.accessDenied)return;
   state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
+  state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;
+  state.favoriteWriting=false;state.favoriteOutcomeUnknown=false;state.favoritesOnly=false;
+  state.favoritesMessage="";++state.favoritesRequest;
+  document.getElementById("favorites-only").checked=false;
+  document.getElementById("favorites-only").disabled=true;
+  document.getElementById("reload-favorites").hidden=true;
+  document.getElementById("reload-favorites").disabled=true;
+  document.getElementById("favorites-status").textContent="";
+  document.getElementById("course-favorite-panel").hidden=true;
+  document.getElementById("favorite-course-title").textContent="";
+  document.getElementById("course-favorite-toggle").disabled=true;
   ++state.courseRequest;++state.lessonRequest;++state.searchRequest;
   document.getElementById("lesson-search-query").value="";
   document.getElementById("lesson-search-query").disabled=true;
@@ -344,6 +375,120 @@ function validatedStudentLesson(payload,lessonId,courseId){
 function validatedStudentProgress(payload){
   return studentRecord(payload)&&typeof payload.completed==="boolean"?{completed:payload.completed}:null;
 }
+// Favorites are a private course preference, independent from completion.
+// A missing list is unavailable, while an explicit empty array is valid.
+function validatedStudentFavorites(payload){
+  if(!studentRecord(payload)||!Array.isArray(payload.course_ids))return null;
+  const unique=new Set();
+  for(const id of payload.course_ids){
+    if(!Number.isSafeInteger(id)||id<1||unique.has(id))return null;
+    unique.add(id);
+  }
+  return Array.from(unique);
+}
+function validatedFavoriteReceipt(payload,courseId,favorite){
+  if(!studentRecord(payload)||payload.course_id!==courseId||
+     !Number.isSafeInteger(payload.course_id)||payload.course_id<1||
+     typeof payload.favorite!=="boolean"||payload.favorite!==favorite)return null;
+  return {course_id:payload.course_id,favorite:payload.favorite};
+}
+function renderFavoriteControls(){
+  const active=state.libraryReady&&!state.accessDenied;
+  const filter=document.getElementById("favorites-only"),retry=document.getElementById("reload-favorites");
+  const panel=document.getElementById("course-favorite-panel"),button=document.getElementById("course-favorite-toggle");
+  const course=active?state.courses.find(item=>item.id===state.courseId):null;
+  const known=active&&state.favoritesReady&&!state.favoriteOutcomeUnknown;
+  // Unpublication/catalogue refresh cannot leave a hidden course in the UI.
+  const available=new Set(state.courses.map(item=>item.id));
+  state.favoriteIds=state.favoriteIds.filter(id=>available.has(id));
+  filter.checked=state.favoritesOnly;
+  // An unavailable favorites service must still let the student turn this
+  // filter off and read the rest of the authorized catalogue.
+  filter.disabled=!active||(!known&&!state.favoritesOnly);
+  retry.hidden=!active||(!state.favoriteOutcomeUnknown&&state.favoritesReady)||state.favoritesLoading;
+  retry.disabled=!active||state.favoritesLoading||state.favoriteWriting;
+  document.getElementById("favorites-status").textContent=active?state.favoritesMessage:"";
+  panel.hidden=!course;
+  document.getElementById("favorite-course-title").textContent=course?"Favoritos · "+course.title:"";
+  const saved=!!course&&known&&state.favoriteIds.includes(course.id);
+  button.disabled=!course||!known||state.favoritesLoading||state.favoriteWriting;
+  button.textContent=known?(saved?"Remover curso dos favoritos":"Salvar curso nos favoritos")
+    :"Consulte os favoritos para alterar";
+  if(known&&course)button.setAttribute("aria-pressed",String(saved));
+  else button.removeAttribute("aria-pressed");
+}
+async function loadFavorites(){
+  if(state.accessDenied||!state.libraryReady||state.favoritesLoading||state.favoriteWriting)return false;
+  const request=++state.favoritesRequest;
+  state.favoritesLoading=true;state.favoritesReady=false;state.favoriteIds=[];
+  state.favoritesMessage="Consultando seus favoritos...";
+  renderCourses();
+  try{
+    const payload=await api("/favorites");
+    if(state.accessDenied||!state.libraryReady||state.favoritesRequest!==request)return false;
+    const ids=validatedStudentFavorites(payload);
+    if(ids===null)throw new Error("invalid_favorites");
+    const available=new Set(state.courses.map(course=>course.id));
+    state.favoriteIds=ids.filter(id=>available.has(id));
+    state.favoritesReady=true;state.favoriteOutcomeUnknown=false;
+    state.favoritesMessage=state.favoriteIds.length?"Seus favoritos estão atualizados.":"Nenhum favorito disponível no catálogo atual.";
+    return true;
+  }catch(error){
+    if(!state.accessDenied&&state.libraryReady&&state.favoritesRequest===request){
+      state.favoriteIds=[];state.favoritesReady=false;
+      state.favoritesMessage=state.favoriteOutcomeUnknown
+        ?"O resultado não pôde ser confirmado. Consulte seus favoritos antes de tentar outra alteração."
+        :"Não foi possível consultar seus favoritos. Seus cursos continuam disponíveis.";
+    }
+    return false;
+  }finally{
+    if(state.favoritesRequest===request){
+      state.favoritesLoading=false;
+      if(!state.accessDenied&&state.libraryReady)renderCourses();
+    }
+  }
+}
+async function toggleCourseFavorite(){
+  if(state.accessDenied||!state.libraryReady||!state.favoritesReady||state.favoritesLoading||
+     state.favoriteWriting||state.favoriteOutcomeUnknown)return;
+  const id=state.courseId,selection=state.courseRequest,generation=state.favoritesRequest;
+  if(!Number.isSafeInteger(id)||id<1||!state.courses.some(course=>course.id===id))return;
+  const desired=!state.favoriteIds.includes(id);
+  const sameSelection=()=>state.libraryReady&&state.courseId===id&&state.courseRequest===selection&&
+    state.courses.some(course=>course.id===id);
+  const uncertain=()=>{
+    state.favoriteIds=[];state.favoritesReady=false;state.favoriteOutcomeUnknown=true;
+    state.favoritesMessage="A seleção mudou durante a alteração. Consulte seus favoritos para confirmar o estado atual.";
+  };
+  state.favoriteWriting=true;
+  state.favoritesMessage=desired?"Salvando curso nos favoritos...":"Removendo curso dos favoritos...";
+  renderFavoriteControls();
+  try{
+    const payload=await api("/courses/"+encodeURIComponent(String(id))+"/favorite",{method:desired?"PUT":"DELETE"});
+    if(state.accessDenied)return;
+    if(!sameSelection()||state.favoritesRequest!==generation){uncertain();return;}
+    const receipt=validatedFavoriteReceipt(payload,id,desired);
+    if(receipt===null)throw new Error("invalid_favorite_receipt");
+    state.favoriteIds=desired?[...state.favoriteIds,id]:state.favoriteIds.filter(value=>value!==id);
+    state.favoritesMessage=desired?"Curso salvo nos favoritos.":"Curso removido dos favoritos.";
+  }catch(error){
+    if(state.accessDenied)return;
+    if(!sameSelection()||state.favoritesRequest!==generation){uncertain();return;}
+    // A lost PUT/DELETE response may follow a committed preference. Re-read
+    // the authoritative list; never replay the uncertain write automatically.
+    state.favoriteIds=[];state.favoritesReady=false;state.favoriteOutcomeUnknown=true;
+    state.favoriteWriting=false;
+    const reconciled=await loadFavorites();
+    if(reconciled&&sameSelection()&&!state.accessDenied){
+      state.favoritesMessage=state.favoriteIds.includes(id)===desired
+        ?(desired?"Favorito confirmado após consulta ao servidor.":"Remoção confirmada após consulta ao servidor.")
+        :"A alteração não foi confirmada. Você pode tentar novamente.";
+    }
+  }finally{
+    state.favoriteWriting=false;
+    if(!state.accessDenied&&state.libraryReady)renderCourses();
+  }
+}
 function normalizeSearchText(text){
   return String(text||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
 }
@@ -353,7 +498,9 @@ function filterCourses(courses,category,query){
     (!term||normalizeSearchText([c.title,c.summary,labels[c.category]||""].join(" ")).includes(term)));
 }
 function coursesFiltered(){
-  return filterCourses(state.courses,state.filter,state.query);
+  const courses=filterCourses(state.courses,state.filter,state.query);
+  const favorites=new Set(state.favoritesReady?state.favoriteIds:[]);
+  return state.favoritesOnly?courses.filter(course=>favorites.has(course.id)):courses;
 }
 function nextPendingCourseId(courses,currentCourseId){
   if(!Array.isArray(courses))return null;
@@ -408,7 +555,7 @@ function renderPillars(){
 }
 function renderCourses(){
   if(state.accessDenied||!state.libraryReady)return;
-  renderPillars();
+  renderFavoriteControls();renderPillars();
   list.replaceChildren();
   const totals=state.courses.reduce((memo,c)=>{
     const p=progressLabel(c);memo.completed+=p.completed;memo.total+=p.total;return memo;
@@ -419,8 +566,14 @@ function renderCourses(){
   const resume=document.getElementById("resume-course");
   resume.disabled=nextPendingCourseId(state.courses,state.courseId)===null;
   document.getElementById("export-progress").disabled=state.exportLoading;
-  const items=coursesFiltered();
-  if(!items.length){list.append(el("p","Nenhum curso publicado nesta categoria.","empty"));return;}
+  const items=coursesFiltered(),favorites=new Set(state.favoritesReady?state.favoriteIds:[]);
+  if(!items.length){
+    const message=state.favoritesOnly
+      ?(state.favoritesReady?"Nenhum curso favorito corresponde a esta busca ou categoria."
+        :"Favoritos indisponíveis. Desmarque Somente favoritos para consultar todos os cursos.")
+      :"Nenhum curso publicado nesta categoria.";
+    list.append(el("p",message,"empty"));return;
+  }
   for(const c of items){
     const p=progressLabel(c);
     const btn=el("button",undefined,"course-btn");
@@ -429,6 +582,7 @@ function renderCourses(){
     btn.append(el("strong",c.title),
       el("span",(labels[c.category]||"Curso")+" · "+(c.summary||"Aulas práticas")),
       el("span",p.completed+" de "+p.total+" aulas concluídas · "+p.percent+"%"));
+    if(favorites.has(c.id))btn.append(el("span","Salvo nos favoritos"));
     const bar=el("progress",undefined,"course-progress");
     bar.max=Math.max(1,p.total);
     bar.value=p.completed;
@@ -772,7 +926,7 @@ async function selectLesson(id){
 function openCourseWithAllFilters(target,preferredLessonId=null){
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(target)||target<1)return;
   if(!state.courses.some(course=>course.id===target))return;
-  state.filter="todos";state.query="";
+  state.filter="todos";state.query="";state.favoritesOnly=false;
   document.getElementById("course-search").value="";
   document.querySelectorAll("[data-filter]").forEach(btn=>{
     btn.setAttribute("aria-pressed",String(btn.dataset.filter==="todos"));
@@ -917,6 +1071,19 @@ document.getElementById("pillar-cards").addEventListener("click",e=>{
 });
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});
+document.getElementById("reload-favorites").addEventListener("click",()=>{void loadFavorites();});
+document.getElementById("course-favorite-toggle").addEventListener("click",()=>{void toggleCourseFavorite();});
+document.getElementById("favorites-only").addEventListener("change",event=>{
+  if(state.accessDenied||!state.libraryReady||(!state.favoritesReady&&event.target.checked)){
+    event.target.checked=state.favoritesOnly;return;
+  }
+  state.favoritesOnly=event.target.checked===true;
+  ++state.courseRequest;++state.lessonRequest;
+  state.courseId=null;state.lessonId=null;
+  lessonsBox.replaceChildren();content.replaceChildren();
+  content.append(el("p","Escolha um curso para ver as aulas.","empty"));
+  renderCourses();
+});
 document.getElementById("course-search").addEventListener("input",event=>{
   if(state.accessDenied||!state.libraryReady)return;
   state.query=event.target.value.slice(0,80);
@@ -938,6 +1105,8 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
 async function loadLibrary(){
   if(state.accessDenied||state.libraryLoading)return;
   state.libraryLoading=true;state.libraryReady=false;
+  state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;++state.favoritesRequest;
+  renderFavoriteControls();
   document.getElementById("course-search").disabled=true;
   document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
   document.getElementById("resume-course").disabled=true;
@@ -966,6 +1135,9 @@ async function loadLibrary(){
     document.getElementById("lesson-search-query").disabled=false;
     document.getElementById("lesson-search-submit").disabled=false;
     renderSimulator();renderCourses();say("");
+    // Favorites load separately: their failure cannot hold libraryLoading
+    // open or block lessons, educational search, progress or completion.
+    void loadFavorites();
   }catch(error){
     if(!state.accessDenied){
       state.libraryReady=false;state.courses=[];state.courseId=null;state.lessonId=null;

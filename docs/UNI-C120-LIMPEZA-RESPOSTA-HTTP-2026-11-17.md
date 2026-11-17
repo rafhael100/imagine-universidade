@@ -1,6 +1,6 @@
 # C-120 — limpeza limitada de corpos de erro HTTP
 
-17/11/2026 · Candidato para verificação na CI. **HOLD_NO_GO** operacional.
+17/11/2026 · Candidato em revisão. **HOLD_NO_GO** operacional.
 
 ## Motivo e limite da conclusão
 
@@ -16,8 +16,8 @@ Esse diagnóstico identifica o ponto de espera do ensaio, mas não comprova que
 a ausência de consumo do body seja sua causa. Fetch pode finalizar corpos
 ignorados; esta entrega não afirma um vazamento anterior de recursos.
 
-O efeito da mudança sobre o timeout será determinado por uma nova execução da
-CI. A asserção do JSON do Tutor permanece obrigatória. Não há aceitação de erro
+O efeito da mudança sobre o timeout exige execução real da CI, registrada ao
+final deste documento. A asserção do JSON do Tutor permanece obrigatória. Não há aceitação de erro
 sem corpo, enfraquecimento de validators ou alteração do gateway desabilitado.
 
 ## Implementação
@@ -98,7 +98,29 @@ node scripts/check-ui-contract.mjs
 git diff --check
 ```
 
-A suíte de limpeza e o checker principal passaram. O resultado do ensaio
-Chromium/Laravel real depende da CI; não houve execução local de PHP,
+A suíte de limpeza e o checker principal passaram. Esses resultados locais
+não substituem o ensaio Chromium/Laravel; não houve execução local de PHP,
 PostgreSQL ou Chromium, nem alteração de guards para permitir essa execução.
 O provider de autoridade normal continua desabilitado.
+
+## Resultado da execução real
+
+O commit `b0827f72568c0a844513b258f656f13134afbab3` foi executado em
+[Actions #44200554259](https://github.com/rafhael100/imagine-universidade/actions/runs/44200554259).
+O job de navegador passou: **341 verificações Chromium com falhas controladas**
+e **63 verificações no percurso completo pelo Laravel/SQLite real**, seguidas
+da confirmação das sessões e dos registros persistidos. A resposta 503 foi
+lida como JSON com `error: tutor_unavailable`, sem retirar a asserção, e o
+percurso seguiu até retirada, republicação, exportações e revogação.
+
+Isso confirma que a alteração resolveu a espera observada nessa execução;
+não estabelece uma causa universal para corpos ignorados no Fetch ou no
+Playwright. O backend também passou com 171 testes e 1.826 asserções.
+
+O resultado geral desse run foi **5 de 6 jobs aprovados**: a preparação do
+PostgreSQL no laboratório de três serviços falhou sem confirmar as migrações, depois
+dos testes de imagem e HTTP privado. A espera anterior podia aceitar o
+servidor temporário por socket; o ajuste em `qa-staging-postgres-http.sh`
+passa a exigir consulta TCP autenticada, com prazo e diagnóstico de etapa.
+Essa correção de infraestrutura exige sua própria execução. A liberação
+operacional continua bloqueada pelos critérios já registrados.

@@ -139,6 +139,14 @@ try {
             && !$repository->favoriteCourse($grantA, $course, static fn () => $grantA)
             && DB::table('educational_course_favorites')->count() === 3,
             'withdrawal hides favorites and denies PUT without erasing preferences');
+        $exported = $repository->exportFavorites($grantA);
+        favoriteCheck($exported !== null && $exported['schema_version'] === 1
+            && $exported['scope'] === 'current_authenticated_student'
+            && count($exported['favorites']) === 1
+            && array_keys($exported['favorites'][0]) === ['course_slug', 'saved_at']
+            && $exported['favorites'][0]['course_slug'] === 'qa-private-favorites'
+            && $exported['favorites'][0]['saved_at'] !== '',
+            'private export retains only the owner reference and saved timestamp after withdrawal');
         $removalLocked = false;
         favoriteCheck($repository->unfavoriteCourse($grantA, $course, static function () use (
             $peer, $course, $grantA, &$removalLocked
@@ -150,6 +158,9 @@ try {
         favoriteCheck($repository->unfavoriteCourse($grantA, $course, static fn () => $grantA)
             && DB::table('educational_course_favorites')->count() === 2,
             'repeated DELETE preserves other students and tenants');
+        favoriteCheck($repository->exportFavorites($grantA)['favorites'] === []
+            && count($repository->exportFavorites($grantB)['favorites']) === 1,
+            'export after removal stays empty for one company and preserves the other company history');
         favoriteCheck(DB::table('educational_course_favorites')
             ->where('educational_organization_id', $organizations['qa-favorites-company-b'])
             ->where('subject_key', 'same-person')->where('educational_course_id', $course)->exists()

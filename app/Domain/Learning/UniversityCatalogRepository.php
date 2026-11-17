@@ -789,6 +789,98 @@ final class UniversityCatalogRepository
         return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? $courses : [];
     }
 
+    /**
+     * Read-only editorial aggregates. Each course uses the highest version
+     * number, matching adminLessons; historical versions are never added up.
+     * No student identity, preference, progress or tutor table is consulted.
+     *
+     * @return array{schema_version:int,scope:string,totals:array<string,int>,categories:list<array<string,int|string>>}|null
+     */
+    public function adminOverview(PortalGrant $grant): ?array
+    {
+        $org = $this->adminOrgId($grant);
+        if ($org === null) {
+            return null;
+        }
+
+        $latestVersions = DB::table('educational_course_versions as v')
+            ->join('educational_courses as owned', 'owned.id', '=', 'v.educational_course_id')
+            ->where('owned.educational_organization_id', $org)->where('owned.is_shared', true)
+            ->select('v.educational_course_id')->selectRaw('MAX(v.version) as latest_version')
+            ->groupBy('v.educational_course_id');
+        $lessonCounts = DB::table('educational_course_versions as v')
+            ->joinSub($latestVersions, 'latest', static function (\Illuminate\Database\Query\JoinClause $join): void {
+                $join->on('latest.educational_course_id', '=', 'v.educational_course_id')
+                    ->on('latest.latest_version', '=', 'v.version');
+            })
+            ->leftJoin('educational_lessons as l', 'l.educational_course_version_id', '=', 'v.id')
+            ->select('v.educational_course_id')->selectRaw('COUNT(l.id) as lesson_count')
+            ->groupBy('v.educational_course_id');
+
+        // One SQL statement provides all category/total inputs from one DB
+        // snapshot. COALESCE also covers a course without any version yet.
+        $rows = DB::table('educational_courses as c')
+            ->leftJoinSub($lessonCounts, 'current_lessons', 'current_lessons.educational_course_id', '=', 'c.id')
+            ->where('c.educational_organization_id', $org)->where('c.is_shared', true)
+            ->groupBy('c.category')->select('c.category')
+            ->selectRaw('COUNT(*) as courses')
+            ->selectRaw('SUM(CASE WHEN c.is_published THEN 1 ELSE 0 END) as published_courses')
+            ->selectRaw('SUM(CASE WHEN c.is_published THEN 0 ELSE 1 END) as draft_courses')
+            ->selectRaw('SUM(COALESCE(current_lessons.lesson_count, 0)) as current_lessons')
+            ->selectRaw('SUM(CASE WHEN COALESCE(current_lessons.lesson_count, 0) = 0 THEN 1 ELSE 0 END) as courses_without_lessons')
+            ->selectRaw("SUM(CASE WHEN TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(c.summary, ''), ?, ''), ?, ''), ?, ''), ?, '')) = '' THEN 1 ELSE 0 END) as courses_without_summary",
+                ["\t", "\n", "\r", "\v"])
+            ->get()->all();
+
+        if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)) {
+            return null;
+        }
+
+        $totals = ['courses' => 0, 'published_courses' => 0, 'draft_courses' => 0,
+            'current_lessons' => 0, 'courses_without_lessons' => 0, 'courses_without_summary' => 0];
+        $categories = [];
+        foreach (['metodologia', 'negocios', 'sistemas'] as $category) {
+            $categories[$category] = ['category' => $category, 'courses' => 0,
+                'published_courses' => 0, 'draft_courses' => 0, 'current_lessons' => 0];
+        }
+        $seen = [];
+        foreach ($rows as $row) {
+            if (!is_string($row->category) || !isset($categories[$row->category]) || isset($seen[$row->category])) {
+                return null;
+            }
+            $seen[$row->category] = true;
+            $counts = [];
+            foreach (array_keys($totals) as $field) {
+                $raw = $row->{$field} ?? null;
+                // PostgreSQL SUM may use a decimal integer string; neither
+                // floats, negatives nor values unsafe for the browser are valid.
+                if (!(is_int($raw) || (is_string($raw) && preg_match('/\A(?:0|[1-9][0-9]{0,15})\z/D', $raw) === 1))
+                    || (int) $raw < 0 || (int) $raw > 9007199254740991) {
+                    return null;
+                }
+                $counts[$field] = (int) $raw;
+            }
+            if ($counts['published_courses'] > $counts['courses']
+                || $counts['draft_courses'] !== $counts['courses'] - $counts['published_courses']
+                || $counts['courses_without_lessons'] > $counts['courses']
+                || $counts['courses_without_summary'] > $counts['courses']) {
+                return null;
+            }
+            foreach ($counts as $field => $count) {
+                if ($count > 9007199254740991 - $totals[$field]) {
+                    return null;
+                }
+                $totals[$field] += $count;
+                if (array_key_exists($field, $categories[$row->category])) {
+                    $categories[$row->category][$field] = $count;
+                }
+            }
+        }
+
+        return ['schema_version' => 1, 'scope' => 'current_editorial_catalog',
+            'totals' => $totals, 'categories' => array_values($categories)];
+    }
+
     public function adminLessons(PortalGrant $grant, int $courseId): array
     {
         $org = $this->adminOrgId($grant);

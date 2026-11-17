@@ -8,6 +8,12 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
   const waitStatus=(page,text)=>page.waitForFunction(value=>
     document.getElementById("favorites-status").textContent.includes(value),text,{timeout:8000});
   const waitReady=page=>page.waitForFunction(()=>!document.getElementById("favorites-only").disabled);
+  async function waitHeld(seen){
+    let timer;
+    try{return await Promise.race([seen,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error("C116 expected request was not observed within 8 seconds")),8000);
+    })]);}finally{clearTimeout(timer);}
+  }
   function heldResponse(){
     let release,received;const result=new Promise(resolve=>{release=resolve;});
     return {seen:new Promise(resolve=>{received=resolve;}),release,
@@ -84,7 +90,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await page.close();
     }
     {
-      const held=heldResponse(),{page,control}=await open({read:held.response});await held.seen;
+      const held=heldResponse(),{page,control}=await open({read:held.response});await waitHeld(held.seen);
       check((await page.locator("#lesson-content h3").innerText())==="Visitas fictícias" &&
         !(await page.locator("#lesson-content button.primary").isDisabled()) &&
         !(await page.locator("#export-progress").isDisabled()) && await page.locator("#favorites-only").isDisabled(),
@@ -165,7 +171,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     }
     {
       const {page,control}=await open();await waitReady(page);const held=heldResponse();control.write=held.response;
-      await page.locator("#course-favorite-toggle").click();await held.seen;
+      await page.locator("#course-favorite-toggle").click();await waitHeld(held.seen);
       await page.locator("#course-favorite-toggle").evaluate(button=>button.dispatchEvent(new Event("click",{bubbles:true})));
       check(control.writes.length===1 && await page.locator("#course-favorite-toggle").isDisabled() &&
         !(await page.locator("#course-list [data-course-id='1']").innerText()).includes("Salvo nos favoritos") &&
@@ -182,7 +188,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     }
     for(const destination of ["filter","reselected course"]){
       const {page,control}=await open();await waitReady(page);const held=heldResponse();control.write=held.response;
-      await page.locator("#course-favorite-toggle").click();await held.seen;
+      await page.locator("#course-favorite-toggle").click();await waitHeld(held.seen);
       if(destination==="filter")await page.locator('[data-filter="negocios"]').click();
       else await selectCourse(page);
       held.release({status:200,payload:{course_id:1,favorite:true}});
@@ -218,6 +224,9 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await page.close();
     }
     check(completionWrites===0,"C116 saving, filtering and recovering favorites never records lesson completion");
+  }catch(error){
+    console.error("C116 browser scenario failed: "+String(error.message).split(/\r?\n/,1)[0].slice(0,240));
+    throw error;
   }finally{
     await context.close();
   }

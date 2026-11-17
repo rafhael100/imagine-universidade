@@ -166,6 +166,14 @@ const server=http.createServer((req,res)=>{
     }
     return send(res,200,payload);
   }
+  if(p==="/universidade/private/admin/overview"&&req.method==="GET"){
+    const count=createdCourseInLab?2:1;
+    return send(res,200,{schema_version:1,scope:"current_editorial_catalog",
+      totals:{courses:count,published_courses:0,draft_courses:count,current_lessons:1,
+        courses_without_lessons:count-1,courses_without_summary:0},
+      categories:[{category:"metodologia",courses:count,published_courses:0,draft_courses:count,current_lessons:1},
+        ...["negocios","sistemas"].map(category=>({category,courses:0,published_courses:0,draft_courses:0,current_lessons:0}))]});
+  }
   if(p==="/universidade/private/admin/courses"){
     if(req.method==="POST"){
       editorialCoursePosts++;
@@ -253,7 +261,13 @@ async function inspect(page,name){
 }
 (async()=>{
   await new Promise((resolve,reject)=>server.once("error",reject).listen(port,host,resolve));
-  const browser=await chromium.launch({headless:true});
+  const browser=await chromium.launch({headless:true,timeout:30000});
+  const deadline=setTimeout(()=>{
+    console.error("Synthetic browser deadline after last check: "+lastCheck);
+    process.exitCode=1;
+    const forcedExit=setTimeout(()=>process.exit(1),5000);forcedExit.unref();
+    void browser.close().catch(()=>{}).finally(()=>{server.closeAllConnections();server.close();});
+  },180000);deadline.unref();
   try{
     const context=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:"reduce"});
     const page=await context.newPage();
@@ -789,6 +803,7 @@ async function inspect(page,name){
     createdCourseInLab=false;
 
     await require("./qa-browser-editor-drafts.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-editorial-overview.cjs")({browser,base,ensureLocalPage,check,pageErrors});
 
     // C-111: the real publication handler must reject incomplete HTTP 200
     // diagnostics before confirmation or mutation. These per-page routes
@@ -936,7 +951,7 @@ async function inspect(page,name){
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));
     console.log("PASS synthetic Chromium browser: "+results.assertions+" checks, student/admin UI, progress, revocation, draft preview, audit, widths 320/390/768/1440 and WCAG serious/critical scan.");
-  }finally{await browser.close();}
+  }finally{await browser.close();clearTimeout(deadline);}
 })().catch(error=>{
   console.error("Synthetic browser last completed check: "+lastCheck);
   console.error("Synthetic browser failure: "+String(error.message).slice(0,240));

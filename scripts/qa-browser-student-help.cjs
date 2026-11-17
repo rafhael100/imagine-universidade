@@ -15,6 +15,12 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     await page.locator("#lesson-help-submit").click();
     if(message)await waitAnswer(page,message);
   };
+  async function waitHeld(seen){
+    let timer;
+    try{return await Promise.race([seen,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error("C112 expected request was not observed within 8 seconds")),8000);
+    })]);}finally{clearTimeout(timer);}
+  }
   function heldResponse(){
     let release,received;
     const result=new Promise(resolve=>{release=resolve;});
@@ -106,7 +112,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
 
     {
       const held=heldResponse(),{page,posts}=await open(held.response);
-      await submit(page,"visitante fictício");await held.seen;
+      await submit(page,"visitante fictício");await waitHeld(held.seen);
       await page.locator("[data-lesson-help] form").evaluate(form=>{
         form.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));
       });
@@ -126,7 +132,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
 
     for(const destination of ["lesson","filter"]){
       const held=heldResponse(),{page,posts}=await open(held.response);
-      await submit(page,"visitante fictício");await held.seen;
+      await submit(page,"visitante fictício");await waitHeld(held.seen);
       if(destination==="lesson"){
         await page.locator("#lesson-items [data-lesson-id='12']").click();
         await page.getByRole("heading",{name:"Leads fictícios",exact:true}).waitFor({state:"visible",timeout:8000});
@@ -179,6 +185,9 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await page.close();
     }
     check(completionWrites===0,"C112 all help paths leave lesson completion exclusively under student control");
+  }catch(error){
+    console.error("C112 browser scenario failed: "+String(error.message).split(/\r?\n/,1)[0].slice(0,240));
+    throw error;
   }finally{
     await context.close();
   }

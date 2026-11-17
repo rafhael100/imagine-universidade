@@ -123,7 +123,7 @@ condições de aceitação. Fontes primárias consultadas:
 - [Proteção contra falsificação de requisições](https://github.com/laravel/framework/blob/v13.42.0/src/Illuminate/Foundation/Http/Middleware/PreventRequestForgery.php).
 - [Seleção de rotas e fallback](https://github.com/laravel/framework/blob/v13.42.0/src/Illuminate/Routing/AbstractRouteCollection.php).
 
-## Percurso verificado
+## Percurso exigido pelo ensaio
 
 O runner cobre, em sequência:
 
@@ -169,6 +169,12 @@ As evidências usam um diretório separado e inicialmente vazio. A saída permit
 verificações e contagens de persistência. Cookies, tokens, banco, sessões,
 controle de autoridade e logs PHP não são publicados. O trap de saída, erro ou
 sinal encerra o servidor criado pelo script e remove o diretório privado.
+
+O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
+conferência final de 30 segundos. O início de cada fase é registrado com um nome
+fixo. Um timeout produz falha, nunca aprovação parcial. O percurso passou a
+incluir também o download dos favoritos retidos e a atualização explícita da
+visão editorial após publicação e retirada.
 
 Falhas de bootstrap mantêm um diagnóstico restrito à etapa fixa e ao nome da
 classe da exceção. O shell valida o formato e imprime somente esses dois

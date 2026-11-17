@@ -12,6 +12,12 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
   const waitStatus=(page,text)=>page.waitForFunction(value=>
     document.getElementById("favorites-export-status").textContent.includes(value),text,{timeout:8000});
   let preferenceWrites=0,completionWrites=0;
+  async function waitHeld(seen){
+    let timer;
+    try{return await Promise.race([seen,new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(new Error("C118 expected request was not observed within 8 seconds")),8000);
+    })]);}finally{clearTimeout(timer);}
+  }
   function heldResponse(){
     let release,received;const result=new Promise(resolve=>{release=resolve;});
     return {seen:new Promise(resolve=>{received=resolve;}),release,response:async()=>{received();return result;}};
@@ -88,7 +94,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     {
       const held=heldResponse(),{page,control}=await open({exportResponse:held.response});
       const event=page.waitForEvent("download");
-      await page.locator("#export-favorites").click();await held.seen;
+      await page.locator("#export-favorites").click();await waitHeld(held.seen);
       await page.locator("#export-favorites").evaluate(button=>{
         button.dispatchEvent(new Event("click",{bubbles:true}));button.dispatchEvent(new Event("click",{bubbles:true}));
       });
@@ -113,7 +119,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await page.close();
     }
     {
-      const held=heldResponse(),{page,control}=await open({favorites:held.response});await held.seen;
+      const held=heldResponse(),{page,control}=await open({favorites:held.response});await waitHeld(held.seen);
       const {data}=await download(page);
       check(data.favorites.length===1&&control.reads.length===1&&await page.locator("#favorites-only").isDisabled(),
         "C118 pending favorites lookup does not delay the authorized private export");
@@ -180,7 +186,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     {
       const held=heldResponse(),{page,control}=await open({favorites:{status:503,payload:{}},exportResponse:held.response});
       await page.locator("#reload-favorites").waitFor({state:"visible",timeout:8000});
-      await page.locator("#export-favorites").click();await held.seen;
+      await page.locator("#export-favorites").click();await waitHeld(held.seen);
       control.favorites={status:403,payload:{}};await page.locator("#reload-favorites").click();
       await page.waitForFunction(()=>document.getElementById("overall-progress").textContent.includes("Acesso à Universidade encerrado"));
       held.release({status:200,payload:payload()});await waitSettled(page);
@@ -192,5 +198,8 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     }
     check(preferenceWrites===0&&completionWrites===0,
       "C118 all private export scenarios make zero favorite mutations and zero lesson completion POSTs");
+  }catch(error){
+    console.error("C118 browser scenario failed: "+String(error.message).split(/\r?\n/,1)[0].slice(0,240));
+    throw error;
   }finally{await context.close();}
 };

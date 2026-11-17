@@ -349,6 +349,27 @@ final class UniversityController
         return response()->json(['courses' => $this->catalog->adminCourses($this->grant($request))]);
     }
 
+    public function adminOverview(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        if ($grant->companyId !== 'imagine-editorial') {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        try {
+            $overview = $this->catalog->adminOverview($grant);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($overview === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
+        return response()->json($overview);
+    }
+
     public function adminLessons(Request $request, int $courseId): JsonResponse
     {
         return response()->json(['lessons' => $this->catalog->adminLessons($this->grant($request), $courseId)]);

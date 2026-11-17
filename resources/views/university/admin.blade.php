@@ -60,11 +60,27 @@
     .audit-row{padding:12px 0;border-bottom:1px solid var(--line)}
     .audit-row strong{display:block;font-weight:750}
     .audit-row small{display:block;color:#505650;font-size:12px}
+    .overview-panel{margin:0 0 20px}
+    .overview-panel .panel-header{flex-wrap:wrap;padding:15px 20px}
+    .overview-body{padding:16px 20px}
+    .overview-status{font-size:13px;margin:0 0 12px}
+    .overview-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px}
+    .overview-card{padding:10px 12px;background:#F7F8FA;border:1px solid var(--line);border-radius:10px;min-width:0}
+    .overview-card strong{display:block;font-size:23px;line-height:1.3;overflow-wrap:anywhere}
+    .overview-card span{display:block;font-size:12px;color:#505650}
+    .overview-warnings{display:flex;flex-wrap:wrap;gap:4px 22px;padding-left:18px;margin:0 0 12px;font-size:13px;color:#505650}
+    .overview-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}
+    .overview-table caption{text-align:left;font-weight:750;color:var(--ink);padding:0 0 6px}
+    .overview-table th,.overview-table td{padding:8px 5px;border-bottom:1px solid var(--line);text-align:right;overflow-wrap:anywhere}
+    .overview-table th:first-child{width:36%;text-align:left}
+    .overview-body>.help{margin:10px 0 0}
+    #overview-content[hidden]{display:none}
     .editorial-preview h3{font-size:19px;color:#263044}
     .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
     .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
     .footer{font-size:12px;color:#565D56;margin-top:28px}
     @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
+    @media(max-width:520px){.overview-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-body{padding:14px}.overview-panel .panel-header{padding:14px}.overview-table th:first-child{width:32%}}
   </style>
 </head>
 <body>
@@ -79,6 +95,22 @@
   <h1>Biblioteca de cursos</h1>
   <p>Cadastre cursos e aulas em rascunho. A publicação só é permitida a operadores autorizados pelo Portal.</p>
   <div id="status" class="notice" role="status" aria-live="polite" hidden></div>
+  <section id="editorial-overview" class="panel overview-panel" aria-labelledby="overview-title">
+    <div class="panel-header"><h2 id="overview-title">Visão do acervo</h2><button type="button" id="refresh-overview" class="secondary" disabled>Atualizar visão</button></div>
+    <div class="overview-body">
+      <p id="overview-status" class="overview-status" role="status" aria-live="polite">A visão do acervo estará disponível após carregar os cursos.</p>
+      <div id="overview-content" hidden>
+        <div id="overview-cards" class="overview-cards"></div>
+        <ul id="overview-warnings" class="overview-warnings"></ul>
+        <table class="overview-table">
+          <caption>Distribuição por categoria</caption>
+          <thead><tr><th scope="col">Categoria</th><th scope="col">Cursos</th><th scope="col">Publicados</th><th scope="col">Rascunhos</th><th scope="col">Aulas</th></tr></thead>
+          <tbody id="overview-categories"></tbody>
+        </table>
+      </div>
+      <p class="help">Os números consideram o acervo salvo e as aulas da versão mais recente de cada curso. Os avisos de aula e descrição não substituem a conferência de publicação.</p>
+    </div>
+  </section>
   <div class="layout">
     <section class="panel" aria-labelledby="courses-title">
       <div class="panel-header"><h2 id="courses-title">Cursos</h2><button type="button" class="primary" id="new-course">+ Novo</button></div>
@@ -149,7 +181,9 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,
+  overviewSnapshot:null,overviewRequest:0,overviewLoading:false,overviewAttempted:false,
+  overviewMessage:"A visão do acervo estará disponível após carregar os cursos."};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
@@ -159,6 +193,7 @@ function beginWrite(){
   if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
   state.writePending=true;
   ++state.courseRequest;++state.lessonRequest;
+  invalidateEditorialOverview("O acervo pode ter mudado. Atualize a visão após concluir a alteração.");
   const layout=document.querySelector(".layout");
   layout.inert=true;
   layout.setAttribute("aria-busy","true");
@@ -170,6 +205,7 @@ function finishWrite(){
   const layout=document.querySelector(".layout");
   layout.setAttribute("aria-busy","false");
   layout.inert=state.accessDenied;
+  renderEditorialOverview();
 }
 // A server may commit an editorial mutation before its HTTP response is
 // lost. Do not let a rejected/ambiguous response unlock a second write.
@@ -189,6 +225,7 @@ function freezeUncertainEditorialWrite(){
   $("catalog-recovery").hidden=false;
   $("retry-catalog").disabled=false;
   clearPublicationCheck();hideLessonPreview();
+  invalidateEditorialOverview("Consulte novamente os cursos para confirmar a alteração antes de atualizar a visão do acervo.");
   say("O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
 }
 function clearPublicationCheck(){
@@ -214,6 +251,7 @@ function lockAccess(message){
   document.querySelectorAll(".layout button,.layout input,.layout select,.layout textarea,.audit-panel button")
     .forEach(field=>{if("value" in field&&field.tagName!=="SELECT")field.value="";field.disabled=true;});
   $("publication-status").textContent="Acesso encerrado";
+  invalidateEditorialOverview("");
   say(message);
 }
 function el(tag,text,className){
@@ -237,6 +275,105 @@ async function api(path,method="GET",payload=null){
   if(state.accessDenied)throw new Error(state.accessMessage);
   return data;
 }
+// The summary describes persisted editorial material. A valid zero is useful;
+// missing, rounded or inconsistent counts must never masquerade as an empty
+// collection. Select only the documented aggregate fields from the response.
+function validatedEditorialOverview(payload){
+  const record=value=>value!==null&&typeof value==="object"&&!Array.isArray(value);
+  const count=value=>Number.isSafeInteger(value)&&value>=0;
+  const names=["metodologia","negocios","sistemas"];
+  const keys=["courses","published_courses","draft_courses","current_lessons"];
+  if(!record(payload)||payload.schema_version!==1||payload.scope!=="current_editorial_catalog"||
+     !record(payload.totals)||!Array.isArray(payload.categories)||payload.categories.length!==3)return null;
+  const totals={};
+  for(const key of [...keys,"courses_without_lessons","courses_without_summary"]){
+    if(!count(payload.totals[key]))return null;
+    totals[key]=payload.totals[key];
+  }
+  if(!Number.isSafeInteger(totals.published_courses+totals.draft_courses)||
+     totals.published_courses+totals.draft_courses!==totals.courses||
+     totals.courses_without_lessons>totals.courses||totals.courses_without_summary>totals.courses||
+     totals.current_lessons<totals.courses-totals.courses_without_lessons||
+     (totals.courses_without_lessons===totals.courses&&totals.current_lessons!==0))return null;
+  const categories=[],sums=Object.fromEntries(keys.map(key=>[key,0]));
+  for(let index=0;index<names.length;index++){
+    const item=payload.categories[index];
+    if(!record(item)||item.category!==names[index])return null;
+    const category={category:names[index]};
+    for(const key of keys){
+      if(!count(item[key])||!Number.isSafeInteger(sums[key]+item[key]))return null;
+      category[key]=item[key];sums[key]+=item[key];
+    }
+    if(!Number.isSafeInteger(category.published_courses+category.draft_courses)||
+       category.published_courses+category.draft_courses!==category.courses||
+       (category.courses===0&&category.current_lessons!==0))return null;
+    categories.push(category);
+  }
+  if(keys.some(key=>sums[key]!==totals[key]))return null;
+  return {schema_version:1,scope:"current_editorial_catalog",totals,categories};
+}
+function renderEditorialOverview(){
+  const active=!state.accessDenied&&state.catalogReady&&!state.catalogLoading&&
+    !state.writePending&&!state.writeOutcomeUnknown;
+  $("refresh-overview").disabled=!active||state.overviewLoading;
+  $("overview-status").textContent=state.accessDenied?"":state.overviewMessage;
+  const snapshot=active?state.overviewSnapshot:null;
+  $("overview-content").hidden=snapshot===null;
+  for(const id of ["overview-cards","overview-warnings","overview-categories"])$(id).replaceChildren();
+  if(snapshot===null)return;
+  for(const [key,label] of [["courses","Cursos"],["published_courses","Publicados"],
+      ["draft_courses","Rascunhos"],["current_lessons","Aulas atuais"]]){
+    const card=el("div",undefined,"overview-card");card.dataset.overviewMetric=key;
+    card.append(el("strong",String(snapshot.totals[key])),el("span",label));
+    $("overview-cards").append(card);
+  }
+  $("overview-warnings").append(
+    el("li",String(snapshot.totals.courses_without_lessons)+" curso(s) sem aulas na versão mais recente."),
+    el("li",String(snapshot.totals.courses_without_summary)+" curso(s) sem descrição curta.")
+  );
+  for(const category of snapshot.categories){
+    const row=el("tr");row.dataset.overviewCategory=category.category;
+    const heading=el("th",cats[category.category]);heading.scope="row";row.append(heading);
+    for(const key of ["courses","published_courses","draft_courses","current_lessons"])
+      row.append(el("td",String(category[key])));
+    $("overview-categories").append(row);
+  }
+}
+function invalidateEditorialOverview(message){
+  ++state.overviewRequest;
+  state.overviewSnapshot=null;state.overviewMessage=message;
+  // Keep an outstanding read single-flight until it settles. Its generation
+  // can no longer render, even if the write finishes before the old GET.
+  renderEditorialOverview();
+}
+async function refreshEditorialOverview(){
+  if(state.accessDenied||!state.catalogReady||state.catalogLoading||state.writePending||
+     state.writeOutcomeUnknown||state.overviewLoading)return;
+  const request=++state.overviewRequest;
+  const current=()=>!state.accessDenied&&state.catalogReady&&!state.catalogLoading&&
+    !state.writePending&&!state.writeOutcomeUnknown&&state.overviewRequest===request;
+  state.overviewAttempted=true;state.overviewLoading=true;state.overviewSnapshot=null;
+  state.overviewMessage="Consultando a visão do acervo...";renderEditorialOverview();
+  try{
+    const payload=await api("/overview");
+    if(!current())return;
+    const snapshot=validatedEditorialOverview(payload);
+    if(snapshot===null)throw new Error("invalid_editorial_overview");
+    state.overviewSnapshot=snapshot;
+    state.overviewMessage=snapshot.totals.courses===0
+      ?"Nenhum curso cadastrado. Os totais do acervo estão zerados."
+      :"Visão atualizada com os dados salvos do acervo.";
+  }catch(error){
+    if(current()){
+      state.overviewSnapshot=null;
+      state.overviewMessage="A visão do acervo está indisponível. Você pode atualizar novamente; o editor continua disponível.";
+    }
+  }finally{
+    state.overviewLoading=false;
+    renderEditorialOverview();
+  }
+}
+$("refresh-overview").addEventListener("click",refreshEditorialOverview);
 const intField=id=>Number.parseInt($(id).value,10)||0;
 const draft=()=>!state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&(state.course===null||(state.lessonsReady&&!Boolean(state.course.is_published)));
 function fillCourse(){
@@ -372,6 +509,7 @@ async function refreshCourses(preferredId=state.course?.id??null){
   // A failed refresh after an editorial write must never leave the old
   // catalog eligible for another mutation merely because it was once valid.
   state.catalogReady=false;
+  invalidateEditorialOverview("Consulte os cursos e atualize a visão para conferir os números do acervo.");
   $("new-course").disabled=true;
   const result=await api("/courses");
   if(state.accessDenied||state.courseRequest!==request)return;
@@ -781,6 +919,11 @@ async function loadAdminCatalog(){
   }finally{
     state.catalogLoading=false;
     if(!state.accessDenied)retry.disabled=false;
+    renderEditorialOverview();
+    // Only the first fully validated catalogue starts an automatic overview
+    // read. Failures and later editorial changes always require a new click.
+    if(!state.accessDenied&&state.catalogReady&&!state.writeOutcomeUnknown&&!state.overviewAttempted)
+      void refreshEditorialOverview();
   }
 }
 $("retry-catalog").addEventListener("click",loadAdminCatalog);

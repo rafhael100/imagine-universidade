@@ -216,6 +216,21 @@ async function publish(editor,courseId,version){
     reviewed.content_hash===diagnostic.content_hash,
     "UI publication must send the exact hash rechecked by the real backend");
 }
+async function editorialOverview(editor,published){
+  const response=await clickResponse(editor.page,"#refresh-overview","GET","/universidade/private/admin/overview");
+  const payload=await json(response,"Editorial overview");
+  await editor.page.locator("#overview-content").waitFor({state:"visible"});
+  check(response.status()===200&&payload.schema_version===1&&payload.scope==="current_editorial_catalog"&&
+    JSON.stringify(payload.totals)===JSON.stringify({courses:1,published_courses:published?1:0,
+      draft_courses:published?0:1,current_lessons:1,courses_without_lessons:0,courses_without_summary:0})&&
+    payload.categories.length===3&&payload.categories[1].category==="negocios"&&
+    payload.categories[1].courses===1&&payload.categories[1].current_lessons===1,
+    "Editorial overview must count the latest real course version without adding archived lessons");
+  check(await editor.page.locator('[data-overview-metric="courses"] strong').innerText()==="1"&&
+    await editor.page.locator('[data-overview-metric="current_lessons"] strong').innerText()==="1"&&
+    await editor.page.locator('[data-overview-metric="published_courses"] strong').innerText()===(published?"1":"0"),
+    "The real editor must render the current aggregate snapshot after an explicit refresh");
+}
 
 async function main(){
   enterStage("health");
@@ -223,7 +238,7 @@ async function main(){
   // Require/launch Chromium only after a token-bound health response proves
   // the randomly selected local port belongs to this test instance.
   const {chromium}=require("playwright");
-  browser=await chromium.launch({headless:true});
+  browser=await chromium.launch({headless:true,timeout:30000});
   enterStage("editorial session and CSRF");
   const editor=await session("editor");
   const adminRoot="/universidade/private/admin";
@@ -318,6 +333,7 @@ async function main(){
     "lesson.updated","lesson.deleted","course.published"].every(action=>actions.has(action)),
     "SQLite must persist the actual editorial audit for all exercised mutations");
   await editor.page.locator("#audit-items .audit-row").first().waitFor({state:"visible"});
+  await editorialOverview(editor,true);
   await editor.page.screenshot({path:path.join(evidenceDir,"framework-editor.png"),fullPage:true});
 
   enterStage("independent student sessions");
@@ -374,6 +390,7 @@ async function main(){
   await waitText(editor.page,"status","Versão anterior arquivada");
   check(withdrawn.status()===200&&(await json(withdrawn,"Course withdrawal")).published===false,
     "Real withdrawal must archive the publication and create a new draft");
+  await editorialOverview(editor,false);
   const newLessonId=Number(await editor.page.locator("#lesson-items [data-lesson]").first().getAttribute("data-lesson"));
   check(Number.isSafeInteger(newLessonId)&&newLessonId>0&&newLessonId!==firstLessonId,
     "The new draft must have a new lesson identity instead of overwriting historical progress");
@@ -448,7 +465,7 @@ async function main(){
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
-    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","private favorites","favorites export download",
+    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
       "completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");

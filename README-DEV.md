@@ -11,9 +11,10 @@ Esta branch contém a aplicação candidata Laravel 13 / PHP 8.3+, com dependên
 | Acesso | Rotas privadas dependem de credencial de sessão verificada pelo Portal e empresa autorizada. A implementação padrão nega todo acesso enquanto a integração real estiver pendente. |
 | Biblioteca do aluno | Catálogo compartilhado publicado, categorias, pesquisa privada, trilhas e retomada de aula pendente. Respostas incompletas não ativam conteúdo ou ações. |
 | Aprendizagem | Leitura textual, conclusão opcional, próxima aula/curso e exportação do progresso próprio. Sem provas, notas, certificados ou classificação. |
-| Favoritos | Cursos salvos por pessoa e empresa, com acesso limitado ao catálogo atualmente publicado. O filtro é opcional e a indisponibilidade dos favoritos não bloqueia o estudo. |
+| Favoritos | Cursos salvos por pessoa e empresa, filtro opcional e exportação própria de referências/data. Referências retidas de cursos retirados podem ser exportadas, sem acesso ao conteúdo. A indisponibilidade da lista não bloqueia o estudo. |
 | Ajuda contextual | Trechos literais da aula autorizada, fonte e versão; pergunta opcional pelo contrato do Tutor. Indisponibilidade da IA mantém o estudo estático. O gateway externo permanece desativado. |
 | Editor | Cadastro, edição, prévia, conferência de versão e publicação/retirada de cursos. Rascunhos de curso e aula são preservados durante as gravações relacionadas. |
+| Visão do acervo | Totais e categorias dos cursos editoriais, aulas da versão mais recente e avisos de ausência de aula/resumo. O painel não consulta dados individuais de aprendizagem nem aprova publicações. |
 | Integridade | Escritas conferem autorização atual dentro da transação; dados pessoais de aprendizagem são isolados por pessoa/empresa; versões publicadas e histórico são protegidos. |
 | Ambiente candidato | PHP/Nginx/PostgreSQL, sessão persistente, porta de loopback explícita, papéis de banco separados e inventário somente de leitura. Nenhuma inicialização automática. |
 
@@ -52,6 +53,8 @@ vendor/bin/phpunit --testsuite Feature
 ```
 
 O workflow `uni-branch-qa-isolated.yml` executa backend e PostgreSQL. Commits da branch de revisão marcados com `[uni-full-qa]` também executam Chromium, Docker, imagens e integração privada de três serviços. O teste Compose verifica a configuração resolvida com valores fictícios e não inicia serviços. As proteções de execução não devem ser contornadas para executar o laboratório localmente.
+
+O job de navegador inclui dois percursos complementares: falhas controladas sobre as views reais e uma jornada HTTP pelo Laravel, com SQLite e sessões reais. A segunda usa três identidades sintéticas em `tests/Browser`, fora da imagem runtime, e mantém CSRF e middleware. Seus resultados só contam quando a etapa correspondente termina com sucesso; a preparação do laboratório não comprova a jornada inteira. As esperas têm prazos e diagnóstico por etapa, sem publicar cookies, tokens ou logs privados.
 
 Os resultados válidos são os associados ao SHA exato da [PR #85](https://github.com/rafhael100/imagine-universidade/pull/85). Uma execução antiga aprovada não valida alterações posteriores.
 

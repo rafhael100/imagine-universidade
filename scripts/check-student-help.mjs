@@ -15,7 +15,8 @@ function actualFunction(name){
 }
 const source=["studentRecord","studentText","studentSlug","normalizeSearchText","splitLessonSections",
   "el","say","lockAccess","discardErrorBody","api","invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
-  "invalidateProgressHistory","renderProgressHistory","lessonTextFragment","validatedStudentHelp","lessonHelpExcerpts","lessonHelpPanel"]
+  "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus","beginNavigationFocus",
+  "lessonTextFragment","validatedStudentHelp","lessonHelpExcerpts","lessonHelpPanel"]
   .map(actualFunction).join("\n");
 const lesson={id:11,slug:"visitas-ficticias",title:"Visitas fictícias",sort_order:0,course_id:1,course_version:2,
   body:"Visitas são pessoas que chegam ao conteúdo.\n\nEXEMPLO FICTÍCIO\nLeads demonstram interesse no exemplo fictício.\n\nAPLICAÇÃO OPCIONAL\nImagine uma jornada de atendimento respeitoso.\n\nCUIDADO IMPORTANTE\nUse dados fictícios e evite promessas de vendas."};
@@ -61,7 +62,7 @@ function harness(response={status:503,payload:{error:"tutor_unavailable"}}){
     retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};
   const control={response};
   const context=createContext({state,content,list,lessonsBox,status:get("status"),overall:get("overall-progress"),
-    root:"/universidade/private",csrf:"synthetic-csrf",TextEncoder,
+    root:"/universidade/private",csrf:"synthetic-csrf",TextEncoder,navigationFocus:{sequence:0,activity:0},
     document:{createElement:tag=>new Node(tag),getElementById:get,querySelectorAll:()=>[]},
     selectCourse:(courseId,lessonId)=>navigations.push({courseId,lessonId}),
     fetch:async(url,options)=>{

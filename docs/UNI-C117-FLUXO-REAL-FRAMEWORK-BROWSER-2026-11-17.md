@@ -219,6 +219,14 @@ favoritos retidos são consultados de novo para verificar a purga de listas
 efetivamente preenchidas; a nova entrada elegível recupera a mesma referência
 por ação manual. Nenhuma conclusão adicional é criada pelo ensaio.
 
+C127 acrescenta foco no título após seleção, retomada e ida/volta por sugestões,
+além de continuidade de Tab dentro da aula. C128 exercita o índice sobre as
+três seções já presentes na fixture, com clique, Enter e Espaço, quatro
+parágrafos literais e estado privado/URL preservados sem requisições. Capturas
+do índice e corpo completo em 1440 e 390 pixels complementam a inspeção.
+As páginas que recebem gestos de foco são trazidas à frente e aguardam
+visibilidade/foco antes da ação. Esses percursos novos dependem da CI integrada.
+
 O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
 conferência final de 30 segundos. O início de cada fase é registrado com um nome
 fixo. Um timeout produz falha, nunca aprovação parcial. O percurso passou a

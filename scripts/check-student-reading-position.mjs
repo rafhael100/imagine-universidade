@@ -40,6 +40,7 @@ class Node {
   setAttribute(name,value){this.attributes[name]=String(value);}
   removeAttribute(name){delete this.attributes[name];}
   focus(){this.focused=true;}
+  get isConnected(){return this.parent!==null;}
   scrollIntoView(){}
   remove(){if(this.parent)this.parent.children=this.parent.children.filter(item=>item!==this);}
   all(){return this.children.flatMap(child=>[child,...child.all()]);}
@@ -70,8 +71,9 @@ async function harness({server=serverState(),boot=true}={}){
   const sim=["sim-visits","sim-leads-rate","sim-clients-rate"].map(get);sim.forEach((node,i)=>{node.value=["1000","5","10"][i];});
   const control={read:null,write:null,export:null,fetch:null,onCreate:null};let urlId=0;
   const snapshot=()=>copy(server.snapshot);
-  const context=createContext({TextEncoder,Blob,
+  const context=createContext({TextEncoder,Blob,window:{addEventListener(){}},
     document:{body,getElementById:get,querySelector:selector=>selector.startsWith("meta")?{content:"synthetic-csrf"}:null,
+      addEventListener(){},visibilityState:"visible",hasFocus:()=>true,
       querySelectorAll:selector=>selector==="[data-filter]"?filters:selector===".sim-inputs input"?sim:[],
       createElement:tag=>{
         const node=new Node(tag);if(tag==="a")node.click=()=>downloads.push({filename:node.download,blob:objects.get(node.href)});return node;

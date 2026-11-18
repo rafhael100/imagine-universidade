@@ -127,8 +127,13 @@
     .contextual-course strong,.contextual-course span{display:block}
     .contextual-course span{font-size:12px;color:#70410C;margin-top:4px}
     .lesson-text{overflow-wrap:anywhere;color:#4B5769;margin:12px 0 20px}
-    .lesson-text h4{font-size:15px;color:#70410C;font-weight:800;letter-spacing:.2px;margin:20px 0 8px}
+    .lesson-text h4{font-size:15px;color:#70410C;font-weight:800;letter-spacing:.2px;margin:20px 0 8px;scroll-margin-top:24px}
     .lesson-text p{white-space:pre-wrap;margin:0 0 17px}
+    .lesson-sections{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:#FAFBFC}
+    .lesson-sections>p{margin:0 0 8px;font-size:13px;font-weight:750;color:#565D56;white-space:normal}
+    .lesson-sections ol{margin:0;padding-left:22px;display:grid;gap:5px}
+    .lesson-section-jump{max-width:100%;text-align:left;white-space:normal;overflow-wrap:anywhere;border:1px solid #E5B56D;border-radius:8px;background:#fff;color:#70410C;padding:7px 10px;font-size:13px;font-weight:750}
+    .lesson-section-jump:hover{background:#FFF5E8}
     .lesson-help{margin-top:24px;padding:18px;border:1px solid var(--line);border-radius:12px;background:#FAFBFC}
     .lesson-help h4{font-size:18px;margin:0 0 8px}
     .lesson-help p{margin:8px 0}
@@ -294,6 +299,31 @@ const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,cour
   readingSnapshot:null,readingLoading:false,readingWriting:false,readingReturning:false,
   readingUncertain:false,readingRequest:0,readingMessage:"",
   readingExportLoading:false,readingExportRequest:0};
+// This ephemeral intent controls only focus. A later interaction, another
+// navigation or leaving the page cancels delivery without changing requests
+// or personal state. Capture once at the explicit action, before any await.
+const navigationFocus={sequence:0,activity:0};
+function invalidateNavigationFocus(){
+  ++navigationFocus.sequence;
+}
+function beginNavigationFocus(){
+  if(state.accessDenied||!state.libraryReady)return null;
+  return {sequence:++navigationFocus.sequence,activity:navigationFocus.activity,delivered:false};
+}
+function finishNavigationFocus(target,intent){
+  if(!intent||intent.delivered||intent.sequence!==navigationFocus.sequence||
+     intent.activity!==navigationFocus.activity||state.accessDenied||!state.libraryReady||
+     !target?.isConnected||document.visibilityState!=="visible"||!document.hasFocus())return;
+  intent.delivered=true;target.tabIndex=-1;target.focus();
+}
+function lessonNavigationTarget(tag,text,className){
+  const target=el(tag,text,className);target.id="lesson-navigation-target";target.tabIndex=-1;return target;
+}
+for(const event of ["pointerdown","keydown","focusin","click","input","change","wheel"]){
+  document.addEventListener(event,()=>{++navigationFocus.activity;},{capture:true,passive:true});
+}
+document.addEventListener("visibilitychange",invalidateNavigationFocus);
+window.addEventListener("blur",invalidateNavigationFocus);
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -332,6 +362,7 @@ function say(message){
 }
 function lockAccess(message){
   if(state.accessDenied)return;
+  invalidateNavigationFocus();
   state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
   renderContextualCourses();
@@ -693,11 +724,12 @@ async function writeReadingPosition(target=null,lessonRequest=null){
     renderReadingPosition();
   }
 }
-async function resumeReadingPosition(){
+async function resumeReadingPosition(focusIntent=null){
   const previous=state.readingSnapshot;
   if(state.accessDenied||!state.libraryReady||state.readingLoading||state.readingWriting||state.readingReturning||
      !previous||previous.status!=="available")return;
   const courseRequest=state.courseRequest,lessonRequest=state.lessonRequest;
+  let navigationStarted=false;
   state.readingReturning=true;renderReadingPosition();
   try{
     const snapshot=await loadReadingPosition();
@@ -712,9 +744,12 @@ async function resumeReadingPosition(){
     if(!state.courses.some(course=>course.id===target.course_id)){
       state.readingMessage="A aula guardada não está no catálogo carregado. Atualize a página para consultar os cursos atuais.";return;
     }
-    openCourseWithAllFilters(target.course_id,target.lesson_id,target.course_version);
+    navigationStarted=true;
+    openCourseWithAllFilters(target.course_id,target.lesson_id,target.course_version,focusIntent);
   }finally{
     state.readingReturning=false;renderReadingPosition();
+    if(!navigationStarted&&state.courseRequest===courseRequest&&state.lessonRequest===lessonRequest)
+      finishNavigationFocus(document.getElementById("reading-position-status"),focusIntent);
   }
 }
 function sanitizedReadingPositionExport(payload){
@@ -756,7 +791,7 @@ async function exportReadingPosition(){
   }
 }
 document.getElementById("reload-reading-position").addEventListener("click",()=>{void loadReadingPosition();});
-document.getElementById("resume-reading-position").addEventListener("click",()=>{void resumeReadingPosition();});
+document.getElementById("resume-reading-position").addEventListener("click",()=>{void resumeReadingPosition(beginNavigationFocus());});
 document.getElementById("remove-reading-position").addEventListener("click",()=>{void writeReadingPosition();});
 document.getElementById("export-reading-position").addEventListener("click",()=>{void exportReadingPosition();});
 function progressHistoryTimestamp(value){
@@ -1181,7 +1216,7 @@ function renderContextualCourses(){
          state.contextualRequest!==generation||state.courseRequest!==selection||state.courseId!==fromId)return;
       const source=state.courses.find(item=>item.id===fromId),target=state.courses.find(item=>item.id===id);
       if(!source||source.category!==category||!target||target.id===fromId||target.category!==category)return;
-      openCourseWithAllFilters(id);
+      openCourseWithAllFilters(id,null,null,beginNavigationFocus());
     });
     item.append(button);list.append(item);
   }
@@ -1231,7 +1266,7 @@ function renderCourses(){
     list.append(btn);
   }
 }
-async function selectCourse(id,preferredLessonId=null,preferredVersion=null){
+async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focusIntent=null){
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!state.courses.some(course=>course.id===id))return;
   if(preferredVersion!==null&&(!Number.isSafeInteger(preferredVersion)||preferredVersion<1))return;
   // Invalidate prior course requests and lesson reads, including same-course clicks.
@@ -1246,7 +1281,10 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null){
     const lessons=validatedStudentLessons(payload);
     if(lessons===null)throw new Error("A lista de aulas recebida é inválida. Tente novamente.");
     lessonsBox.replaceChildren();content.replaceChildren();
-    if(!lessons.length){content.append(el("p","Ainda não existem aulas publicadas neste curso.","empty"));return;}
+    if(!lessons.length){
+      const target=lessonNavigationTarget("p","Ainda não existem aulas publicadas neste curso.","empty");
+      content.append(target);finishNavigationFocus(target,focusIntent);return;
+    }
     for(const item of lessons){
       const btn=el("button",undefined,"lesson-btn");btn.type="button";btn.dataset.lessonId=String(item.id);btn.dataset.completed=item.completed?"1":"0";
       const statusLabel=el("span",item.completed?"✓ Concluída":"Pendente");
@@ -1258,27 +1296,30 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null){
     // Never silently open another lesson in place of the requested result.
     const selected=preferredLessonId===null?null:lessons.find(item=>item.id===preferredLessonId);
     if(preferredLessonId!==null&&!selected){
-      content.append(el("p","Esta aula não está mais disponível na versão publicada atual.","empty"));
+      const target=lessonNavigationTarget("p","Esta aula não está mais disponível na versão publicada atual.","empty");
+      content.append(target);finishNavigationFocus(target,focusIntent);
       return;
     }
     // With no search target, resume the first unfinished authorized lesson.
     const next=selected||lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
-    await selectLesson(Number(next.id),preferredVersion);
+    await selectLesson(Number(next.id),preferredVersion,focusIntent);
   }catch(error){
     if(state.courseRequest===request&&!state.accessDenied){
       // A transient lesson read may be retried by a deliberate click; never
       // automatically re-use old course content or bypass a revoked session.
       say(error.message);lessonsBox.replaceChildren();content.replaceChildren();
-      content.append(el("p","As aulas não puderam ser carregadas.", "empty"));
+      const target=lessonNavigationTarget("p","As aulas não puderam ser carregadas.","empty");
+      content.append(target);
       const retry=el("button","Tentar carregar aulas","secondary lesson-retry");
       retry.type="button";
       retry.addEventListener("click",()=>{
         // A search result keeps its exact lesson target across recovery.
         // If it disappeared meanwhile, show unavailable instead of resuming
         // an unrelated pending lesson from the same course.
-        if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId,preferredVersion);
+        if(!state.accessDenied&&state.courseId===id&&state.courseRequest===request)
+          selectCourse(id,preferredLessonId,preferredVersion,beginNavigationFocus());
       });
-      content.append(retry);
+      content.append(retry);finishNavigationFocus(target,focusIntent);
     }
   }
 }
@@ -1307,10 +1348,44 @@ function splitLessonSections(body){
 }
 function lessonTextFragment(body){
   const wrapper=el("div",undefined,"lesson-text");wrapper.tabIndex=-1;
-  for(const section of splitLessonSections(body)){
-    if(section.heading)wrapper.append(el("h4",section.heading));
-    wrapper.append(el("p",section.text));
+  const sections=splitLessonSections(body);
+  const courseId=state.courseId,lessonId=state.lessonId;
+  const courseRequest=state.courseRequest,lessonRequest=state.lessonRequest;
+  let index=null;
+  if(sections.filter(section=>section.heading!==null).length>=2){
+    const navigation=el("nav",undefined,"lesson-sections");navigation.dataset.lessonSections="";
+    navigation.setAttribute("aria-label","Índice das seções desta aula");
+    navigation.append(el("p","Nesta aula"));index=el("ol");navigation.append(index);wrapper.append(navigation);
   }
+  sections.forEach((section,sectionIndex)=>{
+    if(section.heading){
+      const heading=el("h4",section.heading);
+      heading.id="lesson-section-"+courseId+"-"+lessonId+"-"+lessonRequest+"-"+sectionIndex;
+      heading.tabIndex=-1;heading.dataset.lessonSection="";wrapper.append(heading);
+      if(index){
+        const item=el("li"),button=el("button",section.heading,"lesson-section-jump");button.type="button";
+        button.dataset.lessonSectionId=heading.id;button.setAttribute("aria-controls",heading.id);
+        const current=()=>!state.accessDenied&&state.libraryReady&&state.courses.some(course=>course.id===courseId)&&
+          state.courseId===courseId&&state.lessonId===lessonId&&
+          state.courseRequest===courseRequest&&state.lessonRequest===lessonRequest&&wrapper.isConnected&&
+          heading.isConnected&&button.isConnected&&content.contains(wrapper)&&wrapper.contains(heading)&&wrapper.contains(button);
+        button.addEventListener("click",()=>{
+          if(!current())return;
+          heading.focus({preventScroll:true});
+          // Focusing can synchronously trigger another navigation handler.
+          if(current()&&document.activeElement===heading)heading.scrollIntoView({block:"start",behavior:"auto"});
+        });
+        item.append(button);index.append(item);
+      }
+    }
+    // Blank lines are paragraph boundaries; their literal characters remain
+    // text nodes between paragraphs. Single line breaks stay inside the text.
+    const paragraphs=section.text.split(/(\r?\n(?:[^\S\r\n]*\r?\n)+)/);
+    paragraphs.forEach((paragraph,part)=>{
+      if(part%2===1)wrapper.append(document.createTextNode(paragraph));
+      else if(paragraph.length)wrapper.append(el("p",paragraph,"lesson-paragraph"));
+    });
+  });
   return wrapper;
 }
 // C-112: a grounded, optional help panel. Published lesson text remains
@@ -1431,7 +1506,7 @@ function lessonHelpPanel(lesson,lessonRequest){
       if(error.httpStatus===404){
         answer.replaceChildren(el("p","Esta aula não está disponível para consulta. Reabra as aulas do curso para verificar o material atual."));
         const reload=el("button","Reabrir aulas do curso","secondary");reload.type="button";reload.dataset.helpReload="";
-        reload.addEventListener("click",()=>{if(current())selectCourse(lesson.course_id,lesson.id);});
+        reload.addEventListener("click",()=>{if(current())selectCourse(lesson.course_id,lesson.id,null,beginNavigationFocus());});
         answer.append(reload);
       }else if(!materialSelected){
         showMaterial(error.message==="invalid_tutor_reply"
@@ -1457,6 +1532,9 @@ function nextPendingLessonId(currentId){
 function offerNextLesson(id){
   if(state.accessDenied||state.lessonId!==id||content.querySelector("[data-next-lesson]")||
     content.querySelector("[data-next-course]"))return;
+  const courseId=state.courseId,request=state.lessonRequest;
+  const current=()=>!state.accessDenied&&state.libraryReady&&state.courseId===courseId&&
+    state.lessonId===id&&state.lessonRequest===request;
   const nextId=nextPendingLessonId(id);
   if(nextId===null){
     content.append(el("p","Você concluiu todas as aulas deste curso. Pode revisá-las quando quiser.","mini"));
@@ -1464,17 +1542,21 @@ function offerNextLesson(id){
     if(nextCourseId!==null){
       const nextCourse=el("button","Continuar em outro curso","secondary");
       nextCourse.type="button";nextCourse.dataset.nextCourse="";
-      nextCourse.addEventListener("click",()=>openCourseWithAllFilters(nextCourseId));
+      nextCourse.addEventListener("click",()=>{
+        if(current())openCourseWithAllFilters(nextCourseId,null,null,beginNavigationFocus());
+      });
       content.append(nextCourse);
     }
     return;
   }
   const advance=el("button","Ir para a próxima aula","secondary");
   advance.type="button";advance.dataset.nextLesson="";
-  advance.addEventListener("click",()=>{say("");selectLesson(nextId);});
+  advance.addEventListener("click",()=>{
+    if(current()){say("");selectLesson(nextId,null,beginNavigationFocus());}
+  });
   content.append(advance);
 }
-async function selectLesson(id,preferredVersion=null){
+async function selectLesson(id,preferredVersion=null,focusIntent=null){
   const courseId=state.courseId;
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(courseId)||courseId<1)return;
   if(preferredVersion!==null&&(!Number.isSafeInteger(preferredVersion)||preferredVersion<1))return;
@@ -1495,9 +1577,8 @@ async function selectLesson(id,preferredVersion=null){
       throw new Error("Esta aula não está disponível na versão guardada. Consulte sua posição novamente.");
     markLessonStatus(id,progress.completed);
     content.replaceChildren();
-    const heading=el("h3",lesson.title);
+    const heading=lessonNavigationTarget("h3",lesson.title);
     content.append(heading,lessonTextFragment(lesson.body));
-    if(preferredVersion!==null){heading.tabIndex=-1;heading.focus();}
     const action=el("button",progress.completed?"✓ Aula concluída":"Marcar como concluída","primary");
     action.type="button";action.disabled=progress.completed;
     async function confirmCompletion(message){
@@ -1559,6 +1640,7 @@ async function selectLesson(id,preferredVersion=null){
     content.append(lessonReadingPositionAction(lesson,request));
     renderReadingPosition();
     content.append(lessonHelpPanel(lesson,request));
+    finishNavigationFocus(heading,focusIntent);
   }catch(error){
     if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id){
       // A transient failure loading EITHER body or progress must not render
@@ -1566,17 +1648,19 @@ async function selectLesson(id,preferredVersion=null){
       // purges and locks the UI. Never retry an old lesson selection.
       content.replaceChildren();
       say(error.message);
-      content.append(el("p","A aula está temporariamente indisponível.", "empty"));
+      const target=lessonNavigationTarget("p","A aula está temporariamente indisponível.","empty");
+      content.append(target);
       const retry=el("button","Tentar abrir aula novamente","secondary lesson-detail-retry");
       retry.type="button";
       retry.addEventListener("click",()=>{
-        if(!state.accessDenied&&state.lessonId===id)selectLesson(id,preferredVersion);
+        if(!state.accessDenied&&state.lessonId===id&&state.lessonRequest===request)
+          selectLesson(id,preferredVersion,beginNavigationFocus());
       });
-      content.append(retry);
+      content.append(retry);finishNavigationFocus(target,focusIntent);
     }
   }
 }
-function openCourseWithAllFilters(target,preferredLessonId=null,preferredVersion=null){
+function openCourseWithAllFilters(target,preferredLessonId=null,preferredVersion=null,focusIntent=null){
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(target)||target<1)return;
   if(!state.courses.some(course=>course.id===target))return;
   state.filter="todos";state.query="";state.favoritesOnly=false;
@@ -1585,7 +1669,7 @@ function openCourseWithAllFilters(target,preferredLessonId=null,preferredVersion
     btn.setAttribute("aria-pressed",String(btn.dataset.filter==="todos"));
   });
   say("");
-  selectCourse(target,preferredLessonId,preferredVersion);
+  selectCourse(target,preferredLessonId,preferredVersion,focusIntent);
 }
 // Read-only search results are rendered with textContent, never HTML.
 // A 403/419 revokes and purges them; late responses cannot restore results.
@@ -1637,7 +1721,8 @@ document.getElementById("lesson-search-form").addEventListener("submit",async ev
       b.append(el("strong",hit.lesson_title),
         el("small","Curso: "+hit.course_title),el("small",hit.snippet));
       b.addEventListener("click",()=>{
-        if(!state.accessDenied)openCourseWithAllFilters(hit.course_id,hit.lesson_id);
+        if(!state.accessDenied&&state.searchRequest===request&&b.isConnected&&results.contains(b))
+          openCourseWithAllFilters(hit.course_id,hit.lesson_id,null,beginNavigationFocus());
       });
       results.append(b);
     }
@@ -1765,18 +1850,18 @@ document.getElementById("export-progress").addEventListener("click",async()=>{
 });
 document.getElementById("resume-course").addEventListener("click",()=>{
   const target=nextPendingCourseId(state.courses,state.courseId);
-  if(target!==null)openCourseWithAllFilters(target);
+  if(target!==null)openCourseWithAllFilters(target,null,null,beginNavigationFocus());
 });
 document.getElementById("pillar-cards").addEventListener("click",e=>{
   const item=e.target.closest("[data-pillar-course]");
   if(!item||state.accessDenied)return;
   const id=Number(item.dataset.pillarCourse);
   if(Number.isSafeInteger(id)&&state.courses.some(c=>c.id===id)){
-    openCourseWithAllFilters(id);
+    openCourseWithAllFilters(id,null,null,beginNavigationFocus());
   }
 });
-list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId));}});
-lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});
+list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId),null,null,beginNavigationFocus());}});
+lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId),null,beginNavigationFocus());}});
 document.getElementById("reload-favorites").addEventListener("click",()=>{void loadFavorites();});
 document.getElementById("course-favorite-toggle").addEventListener("click",()=>{void toggleCourseFavorite();});
 document.getElementById("reload-retained-favorites").addEventListener("click",()=>{void loadRetainedFavorites();});
@@ -1816,6 +1901,7 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
 // or retain a previous list after a failed initial authorization request.
 async function loadLibrary(){
   if(state.accessDenied||state.libraryLoading)return;
+  invalidateNavigationFocus();
   invalidateRetainedFavorites();
   invalidateProgressHistory();
   state.libraryLoading=true;state.libraryReady=false;

@@ -33,11 +33,11 @@ function harness(name){
     "archivePositive","editorialArchiveAllowed","clearEditorialArchiveSelection","invalidateEditorialArchive","renderEditorialArchive",
     "editorialCourseFiltersAllowed","renderEditorialCourseFilters"]:
     ["invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
-      "invalidateProgressHistory","renderProgressHistory"];
+      "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus"];
   const source=["discardErrorBody","api","el","say","lockAccess",...extra].map(fn=>actual(view,fn)).join("\n");
   const initial=view.match(/const state=(\{[\s\S]*?\});/)?.[1];assert.ok(initial);
   const context=createContext({
-    root:"/universidade/private",base:"/universidade/private/admin",csrf:"synthetic-csrf",$:get,
+    root:"/universidade/private",base:"/universidade/private/admin",csrf:"synthetic-csrf",$:get,navigationFocus:{sequence:0,activity:0},
     note:get("status"),status:get("status"),list:get("course-list"),lessonsBox:get("lesson-items"),
     content:get("lesson-content"),overall:get("overall-progress"),
     document:{getElementById:get,createElement:tag=>element(tag.toUpperCase()),

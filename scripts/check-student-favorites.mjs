@@ -20,6 +20,7 @@ const source=["studentRecord","studentText","studentSlug","validatedStudentCours
   "invalidateRetainedFavorites","renderRetainedFavorites",
   "contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory",
+  "invalidateNavigationFocus","beginNavigationFocus","finishNavigationFocus","lessonNavigationTarget",
   "renderCourses","loadFavorites","toggleCourseFavorite","selectCourse","openCourseWithAllFilters","loadLibrary"]
   .map(actual).join("\n")+"\n"+view.slice(start,end);
 const courses=[
@@ -64,7 +65,7 @@ function harness(initial=[]){
     progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,message:""},
     retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};
   const control={authoritative:new Set(initial),read:null,write:null};
-  const context=createContext({state,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),
+  const context=createContext({state,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),navigationFocus:{sequence:0,activity:0},
     root:"/universidade/private",csrf:"synthetic-csrf",labels:{metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas"},
     renderPillars:()=>{},renderSimulator:()=>{},selectLesson:async()=>{},renderReadingPosition:()=>{},loadReadingPosition:async()=>null,
     document:{createElement:tag=>new Node(tag),getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},

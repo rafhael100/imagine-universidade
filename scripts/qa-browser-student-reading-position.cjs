@@ -105,6 +105,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         (await page.locator("#reading-position-replace-hint").innerText()).includes("substitui"),
         "C121 navigating to another lesson never moves the stored position automatically");
       await page.locator("#save-reading-position").click();await waitSettled(page);
+      await page.bringToFront();await page.waitForFunction(()=>document.hasFocus()&&document.visibilityState==="visible");
       await page.locator('[data-filter="sistemas"]').click();await page.locator("#resume-reading-position").click();
       await page.getByRole("heading",{name:"Leads fictícios",exact:true}).waitFor({state:"visible"});await waitSettled(page);
       check(control.reads===2&&control.writes.length===2&&control.lessonReads.at(-1)===12&&

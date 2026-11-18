@@ -220,8 +220,8 @@ assert.equal(otherCourseFixture([{id:1,lessons_total:2,lessons_completed:2}],1),
 assert.equal(otherCourseFixture([{id:1,lessons_total:1,lessons_completed:0}],1),null,"não indicar o mesmo curso");
 assert.equal(otherCourseFixture(null,1),null,"dados inválidos");
 assert.match(studentProgressUI,/nextCourse.dataset.nextCourse=""/,"aluno: botão de próximo curso");
-assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>openCourseWithAllFilters\(nextCourseId\)\)/,"aluno: troca segura de curso");
-assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null,preferredVersion=null\)/,"aluno: navegação segura por curso, aula selecionada e versão opcional");
+assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>\{\s+if\(current\(\)\)openCourseWithAllFilters\(nextCourseId,null,null,beginNavigationFocus\(\)\)/,"aluno: troca segura de curso com origem atual e intenção explícita de foco");
+assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null,preferredVersion=null,focusIntent=null\)/,"aluno: navegação segura por curso, aula selecionada, versão opcional e intenção original");
 assert.match(studentProgressUI,/if\(state.accessDenied\|\|!state.libraryReady\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
 console.log("PASS cross-course resume: próximo curso incompleto, sem voltar ao atual");
 
@@ -306,9 +306,10 @@ const malicious="<img src=x onerror=alert(1)>";
 const maliciousBlocks=new Script(splitLessonFn+"\nsplitLessonSections(input)").runInNewContext({input:malicious});
 assert.equal(maliciousBlocks[0].text,malicious,"aula: conteúdo potencialmente hostil preservado como texto, não HTML");
 assert.match(studentProgressUI,/function lessonTextFragment\(body\)/,"aula: construção de DOM");
-assert.match(studentProgressUI,/wrapper.append\(el\("h4",section.heading\)\)/,"aula: estrutura semântica");
-assert.match(studentProgressUI,/wrapper.append\(el\("p",section.text\)\)/,"aula: texto seguro");
-assert.match(studentProgressUI,/const heading=el\("h3",lesson.title\);\s+content.append\(heading,lessonTextFragment\(lesson.body\)\)/);
+assert.match(studentProgressUI,/const heading=el\("h4",section.heading\);[\s\S]*?wrapper.append\(heading\)/,"aula: estrutura semântica");
+assert.match(studentProgressUI,/wrapper.append\(el\("p",paragraph,"lesson-paragraph"\)\)/,"aula: texto seguro em parágrafos semânticos");
+assert.match(studentProgressUI,/const heading=lessonNavigationTarget\("h3",lesson.title\);\s+content.append\(heading,lessonTextFragment\(lesson.body\)\)/);
+assert.match(studentProgressUI,/function lessonNavigationTarget\(tag,text,className\)\{\s+const target=el\(tag,text,className\)/,"navigation heading retains the safe text renderer");
 assert.doesNotMatch(studentProgressUI,/\.innerHTML\s*=/,"aula: nunca interpretar HTML de currículo");
 console.log("PASS lesson sections: semântica acessível e texto seguro sem HTML");
 
@@ -452,7 +453,7 @@ assert.match(studentProgressUI,/id="pillar-cards"/,"student: 3 pillars region");
 assert.match(studentProgressUI,/renderPillars\(\);/,"student: refresh from authoritative catalog");
 assert.match(studentProgressUI,/document.getElementById\("pillar-cards"\)\.replaceChildren\(\)/,"student: purge on 403");
 assert.match(studentProgressUI,/button\.disabled=!Number\.isSafeInteger\(pillar\.courseId\)/,"student: unapproved courses are disabled");
-assert.match(studentProgressUI,/openCourseWithAllFilters\(id\)/,"student: route through guarded course selection");
+assert.match(studentProgressUI,/openCourseWithAllFilters\(id,null,null,beginNavigationFocus\(\)\)/,"student: route explicit actions through guarded course selection");
 console.log("PASS student three-pillar journey: only published authorized course IDs clickable");
 
 
@@ -499,14 +500,14 @@ assert.match(adminRecoveryUI,/state\.lesson\?\.id===Number\(b\.dataset\.lesson\)
 console.log("PASS editorial navigation: unsaved course and lesson changes require explicit discard");
 
 assert.ok(studentProgressUI.includes('const retry=el("button","Tentar carregar aulas","secondary lesson-retry")'),"student: failed lesson read must offer manual retry");
-assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId,preferredVersion);'),"student: lesson retry preserves exact search target and optional saved version in current authorized course");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id&&state.courseRequest===request)')&&studentProgressUI.includes('selectCourse(id,preferredLessonId,preferredVersion,beginNavigationFocus());'),"student: lesson retry preserves exact search target, optional saved version and current authorized request");
 assert.ok(adminRecoveryUI.includes('retry.id="retry-lessons"'),"admin: failed lesson read must offer manual retry");
 assert.ok(adminRecoveryUI.includes('if(!state.accessDenied&&!state.writePending&&state.course?.id===courseId)'),"admin: retry forbidden after revocation or concurrent edit");
 console.log("PASS both private lesson lists: fail-closed manual recovery without stale data");
 
 assert.ok(studentProgressUI.includes('"secondary lesson-detail-retry"'),"student: a failed detail or progress read offers deliberate retry");
 assert.ok(studentProgressUI.includes('if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id)'),"student: stale or revoked lesson responses do not show retry");
-assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id)selectLesson(id,preferredVersion);'),"student: retry only while same lesson and permission context remains active, preserving optional saved version");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id&&state.lessonRequest===request)')&&studentProgressUI.includes('selectLesson(id,preferredVersion,beginNavigationFocus());'),"student: retry only while same lesson, request and permission context remain active, preserving optional saved version");
 assert.ok(studentProgressUI.includes('if(preferredVersion!==null&&lesson.course_version!==preferredVersion)'),"student: saved reading navigation refuses a different lesson version");
 console.log("PASS individual lesson read: no partial body or progress and no revoked retry");
 
@@ -703,6 +704,7 @@ function studentFlowFixture(){
     invalidateRetainedFavorites:()=>{},
     renderContextualCourses:()=>{},
     invalidateProgressHistory:()=>{},renderProgressHistory:()=>{},
+    invalidateNavigationFocus:()=>{},beginNavigationFocus:()=>null,finishNavigationFocus:()=>{},lessonNavigationTarget:studentTestNode,
     markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
   return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
 }
@@ -874,7 +876,7 @@ assert.match(studentProgressUI,/id="lesson-search-form"/,"student must expose pr
 assert.match(studentProgressUI,/function validLessonSearchResults\(payload\)/,"student must check result shape");
 assert.match(studentProgressUI,/api\("\/search",\{method:"POST",body:\{query:phrase\}\}\)/,
   "student must never place search terms in query URL");
-assert.match(studentProgressUI,/if\(!state\.accessDenied\)openCourseWithAllFilters\(hit\.course_id,hit\.lesson_id\)/,
+assert.match(studentProgressUI,/if\(!state\.accessDenied&&state\.searchRequest===request&&b\.isConnected&&results\.contains\(b\)\)\s+openCourseWithAllFilters\(hit\.course_id,hit\.lesson_id,null,beginNavigationFocus\(\)\)/,
   "result must open an authorized selected lesson");
 assert.match(studentProgressUI,/document\.getElementById\("lesson-search-results"\)\.replaceChildren\(\)/,
   "search results must be purged on Portal denial");
@@ -889,6 +891,8 @@ await import("./check-retained-favorites.mjs");
 await import("./check-student-reading-position.mjs");
 await import("./check-contextual-courses.mjs");
 await import("./check-progress-history.mjs");
+await import("./check-student-navigation-focus.mjs");
+await import("./check-lesson-sections.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 await import("./check-editorial-version-history.mjs");

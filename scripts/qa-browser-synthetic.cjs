@@ -816,6 +816,8 @@ async function inspect(page,name){
     await require("./qa-browser-editor-drafts.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-contextual-courses.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-progress-history.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-navigation-focus.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-lesson-sections.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-overview.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-version-history.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-catalog-filters.cjs")({browser,base,ensureLocalPage,check,pageErrors});

@@ -71,8 +71,9 @@ async function harness({boot=true}={}){
   const server={courses:[1,2,3].map(id=>({id,slug:"curso-"+id,title:"Título atual "+id,summary:"Resumo atual",
     category:"metodologia",lessons_total:1,lessons_completed:0})),rows:envelope().favorites};
   const control={retained:null,favorites:null,write:null,fetch:null};
-  const context=createContext({Blob,TextEncoder,URL,
+  const context=createContext({Blob,TextEncoder,URL,window:{addEventListener(){}},
     document:{body:new Node("body"),getElementById:get,createElement:tag=>new Node(tag),
+      addEventListener(){},visibilityState:"visible",hasFocus:()=>true,
       querySelector:selector=>selector.startsWith("meta")?{content:"synthetic-csrf"}:null,
       querySelectorAll:selector=>selector==="[data-filter]"?filters:selector===".sim-inputs input"?sim:[]},
     setTimeout:()=>1,clearTimeout:()=>{},

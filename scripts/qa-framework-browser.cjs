@@ -179,10 +179,58 @@ async function session(profile){
   return {context,page,profile};
 }
 async function openStudent(student,courseId,lessonTitle){
+  await student.page.bringToFront();
+  await student.page.waitForFunction(()=>document.hasFocus()&&document.visibilityState==="visible");
   await student.page.goto(base+"/universidade/private/app");
   await student.page.locator("#course-list [data-course-id='"+courseId+"']").click();
   await student.page.getByRole("heading",{name:lessonTitle,exact:true}).waitFor({state:"visible"});
   await student.page.waitForFunction(()=>!document.getElementById("course-favorite-toggle").disabled);
+}
+async function lessonSectionNavigation(student){
+  enterStage("explicit local lesson sections");
+  const page=student.page;
+  await page.waitForFunction(()=>state.libraryReady&&!state.libraryLoading&&state.favoritesReady&&
+    !state.favoritesLoading&&!state.readingLoading);
+  const sectionButtons=page.locator(".lesson-text [data-lesson-section-id]");
+  const headings=page.locator(".lesson-text h4[data-lesson-section]");
+  const labels=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
+  const paragraphs=["Contexto sintético para a leitura.","Um visitante fictício consulta uma página.",
+    "Desenhe uma jornada fictícia.","Este material usa somente exemplos fictícios."];
+  check(JSON.stringify(await sectionButtons.allTextContents())===JSON.stringify(labels)&&
+    JSON.stringify(await headings.allTextContents())===JSON.stringify(labels)&&
+    JSON.stringify(await page.locator(".lesson-paragraph").allTextContents())===JSON.stringify(paragraphs)&&
+    await sectionButtons.evaluateAll(nodes=>nodes.every(button=>button.type==="button"&&
+      button.getAttribute("aria-controls")===button.dataset.lessonSectionId&&
+      document.getElementById(button.dataset.lessonSectionId)?.tabIndex===-1)),
+    "The real authorized lesson must retain its exact paragraphs and expose native actions for the three editorial sections");
+  const snapshot=()=>page.evaluate(()=>JSON.stringify({courses:state.courses,courseId:state.courseId,lessonId:state.lessonId,
+    filter:state.filter,query:state.query,favoriteIds:state.favoriteIds,favoritesOnly:state.favoritesOnly,
+    readingSnapshot:state.readingSnapshot}));
+  const before=await snapshot(),url=page.url(),writes=countWrites(student.profile);
+  const requests=businessRequests.filter(request=>request.profile===student.profile).length;
+  await sectionButtons.nth(1).click();
+  check(await headings.nth(1).evaluate(node=>{
+    const rect=node.getBoundingClientRect();return document.activeElement===node&&rect.top>=0&&rect.top<innerHeight;
+  }),"A section click in the real lesson must focus and reveal the exact optional-application heading");
+  await sectionButtons.first().focus();await page.keyboard.press("Enter");
+  check(await headings.first().evaluate(node=>document.activeElement===node),
+    "Enter must activate the real native section action without a custom keyboard shortcut");
+  await sectionButtons.last().focus();await page.keyboard.press("Space");
+  check(await headings.last().evaluate(node=>document.activeElement===node),
+    "Space must activate the real native section action and focus its exact heading");
+  check(await snapshot()===before&&page.url()===url&&countWrites(student.profile)===writes&&
+    businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "Real section navigation must preserve course, lesson, progress, favorites, reading revision and URL with zero private requests");
+  await page.locator(".lesson-text").screenshot({path:path.join(evidenceDir,"framework-lesson-sections-desktop.png")});
+  await page.setViewportSize({width:390,height:844});await sectionButtons.nth(1).click();
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&
+    await headings.nth(1).evaluate(node=>document.activeElement===node)&&
+    JSON.stringify(await page.locator(".lesson-paragraph").allTextContents())===JSON.stringify(paragraphs)&&
+    await snapshot()===before&&page.url()===url&&countWrites(student.profile)===writes&&
+    businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "The real mobile index must fit 390 pixels and keep all text, private state and local-only navigation intact");
+  await page.locator(".lesson-text").screenshot({path:path.join(evidenceDir,"framework-lesson-sections-mobile.png")});
+  await page.setViewportSize({width:1440,height:1000});
 }
 async function favorite(student,courseId,desired){
   const response=await clickResponse(student.page,"#course-favorite-toggle",desired?"PUT":"DELETE",
@@ -495,6 +543,9 @@ async function contextualCoursesJourney(editor,student,source){
     "/universidade/private/lessons/"+peerLessonId);
   const peerLesson=await json(opened,"Contextual peer lesson");
   await student.page.getByRole("heading",{name:peerTitle,exact:true}).waitFor({state:"visible"});
+  check(await student.page.locator("#lesson-navigation-target").evaluate(node=>
+    node===document.activeElement&&node.tagName==="H3"&&node.tabIndex===-1),
+    "An explicit real contextual navigation must place focus on the authorized peer lesson heading");
   check(opened.status()===200&&peerLesson.lesson?.id===peerLessonId&&peerLesson.lesson.course_id===peerId&&
     peerLesson.lesson.course_version===1&&await student.page.locator("#lesson-content button.primary").isEnabled()&&
     await student.page.locator("#course-favorite-toggle").getAttribute("aria-pressed")==="false",
@@ -503,6 +554,8 @@ async function contextualCoursesJourney(editor,student,source){
     "/universidade/private/lessons/"+source.lessonId);
   const sourceLesson=await json(returned,"Contextual return lesson");
   await student.page.getByRole("heading",{name:source.title,exact:true}).waitFor({state:"visible"});
+  check(await student.page.locator("#lesson-navigation-target").evaluate(node=>node===document.activeElement),
+    "The real return navigation must deliver focus to the newly selected source lesson");
   check(returned.status()===200&&sourceLesson.lesson?.id===source.lessonId&&
     sourceLesson.lesson.course_id===source.courseId&&sourceLesson.lesson.course_version===source.version,
     "The return suggestion must reauthorize the exact currently published source lesson");
@@ -638,6 +691,16 @@ async function main(){
   enterStage("independent student sessions");
   const studentA=await session("student-a"),studentB=await session("student-b");
   await openStudent(studentA,courseId,firstTitle);
+  check(await studentA.page.locator("#lesson-navigation-target").evaluate(node=>
+    node===document.activeElement&&node.tagName==="H3"&&node.tabIndex===-1),
+    "Selecting a real course must deliver keyboard focus to its authorized lesson heading");
+  await studentA.page.keyboard.press("Tab");
+  check(await studentA.page.evaluate(()=>{
+    const active=document.activeElement;
+    return document.getElementById("lesson-content").contains(active)&&
+      active.matches("button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled])");
+  }),"Keyboard navigation after the real lesson heading must continue into an enabled lesson action without a focus trap");
+  await lessonSectionNavigation(studentA);
   await openStudent(studentB,courseId,firstTitle);
   const forbiddenAdmin=await studentA.context.request.get(base+adminRoot+"/courses",{headers:{Accept:"application/json"}});
   check(forbiddenAdmin.status()===403,"A learner's real session must not authorize editorial endpoints");
@@ -674,6 +737,8 @@ async function main(){
     !await studentA.page.locator("#lesson-content button.primary").isDisabled(),
     "The saved position must survive reload, stay private to the company and leave completion pending");
   const writesBeforeResume=countWrites("student-a");
+  await studentA.page.bringToFront();
+  await studentA.page.waitForFunction(()=>document.hasFocus()&&document.visibilityState==="visible");
   await studentA.page.locator('[data-filter="sistemas"]').click();
   const resumed=await clickResponse(studentA.page,"#resume-reading-position","GET",
     "/universidade/private/lessons/"+firstLessonId);
@@ -684,6 +749,8 @@ async function main(){
     await studentA.page.locator('[data-filter="todos"]').getAttribute("aria-pressed")==="true"&&
     countWrites("student-a")===writesBeforeResume,
     "Explicit resume must clear obstructing filters, open the saved exact version and remain read-only");
+  check(await studentA.page.locator("#lesson-navigation-target").evaluate(node=>node===document.activeElement),
+    "Resuming the exact real reading position must deliver the original focus intention only after the lesson is authorized");
   const savedPositionB=await saveReadingPosition(studentB,courseId,1,firstLessonId);
 
   enterStage("manual completion history before the first completion");
@@ -964,7 +1031,7 @@ async function main(){
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
     synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","contextual courses without personal ranking","manual completion history","revocation"],
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

@@ -214,8 +214,24 @@ do histórico em 1440 e 390 pixels e verifica a largura móvel. Os dados finais
 de progresso do laboratório permanecem inalterados.
 
 O backend, a interface e esse complemento do percurso receberam revisão
-independente. A sintaxe e o diff passaram; a execução real deste novo conjunto
-continua pendente da CI, sem navegador, PHP ou banco executados localmente.
+independente. A sintaxe e o diff passaram; a execução real ficou inicialmente
+pendente da CI, sem navegador, PHP ou banco executados localmente.
+
+## Evidência integrada e inspeção visual
+
+O SHA `b67b9a44f92f538a2f595324b6e24dc78304e9c1` passou nos seis jobs da
+[execução 44216815401](https://github.com/rafhael100/imagine-universidade/actions/runs/44216815401).
+Foram observadas **523 verificações Chromium**, incluindo as **28 de C126**,
+e **169 verificações no percurso Laravel/SQLite real**. O backend completou
+270 testes e 3.111 asserções; o probe de histórico em PostgreSQL também passou.
+
+As capturas `framework-progress-history-desktop.png` e
+`framework-progress-history-mobile.png`, do artefato de navegador real,
+foram inspecionadas. Em 1440 e 390 pixels, a referência retida, versão,
+data UTC com segundos, disponibilidade e atualização manual ficaram legíveis;
+o painel móvel não apresentou transbordamento horizontal. A referência
+indisponível não oferece título de conteúdo, link nem navegação para a aula.
+Esta evidência pertence ao SHA acima e não libera os gates operacionais.
 
 ## Limites preservados
 

@@ -70,8 +70,9 @@ async function harness({boot=true,select=true}={}){
   const storage=Object.fromEntries(["getItem","setItem","removeItem","clear"].map(method=>[method,()=>{
     storageCalls.push(method);throw new Error("Unexpected persistent preference");
   }]));
-  const context=createContext({Blob,URL,TextEncoder,localStorage:storage,sessionStorage:storage,
+  const context=createContext({Blob,URL,TextEncoder,localStorage:storage,sessionStorage:storage,window:{addEventListener(){}},
     document:{body:new Node("body"),getElementById:get,createElement:tag=>new Node(tag),
+      addEventListener(){},visibilityState:"visible",hasFocus:()=>true,
       querySelector:selector=>selector.startsWith("meta")?{content:"synthetic-csrf"}:null,
       querySelectorAll:selector=>selector==="[data-filter]"?filters:selector===".sim-inputs input"?sim:[]},
     setTimeout:()=>1,clearTimeout:()=>{},

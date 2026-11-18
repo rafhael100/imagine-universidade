@@ -20,6 +20,7 @@ const source=["studentRecord","studentText","studentSlug","validatedStudentCours
   "invalidateRetainedFavorites","renderRetainedFavorites",
   "contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory",
+  "invalidateNavigationFocus",
   "sanitizedProgressExport","sanitizedFavoritesExport","exportFavorites"].map(actual).join("\n")+"\n"+handler;
 const row={course_slug:"curso-retirado",saved_at:"2026-11-17 12:34:56"};
 const payload=()=>({schema_version:1,scope:"current_authenticated_student",favorites:[{...row}]});
@@ -46,7 +47,7 @@ function harness(){
     initialize:{status:200,payload:{ready:true}},courses:{status:200,payload:{courses:[course]}},onCreate:null,clickError:false};
   let sequence=0,context;
   context=createContext({
-    root:"/universidade/private",csrf:"synthetic-csrf",status:get("status"),overall:get("overall-progress"),
+    root:"/universidade/private",csrf:"synthetic-csrf",status:get("status"),overall:get("overall-progress"),navigationFocus:{sequence:0,activity:0},
     list:get("course-list"),lessonsBox:get("lesson-items"),content:get("lesson-content"),
     Blob,renderSimulator:()=>{},renderCourses:()=>context.renderFavoriteControls(),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,
     document:{body,getElementById:get,querySelectorAll:()=>[],createElement:tag=>{

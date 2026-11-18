@@ -1,6 +1,6 @@
 # C-126 — histórico privado de aulas concluídas
 
-17/11/2026 · Backend candidato para revisão e CI. **HOLD_NO_GO** operacional.
+17/11/2026 · Backend candidato revisado, com CI integrada aprovada no SHA indicado abaixo. **HOLD_NO_GO** operacional.
 
 ## Objetivo e base
 
@@ -205,5 +205,22 @@ são integrados separadamente pelo responsável principal.
 
 Validação local realizada: `git diff --check` e `node scripts/check-write-fence.mjs`
 passaram; os 14 caminhos de escrita existentes mantêm sua proteção transacional.
-PHP, PostgreSQL e navegador não foram executados localmente. Os 25 Feature tests
-e o probe estão preparados, e sua evidência de execução ainda depende da CI.
+PHP, PostgreSQL e navegador não foram executados localmente. Na preparação
+inicial, os 25 Feature tests e o probe ainda dependiam da CI.
+
+## Evidência integrada C126
+
+O commit `b67b9a44f92f538a2f595324b6e24dc78304e9c1` concluiu os seis jobs da
+[execução 44216815401](https://github.com/rafhael100/imagine-universidade/actions/runs/44216815401)
+com sucesso: validação, paridade Portal, imagem candidata, pacote editorial,
+Docker e navegador. Foram aprovados **270 testes PHP e 3.111 asserções**,
+incluindo os **25 novos Feature tests**. O probe real de PostgreSQL passou com
+paginação 50+1, isolamento, versões exatas, timestamps UTC, cursor removido ou
+acima de int4, dados inválidos e rollback das fixtures.
+
+Os **16 invariantes de schema**, **24 verificações de privilégios** e
+**14 caminhos de escrita** permanecem aprovados. O navegador concluiu
+**523 verificações sintéticas** e **169 pelo Laravel/SQLite real**, incluindo
+consulta manual nas duas empresas, conclusão, retirada/republicação e revogação.
+Essa execução confirma o código desse SHA; não homologa identidade operacional,
+conteúdo real ou publicação. Os 13 critérios de liberação seguem em HOLD_NO_GO.

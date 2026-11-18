@@ -154,6 +154,21 @@ de um gerenciador de janelas ou tecnologia assistiva específicos.
 A sintaxe e os 64 cenários passaram após o ajuste; a execução integral do
 módulo e dos percursos seguintes permanece pendente no próximo SHA.
 
+### Consulta inválida e validação HTML
+
+No SHA `c19bea9ed404e83c02cab83b6b2cdedc3c955c35`, a
+[execução 44224418993](https://github.com/rafhael100/imagine-universidade/actions/runs/44224418993)
+aprovou novamente os cinco jobs fora do navegador. O caso de `blur` passou;
+o Chromium avançou até a tentativa de remover um resultado antigo com consulta
+inválida. O valor de um caractere era recusado pelo `minlength="3"` nativo,
+antes de o handler de submit poder exibir a mensagem esperada.
+
+O caso usa agora `texto!`: atende ao tamanho HTML e aciona a validação de
+caracteres real da aplicação. Mantém a exigência de remover o resultado antigo
+e de seu botão desconectado não gerar HTTP ou foco. A regra HTML, o handler do
+produto e todas as asserções permanecem inalterados. Os cenários Node que
+invocam diretamente o handler continuam cobrindo também a consulta curta.
+
 ## Recortes identificados durante a preparação
 
 | Capacidade aprovada | Evidência no código atual | Recorte útil e limite |

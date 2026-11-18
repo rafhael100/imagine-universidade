@@ -280,7 +280,9 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     {
       stage="search result removed by invalid query";const {page,control}=await open();await search(page);
       const old=await page.locator("[data-search-lesson='12']").elementHandle();
-      await page.locator("#lesson-search-query").fill("x");await page.locator("#lesson-search-query").press("Enter");
+      // Satisfy native minlength so submit reaches the real character guard.
+      // A one-character value is blocked by HTML before this handler runs.
+      await page.locator("#lesson-search-query").fill("texto!");await page.locator("#lesson-search-query").press("Enter");
       await page.waitForFunction(()=>document.getElementById("lesson-search-results").textContent.includes("Informe de 3 a 60"));
       await select(page,2);const count=await focusCount(page),requests=control.requests.length;
       await page.evaluate(node=>node.click(),old);await page.waitForLoadState("networkidle",{timeout:8000});

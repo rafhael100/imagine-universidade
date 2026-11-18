@@ -144,11 +144,15 @@ O runner cobre, em sequência:
    retorna 404 e a remoção da preferência própria retida continua possível.
    O marcador fica indisponível; a exportação conserva apenas a referência
    histórica própria. Removê-lo numa empresa mantém o da outra.
+   O editor consulta a versão arquivada, lista suas aulas e lê o corpo histórico
+   mantendo os dois formulários com alterações locais intactas. Essas consultas
+   não geram escritas; uma mutação posterior invalida a leitura do painel.
 8. Edição e republicação da nova versão: favorito retido reaparece, favorito
    removido não volta, progresso atual começa pendente e a exportação conserva
    a conclusão da versão histórica.
    A posição antiga não aponta automaticamente à nova versão: uma nova ação
    explícita salva a aula revisada e sua exportação passa a identificar a versão 2.
+   A consulta editorial da versão 1 confirma que seu conteúdo continua preservado.
 9. Revogação de uma empresa: escrita retorna 403, a interface purga conteúdo
    privado e não repete a operação. A outra empresa permanece autorizada. A
    restauração da elegibilidade comprova que a remoção negada não apagou o favorito.
@@ -178,6 +182,11 @@ As evidências usam um diretório separado e inicialmente vazio. A saída permit
 verificações e contagens de persistência. Cookies, tokens, banco, sessões,
 controle de autoridade e logs PHP não são publicados. O trap de saída, erro ou
 sinal encerra o servidor criado pelo script e remove o diretório privado.
+
+A consulta C-122 acrescenta capturas do painel de versões arquivadas em
+1440 e 390 pixels, com o corpo histórico aberto e rascunhos locais preservados.
+O percurso confere também que a página não transborda horizontalmente em
+390 pixels; as imagens permitem a inspeção visual do resultado real da CI.
 
 O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
 conferência final de 30 segundos. O início de cada fase é registrado com um nome

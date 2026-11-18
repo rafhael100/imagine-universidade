@@ -183,3 +183,15 @@ O provider operacional permanece desativado. Este painel não acrescenta uma
 fonte Portal, SSO real, IA paga, dados reais, deploy, purge ou relógio de retenção
 baseado em `saved_at`. As condições de retenção e eliminação permanecem no
 contrato backend e na decisão de governança aplicável.
+
+## Resultado real da CI
+
+Em `0cff8de56f1da5bf5b5a00ad899e8332042b48ad`,
+[Actions #44204205999](https://github.com/rafhael100/imagine-universidade/actions/runs/44204205999)
+aprovou os seis jobs. O módulo C121 executou seus **39 checks** dentro das
+**380 verificações Chromium**; a varredura da interface não encontrou violações
+graves ou críticas. O percurso real pelo Laravel/SQLite chegou a **91
+verificações aprovadas**, incluindo guardar, recarregar, retomar a aula e versão
+exatas após um filtro, retirar/republicar, exportar, remover e revogar acesso.
+Os estados persistidos foram conferidos ao final. Esses resultados pertencem
+ao SHA indicado e não representam homologação operacional.

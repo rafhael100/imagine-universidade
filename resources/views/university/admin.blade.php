@@ -60,6 +60,17 @@
     .audit-row{padding:12px 0;border-bottom:1px solid var(--line)}
     .audit-row strong{display:block;font-weight:750}
     .audit-row small{display:block;color:#505650;font-size:12px}
+    .archive-panel{margin-top:20px}
+    .archive-panel .panel-header{flex-wrap:wrap}
+    .archive-context,.archive-status{font-size:13px;margin:0 0 10px;overflow-wrap:anywhere}
+    .archive-grid{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(0,2fr);gap:18px}
+    .archive-grid h3{font-size:15px;margin:0 0 9px}
+    .archive-list{display:grid;gap:4px;max-height:340px;overflow:auto;margin-bottom:10px}
+    .archive-list .item{border-color:var(--line)}
+    .archive-reader{border-top:1px solid var(--line);padding-top:16px;margin-top:16px;overflow-wrap:anywhere}
+    .archive-reader h4{font-size:18px;margin:0 0 8px}
+    .archive-text{white-space:pre-wrap;line-height:1.65;color:#465369}
+    .archive-panel [hidden]{display:none}
     .overview-panel{margin:0 0 20px}
     .overview-panel .panel-header{flex-wrap:wrap;padding:15px 20px}
     .overview-body{padding:16px 20px}
@@ -79,7 +90,7 @@
     .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
     .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
     .footer{font-size:12px;color:#565D56;margin-top:28px}
-    @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
+    @media(max-width:820px){.layout,.archive-grid{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
     @media(max-width:520px){.overview-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-body{padding:14px}.overview-panel .panel-header{padding:14px}.overview-table th:first-child{width:32%}}
   </style>
 </head>
@@ -164,6 +175,32 @@
       </div>
     </section>
   </div>
+  <section id="editorial-versions-panel" class="panel archive-panel" aria-labelledby="archived-versions-title">
+    <div class="panel-header">
+      <h2 id="archived-versions-title">Versões arquivadas</h2>
+      <button type="button" id="refresh-editorial-versions" class="secondary" disabled>Consultar versões</button>
+    </div>
+    <div class="panel-body">
+      <p id="editorial-versions-context" class="archive-context" hidden></p>
+      <p id="editorial-versions-status" class="archive-status" role="status" aria-live="polite">Selecione um curso para consultar suas versões arquivadas.</p>
+      <div id="editorial-version-browser" class="archive-grid" hidden>
+        <div>
+          <h3>Versões disponíveis para consulta</h3>
+          <div id="editorial-version-list" class="archive-list" aria-label="Versões arquivadas do curso"></div>
+          <button type="button" id="more-editorial-versions" class="secondary" hidden disabled>Carregar versões anteriores</button>
+        </div>
+        <div>
+          <h3 id="editorial-version-heading">Selecione uma versão</h3>
+          <p id="editorial-version-lessons-status" class="archive-status" role="status" aria-live="polite"></p>
+          <div id="editorial-version-lessons" class="archive-list" aria-label="Aulas da versão arquivada"></div>
+          <button type="button" id="more-version-lessons" class="secondary" hidden disabled>Carregar mais aulas</button>
+          <p id="editorial-version-body-status" class="archive-status" role="status" aria-live="polite"></p>
+          <article id="editorial-version-content" class="archive-reader" aria-label="Aula arquivada, somente leitura" hidden></article>
+        </div>
+      </div>
+      <p class="help">Consulta do conteúdo salvo em cada versão arquivada, somente leitura. O rascunho e a versão publicada continuam no editor acima.</p>
+    </div>
+  </section>
   <section id="audit-panel" class="panel audit-panel" aria-labelledby="audit-title">
     <div class="panel-header">
       <h2 id="audit-title">Histórico editorial</h2>
@@ -183,7 +220,11 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
 const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,
   overviewSnapshot:null,overviewRequest:0,overviewLoading:false,overviewAttempted:false,
-  overviewMessage:"A visão do acervo estará disponível após carregar os cursos."};
+  overviewMessage:"A visão do acervo estará disponível após carregar os cursos.",
+  archive:{courseId:null,versions:[],nextBefore:null,selectedVersion:null,lessons:[],nextAfter:null,lesson:null,bodyLessonId:null,
+    versionsLoaded:false,lessonsLoaded:false,versionsLoading:false,lessonsLoading:false,bodyLoading:false,
+    versionsRequest:0,lessonsRequest:0,bodyRequest:0,message:"Selecione um curso para consultar suas versões arquivadas.",
+    lessonsMessage:"",bodyMessage:""}};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
@@ -194,6 +235,7 @@ function beginWrite(){
   state.writePending=true;
   ++state.courseRequest;++state.lessonRequest;
   invalidateEditorialOverview("O acervo pode ter mudado. Atualize a visão após concluir a alteração.");
+  invalidateEditorialArchive("O acervo pode ter mudado. Consulte as versões após concluir a alteração.");
   const layout=document.querySelector(".layout");
   layout.inert=true;
   layout.setAttribute("aria-busy","true");
@@ -206,6 +248,7 @@ function finishWrite(){
   layout.setAttribute("aria-busy","false");
   layout.inert=state.accessDenied;
   renderEditorialOverview();
+  renderEditorialArchive();
 }
 // A server may commit an editorial mutation before its HTTP response is
 // lost. Do not let a rejected/ambiguous response unlock a second write.
@@ -226,6 +269,7 @@ function freezeUncertainEditorialWrite(){
   $("retry-catalog").disabled=false;
   clearPublicationCheck();hideLessonPreview();
   invalidateEditorialOverview("Consulte novamente os cursos para confirmar a alteração antes de atualizar a visão do acervo.");
+  invalidateEditorialArchive("Confirme a alteração consultando os cursos antes de abrir as versões arquivadas.");
   say("O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
 }
 function clearPublicationCheck(){
@@ -252,6 +296,7 @@ function lockAccess(message){
     .forEach(field=>{if("value" in field&&field.tagName!=="SELECT")field.value="";field.disabled=true;});
   $("publication-status").textContent="Acesso encerrado";
   invalidateEditorialOverview("");
+  invalidateEditorialArchive("");
   say(message);
 }
 function el(tag,text,className){
@@ -416,6 +461,201 @@ async function refreshEditorialOverview(){
 $("refresh-overview").addEventListener("click",refreshEditorialOverview);
 const intField=id=>Number.parseInt($(id).value,10)||0;
 const draft=()=>!state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&(state.course===null||(state.lessonsReady&&!Boolean(state.course.is_published)));
+function archiveRecord(value){
+  return value!==null&&typeof value==="object"&&!Array.isArray(value);
+}
+function archiveText(value,max){
+  return typeof value==="string"&&value.length<=max*2&&value.trim().length>0&&Array.from(value).length<=max;
+}
+function archiveSlug(value){
+  return typeof value==="string"&&value.length<=120&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+function archivePositive(value){
+  return Number.isSafeInteger(value)&&value>0;
+}
+function archiveEnvelope(payload,courseId){
+  return archiveRecord(payload)&&payload.schema_version===1&&payload.scope==="editorial_archived_content"&&payload.course_id===courseId;
+}
+function validatedArchivedVersions(payload,courseId,beforeVersion=null,existing=[]){
+  if(!archiveEnvelope(payload,courseId)||!Array.isArray(payload.versions)||payload.versions.length>50)return null;
+  const seen=new Set(existing.map(item=>item.version)),versions=[];
+  let previous=beforeVersion??Infinity;
+  for(const item of payload.versions){
+    if(!archiveRecord(item)||!archivePositive(item.version)||item.version>=previous||seen.has(item.version)||
+       item.status!=="archived"||!Number.isSafeInteger(item.lesson_count)||item.lesson_count<0)return null;
+    previous=item.version;seen.add(item.version);
+    versions.push({version:item.version,status:"archived",lesson_count:item.lesson_count});
+  }
+  const next=payload.next_before_version;
+  if(next!==null&&(!archivePositive(next)||versions.length!==50||next!==versions[versions.length-1]?.version))return null;
+  return {versions,next_before_version:next};
+}
+function archivePairAfter(item,cursor){
+  return cursor===null||item.sort_order>cursor.sort_order||(item.sort_order===cursor.sort_order&&item.id>cursor.lesson_id);
+}
+function validatedArchivedLessons(payload,courseId,version,after=null,existing=[],lessonCount=null){
+  if(!archiveEnvelope(payload,courseId)||payload.course_version!==version||payload.status!=="archived"||
+     !Array.isArray(payload.lessons)||payload.lessons.length>50)return null;
+  const ids=new Set(existing.map(item=>item.id)),slugs=new Set(existing.map(item=>item.slug)),lessons=[];
+  let cursor=after;
+  for(const item of payload.lessons){
+    if(!archiveRecord(item)||!archivePositive(item.id)||ids.has(item.id)||!archiveSlug(item.slug)||slugs.has(item.slug)||
+       !archiveText(item.title,200)||!Number.isSafeInteger(item.sort_order)||item.sort_order<0||!archivePairAfter(item,cursor))return null;
+    ids.add(item.id);slugs.add(item.slug);cursor={sort_order:item.sort_order,lesson_id:item.id};
+    lessons.push({id:item.id,slug:item.slug,title:item.title,sort_order:item.sort_order});
+  }
+  const next=payload.next_after;
+  if(next!==null&&(!archiveRecord(next)||!Number.isSafeInteger(next.sort_order)||next.sort_order<0||
+     !archivePositive(next.lesson_id)||lessons.length!==50||next.sort_order!==cursor?.sort_order||next.lesson_id!==cursor?.lesson_id))return null;
+  const total=existing.length+lessons.length;
+  if(lessonCount!==null&&(!Number.isSafeInteger(lessonCount)||lessonCount<0||total>lessonCount||
+     (next===null?total!==lessonCount:total>=lessonCount)))return null;
+  return {lessons,next_after:next===null?null:{sort_order:next.sort_order,lesson_id:next.lesson_id}};
+}
+function validatedArchivedLesson(payload,courseId,version,expected){
+  if(!archiveEnvelope(payload,courseId)||payload.course_version!==version||payload.status!=="archived"||!archiveRecord(payload.lesson))return null;
+  const item=payload.lesson;
+  if(item.id!==expected.id||item.slug!==expected.slug||item.title!==expected.title||item.sort_order!==expected.sort_order||
+     !archiveText(item.body,30000))return null;
+  return {id:item.id,slug:item.slug,title:item.title,body:item.body,sort_order:item.sort_order};
+}
+function editorialArchiveAllowed(){
+  return !state.accessDenied&&state.catalogReady&&!state.catalogLoading&&!state.writePending&&!state.writeOutcomeUnknown&&
+    archivePositive(state.course?.id)&&state.courses.some(course=>course.id===state.course.id);
+}
+function renderEditorialArchive(){
+  const a=state.archive,active=editorialArchiveAllowed(),scoped=active&&a.courseId===state.course.id;
+  const renderedCourse=a.courseId,renderedVersion=a.selectedVersion;
+  $("editorial-versions-panel").hidden=state.accessDenied;
+  const context=$("editorial-versions-context");
+  context.hidden=!active;context.textContent=active?"Curso no cadastro atual: "+state.course.title:"";
+  $("editorial-versions-status").textContent=state.accessDenied?"":!state.course
+    ?"Selecione um curso para consultar suas versões arquivadas.":a.message;
+  const refresh=$("refresh-editorial-versions");refresh.disabled=!active||a.versionsLoading;
+  refresh.textContent=a.versionsLoading?"Consultando versões...":a.versionsLoaded?"Atualizar versões":"Consultar versões";
+  $("editorial-version-browser").hidden=!scoped||!a.versionsLoaded||a.versions.length===0;
+  const versions=$("editorial-version-list");versions.replaceChildren();
+  if(scoped)for(const item of a.versions){
+    const button=el("button",undefined,"item");button.type="button";button.dataset.archiveVersion=String(item.version);
+    button.disabled=a.versionsLoading;button.setAttribute("aria-current",String(a.selectedVersion===item.version));
+    button.append(el("strong","Versão "+item.version+" · Arquivada"),el("small",item.lesson_count+" aula"+(item.lesson_count===1?"":"s")));
+    button.addEventListener("click",()=>{
+      if(state.course?.id===renderedCourse)void loadEditorialArchiveLessons(item.version);
+    });versions.append(button);
+  }
+  const more=$("more-editorial-versions");more.hidden=!scoped||a.nextBefore===null;more.disabled=!active||a.versionsLoading;
+  $("editorial-version-heading").textContent=scoped&&a.selectedVersion!==null?"Versão "+a.selectedVersion+" · Arquivada":"Selecione uma versão";
+  $("editorial-version-lessons-status").textContent=scoped?a.lessonsMessage:"";
+  const lessons=$("editorial-version-lessons");lessons.replaceChildren();
+  if(scoped)for(const item of a.lessons){
+    const button=el("button",undefined,"item");button.type="button";button.dataset.archiveLesson=String(item.id);
+    button.disabled=!a.lessonsLoaded||(a.bodyLoading&&a.bodyLessonId===item.id);button.setAttribute("aria-current",String(a.lesson?.id===item.id));
+    button.append(el("strong",item.title),el("small",item.slug));
+    button.addEventListener("click",()=>{
+      if(state.course?.id===renderedCourse&&a.selectedVersion===renderedVersion)void loadEditorialArchiveBody(item.id);
+    });lessons.append(button);
+  }
+  const next=$("more-version-lessons");next.hidden=!scoped||a.nextAfter===null;next.disabled=!active||a.lessonsLoading;
+  $("editorial-version-body-status").textContent=scoped?a.bodyMessage:"";
+  const content=$("editorial-version-content");content.replaceChildren();content.hidden=!scoped||a.lesson===null;
+  if(scoped&&a.lesson){
+    content.append(el("p","Versão "+a.selectedVersion+" · Arquivada · Somente leitura","help"),
+      el("h4",a.lesson.title),el("p",a.lesson.body,"archive-text"));
+  }
+}
+function clearEditorialArchiveSelection(){
+  const a=state.archive;++a.lessonsRequest;++a.bodyRequest;
+  a.selectedVersion=null;a.lessons=[];a.nextAfter=null;a.lesson=null;a.bodyLessonId=null;
+  a.lessonsLoaded=false;a.lessonsLoading=false;a.bodyLoading=false;a.lessonsMessage="";a.bodyMessage="";
+}
+function invalidateEditorialArchive(message){
+  const a=state.archive;++a.versionsRequest;
+  a.courseId=null;a.versions=[];a.nextBefore=null;a.versionsLoaded=false;a.versionsLoading=false;a.message=message;
+  clearEditorialArchiveSelection();renderEditorialArchive();
+}
+async function loadEditorialArchiveVersions(beforeVersion=null){
+  const a=state.archive;
+  if(!editorialArchiveAllowed()||a.versionsLoading)return;
+  const courseId=state.course.id,append=beforeVersion!==null;
+  if(append&&(!archivePositive(beforeVersion)||!a.versionsLoaded||a.courseId!==courseId||beforeVersion!==a.nextBefore))return;
+  if(!append)invalidateEditorialArchive("Consultando versões arquivadas...");
+  const request=++a.versionsRequest,existing=append?a.versions:[];
+  a.courseId=courseId;a.versionsLoading=true;a.message="Consultando versões arquivadas...";renderEditorialArchive();
+  const current=()=>editorialArchiveAllowed()&&state.course.id===courseId&&a.courseId===courseId&&a.versionsRequest===request;
+  try{
+    const query=append?"?before_version="+encodeURIComponent(String(beforeVersion)):"";
+    const payload=await api("/courses/"+courseId+"/versions"+query);
+    if(!current())return;
+    const page=validatedArchivedVersions(payload,courseId,beforeVersion,existing);
+    if(page===null)throw new Error("invalid_archived_versions");
+    a.versions=[...existing,...page.versions];a.nextBefore=page.next_before_version;a.versionsLoaded=true;
+    a.message=a.versions.length===0?"Este curso não possui versões arquivadas.":
+      a.versions.length+" vers"+(a.versions.length===1?"ão arquivada carregada":"ões arquivadas carregadas")+". Selecione uma versão para consultar suas aulas.";
+  }catch(error){
+    if(current())invalidateEditorialArchive("Não foi possível consultar as versões arquivadas. Use Consultar versões para tentar novamente.");
+  }finally{
+    if(a.versionsRequest===request){a.versionsLoading=false;renderEditorialArchive();}
+  }
+}
+async function loadEditorialArchiveLessons(version,after=null){
+  const a=state.archive,courseId=state.course?.id;
+  if(!editorialArchiveAllowed()||a.courseId!==courseId||!a.versionsLoaded||a.versionsLoading||!archivePositive(version))return;
+  const metadata=a.versions.find(item=>item.version===version);if(!metadata)return;
+  const append=after!==null;
+  if(append&&(!a.lessonsLoaded||a.selectedVersion!==version||a.lessonsLoading||!archiveRecord(after)||
+     after.sort_order!==a.nextAfter?.sort_order||after.lesson_id!==a.nextAfter?.lesson_id))return;
+  if(!append){
+    if(a.lessonsLoading&&a.selectedVersion===version)return;
+    clearEditorialArchiveSelection();a.selectedVersion=version;
+  }
+  const request=++a.lessonsRequest,existing=append?a.lessons:[];
+  a.lessonsLoading=true;a.lessonsMessage="Consultando aulas arquivadas...";renderEditorialArchive();
+  const current=()=>editorialArchiveAllowed()&&state.course.id===courseId&&a.courseId===courseId&&
+    a.selectedVersion===version&&a.lessonsRequest===request;
+  try{
+    const query=append?"?after_sort_order="+encodeURIComponent(String(after.sort_order))+"&after_lesson_id="+encodeURIComponent(String(after.lesson_id)):"";
+    const payload=await api("/courses/"+courseId+"/versions/"+version+"/lessons"+query);
+    if(!current())return;
+    const page=validatedArchivedLessons(payload,courseId,version,after,existing,metadata.lesson_count);
+    if(page===null)throw new Error("invalid_archived_lessons");
+    a.lessons=[...existing,...page.lessons];a.nextAfter=page.next_after;a.lessonsLoaded=true;
+    a.lessonsMessage=a.lessons.length===0?"Esta versão arquivada não possui aulas.":
+      a.lessons.length+" aula"+(a.lessons.length===1?" carregada":"s carregadas")+". Selecione uma aula para ler o conteúdo salvo.";
+  }catch(error){
+    if(current()){
+      clearEditorialArchiveSelection();a.selectedVersion=version;
+      a.lessonsMessage="Não foi possível consultar as aulas desta versão. Selecione a versão novamente para tentar.";renderEditorialArchive();
+    }
+  }finally{
+    if(a.lessonsRequest===request){a.lessonsLoading=false;renderEditorialArchive();}
+  }
+}
+async function loadEditorialArchiveBody(lessonId){
+  const a=state.archive,courseId=state.course?.id,version=a.selectedVersion;
+  if(!editorialArchiveAllowed()||a.courseId!==courseId||!a.lessonsLoaded||!archivePositive(version))return;
+  const metadata=a.lessons.find(item=>item.id===lessonId);if(!metadata)return;
+  if(a.bodyLoading&&a.bodyLessonId===lessonId)return;
+  const request=++a.bodyRequest;a.lesson=null;a.bodyLessonId=lessonId;a.bodyLoading=true;a.bodyMessage="Carregando conteúdo arquivado...";renderEditorialArchive();
+  const current=()=>editorialArchiveAllowed()&&state.course.id===courseId&&a.courseId===courseId&&a.selectedVersion===version&&a.bodyRequest===request;
+  try{
+    const payload=await api("/courses/"+courseId+"/versions/"+version+"/lessons/"+lessonId);
+    if(!current())return;
+    const lesson=validatedArchivedLesson(payload,courseId,version,metadata);
+    if(lesson===null)throw new Error("invalid_archived_lesson");
+    a.lesson=lesson;a.bodyMessage="Conteúdo arquivado carregado para leitura.";
+  }catch(error){
+    if(current()){a.lesson=null;a.bodyMessage="Não foi possível ler esta aula arquivada. Selecione a aula novamente para tentar.";}
+  }finally{
+    if(a.bodyRequest===request){a.bodyLoading=false;renderEditorialArchive();}
+  }
+}
+$("refresh-editorial-versions").addEventListener("click",()=>{void loadEditorialArchiveVersions();});
+$("more-editorial-versions").addEventListener("click",()=>{
+  if(state.archive.nextBefore!==null)void loadEditorialArchiveVersions(state.archive.nextBefore);
+});
+$("more-version-lessons").addEventListener("click",()=>{
+  if(state.archive.nextAfter!==null)void loadEditorialArchiveLessons(state.archive.selectedVersion,state.archive.nextAfter);
+});
 function fillCourse(){
   if(state.accessDenied)return;
   const c=state.course;
@@ -428,6 +668,7 @@ function fillCourse(){
   $("publication-status").textContent=c?.is_published?"Publicado":"Rascunho";
   $("publication-status").className="chip"+(c?.is_published?" published":"");
   updateEditorialControls();
+  renderEditorialArchive();
 }
 // Refreshing lessons must update permissions without replacing the course
 // fields: the editor may still have an independent, unsaved course draft.
@@ -550,6 +791,7 @@ async function refreshCourses(preferredId=state.course?.id??null){
   // catalog eligible for another mutation merely because it was once valid.
   state.catalogReady=false;
   invalidateEditorialOverview("Consulte os cursos e atualize a visão para conferir os números do acervo.");
+  invalidateEditorialArchive("Consulte as versões arquivadas após carregar os cursos.");
   $("new-course").disabled=true;
   const result=await api("/courses");
   if(state.accessDenied||state.courseRequest!==request)return;
@@ -628,6 +870,7 @@ $("course-items").addEventListener("click",async event=>{
   if(state.course?.id===nextId)return;
   if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;
+  invalidateEditorialArchive("Consulte as versões arquivadas do curso selecionado.");
   say("");state.course=state.courses.find(c=>c.id===Number(b.dataset.course))||null;
   renderCourses();fillCourse();
   try{await refreshLessons();}catch(error){say(error.message);}
@@ -636,6 +879,7 @@ $("new-course").addEventListener("click",()=>{
   if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady)return;
   if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;++state.lessonRequest;
+  invalidateEditorialArchive("Selecione um curso para consultar suas versões arquivadas.");
   state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
   renderCourses();renderLessons();fillCourse();resetLesson();$("course-title").focus();say("");
 });
@@ -960,6 +1204,7 @@ async function loadAdminCatalog(){
     state.catalogLoading=false;
     if(!state.accessDenied)retry.disabled=false;
     renderEditorialOverview();
+    renderEditorialArchive();
     // Only the first fully validated catalogue starts an automatic overview
     // read. Failures and later editorial changes always require a new click.
     if(!state.accessDenied&&state.catalogReady&&!state.writeOutcomeUnknown&&!state.overviewAttempted)

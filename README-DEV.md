@@ -16,6 +16,7 @@ Esta branch contém a aplicação candidata Laravel 13 / PHP 8.3+, com dependên
 | Ajuda contextual | Trechos literais da aula autorizada, fonte e versão; pergunta opcional pelo contrato do Tutor. Indisponibilidade da IA mantém o estudo estático. O gateway externo permanece desativado. |
 | Editor | Cadastro, edição, prévia, conferência de versão e publicação/retirada de cursos. Rascunhos de curso e aula são preservados durante as gravações relacionadas. |
 | Visão do acervo | Totais e categorias dos cursos editoriais, aulas da versão mais recente e avisos de ausência de aula/resumo. O painel não consulta dados individuais de aprendizagem nem aprova publicações. |
+| Versões arquivadas | Consulta editorial paginada de versões anteriores, lista de aulas e leitura de um conteúdo histórico por vez. O painel preserva os formulários atuais e não restaura, edita ou publica versões. |
 | Integridade | Escritas conferem autorização atual dentro da transação; dados pessoais de aprendizagem são isolados por pessoa/empresa; versões publicadas e histórico são protegidos. |
 | Ambiente candidato | PHP/Nginx/PostgreSQL, sessão persistente, porta de loopback explícita, papéis de banco separados e inventário somente de leitura. Nenhuma inicialização automática. |
 

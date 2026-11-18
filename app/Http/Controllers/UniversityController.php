@@ -14,6 +14,7 @@ use App\Domain\Learning\ReadingPositionRevision;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -437,6 +438,95 @@ final class UniversityController
     public function adminCourses(Request $request): JsonResponse
     {
         return response()->json(['courses' => $this->catalog->adminCourses($this->grant($request))]);
+    }
+
+    private function archivedRouteNumber(string $value): ?int
+    {
+        if (preg_match('/\A[1-9][0-9]{0,15}\z/D', $value) !== 1) {
+            return null;
+        }
+        $number = filter_var($value, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => 1, 'max_range' => 9007199254740991,
+        ]]);
+        return $number === false ? null : $number;
+    }
+
+    /** Keep failure responses behind the same live read boundary as content. */
+    private function archivedReadResponse(Request $request, PortalAccessGate $gate, callable $read): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $result = $read($grant);
+        } catch (\Throwable) {
+            $result = 'temporarily_unavailable';
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        if (is_array($result)) {
+            return response()->json($result);
+        }
+        $status = match ($result) {
+            'access_denied' => 403,
+            'not_found' => 404,
+            'invalid_cursor' => 422,
+            default => 503,
+        };
+        return response()->json(['error' => $status === 503 ? 'temporarily_unavailable' : $result], $status);
+    }
+
+    public function archivedVersions(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
+    {
+        $course = $this->archivedRouteNumber($courseId);
+        if ($course === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $validator = Validator::make($request->query(), [
+            'before_version' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $input = $validator->validated();
+        $before = isset($input['before_version']) ? (int) $input['before_version'] : null;
+        return $this->archivedReadResponse($request, $gate,
+            fn (PortalGrant $grant): array|string => $this->catalog->archivedVersions($grant, $course, $before));
+    }
+
+    public function archivedLessons(Request $request, string $courseId, string $courseVersion, PortalAccessGate $gate): JsonResponse
+    {
+        $course = $this->archivedRouteNumber($courseId);
+        $version = $this->archivedRouteNumber($courseVersion);
+        if ($course === null || $version === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $query = $request->query();
+        $validator = Validator::make($query, [
+            'after_sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:9007199254740991'],
+            'after_lesson_id' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991'],
+        ]);
+        if (array_key_exists('after_sort_order', $query) !== array_key_exists('after_lesson_id', $query)
+            || $validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $input = $validator->validated();
+        $afterSort = isset($input['after_sort_order']) ? (int) $input['after_sort_order'] : null;
+        $afterLesson = isset($input['after_lesson_id']) ? (int) $input['after_lesson_id'] : null;
+        return $this->archivedReadResponse($request, $gate,
+            fn (PortalGrant $grant): array|string => $this->catalog->archivedLessons($grant, $course, $version, $afterSort, $afterLesson));
+    }
+
+    public function archivedLesson(Request $request, string $courseId, string $courseVersion,
+        string $lessonId, PortalAccessGate $gate): JsonResponse
+    {
+        $course = $this->archivedRouteNumber($courseId);
+        $version = $this->archivedRouteNumber($courseVersion);
+        $lesson = $this->archivedRouteNumber($lessonId);
+        if ($course === null || $version === null || $lesson === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        return $this->archivedReadResponse($request, $gate,
+            fn (PortalGrant $grant): array|string => $this->catalog->archivedLesson($grant, $course, $version, $lesson));
     }
 
     public function adminOverview(Request $request, PortalAccessGate $gate): JsonResponse

@@ -1054,6 +1054,182 @@ final class UniversityCatalogRepository
         return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? $courses : [];
     }
 
+    private function archivedCourseError(PortalGrant $grant, int $courseId): ?string
+    {
+        if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)
+            || $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY) {
+            return 'access_denied';
+        }
+        if ($courseId < 1 || $courseId > 9007199254740991) {
+            return 'not_found';
+        }
+        $org = $this->adminOrgId($grant);
+        if ($org === null) {
+            return 'temporarily_unavailable';
+        }
+        // No historical lookup for a course outside the current editorial scope.
+        return DB::table('educational_courses')->where('id', $courseId)
+            ->where('educational_organization_id', $org)->where('is_shared', true)->exists()
+            ? null : 'not_found';
+    }
+
+    private function archivedInteger(mixed $value, int $minimum = 0): int
+    {
+        if ((!is_int($value) && !is_string($value))
+            || (is_string($value) && preg_match('/\A(?:0|[1-9][0-9]*)\z/D', $value) !== 1)) {
+            throw new \UnexpectedValueException('Invalid editorial archive integer.');
+        }
+        $integer = filter_var($value, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => $minimum, 'max_range' => 9007199254740991,
+        ]]);
+        if ($integer === false) {
+            throw new \UnexpectedValueException('Invalid editorial archive integer.');
+        }
+        return $integer;
+    }
+
+    private function archivedText(mixed $value, int $maximum): string
+    {
+        if (!is_string($value) || preg_match('//u', $value) !== 1 || trim($value) === ''
+            || mb_strlen($value, 'UTF-8') > $maximum) {
+            throw new \UnexpectedValueException('Invalid editorial archive text.');
+        }
+        return $value;
+    }
+
+    /** @return array<string, int|string> */
+    private function archivedLessonFields(stdClass $row, bool $withBody): array
+    {
+        $slug = $this->archivedText($row->slug, 120);
+        if (preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/D', $slug) !== 1) {
+            throw new \UnexpectedValueException('Invalid editorial archive slug.');
+        }
+        $lesson = ['id' => $this->archivedInteger($row->id, 1), 'slug' => $slug,
+            'title' => $this->archivedText($row->title, 200)];
+        if ($withBody) {
+            $lesson['body'] = $this->archivedText($row->body, 30000);
+        }
+        $lesson['sort_order'] = $this->archivedInteger($row->sort_order);
+        return $lesson;
+    }
+
+    /**
+     * Archived version numbers only. Course title/summary/category are global
+     * current metadata and are deliberately absent from historical envelopes.
+     *
+     * @return array<string, mixed>|string
+     */
+    public function archivedVersions(PortalGrant $grant, int $courseId, ?int $beforeVersion = null): array|string
+    {
+        $error = $this->archivedCourseError($grant, $courseId);
+        if ($error !== null) {
+            return $error;
+        }
+        $query = DB::table('educational_course_versions as v')
+            ->where('v.educational_course_id', $courseId)->where('v.status', 'archived');
+        if ($beforeVersion !== null) {
+            if ($beforeVersion < 1 || $beforeVersion > 9007199254740991
+                // Bind as bigint so a safe JS integer beyond PostgreSQL int4
+                // yields an absent anchor rather than a parameter overflow.
+                || !(clone $query)->whereRaw('v.version = CAST(? AS BIGINT)', [$beforeVersion])->exists()) {
+                return 'invalid_cursor';
+            }
+            $query->where('v.version', '<', $beforeVersion);
+        }
+        // Correlated count uses the version index and the same SQL snapshot;
+        // it never sums current or other-version lessons into an archived one.
+        $count = DB::table('educational_lessons as l')->selectRaw('COUNT(*)')
+            ->whereColumn('l.educational_course_version_id', 'v.id');
+        $rows = $query->orderByDesc('v.version')->limit(51)->select('v.version', 'v.status')
+            ->selectSub($count, 'lesson_count')->get()->all();
+        $versions = [];
+        foreach ($rows as $row) {
+            if ($row->status !== 'archived') {
+                throw new \UnexpectedValueException('Invalid editorial archive status.');
+            }
+            $versions[] = ['version' => $this->archivedInteger($row->version, 1),
+                'status' => 'archived', 'lesson_count' => $this->archivedInteger($row->lesson_count)];
+        }
+        $more = count($versions) > 50;
+        $versions = array_slice($versions, 0, 50);
+        return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? [
+            'schema_version' => 1, 'scope' => 'editorial_archived_content', 'course_id' => $courseId,
+            'versions' => $versions,
+            'next_before_version' => $more ? $versions[count($versions) - 1]['version'] : null,
+        ] : 'access_denied';
+    }
+
+    /** @return array<string, mixed>|string */
+    public function archivedLessons(PortalGrant $grant, int $courseId, int $courseVersion,
+        ?int $afterSortOrder = null, ?int $afterLessonId = null): array|string
+    {
+        $error = $this->archivedCourseError($grant, $courseId);
+        if ($error !== null) {
+            return $error;
+        }
+        if ($courseVersion < 1 || $courseVersion > 9007199254740991) {
+            return 'not_found';
+        }
+        $version = DB::table('educational_course_versions')->where('educational_course_id', $courseId)
+            ->whereRaw('version = CAST(? AS BIGINT)', [$courseVersion])->where('status', 'archived')->value('id');
+        if ($version === null) {
+            return 'not_found';
+        }
+        $query = DB::table('educational_lessons')->where('educational_course_version_id', $version);
+        if (($afterSortOrder === null) !== ($afterLessonId === null)) {
+            return 'invalid_cursor';
+        }
+        if ($afterSortOrder !== null) {
+            if ($afterSortOrder < 0 || $afterSortOrder > 9007199254740991
+                || $afterLessonId < 1 || $afterLessonId > 9007199254740991
+                || !(clone $query)->whereRaw('sort_order = CAST(? AS BIGINT)', [$afterSortOrder])
+                    ->where('id', $afterLessonId)->exists()) {
+                return 'invalid_cursor';
+            }
+            $query->where(static function ($after) use ($afterSortOrder, $afterLessonId): void {
+                $after->where('sort_order', '>', $afterSortOrder)->orWhere(static function ($tie) use ($afterSortOrder, $afterLessonId): void {
+                    $tie->where('sort_order', $afterSortOrder)->where('id', '>', $afterLessonId);
+                });
+            });
+        }
+        $rows = $query->orderBy('sort_order')->orderBy('id')->limit(51)
+            ->get(['id', 'slug', 'title', 'sort_order'])->all();
+        $lessons = array_map(fn (stdClass $row): array => $this->archivedLessonFields($row, false), $rows);
+        $more = count($lessons) > 50;
+        $lessons = array_slice($lessons, 0, 50);
+        $last = $more ? $lessons[count($lessons) - 1] : null;
+        return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? [
+            'schema_version' => 1, 'scope' => 'editorial_archived_content', 'course_id' => $courseId,
+            'course_version' => $courseVersion, 'status' => 'archived', 'lessons' => $lessons,
+            'next_after' => $last === null ? null : ['sort_order' => $last['sort_order'], 'lesson_id' => $last['id']],
+        ] : 'access_denied';
+    }
+
+    /** @return array<string, mixed>|string */
+    public function archivedLesson(PortalGrant $grant, int $courseId, int $courseVersion, int $lessonId): array|string
+    {
+        $error = $this->archivedCourseError($grant, $courseId);
+        if ($error !== null) {
+            return $error;
+        }
+        if ($courseVersion < 1 || $courseVersion > 9007199254740991 || $lessonId < 1 || $lessonId > 9007199254740991) {
+            return 'not_found';
+        }
+        $row = DB::table('educational_lessons as l')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->where('v.educational_course_id', $courseId)->whereRaw('v.version = CAST(? AS BIGINT)', [$courseVersion])
+            ->where('v.status', 'archived')->where('l.id', $lessonId)
+            ->first(['l.id', 'l.slug', 'l.title', 'l.body', 'l.sort_order']);
+        if ($row === null) {
+            return 'not_found';
+        }
+        $lesson = $this->archivedLessonFields($row, true);
+        return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? [
+            'schema_version' => 1, 'scope' => 'editorial_archived_content', 'course_id' => $courseId,
+            'course_version' => $courseVersion, 'status' => 'archived', 'lesson' => $lesson,
+        ] : 'access_denied';
+    }
+
     /**
      * Read-only editorial aggregates. Each course uses the highest version
      * number, matching adminLessons; historical versions are never added up.

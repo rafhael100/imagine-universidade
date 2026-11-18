@@ -397,7 +397,8 @@ const result=new Script(writeStart+"\n"+writeEnd+"\n"+
   {filename:"admin-write-serialization"}).runInNewContext({
     state:{accessDenied:false,writePending:false,catalogReady:true,course:null,lessonsReady:true,courseRequest:0,lessonRequest:0},
     document:{querySelector:()=>fakeLayout},say:()=>{},
-    invalidateEditorialOverview:()=>{},renderEditorialOverview:()=>{}
+    invalidateEditorialOverview:()=>{},renderEditorialOverview:()=>{},
+    invalidateEditorialArchive:()=>{},renderEditorialArchive:()=>{}
   });
 assert.equal(result.first,true);
 assert.equal(result.duplicate,false,"double-click cannot start second POST");
@@ -583,7 +584,7 @@ const frozen= new Script(freezeFn+"\nfreezeUncertainEditorialWrite();"+
   {filename:"ambiguous-editorial-no-replay"}).runInNewContext({
   state:{accessDenied:false,writeOutcomeUnknown:false,catalogReady:true,lessonsReady:true,courseRequest:0,lessonRequest:0},
   $:id=>elements[id]??{disabled:false},clearPublicationCheck:()=>{},hideLessonPreview:()=>{},
-  say:m=>{statusMessage=m;},invalidateEditorialOverview:()=>{},
+  say:m=>{statusMessage=m;},invalidateEditorialOverview:()=>{},invalidateEditorialArchive:()=>{},
 });
 assert.equal(frozen.unknown,true,"editor: error after possible commit must freeze writes");
 assert.equal(frozen.catalog,false,"editor: no cached catalogue authority after ambiguous write");
@@ -884,4 +885,5 @@ await import("./check-student-favorites-export.mjs");
 await import("./check-student-reading-position.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
+await import("./check-editorial-version-history.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

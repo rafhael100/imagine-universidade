@@ -307,6 +307,35 @@ async function editorialOverview(editor,published){
     await editor.page.locator('[data-overview-metric="published_courses"] strong').innerText()===(published?"1":"0"),
     "The real editor must render the current aggregate snapshot after an explicit refresh");
 }
+async function archivedLessonPreview(editor,courseId,version,lessonId,expectedBody){
+  const index=await clickResponse(editor.page,"#refresh-editorial-versions","GET",
+    "/universidade/private/admin/courses/"+courseId+"/versions");
+  const versions=await json(index,"Archived version index");
+  check(index.status()===200&&versions.schema_version===1&&versions.scope==="editorial_archived_content"&&
+    versions.course_id===courseId&&versions.next_before_version===null&&
+    Array.isArray(versions.versions)&&versions.versions.length===1&&versions.versions[0].version===version&&
+    versions.versions[0].status==="archived"&&versions.versions[0].lesson_count===1&&
+    JSON.stringify(Object.keys(versions.versions[0]).sort())===JSON.stringify(["lesson_count","status","version"])&&
+    JSON.stringify(Object.keys(versions).sort())===JSON.stringify(["course_id","next_before_version","schema_version","scope","versions"]),
+    "The editorial archive index must expose only the exact archived version and lesson count");
+  const listing=await clickResponse(editor.page,'#editorial-version-list [data-archive-version="'+version+'"]',"GET",
+    "/universidade/private/admin/courses/"+courseId+"/versions/"+version+"/lessons");
+  const lessons=await json(listing,"Archived lesson list");
+  check(listing.status()===200&&lessons.course_id===courseId&&lessons.course_version===version&&
+    lessons.scope==="editorial_archived_content"&&lessons.status==="archived"&&lessons.next_after===null&&
+    lessons.lessons.length===1&&lessons.lessons[0].id===lessonId&&
+    JSON.stringify(Object.keys(lessons.lessons[0]).sort())===JSON.stringify(["id","slug","sort_order","title"]),
+    "The archived lesson page must keep the exact course/version and omit lesson bodies until selection");
+  const detail=await clickResponse(editor.page,'#editorial-version-lessons [data-archive-lesson="'+lessonId+'"]',"GET",
+    "/universidade/private/admin/courses/"+courseId+"/versions/"+version+"/lessons/"+lessonId);
+  const archived=await json(detail,"Archived lesson detail");
+  await editor.page.waitForFunction(()=>document.getElementById("editorial-version-content")?.textContent.includes("Um visitante fictício"));
+  check(detail.status()===200&&archived.course_id===courseId&&archived.course_version===version&&
+    archived.scope==="editorial_archived_content"&&archived.status==="archived"&&
+    archived.lesson.id===lessonId&&archived.lesson.body===expectedBody&&
+    JSON.stringify(Object.keys(archived.lesson).sort())===JSON.stringify(["body","id","slug","sort_order","title"]),
+    "An explicit archive selection must render only the historical lesson from its exact course and version");
+}
 
 async function main(){
   enterStage("health");
@@ -540,6 +569,28 @@ async function main(){
   check(otherPosition.status==="unavailable"&&otherPosition.revision===savedPositionA.revision,
     "Removing one company's reading position must preserve the other company's independent preference");
 
+  enterStage("read-only editorial archive with independent drafts");
+  await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"']").click();
+  const archiveFields=["course-summary","lesson-title","lesson-body"];
+  const cleanArchiveFields=await fields(editor.page,archiveFields);
+  await editor.page.locator("#course-summary").fill("Resumo local sintético preservado durante a consulta histórica.");
+  await editor.page.locator("#lesson-body").fill(revisedBody+"\n\nRascunho local ainda não salvo.");
+  const pendingArchiveFields=await fields(editor.page,archiveFields),archiveWrites=countWrites("editor");
+  await archivedLessonPreview(editor,courseId,1,firstLessonId,revisedBody);
+  check(JSON.stringify(await fields(editor.page,archiveFields))===JSON.stringify(pendingArchiveFields)&&
+    countWrites("editor")===archiveWrites&&
+    await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"'][aria-current='true']").count()===1,
+    "Browsing an archived version must preserve both unsaved forms, current draft selection and the write count");
+  await editor.page.locator("#editorial-versions-panel").screenshot({path:path.join(evidenceDir,"framework-archive-desktop.png")});
+  await editor.page.setViewportSize({width:390,height:844});
+  check(await editor.page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),
+    "The real archived lesson reader must remain within the narrow mobile viewport");
+  await editor.page.locator("#editorial-versions-panel").screenshot({path:path.join(evidenceDir,"framework-archive-mobile.png")});
+  await editor.page.setViewportSize({width:1440,height:1000});
+  for(let index=0;index<archiveFields.length;index++){
+    await editor.page.locator("#"+archiveFields[index]).fill(cleanArchiveFields[index]);
+  }
+
   enterStage("republication and independent current progress");
   await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"']").click();
   const revisedTitle="Primeira aula sintética revisada";
@@ -548,7 +599,15 @@ async function main(){
   const savedRevision=await clickResponse(editor.page,"#lesson-save","PATCH",adminRoot+"/lessons/"+newLessonId);
   await waitText(editor.page,"status","Aula salva em rascunho.");
   check(savedRevision.status()===200,"The cloned draft lesson must remain editable through the UI");
+  check(!(await editor.page.locator("#editorial-version-content").textContent()).includes("Um visitante fictício"),
+    "A new editorial mutation must invalidate the previously loaded archive view");
   await publish(editor,courseId,2);
+  const preservedArchiveResponse=await editor.context.request.get(base+adminRoot+"/courses/"+courseId+
+    "/versions/1/lessons/"+firstLessonId,{headers:{Accept:"application/json"}});
+  const preservedArchive=await json(preservedArchiveResponse,"Archive after republication");
+  check(preservedArchiveResponse.status()===200&&preservedArchive.course_version===1&&
+    preservedArchive.status==="archived"&&preservedArchive.lesson.id===firstLessonId&&preservedArchive.lesson.body===revisedBody,
+    "Editing and publishing the new version must preserve the earlier archived lesson content");
   await openStudent(studentA,courseId,revisedTitle);
   await openStudent(studentB,courseId,revisedTitle);
   check((await studentA.page.locator("#course-favorite-toggle").getAttribute("aria-pressed"))==="true"&&
@@ -608,7 +667,7 @@ async function main(){
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
     synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "explicit reading position","reading position export","completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
+      "explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

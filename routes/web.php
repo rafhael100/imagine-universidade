@@ -43,6 +43,12 @@ Route::prefix('universidade/private')->group(function (): void {
     Route::middleware('university.grant:manage')->prefix('admin')->group(function (): void {
         Route::view('/app', 'university.admin');
         Route::get('/courses', [UniversityController::class, 'adminCourses']);
+        Route::get('/courses/{courseId}/versions', [UniversityController::class, 'archivedVersions'])
+            ->whereNumber('courseId');
+        Route::get('/courses/{courseId}/versions/{courseVersion}/lessons', [UniversityController::class, 'archivedLessons'])
+            ->whereNumber('courseId')->whereNumber('courseVersion');
+        Route::get('/courses/{courseId}/versions/{courseVersion}/lessons/{lessonId}', [UniversityController::class, 'archivedLesson'])
+            ->whereNumber('courseId')->whereNumber('courseVersion')->whereNumber('lessonId');
         Route::get('/overview', [UniversityController::class, 'adminOverview']);
         Route::get('/audit', [UniversityController::class, 'adminAudit']);
         Route::post('/courses', [UniversityController::class, 'createCourse']);

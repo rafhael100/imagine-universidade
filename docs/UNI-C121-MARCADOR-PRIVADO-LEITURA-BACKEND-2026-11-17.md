@@ -249,3 +249,18 @@ PHP, PHPUnit, PostgreSQL e Chromium não foram executados localmente nesta
 entrega. Os resultados reais deverão ser confirmados no run de integração.
 Nenhum binding, provider operacional, gate, merge, deploy ou ambiente real foi
 alterado por este backend.
+
+## Evidência de integração aprovada
+
+O commit `0cff8de56f1da5bf5b5a00ad899e8332042b48ad` passou nos **seis jobs** de
+[Actions #44204205999](https://github.com/rafhael100/imagine-universidade/actions/runs/44204205999).
+A suíte registrou **196 testes PHP e 2.262 asserções** (39 Unit/169 e 157
+Feature/2.093), incluindo os 25 testes desta entrega. O PostgreSQL confirmou
+os 16 invariantes de schema, as 24 verificações de privilégios e o probe do
+marcador com duas conexões: disputa do primeiro INSERT, CAS antigo, locks,
+rollback após revogação, isolamento e normalização de timestamps.
+
+O navegador passou com 380 verificações de falhas controladas e 91 verificações
+no percurso real pelo Laravel/SQLite. A verificação final encontrou uma
+referência guardada e um slot vazio sem referência/data, como exigido pelo
+percurso. O resultado não altera a decisão operacional `HOLD_NO_GO`.

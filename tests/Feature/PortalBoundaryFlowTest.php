@@ -512,6 +512,57 @@ final class PortalBoundaryFlowTest extends TestCase
         self::assertSame(0, DB::table('educational_course_favorites')->count());
     }
 
+    public function test_same_subject_credential_rotation_before_fresh_write_check_is_denied(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $this->asClientA();
+
+        // Both credentials are valid for the SAME person, company, grant
+        // revision and permission. Comparing only PortalGrant is insufficient.
+        $authority = new class implements PortalAuthority {
+            public int $checks = 0;
+
+            public function verify(
+                string $serverSessionCredential,
+                string $companyId,
+                string $permission,
+            ): PortalGrant {
+                $this->checks++;
+                if (!in_array($serverSessionCredential, [
+                        'synthetic-client-a-session', 'synthetic-client-a-rotated',
+                    ], true)
+                    || $companyId !== 'test-client-a'
+                    || $permission !== PortalAccessGate::VIEW) {
+                    return PortalGrant::deny('synthetic_context_mismatch');
+                }
+
+                return PortalGrant::allow(
+                    'test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 1, time() + 30,
+                );
+            }
+        };
+        $this->app->instance(PortalAuthority::class, $authority);
+        $rotated = false;
+
+        DB::listen(static function (\Illuminate\Database\Events\QueryExecuted $query) use (&$rotated): void {
+            if (!$rotated
+                && str_contains($query->sql, 'educational_lessons')
+                && str_contains($query->sql, 'educational_course_versions')) {
+                $rotated = true;
+                request()->session()->put(
+                    'portal_server_credential', 'synthetic-client-a-rotated'
+                );
+            }
+        });
+
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertNotFound()->assertJsonPath('error', 'not_found');
+
+        self::assertTrue($rotated, 'The credential rotated after initial middleware authority.');
+        self::assertSame(1, $authority->checks, 'A rotated request must not even ask for another grant.');
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
     public function test_portal_outage_during_admin_audit_read_hides_response(): void
     {
         $this->asEditor();

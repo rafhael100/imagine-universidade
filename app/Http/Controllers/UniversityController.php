@@ -77,7 +77,12 @@ final class UniversityController
         try {
             $credential = $request->session()->get('portal_server_credential');
             $company = $request->session()->get('portal_company_id');
-            if (!is_string($credential) || !is_string($company)) {
+            $boundDigest = $request->attributes->get('university.initial_credential_digest');
+            if (!is_string($credential) || !is_string($company)
+                || !is_string($boundDigest)
+                || strlen($boundDigest) !== 64
+                || !hash_equals($boundDigest, hash('sha256', $credential))
+                || $company !== $expected->companyId) {
                 return null;
             }
 

@@ -58,6 +58,12 @@ final class RequireUniversityGrant
             return $this->deny();
         }
 
+        // Bind the initial server-held session credential to this request
+        // without exposing its raw value in a downstream request attribute.
+        // This digest is only a drift check, NEVER an authority token.
+        $request->attributes->set(
+            'university.initial_credential_digest', hash('sha256', $credential)
+        );
         $request->attributes->set('university.verified_grant', $grant);
         try {
             $nonce = base64_encode(random_bytes(18));

@@ -28,7 +28,6 @@ use App\Domain\Organizations\OrganizationMembership;
 use App\Domain\Organizations\OrganizationRole;
 use App\Domain\ServicePortfolio\PortfolioProduct;
 use App\Domain\ServicePortfolio\UniversityCommercialEligibilityPreflight;
-use App\Domain\ServicePortfolio\UniversityCommercialEligibilityResult;
 use App\Domain\ServicePortfolio\UniversityCommercialPolicyAuthority;
 use App\Domain\ServicePortfolio\UniversityCommercialPolicySnapshot;
 use App\Domain\ServicePortfolio\UniversityContractAuthority;
@@ -201,9 +200,9 @@ $coverageFor = static fn (
     ?OrganizationId $organization = null,
     int $contractRevision = 7,
     int $policyRevision = 4,
-    string $plan = $sku,
+    ?string $plan = null,
 ): UniversityServiceCoverageSnapshot => new UniversityServiceCoverageSnapshot(
-    $service, $organization ?? $tenant, PortfolioProduct::Onepage, $plan,
+    $service, $organization ?? $tenant, PortfolioProduct::Onepage, $plan ?? $sku,
     $contractRevision, $policyRevision,
     $now - 60, $now + 60, $now - 5, $now + 30, $basis,
 );

@@ -896,6 +896,7 @@ await import("./check-student-reading-position.mjs");
 await import("./check-contextual-courses.mjs");
 await import("./check-progress-history.mjs");
 await import("./check-progress-export-timestamps.mjs");
+await import("./check-progress-export-version.mjs");
 await import("./check-student-navigation-focus.mjs");
 await import("./check-lesson-sections.mjs");
 await import("./check-student-catalog-reconciliation.mjs");

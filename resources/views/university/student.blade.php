@@ -1827,7 +1827,7 @@ function sanitizedProgressExport(payload){
     if(!item||typeof item!=="object"||Array.isArray(item)||
        typeof item.course_slug!=="string"||item.course_slug.length>120||!slug.test(item.course_slug)||
        typeof item.lesson_slug!=="string"||item.lesson_slug.length>120||!slug.test(item.lesson_slug)||
-       !Number.isSafeInteger(item.course_version)||item.course_version<1||item.course_version>1000000||
+       !Number.isSafeInteger(item.course_version)||item.course_version<1||
        typeof item.completed_at!=="string"||item.completed_at.length>40||!timestamp.test(item.completed_at))return null;
     rows.push({
       course_slug:item.course_slug,

@@ -617,6 +617,9 @@ async function concurrentLessonEdits(editor,peer,courseId,firstLessonId,lessonId
     "The confirmed text save must adopt the server's current order while preserving the other form, filtered list and lesson selection");
   // Refresh through the current UI before changing the order from the first
   // session, so this deliberate edit does not also replay old lesson text.
+  // Selecting the already selected course is intentionally a no-op. Leave
+  // its form without creating a record, then select it for a real lesson GET.
+  await editor.page.locator("#new-course").click();
   await editor.page.locator("#course-items [data-course='"+courseId+"']").click();
   await editor.page.locator("#lesson-items [data-lesson='"+lessonId+"']").click();
   await editor.page.locator("#lesson-sort").fill("2");
@@ -676,6 +679,7 @@ async function concurrentLessonEdits(editor,peer,courseId,firstLessonId,lessonId
     JSON.stringify(restored.request().postDataJSON())===JSON.stringify({title:savedTitle,body:savedBody,sort_order:1,expected_sort_order:2})&&
     countWrites(editor.profile)===writes+4,
     "A new deliberate edit after recovery must use the new order baseline and succeed without replaying the rejected request");
+  await editor.page.locator("#new-course").click();
   await editor.page.locator("#course-items [data-course='"+courseId+"']").click();
   await editor.page.locator("#lesson-items [data-lesson='"+lessonId+"']").click();
   check(await editor.page.evaluate(({first,lesson})=>JSON.stringify(state.lessons.map(item=>({id:item.id,sort_order:item.sort_order})))===

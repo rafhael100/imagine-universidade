@@ -185,3 +185,9 @@ relaxados. Os diagnósticos não imprimem SQL, payloads ou credenciais.
 PHP, PostgreSQL, Chromium e os percursos integrados dependem dos jobs existentes
 de CI. Esta entrega não atribui execução desses ambientes aos checks estáticos
 acima.
+
+## Backend executado em CI
+
+O [run 44227212699](https://github.com/rafhael100/imagine-universidade/actions/runs/44227212699), SHA `3894f10715be4d52a9a3d4d946cc9923617e05f5`, passou a validação com **328 testes PHP / 3.721 asserções** (39 Unit/169 e 289 Feature/3.552), incluindo os 21 métodos C133 e os 11 C134. O probe PostgreSQL executou as nove verificações novas: ordem preservada após reordenação real, espera do peer no lock, CAS válido, conflitos sem efeitos, legado, defesa estrita e rollback após auditoria. Os 15 caminhos de escrita, 16 invariantes e 24 verificações de privilégios permaneceram aprovados.
+
+Cinco jobs foram aprovados. O módulo Chromium sintético também passou; o percurso Laravel parou em uma preparação de atualização da seleção, documentada na C133 UI. Esta evidência confirma backend e PostgreSQL nesse SHA, sem atribuir aprovação integral ao percurso real ou a alterações posteriores.

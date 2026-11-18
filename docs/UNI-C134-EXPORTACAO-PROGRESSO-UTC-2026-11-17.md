@@ -154,3 +154,9 @@ bindings operacionais ou gates de lançamento.
 O checker focal foi incluído na suíte Node principal, que passou integralmente com a C133. A revisão independente do mapper, dos testes, do probe e do complemento do percurso real não encontrou bloqueadores.
 
 O runner Laravel/SQLite substitui a consulta direta anterior à exportação por um clique em **Exportar meu progresso** e a leitura do arquivo realmente baixado. Acrescenta **duas verificações preparadas** para cabeçalhos/nome, allowlist/envelope, UTC canônico, igualdade integral com a resposta real e ausência de escritas. A asserção anterior de curso/aula/versão após republicação permanece e passa a comparar também a data com a referência original obtida no histórico. A sintaxe passou; a execução depende da CI do SHA integrado, sem simular respostas de negócio.
+
+## Backend executado em CI
+
+No SHA `3894f10715be4d52a9a3d4d946cc9923617e05f5`, o [run 44227212699](https://github.com/rafhael100/imagine-universidade/actions/runs/44227212699) aprovou **328 testes PHP / 3.721 asserções**, incluindo os 11 métodos C134. O probe PostgreSQL confirmou o DTO canônico idêntico sob UTC, Etc/GMT-3 e Asia/Kolkata e a preservação integral dos registros originais, além do escopo/allowlist. Essas seis verificações foram executadas no banco descartável real.
+
+Cinco jobs foram aprovados e o módulo Chromium sintético completou 702 verificações. A jornada Laravel parou antes do download, por uma preparação C133 de atualização de seleção já corrigida no runner. Portanto, o download real C134 continua pendente da execução seguinte; os resultados acima não presumem sua conclusão.

@@ -156,6 +156,7 @@ jobs:
           php scripts/check-pg-reading-position.php
           php scripts/check-pg-editorial-archives.php
           php scripts/check-pg-retained-favorites.php
+          php scripts/check-pg-progress-history.php
           php scripts/check-pg-nonce.php
           php scripts/check-pg-concurrency.php
           php scripts/check-pg-runtime-roles.php

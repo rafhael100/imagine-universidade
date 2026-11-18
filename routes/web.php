@@ -29,6 +29,7 @@ Route::prefix('universidade/private')->group(function (): void {
         Route::post('/search', [UniversityController::class, 'searchLessons'])
             ->middleware('throttle:20,1');
         Route::get('/progress/export', [UniversityController::class, 'exportProgress']);
+        Route::get('/progress/history', [UniversityController::class, 'progressHistory']);
         Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'lessons'])
             ->whereNumber('courseId');
         Route::get('/lessons/{lessonId}', [UniversityController::class, 'lesson'])

@@ -225,6 +225,51 @@ async function retainedFavorites(student,courseId,availability){
     "Consulting retained favorites through the real UI must preserve the current lesson, course, filters and write count");
   return rows[0]??null;
 }
+async function progressHistory(student,availability){
+  const historyPath="/universidade/private/progress/history";
+  const selection=()=>student.page.evaluate(()=>({
+    course:document.querySelector("#course-list [aria-current='true']")?.getAttribute("data-course-id")??null,
+    lesson:document.querySelector("#lesson-content h3")?.textContent??null,
+    category:document.querySelector("[data-filter][aria-pressed='true']")?.getAttribute("data-filter")??null,
+    query:document.getElementById("course-search").value,
+    favoritesOnly:document.getElementById("favorites-only").checked,
+    reading:state.readingSnapshot,favorites:state.favoriteIds,courses:state.courses,
+  }));
+  await student.page.waitForFunction(()=>!state.libraryLoading&&!state.favoritesLoading&&!state.readingLoading);
+  const before=await selection(),writes=countWrites(student.profile);
+  if(!await student.page.locator("#progress-history-panel").evaluate(node=>node.open)){
+    const reads=businessRequests.filter(request=>request.profile===student.profile&&request.path===historyPath).length;
+    await student.page.locator("#progress-history-panel > summary").click();
+    check(businessRequests.filter(request=>request.profile===student.profile&&request.path===historyPath).length===reads,
+      "Opening the real completion-history panel must not request private records automatically");
+  }
+  const response=await clickResponse(student.page,"#reload-progress-history","GET",historyPath);
+  const payload=await json(response,"Private completion history");
+  await student.page.waitForFunction(()=>!document.getElementById("reload-progress-history").disabled);
+  const rows=payload.completions;
+  check(response.status()===200&&(response.headers()["cache-control"]||"").includes("no-store")&&
+    payload.schema_version===1&&payload.scope==="current_authenticated_student"&&payload.next_before_id===null&&
+    JSON.stringify(Object.keys(payload).sort())===JSON.stringify(["completions","next_before_id","schema_version","scope"])&&
+    Array.isArray(rows)&&(availability===null?rows.length===0:rows.length===1&&
+      Number.isSafeInteger(rows[0].completion_id)&&rows[0].completion_id>0&&
+      rows[0].course_slug==="curso-framework-sintetico"&&rows[0].course_version===1&&
+      rows[0].lesson_slug==="aula-principal-sintetica"&&rows[0].availability===availability&&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(rows[0].completed_at)&&
+      JSON.stringify(Object.keys(rows[0]).sort())===JSON.stringify([
+        "availability","completed_at","completion_id","course_slug","course_version","lesson_slug"
+      ])),
+    "The real completion-history API must return only this student's exact version references, UTC date and availability");
+  const list=student.page.locator("#progress-history-list"),text=await list.textContent();
+  check(await list.locator("[data-completion-id]").count()===rows.length&&
+    await list.locator("a,button").count()===0&&
+    (rows.length===0||await list.locator("[data-completion-id='"+rows[0].completion_id+"'] time").getAttribute("datetime")===rows[0].completed_at&&
+      text.includes("Curso: "+rows[0].course_slug)&&text.includes("Aula: "+rows[0].lesson_slug)&&
+      text.includes("Versão da aula: 1")&&text.includes(availability==="available"
+        ?"Esta aula e versão estão disponíveis.":"Esta aula ou versão está indisponível."))&&
+    JSON.stringify(await selection())===JSON.stringify(before)&&countWrites(student.profile)===writes,
+    "Reading the real history must preserve current study, filters, favorites and reading position without a navigation or mutation action");
+  return rows[0]??null;
+}
 async function exportFavorites(student,expectedSlugs){
   const [download,response]=await Promise.all([
     student.page.waitForEvent("download"),
@@ -641,6 +686,11 @@ async function main(){
     "Explicit resume must clear obstructing filters, open the saved exact version and remain read-only");
   const savedPositionB=await saveReadingPosition(studentB,courseId,1,firstLessonId);
 
+  enterStage("manual completion history before the first completion");
+  await progressHistory(studentA,null);
+  await progressHistory(studentB,null);
+  const historyReadsBeforeCompletion=businessRequests.filter(request=>request.profile==="student-a"&&
+    request.path==="/universidade/private/progress/history").length;
   enterStage("completion and disabled tutor");
   const completion=await clickResponse(studentA.page,"#lesson-content button.primary","POST",
     "/universidade/private/lessons/"+firstLessonId+"/complete");
@@ -653,6 +703,13 @@ async function main(){
   check(completion.status()===200&&completed.completed===true&&
     (await studentA.page.locator("#lesson-content button.primary").innerText()).includes("Aula concluída"),
     "Student completion must be confirmed by the real database-backed API");
+  await studentA.page.waitForFunction(id=>state.courses.find(course=>course.id===id)?.lessons_completed===1,courseId);
+  check(await studentA.page.locator("#progress-history-list [data-completion-id]").count()===0&&
+    (await studentA.page.locator("#progress-history-status").textContent()).includes("Consulte novamente")&&
+    businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/progress/history").length===historyReadsBeforeCompletion,
+    "A real completion must invalidate the consulted history without inserting an optimistic row or requesting history automatically");
+  const originalCompletion=await progressHistory(studentA,"available");
+  await progressHistory(studentB,null);
   enterStage("completion isolation after student reload");
   await openStudent(studentB,courseId,firstTitle);
   check(!(await studentB.page.locator("#lesson-content button.primary").isDisabled())&&
@@ -698,6 +755,17 @@ async function main(){
   const oldSource=await studentA.context.request.get(base+"/universidade/private/lessons/"+firstLessonId,
     {headers:{Accept:"application/json"}});
   check(oldSource.status()===404,"The archived lesson must be unavailable through its previous HTTP identity");
+  const withdrawnCompletion=await progressHistory(studentA,"unavailable");
+  check(withdrawnCompletion.completion_id===originalCompletion.completion_id&&
+    withdrawnCompletion.completed_at===originalCompletion.completed_at,
+    "Withdrawal must retain the original completion identity and date while marking that exact lesson version unavailable");
+  await progressHistory(studentB,null);
+  await studentA.page.locator("#progress-history-panel").screenshot({path:path.join(evidenceDir,"framework-progress-history-desktop.png")});
+  await studentA.page.setViewportSize({width:390,height:844});
+  check(await studentA.page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),
+    "The real retained completion references must remain legible inside the narrow mobile viewport");
+  await studentA.page.locator("#progress-history-panel").screenshot({path:path.join(evidenceDir,"framework-progress-history-mobile.png")});
+  await studentA.page.setViewportSize({width:1440,height:1000});
   await exportFavorites(studentA,["curso-framework-sintetico"]);
   const retainedAfterWithdrawal=await retainedFavorites(studentA,courseId,"unavailable");
   check(retainedAfterWithdrawal.saved_at===retainedA.saved_at&&
@@ -831,6 +899,15 @@ async function main(){
     courseId,lessonId:newLessonId,title:revisedTitle,version:2,position:revisedPosition,history
   });
 
+  enterStage("retained completion version after republication");
+  const republishedCompletion=await progressHistory(studentA,"unavailable");
+  check(JSON.stringify(republishedCompletion)===JSON.stringify(withdrawnCompletion)&&
+    await studentA.page.locator("#lesson-content button.primary").isEnabled(),
+    "Republication and contextual navigation must preserve the old unavailable completion without completing the new version");
+  await progressHistory(studentB,null);
+  // The contextual journey reloads the student page. Refill the manager so
+  // the following revocation still proves removal of populated private rows.
+  await retainedFavorites(studentA,courseId,"available");
   enterStage("revocation, purge and retained preference");
   const readsBefore=businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length;
   setAuthority("student-a",false);
@@ -850,6 +927,12 @@ async function main(){
     await studentA.page.locator("#retained-favorites-list [data-retained-course-id]").count()===0&&
     await studentA.page.locator("#reload-retained-favorites").isDisabled(),
     "Eligibility revocation must purge retained references and disable the private manager");
+  check(await studentA.page.locator("#progress-history-panel").isHidden()&&
+    !(await studentA.page.locator("#progress-history-panel").evaluate(node=>node.open))&&
+    await studentA.page.locator("#progress-history-list [data-completion-id]").count()===0&&
+    (await studentA.page.locator("#progress-history-status").textContent())===""&&
+    await studentA.page.locator("#reload-progress-history").isDisabled(),
+    "Eligibility revocation must close and purge the populated personal completion history without deleting its records");
   check(await studentA.page.locator("#contextual-courses-panel").isHidden()&&
     await studentA.page.locator("#contextual-courses-list [data-contextual-course-id]").count()===0&&
     (await studentA.page.locator("#contextual-courses-status").textContent())===""&&
@@ -874,12 +957,14 @@ async function main(){
   check(await studentA.page.locator("#course-list [data-course-id='"+courseId+"']").count()===1&&
     await studentA.page.locator("#contextual-courses-list [data-contextual-course-id='"+contextualPeerId+"']").count()===1,
     "A newly eligible page may suggest the independently published peer while preserving the selected source course");
+  check(JSON.stringify(await progressHistory(studentA,"unavailable"))===JSON.stringify(withdrawnCompletion),
+    "A newly eligible manual history query must restore the same retained reference without creating another completion");
   await studentA.page.screenshot({path:path.join(evidenceDir,"framework-student.png"),fullPage:true});
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
     synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","contextual courses without personal ranking","revocation"],
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","contextual courses without personal ranking","manual completion history","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

@@ -103,6 +103,14 @@ A comparação das seis rotas conserva quantidade e multiplicidade exatas, exigi
 
 O runner também prepara capturas do painel em desktop e em largura móvel, verificando ausência de transbordamento horizontal. Os arquivos ficam no diretório de evidências isolado da CI. Nenhuma execução local de navegador, PHP ou banco foi realizada para essa extensão.
 
+## Evidência de execução integrada
+
+O [run 44215301990](https://github.com/rafhael100/imagine-universidade/actions/runs/44215301990), SHA `f6c14e8c9189f9eea3d990718b37929b1270adea`, passou nos **seis jobs**. O backend manteve **245 testes PHP / 2.801 asserções**, com 16 invariantes de schema e 24 verificações de privilégios.
+
+O navegador sintético passou em **495 verificações**, incluindo as 20 C125. O percurso real passou em **136 verificações**, incluindo as 17 adicionais descritas acima, e a conferência final de persistência passou. A ida/volta realizou somente as seis leituras autorizadas e preservou os snapshots reais de favoritos, conclusões e posição/revisão. Revogação e restauração usaram as identidades sintéticas existentes.
+
+As capturas reais do painel em 1440 e 390 pixels foram inspecionadas: razão da sugestão, título e ações estão legíveis, sem transbordamento horizontal. A varredura de aluno/editor nos quatro tamanhos da suíte permaneceu sem violações graves/críticas de acessibilidade. Essa evidência pertence ao SHA acima, sem antecipar aprovação de alterações posteriores.
+
 ## Limites do recorte
 
 Esta é uma sugestão editorial por categoria. Não é recomendação por IA ou inferência de necessidade pessoal, não muda a elegibilidade, não bloqueia cursos e não atribui direitos nos produtos Imagine. A escolha de ocultar dura somente enquanto esta página existir. Preferências permanentes, notificações, campanhas e comunicação com outros sistemas permanecem fora deste recorte.

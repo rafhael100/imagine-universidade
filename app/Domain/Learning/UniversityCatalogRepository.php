@@ -241,8 +241,8 @@ final class UniversityCatalogRepository
         ];
     }
 
-    /** The retained-preference API has a canonical UTC date, independent of PDO formatting. */
-    private function retainedFavoriteTimestamp(mixed $value): string
+    /** Private reference APIs use canonical UTC dates, independent of PDO formatting. */
+    private function privateReferenceTimestamp(mixed $value): string
     {
         if (!is_string($value)
             || preg_match('/\A\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::?\d{2})?)?\z/D', $value) !== 1) {
@@ -321,7 +321,7 @@ final class UniversityCatalogRepository
                 throw new \UnexpectedValueException('Invalid retained preference ordering.');
             }
             $favorites[] = ['course_id' => $id, 'course_slug' => $row->course_slug,
-                'saved_at' => $this->retainedFavoriteTimestamp($row->saved_at),
+                'saved_at' => $this->privateReferenceTimestamp($row->saved_at),
                 'availability' => $row->availability];
             $previousId = $id;
         }
@@ -880,6 +880,90 @@ final class UniversityCatalogRepository
                 $entries,
             ),
         ];
+    }
+
+    private function progressHistoryInteger(mixed $value): int
+    {
+        if ((!is_int($value) && !is_string($value))
+            || preg_match('/\A[1-9][0-9]{0,15}\z/D', (string) $value) !== 1
+            || filter_var($value, FILTER_VALIDATE_INT, ['options' => [
+                'min_range' => 1, 'max_range' => 9007199254740991,
+            ]]) === false) {
+            throw new \UnexpectedValueException('Invalid private completion identifier.');
+        }
+        return (int) $value;
+    }
+
+    /**
+     * The same retained references as exportProgress, one bounded page at a
+     * time. Record order is p.id DESC, not a new ranking or a timestamp cursor.
+     * Availability belongs to the exact completed lesson and version.
+     *
+     * @return array<string, mixed>|string A fixed error code, never a partial page.
+     */
+    public function progressHistory(PortalGrant $grant, ?int $beforeId = null): array|string
+    {
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)
+            || $grant->companyId === self::EDITORIAL_ORGANIZATION_KEY) {
+            return 'access_denied';
+        }
+        if ($beforeId !== null && ($beforeId < 1 || $beforeId > 9007199254740991)) {
+            return 'invalid_cursor';
+        }
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return 'temporarily_unavailable';
+        }
+        $query = DB::table('educational_lesson_progress as p')
+            ->join('educational_lessons as l', 'l.id', '=', 'p.educational_lesson_id')
+            ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->where('p.educational_organization_id', $org)
+            ->where('p.subject_key', $grant->subjectId)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
+            ->whereIn('v.status', ['published', 'archived']);
+        if ($beforeId !== null) {
+            // A bound is not an ownership claim. Do not look up an anchor:
+            // foreign or removed IDs only restrict this already-private query.
+            $query->where('p.id', '<', $beforeId);
+        }
+        $rows = $query->orderByDesc('p.id')->limit(51)
+            ->get(['p.id as completion_id', 'c.slug as course_slug', 'v.version as course_version',
+                'l.slug as lesson_slug', 'p.completed_at',
+                DB::raw("CASE WHEN c.is_published AND v.status = 'published' AND l.is_published THEN 'available' ELSE 'unavailable' END AS availability"),
+            ])->all();
+        $completions = [];
+        $previousId = $beforeId;
+        foreach ($rows as $row) {
+            $id = $this->progressHistoryInteger($row->completion_id);
+            $version = $this->progressHistoryInteger($row->course_version);
+            foreach ([$row->course_slug, $row->lesson_slug] as $slug) {
+                if (!is_string($slug) || strlen($slug) > 120
+                    || preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/D', $slug) !== 1) {
+                    throw new \UnexpectedValueException('Invalid private completion reference.');
+                }
+            }
+            if (($previousId !== null && $id >= $previousId)
+                || !in_array($row->availability, ['available', 'unavailable'], true)) {
+                throw new \UnexpectedValueException('Invalid private completion ordering or availability.');
+            }
+            $completions[] = ['completion_id' => $id, 'course_slug' => $row->course_slug,
+                'course_version' => $version, 'lesson_slug' => $row->lesson_slug,
+                'completed_at' => $this->privateReferenceTimestamp($row->completed_at),
+                'availability' => $row->availability];
+            $previousId = $id;
+        }
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return 'access_denied';
+        }
+        // The sentinel is validated too; do not hide a broken continuation.
+        $hasNext = count($completions) > 50;
+        $completions = array_slice($completions, 0, 50);
+        return ['schema_version' => 1, 'scope' => 'current_authenticated_student',
+            'completions' => $completions,
+            'next_before_id' => $hasNext ? $completions[49]['completion_id'] : null];
     }
 
     public function isComplete(PortalGrant $grant, int $lessonId): ?bool

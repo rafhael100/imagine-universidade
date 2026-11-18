@@ -702,6 +702,7 @@ function studentFlowFixture(){
     el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),lessonReadingPositionAction:()=>studentTestNode("div"),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,renderCourses:()=>{},renderSimulator:()=>{},renderFavoriteControls:()=>{},loadFavorites:async()=>false,
     invalidateRetainedFavorites:()=>{},
     renderContextualCourses:()=>{},
+    invalidateProgressHistory:()=>{},renderProgressHistory:()=>{},
     markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
   return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
 }
@@ -887,6 +888,7 @@ await import("./check-student-favorites-export.mjs");
 await import("./check-retained-favorites.mjs");
 await import("./check-student-reading-position.mjs");
 await import("./check-contextual-courses.mjs");
+await import("./check-progress-history.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 await import("./check-editorial-version-history.mjs");

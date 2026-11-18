@@ -32,7 +32,8 @@ function harness(name){
   const extra=name==="admin"?["hideLessonPreview","clearPublicationCheck","invalidateEditorialOverview","renderEditorialOverview",
     "archivePositive","editorialArchiveAllowed","clearEditorialArchiveSelection","invalidateEditorialArchive","renderEditorialArchive",
     "editorialCourseFiltersAllowed","renderEditorialCourseFilters"]:
-    ["invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses"];
+    ["invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
+      "invalidateProgressHistory","renderProgressHistory"];
   const source=["discardErrorBody","api","el","say","lockAccess",...extra].map(fn=>actual(view,fn)).join("\n");
   const initial=view.match(/const state=(\{[\s\S]*?\});/)?.[1];assert.ok(initial);
   const context=createContext({

@@ -65,6 +65,14 @@
     .retained-favorite-info{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}
     .retained-favorite-info strong,.retained-favorite-info span,.retained-favorite-info time{display:block}
     .retained-favorite-info span,.retained-favorite-info time{font-size:12px;color:#565D56;margin-top:3px}
+    .progress-history{margin:0 0 18px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:#FAFBFC;min-width:0}
+    .progress-history summary{cursor:pointer;font-weight:750;min-height:28px}
+    .progress-history>p{font-size:13px;color:#565D56;margin:10px 0}
+    .progress-history .secondary{margin-left:0}
+    .progress-history-list{list-style:none;padding:0;margin:12px 0;display:grid;gap:8px}
+    .progress-history-entry{padding:12px 14px;border:1px solid var(--line);border-radius:9px;background:#fff;overflow-wrap:anywhere}
+    .progress-history-entry strong,.progress-history-entry span,.progress-history-entry time{display:block}
+    .progress-history-entry span,.progress-history-entry time{font-size:12px;color:#565D56;margin-top:4px}
     .favorite-status{flex-basis:100%;font-size:13px;color:#565D56;margin:0}
     .course-favorite{padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
     .course-favorite p{font-size:13px;font-weight:750;margin:0 0 8px;overflow-wrap:anywhere}
@@ -206,6 +214,14 @@
       <button id="more-retained-favorites" type="button" class="secondary" hidden disabled>Ver mais favoritos</button>
     </details>
   </div>
+  <details id="progress-history-panel" class="progress-history" hidden>
+    <summary>Meu histórico de conclusões</summary>
+    <p>Consulte as conclusões registradas nas versões exatas das aulas, inclusive quando o material não está mais disponível. Esta consulta não altera seu progresso.</p>
+    <button id="reload-progress-history" type="button" class="secondary" disabled>Consultar histórico</button>
+    <p id="progress-history-status" role="status" aria-live="polite"></p>
+    <ul id="progress-history-list" class="progress-history-list"></ul>
+    <button id="more-progress-history" type="button" class="secondary" hidden disabled>Ver mais conclusões</button>
+  </details>
   <section class="lesson-search-panel" aria-labelledby="lesson-search-title">
     <h2 id="lesson-search-title">Encontre um assunto dentro das aulas</h2>
     <p>Busca privada somente nos materiais publicados. As palavras pesquisadas não são enviadas a ferramentas externas.</p>
@@ -268,6 +284,8 @@ const list=document.getElementById("course-list"),lessonsBox=document.getElement
 const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
   contextualCoursesVisible:true,contextualRequest:0,
+  progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,
+    message:"Consulte seu histórico quando desejar."},
   favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,
   favoriteWriting:false,favoriteWriteRequest:0,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",
   favoriteExportLoading:false,favoriteExportRequest:0,
@@ -317,6 +335,9 @@ function lockAccess(message){
   state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
   renderContextualCourses();
+  invalidateProgressHistory("");
+  document.getElementById("progress-history-panel").open=false;
+  renderProgressHistory();
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;
   state.favoriteWriting=false;state.favoriteOutcomeUnknown=false;state.favoritesOnly=false;
   ++state.favoriteWriteRequest;
@@ -738,6 +759,94 @@ document.getElementById("reload-reading-position").addEventListener("click",()=>
 document.getElementById("resume-reading-position").addEventListener("click",()=>{void resumeReadingPosition();});
 document.getElementById("remove-reading-position").addEventListener("click",()=>{void writeReadingPosition();});
 document.getElementById("export-reading-position").addEventListener("click",()=>{void exportReadingPosition();});
+function progressHistoryTimestamp(value){
+  if(typeof value!=="string"||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value))return false;
+  const date=new Date(value);
+  return Number.isFinite(date.getTime())&&date.toISOString().replace(".000Z","Z")===value;
+}
+function validatedProgressHistory(payload,before=null,previous=[]){
+  if(!studentRecord(payload)||payload.schema_version!==1||payload.scope!=="current_authenticated_student"||
+     !Array.isArray(payload.completions)||payload.completions.length>50||
+     !(before===null||(Number.isSafeInteger(before)&&before>0)))return null;
+  const ids=new Set(previous.map(row=>row.completion_id));
+  const references=new Set(previous.map(row=>JSON.stringify([row.course_slug,row.course_version,row.lesson_slug])));
+  const completions=[];let last=before;
+  for(const row of payload.completions){
+    if(!studentRecord(row)||!Number.isSafeInteger(row.completion_id)||row.completion_id<1||
+       (last!==null&&row.completion_id>=last)||ids.has(row.completion_id)||
+       !studentSlug(row.course_slug)||!studentSlug(row.lesson_slug)||
+       !Number.isSafeInteger(row.course_version)||row.course_version<1||
+       !progressHistoryTimestamp(row.completed_at)||!["available","unavailable"].includes(row.availability))return null;
+    const reference=JSON.stringify([row.course_slug,row.course_version,row.lesson_slug]);
+    if(references.has(reference))return null;
+    completions.push({completion_id:row.completion_id,course_slug:row.course_slug,
+      course_version:row.course_version,lesson_slug:row.lesson_slug,completed_at:row.completed_at,availability:row.availability});
+    ids.add(row.completion_id);references.add(reference);last=row.completion_id;
+  }
+  const next=payload.next_before_id;
+  if(next!==null&&(!Number.isSafeInteger(next)||next<1||completions.length!==50||next!==last))return null;
+  return {completions,next_before_id:next};
+}
+function invalidateProgressHistory(message="Seu histórico pode ter mudado. Consulte novamente para ver os registros atuais."){
+  const history=state.progressHistory;++history.request;
+  history.rows=[];history.nextBefore=null;history.ready=false;history.loading=false;history.message=message;
+}
+function renderProgressHistory(){
+  const history=state.progressHistory,active=state.libraryReady&&!state.accessDenied;
+  const panel=document.getElementById("progress-history-panel"),list=document.getElementById("progress-history-list");
+  const reload=document.getElementById("reload-progress-history"),more=document.getElementById("more-progress-history");
+  panel.hidden=!active;list.replaceChildren();
+  reload.disabled=!active||history.loading;
+  reload.textContent=history.ready?"Atualizar histórico":"Consultar histórico";
+  more.hidden=!active||!history.ready||history.nextBefore===null;more.disabled=!active||history.loading;
+  document.getElementById("progress-history-status").textContent=active?history.message:"";
+  if(!active)return;
+  for(const row of history.rows){
+    const item=el("li",undefined,"progress-history-entry");item.dataset.completionId=String(row.completion_id);
+    item.append(el("strong","Curso: "+row.course_slug),el("span","Aula: "+row.lesson_slug),
+      el("span","Versão da aula: "+row.course_version));
+    const time=el("time","Conclusão registrada em "+new Intl.DateTimeFormat("pt-BR",{
+      dateStyle:"short",timeStyle:"medium",timeZone:"UTC"
+    }).format(new Date(row.completed_at))+" (UTC)");
+    time.setAttribute("datetime",row.completed_at);item.append(time);
+    item.append(el("span",row.availability==="available"
+      ?"Esta aula e versão estão disponíveis.":"Esta aula ou versão está indisponível."));
+    list.append(item);
+  }
+}
+async function loadProgressHistory(append=false){
+  const history=state.progressHistory;
+  if(state.accessDenied||!state.libraryReady||history.loading||
+     (append&&(!history.ready||history.nextBefore===null)))return false;
+  const before=append?history.nextBefore:null,previous=append?history.rows:[];
+  const request=++history.request;
+  if(!append){history.rows=[];history.nextBefore=null;history.ready=false;}
+  history.loading=true;history.message=append?"Consultando mais conclusões...":"Consultando seu histórico de conclusões...";
+  renderProgressHistory();
+  const current=()=>!state.accessDenied&&state.libraryReady&&history.request===request;
+  try{
+    const payload=await api("/progress/history"+(before===null?"":"?before_id="+encodeURIComponent(String(before))));
+    if(!current())return false;
+    const page=validatedProgressHistory(payload,before,previous);
+    if(page===null)throw new Error("invalid_progress_history");
+    history.rows=[...previous,...page.completions];history.nextBefore=page.next_before_id;history.ready=true;
+    history.message=history.rows.length
+      ?"Registros consultados: "+history.rows.length+"."+(history.nextBefore!==null?" Há mais registros para consultar.":"")+
+        " Atualize o histórico para conferir novas conclusões."
+      :"Nenhuma conclusão encontrada nesta consulta.";
+    return true;
+  }catch{
+    if(current()){
+      history.rows=[];history.nextBefore=null;history.ready=false;
+      history.message="Não foi possível consultar seu histórico. Use Consultar histórico para tentar novamente.";
+    }
+    return false;
+  }finally{
+    if(history.request===request){history.loading=false;renderProgressHistory();}
+  }
+}
+document.getElementById("reload-progress-history").addEventListener("click",()=>{void loadProgressHistory();});
+document.getElementById("more-progress-history").addEventListener("click",()=>{void loadProgressHistory(true);});
 function retainedTimestamp(value){
   if(typeof value!=="string"||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value))return false;
   const date=new Date(value);
@@ -1084,6 +1193,7 @@ document.getElementById("contextual-courses-toggle").addEventListener("click",()
 });
 function renderCourses(){
   renderContextualCourses();
+  renderProgressHistory();
   if(state.accessDenied||!state.libraryReady)return;
   renderFavoriteControls();renderReadingPosition();renderPillars();
   list.replaceChildren();
@@ -1410,6 +1520,9 @@ async function selectLesson(id,preferredVersion=null){
     }
     action.addEventListener("click",async()=>{
       if(action.disabled||state.accessDenied||state.lessonId!==id)return;
+      // A read begun before or during this explicit write may omit its
+      // outcome. Keep the global history manual, including after navigation.
+      invalidateProgressHistory();renderProgressHistory();
       action.disabled=true;
       try{
         const receipt=await api("/lessons/"+encodeURIComponent(String(id))+"/complete",{method:"POST"});
@@ -1437,6 +1550,8 @@ async function selectLesson(id,preferredVersion=null){
           action.disabled=true;
           say("Não foi possível confirmar o resultado. Reabra a aula para verificar o progresso antes de tentar novamente.");
         }
+      }finally{
+        if(!state.accessDenied){invalidateProgressHistory();renderProgressHistory();}
       }
     });
     content.append(action);
@@ -1702,8 +1817,10 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
 async function loadLibrary(){
   if(state.accessDenied||state.libraryLoading)return;
   invalidateRetainedFavorites();
+  invalidateProgressHistory();
   state.libraryLoading=true;state.libraryReady=false;
   renderContextualCourses();
+  renderProgressHistory();
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;++state.favoritesRequest;
   // Keep an outstanding export single-flight, but invalidate its download
   // when library authorization starts again, even if the new load succeeds.

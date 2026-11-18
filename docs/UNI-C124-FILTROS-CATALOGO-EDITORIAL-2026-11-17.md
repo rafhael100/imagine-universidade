@@ -110,6 +110,13 @@ os dois seletores ficam lado a lado quando há largura e ocupam linhas próprias
 quando necessário. Essa correção visual entra na próxima CI, sem atribuir ao
 run anterior a validação de CSS alterado posteriormente.
 
+O ajuste foi executado no [run 44215301990](https://github.com/rafhael100/imagine-universidade/actions/runs/44215301990),
+SHA `f6c14e8c9189f9eea3d990718b37929b1270adea`, com os seis jobs aprovados.
+As novas capturas foram inspecionadas: **Sistemas Imagine** aparece completo
+na coluna desktop, com os seletores em linhas próprias; no móvel de 390 pixels,
+ambos continuam lado a lado sem corte. As verificações de filtro, preservação
+de rascunhos e largura da página permaneceram aprovadas.
+
 Nenhuma tabela, permissão, escrita HTTP ou binding operacional foi alterado.
 Os treze gates, a integração Portal pendente e os limites de publicação e
 implantação permanecem vigentes.

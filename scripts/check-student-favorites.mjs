@@ -19,6 +19,7 @@ const source=["studentRecord","studentText","studentSlug","validatedStudentCours
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
   "invalidateRetainedFavorites","renderRetainedFavorites",
   "contextualCourses","renderContextualCourses",
+  "invalidateProgressHistory","renderProgressHistory",
   "renderCourses","loadFavorites","toggleCourseFavorite","selectCourse","openCourseWithAllFilters","loadLibrary"]
   .map(actual).join("\n")+"\n"+view.slice(start,end);
 const courses=[
@@ -60,6 +61,7 @@ function harness(initial=[]){
     favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,favoriteWriting:false,
     favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",favoriteWriteRequest:0,
     contextualCoursesVisible:true,contextualRequest:0,
+    progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,message:""},
     retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};
   const control={authoritative:new Set(initial),read:null,write:null};
   const context=createContext({state,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),

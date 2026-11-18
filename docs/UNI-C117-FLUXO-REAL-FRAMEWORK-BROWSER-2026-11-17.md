@@ -209,6 +209,16 @@ posição/revisão devem permanecer idênticos. Capturas do painel em 1440 e 390
 pixels e a purga após revogação completam essa verificação. O curso adicional
 não recebe dados pessoais de estudo; bootstrap e identidades não mudam.
 
+O histórico próprio C-126 começa com consultas vazias das duas empresas. A
+conclusão explícita de A invalida a consulta anterior sem inserir linha otimista
+ou buscar histórico automaticamente. Uma consulta manual encontra a referência
+somente em A. Retirada e republicação preservam ID/data/versão da conclusão e
+marcam a versão antiga indisponível, enquanto a aula nova segue pendente.
+O painel é capturado em 1440 e 390 pixels. Antes da revogação, histórico e
+favoritos retidos são consultados de novo para verificar a purga de listas
+efetivamente preenchidas; a nova entrada elegível recupera a mesma referência
+por ação manual. Nenhuma conclusão adicional é criada pelo ensaio.
+
 O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
 conferência final de 30 segundos. O início de cada fase é registrado com um nome
 fixo. Um timeout produz falha, nunca aprovação parcial. O percurso passou a

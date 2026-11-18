@@ -344,6 +344,37 @@ final class UniversityController
         ]);
     }
 
+    public function progressHistory(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        $validator = Validator::make($request->query(), [
+            'before_id' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991',
+                'regex:/\A[1-9][0-9]{0,15}\z/D'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $cursor = $request->query('before_id');
+        try {
+            $history = $this->catalog->progressHistory($grant, $cursor === null ? null : (int) $cursor);
+        } catch (\Throwable) {
+            $history = 'temporarily_unavailable';
+        }
+        // Check authority after a successful read AND a repository failure.
+        // GET middleware will check the same identity again before output.
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        if (is_array($history)) {
+            return response()->json($history);
+        }
+        return match ($history) {
+            'access_denied' => response()->json(['error' => 'access_denied'], 403),
+            'invalid_cursor' => response()->json(['error' => 'invalid_cursor'], 422),
+            default => response()->json(['error' => 'temporarily_unavailable'], 503),
+        };
+    }
+
     public function lessons(Request $request, int $courseId): JsonResponse
     {
         return response()->json(['lessons' => $this->catalog->lessons($this->grant($request), $courseId)]);

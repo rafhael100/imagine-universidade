@@ -383,7 +383,9 @@ async function api(path,options={}){
       ...(options.body===undefined?{}:{"Content-Type":"application/json"})},
     body:options.body===undefined?undefined:JSON.stringify(options.body),
   });
-  if(!response.ok)void discardErrorBody(response);
+  // A successful response can arrive after another request revokes access.
+  // Release that unread body too, without decoding it or delaying denial.
+  if(!response.ok||state.accessDenied)void discardErrorBody(response);
   if(response.status===403)lockAccess("Seu acesso não está autorizado. Retorne ao Portal do Cliente.");
   if(response.status===419)lockAccess("Sua sessão expirou. Acesse novamente pelo Portal.");
   if(state.accessDenied)throw new Error(state.accessMessage);

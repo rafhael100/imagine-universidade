@@ -2,6 +2,22 @@
 
 17/11/2026 · Candidato em revisão. **HOLD_NO_GO** operacional.
 
+## Extensão durante a C-122
+
+O caso Chromium de corpo arquivado tardio após revogação expôs um caminho
+adicional: respostas HTTP 200 recebidas quando o acesso já foi negado eram
+rejeitadas antes de ler JSON, sem entrar no descarte de erros. As duas funções
+`api` agora acionam o mesmo descarte limitado quando `!response.ok` **ou**
+`state.accessDenied`. Uma resposta bem-sucedida e autorizada continua seguindo
+o contrato JSON normal. A negação não espera o término da limpeza.
+
+Os limites de bytes, leituras e prazo permanecem iguais. Quatro novos cenários
+com funções reais e streams nativos/controlados verificam EOF sem decodificação
+e leitura/cancelamento pendentes após revogação. Os 58 cenários locais passaram;
+a espera Chromium que detectou o problema foi preservada para a nova execução.
+O resultado inicial e a confirmação posterior ficam registrados na
+[documentação da interface C-122](UNI-C122-CONSULTA-VERSOES-EDITORIAIS-UI-2026-11-17.md).
+
 ## Motivo e limite da conclusão
 
 As funções `api` das interfaces de aluno e editor rejeitam respostas HTTP de

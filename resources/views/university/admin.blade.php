@@ -351,7 +351,9 @@ async function api(path,method="GET",payload=null){
     headers:{"Accept":"application/json","X-Requested-With":"XMLHttpRequest","Content-Type":"application/json","X-CSRF-TOKEN":csrf},
     body:payload===null?undefined:JSON.stringify(payload)
   });
-  if(!response.ok)void discardErrorBody(response);
+  // A successful response can arrive after another request revokes access.
+  // Release that unread body too, without decoding it or delaying denial.
+  if(!response.ok||state.accessDenied)void discardErrorBody(response);
   if(response.status===403)lockAccess("Acesso administrativo não autorizado. Volte ao Portal.");
   if(response.status===419)lockAccess("Sessão expirada. Acesse novamente pelo Portal.");
   if(state.accessDenied)throw new Error(state.accessMessage);

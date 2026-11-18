@@ -208,10 +208,31 @@ try{
       assert.equal(bodyReads,0);assert.equal(jsonReads,1);assert.equal(h.delays.length,0);
       assert.equal(h.requests[0].credentials,"same-origin");assert.equal(h.requests[0].cache,"no-store");
     });
+    await scenario(name,"a successful body arriving after revocation drains to EOF without parsing private data",async()=>{
+      const h=harness(name),r=nativeResponse([bytes('{"private":"'),bytes('late content"}')],200);
+      let release;h.control.response=new Promise(resolve=>{release=resolve;});
+      const pending=h.api();h.context.lockAccess("Synthetic access ended");release(r.response);
+      await assert.rejects(bounded(pending),{message:"Synthetic access ended"});await setImmediate();
+      assert.equal(h.state.accessDenied,true);assert.equal(h.state.courses.length,0);
+      assert.equal(h.get("course-title").value,"");assert.equal(h.get("lesson-body").value,"");
+      assert.deepEqual(r.stats,{reads:3,cancels:0,releases:1,interpreted:0});
+      assert.equal(r.response.bodyUsed,true);assert.equal(r.response.body.locked,false);
+      assert.equal(h.timers.size,0);assert.deepEqual(h.calls,{logs:0,storage:0,decode:0});
+    });
+    await scenario(name,"a pending successful body after revocation cannot delay denial or hold cleanup indefinitely",async()=>{
+      const h=harness(name),r=controlledResponse({status:200,read:()=>new Promise(()=>{}),cancel:()=>new Promise(()=>{})});
+      let release;h.control.response=new Promise(resolve=>{release=resolve;});
+      const pending=h.api();h.context.lockAccess("Synthetic access ended");release(r.response);
+      await assert.rejects(bounded(pending),{message:"Synthetic access ended"});
+      assert.equal(h.state.accessDenied,true);assert.equal(r.stats.reads,1);assert.equal(r.stats.interpreted,0);
+      assert.equal(h.timers.size,1);assert.equal(r.stats.cancels,0);
+      h.expire();await setImmediate();assert.equal(r.stats.cancels,1);assert.equal(r.stats.releases,1);
+      assert.equal(h.timers.size,0);assert.deepEqual(h.calls,{logs:0,storage:0,decode:0});
+    });
     await scenario(name,"cleanup contains no decoder, logger, storage or body serialization",()=>{
       const fn=actual(views[name],"discardErrorBody");
       assert.doesNotMatch(fn,/\.text\(|\.json\(|\.arrayBuffer\(|\.blob\(|JSON\.|TextDecoder|console\.|localStorage|sessionStorage|\.push\(/);
-      const api=actual(views[name],"api"),call=api.indexOf("if(!response.ok)void discardErrorBody(response);");
+      const api=actual(views[name],"api"),call=api.indexOf("if(!response.ok||state.accessDenied)void discardErrorBody(response);");
       assert.ok(call>=0&&call<api.indexOf("if(response.status===403)lockAccess"));
       assert.doesNotMatch(api,/await discardErrorBody/);
     });

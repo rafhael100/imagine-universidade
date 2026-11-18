@@ -2,6 +2,32 @@
 
 17/11/2026 · Implementação candidata para revisão e CI. **HOLD_NO_GO** operacional.
 
+## Primeira execução e correção da resposta tardia
+
+O commit `fe71c926ef8cd70e94f9effe9997802fa652e32d`, na
+[execução 44207898533](https://github.com/rafhael100/imagine-universidade/actions/runs/44207898533),
+passou em cinco dos seis jobs. O backend concluiu 39 testes Unit/169 asserções
+e 178 Feature/2.350, incluindo os 21 testes de arquivo. O probe PostgreSQL
+confirmou paginação, escopo, Unicode e os parâmetros acima do intervalo int4.
+
+O navegador falhou no caso **late body after revocation**, ao esperar a rede
+encerrar em 20 segundos. O último caso concluído verificou a limpeza após 419
+no corpo arquivado. A jornada pelo Laravel foi pulada, portanto não há evidência
+de conclusão do navegador nesse SHA.
+
+A análise do cliente encontrou um caminho distinto: um HTTP 200 pode chegar
+depois de outra requisição revogar o acesso. O cliente rejeitava essa resposta
+antes de ler JSON, mas o descarte limitado era acionado somente para HTTP sem
+sucesso. A correção estende o mesmo descarte às respostas recebidas quando o
+acesso já está negado, sem ler o conteúdo, alterar a negação ou aguardar o corpo.
+O teste Chromium e sua espera de rede permanecem intactos.
+
+O checker local passou a ter 58 cenários de limpeza HTTP, com quatro novos
+casos nas funções reais de aluno e editor: sucesso tardio drenado até EOF sem
+decodificação e sucesso tardio com leitura/cancelamento pendentes, limitado
+pelo prazo existente. O checker principal, incluindo os 79 cenários C-122,
+também passou. A confirmação da correção no navegador depende da próxima CI.
+
 ## Capacidade entregue
 
 O painel **Versões arquivadas**, separado dos formulários de curso e aula,

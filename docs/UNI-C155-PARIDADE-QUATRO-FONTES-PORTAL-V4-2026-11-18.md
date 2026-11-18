@@ -27,7 +27,7 @@ sintéticas injetadas somente na suíte de teste:
 - Cobertura derivada de instalação isolada, webhook isolado, carência não
   aprovada, revisões divergentes, tenant trocado, SKU não autorizado ou
   ausência da cobertura de serviço ativo: todas recusadas.
-- Portfólio explicitamente vazio retorna `no_eligible_service` e não
+- Portfólio explicitamente vazio retorna `contract_no_eligible_service` e não
   representa cliente com assinatura ativa.
 
 Os 4 pontos de falha são independentes; as verificações confirmam também

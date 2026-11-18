@@ -308,8 +308,8 @@ $noServices['revisions'] = new UniversityServiceRevisionSnapshot(
 );
 $noServices['coverage'] = [];
 $empty = $preflightFrom($noServices)->inspect($tenant, $now);
-$assert($empty->reason === 'no_eligible_service' && $empty->candidateCount === 0,
-    'verified empty service portfolio is not an active entitlement');
+$assert($empty->reason === 'contract_no_eligible_service' && $empty->candidateCount === 0,
+    'Portal V4 empty portfolio uses contract_no_eligible_service');
 $assert(!$empty->mayIssuePortalGrant(),
     'empty service portfolio does not issue a Portal grant');
 

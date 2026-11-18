@@ -627,6 +627,7 @@ const studentFunction=name=>{
   assert.ok(source,"student function missing: "+name);return source;
 };
 const studentNormalizers=["studentRecord","studentText","studentSlug","validatedStudentCourses",
+  "clearLessonReflection","forgetLessonReflection",
   "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
   "invalidateLessonSearch","renderLessonSearchControls",
   "validatedStudentLessons","validatedStudentLesson","validatedStudentProgress"].map(studentFunction).join("\n");
@@ -703,9 +704,10 @@ function studentFlowFixture(){
   const content=studentTestNode("article"),lessonsBox=studentTestNode("div"),list=studentTestNode("div");
   const messages=[],marks=[],calls=[];
   const filters=["todos","metodologia"].map(filter=>{const node=studentTestNode("button");node.dataset.filter=filter;return node;});
-  const context={state,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
+  const context={state,activeReflection:null,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
     el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),lessonReadingPositionAction:()=>studentTestNode("div"),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,renderCourses:()=>{},renderSimulator:()=>{},renderFavoriteControls:()=>{},loadFavorites:async()=>false,
     invalidateRetainedFavorites:()=>{},
+    lessonReflectionPanel:()=>studentTestNode("details"),
     renderContextualCourses:()=>{},
     invalidateProgressHistory:()=>{},renderProgressHistory:()=>{},
     invalidateNavigationFocus:()=>{},beginNavigationFocus:()=>null,finishNavigationFocus:()=>{},lessonNavigationTarget:studentTestNode,
@@ -908,6 +910,7 @@ await import("./check-lesson-sections.mjs");
 await import("./check-student-catalog-reconciliation.mjs");
 await import("./check-student-lesson-filter.mjs");
 await import("./check-student-course-guidance.mjs");
+await import("./check-student-reflection.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 await import("./check-editorial-audit.mjs");

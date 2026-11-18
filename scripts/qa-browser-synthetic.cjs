@@ -822,6 +822,7 @@ async function inspect(page,name){
     await require("./qa-browser-student-catalog-reconciliation.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-lesson-filter.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-course-guidance.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-reflection.cjs")({browser,base,ensureLocalPage,check,pageErrors,out});
     await require("./qa-browser-editorial-overview.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-audit.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-course-context.cjs")({browser,base,ensureLocalPage,check,pageErrors});

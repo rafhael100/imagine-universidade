@@ -328,6 +328,44 @@ async function studentLessonFilter(student,courseId,lessonId){
     "The native Space action must restore the unfiltered real list without altering the lesson or private preferences");
   await page.setViewportSize({width:1440,height:1000});
 }
+async function studentReflectionReview(student){
+  enterStage("optional local reflection with real authorized lesson material");
+  const page=student.page,panel=page.locator("[data-lesson-reflection]"),field=page.locator("#lesson-reflection-text");
+  const requests=businessRequests.filter(request=>request.profile===student.profile).length;
+  const selection=await page.evaluate(()=>JSON.stringify({courseId:state.courseId,lessonId:state.lessonId,
+    favoriteIds:state.favoriteIds,readingSnapshot:state.readingSnapshot,courses:state.courses}));
+  check(await panel.count()===1&&!await panel.evaluate(node=>node.open)&&await field.inputValue()==="",
+    "The real lesson must offer exactly one collapsed optional reflection with an empty temporary draft");
+  await panel.locator("summary").focus();await page.keyboard.press("Enter");
+  check(await panel.evaluate(node=>node.open)&&await field.isVisible()&&await page.locator("#lesson-content button.primary").isEnabled(),
+    "Keyboard opening the optional reflection must leave lesson completion available before any answer");
+  await field.fill("😀".repeat(2000));await page.locator("[data-reflection-review]").click();
+  check(Array.from(await field.inputValue()).length===2000&&
+    (await page.locator("#lesson-reflection-count").textContent()).startsWith("2000 de 2.000")&&
+    await page.locator("#lesson-reflection-review blockquote").count()===2,
+    "The real input must preserve 2000 Unicode characters and show the two literal lesson excerpts");
+  const reflection="Eu explicaria a jornada com um visitante e um atendimento inteiramente fictícios.";
+  await field.fill(reflection);await page.locator("[data-reflection-review]").click();
+  const review=await page.locator("#lesson-reflection-review").textContent();
+  check(review.includes("Um visitante fictício consulta uma página.")&&review.includes("Desenhe uma jornada fictícia.")&&
+    review.includes("versão 1")&&!review.includes(reflection)&&
+    businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "Self-review must quote the actual authorized material without sending or copying the personal draft into the response");
+  await panel.screenshot({path:path.join(evidenceDir,"framework-student-reflection-desktop.png")});
+  await page.setViewportSize({width:390,height:844});
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await field.inputValue()===reflection&&
+    await page.locator("[data-reflection-review]").isEnabled(),
+    "The expanded real reflection and literal excerpts must fit 390 pixels without changing the draft");
+  await panel.screenshot({path:path.join(evidenceDir,"framework-student-reflection-mobile.png")});
+  await page.locator("[data-reflection-clear]").focus();await page.keyboard.press("Space");
+  check(await field.inputValue()===""&&await page.locator("#lesson-reflection-review").textContent()===""&&
+    await field.evaluate(node=>document.activeElement===node)&&
+    await page.evaluate(()=>JSON.stringify({courseId:state.courseId,lessonId:state.lessonId,
+      favoriteIds:state.favoriteIds,readingSnapshot:state.readingSnapshot,courses:state.courses}))===selection&&
+    businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "Explicitly clearing the reflection must restore focus without any private request, progress or preference change");
+  await page.setViewportSize({width:1440,height:1000});
+}
 async function reconcileWithdrawnReader(student,courseId,lessonId,readingRevision){
   enterStage("withdrawn course in an already open reader");
   const page=student.page;
@@ -1399,6 +1437,7 @@ async function main(){
   await lessonSectionNavigation(studentA);
   await studentLessonFilter(studentA,courseId,firstLessonId);
   await studentCourseGuidance(studentA,courseId,firstLessonId);
+  await studentReflectionReview(studentA);
   await openStudent(studentB,courseId,firstTitle);
   const forbiddenAdmin=await studentA.context.request.get(base+adminRoot+"/courses",{headers:{Accept:"application/json"}});
   check(forbiddenAdmin.status()===403,"A learner's real session must not authorize editorial endpoints");
@@ -1456,6 +1495,9 @@ async function main(){
   await progressHistory(studentB,null);
   const historyReadsBeforeCompletion=businessRequests.filter(request=>request.profile==="student-a"&&
     request.path==="/universidade/private/progress/history").length;
+  await studentA.page.locator("[data-lesson-reflection] summary").click();
+  const completionReflection="Reflexão local preservada ao concluir esta aula fictícia.";
+  await studentA.page.locator("#lesson-reflection-text").fill(completionReflection);
   enterStage("completion and disabled tutor");
   const completion=await clickResponse(studentA.page,"#lesson-content button.primary","POST",
     "/universidade/private/lessons/"+firstLessonId+"/complete");
@@ -1469,6 +1511,9 @@ async function main(){
     (await studentA.page.locator("#lesson-content button.primary").innerText()).includes("Aula concluída"),
     "Student completion must be confirmed by the real database-backed API");
   await studentA.page.waitForFunction(id=>state.courses.find(course=>course.id===id)?.lessons_completed===1,courseId);
+  check(await studentA.page.locator("#lesson-reflection-text").inputValue()===completionReflection&&
+    completion.request().postData()===null,
+    "Real completion and its catalog refresh must preserve the local reflection while the POST remains bodyless");
   check(await studentA.page.locator("#progress-history-list [data-completion-id]").count()===0&&
     (await studentA.page.locator("#progress-history-status").textContent()).includes("Consulte novamente")&&
     businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/progress/history").length===historyReadsBeforeCompletion,
@@ -1701,6 +1746,10 @@ async function main(){
   // The contextual journey reloads the student page. Refill the manager so
   // the following revocation still proves removal of populated private rows.
   await retainedFavorites(studentA,courseId,"available");
+  if(!await studentA.page.locator("[data-lesson-reflection]").evaluate(node=>node.open))
+    await studentA.page.locator("[data-lesson-reflection] summary").click();
+  await studentA.page.locator("#lesson-reflection-text").fill("Reflexão fictícia que deve desaparecer na revogação.");
+  const revokedReflection=await studentA.page.locator("#lesson-reflection-text").elementHandle();
   enterStage("revocation, purge and retained preference");
   const readsBefore=businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length;
   setAuthority("student-a",false);
@@ -1714,6 +1763,10 @@ async function main(){
     "Real eligibility revocation must purge private content and disable favorite writes");
   check(await courseGuidanceMatches(studentA.page),
     "Real eligibility revocation must also erase both guidance texts and hide the previously populated course panel");
+  check(await studentA.page.locator("[data-lesson-reflection]").count()===0&&
+    await revokedReflection.evaluate(node=>node.value===""&&!node.isConnected),
+    "Real revocation must wipe the reflection field before detaching its old panel");
+  await revokedReflection.dispose();
   check(await studentA.page.locator("#reading-position-panel").isHidden()&&
     await studentA.page.locator("#resume-reading-position").isDisabled()&&
     await studentA.page.locator("#export-reading-position").isDisabled(),

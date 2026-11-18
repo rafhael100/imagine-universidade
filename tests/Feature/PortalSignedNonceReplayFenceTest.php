@@ -9,6 +9,7 @@ use App\Domain\Access\PortalSignedClaimCandidate;
 use App\Domain\Access\PortalSignedEnvelopeVerifier;
 use App\Domain\Access\PortalSignedNonceReplayFence;
 use App\Domain\Access\PortalNonceReplayRetention;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -86,6 +87,54 @@ final class PortalSignedNonceReplayFenceTest extends TestCase
         Schema::drop('educational_portal_replay_nonces');
         self::assertFalse((new PortalSignedNonceReplayFence())
             ->reserveOnce($this->candidate(), self::NOW));
+    }
+
+    public function test_expiry_during_database_response_denies_and_preserves_consumed_nonce(): void
+    {
+        $delayed = false;
+        DB::listen(static function (QueryExecuted $query) use (&$delayed): void {
+            if (!$delayed && str_contains($query->sql, 'educational_portal_replay_nonces')
+                && preg_match('/^\s*insert\b/i', $query->sql) === 1) {
+                $delayed = true;
+                // The real INSERT has executed, but its response is delayed.
+                usleep(1_100_000);
+            }
+        });
+
+        $fence = new PortalSignedNonceReplayFence();
+        self::assertFalse($fence->reserveOnce(
+            $this->candidate(expiry: self::NOW + 1), self::NOW,
+        ));
+        self::assertTrue($delayed, 'The SQL response must cross the claim expiry.');
+        $record = DB::table('educational_portal_replay_nonces')->first();
+        self::assertNotNull($record);
+        self::assertSame(hash('sha256', str_repeat('a', 32)), $record->nonce_sha256);
+        self::assertSame(self::NOW + 1, (int) $record->expires_at_epoch);
+
+        // Even a fresh claim for another tenant cannot recover that nonce.
+        self::assertFalse($fence->reserveOnce(
+            $this->candidate(company: 'synthetic-company-b'), self::NOW,
+        ));
+        self::assertSame(1, DB::table('educational_portal_replay_nonces')->count());
+        self::assertEquals($record, DB::table('educational_portal_replay_nonces')->first());
+    }
+
+    public function test_database_delay_within_claim_validity_still_allows_first_reservation(): void
+    {
+        $delayed = false;
+        DB::listen(static function (QueryExecuted $query) use (&$delayed): void {
+            if (!$delayed && str_contains($query->sql, 'educational_portal_replay_nonces')
+                && preg_match('/^\s*insert\b/i', $query->sql) === 1) {
+                $delayed = true;
+                usleep(1_100_000);
+            }
+        });
+
+        $fence = new PortalSignedNonceReplayFence();
+        self::assertTrue($fence->reserveOnce($this->candidate(), self::NOW));
+        self::assertTrue($delayed);
+        self::assertFalse($fence->reserveOnce($this->candidate(), self::NOW));
+        self::assertSame(1, DB::table('educational_portal_replay_nonces')->count());
     }
 
     public function test_signed_envelope_can_be_reserved_only_once_without_grant(): void

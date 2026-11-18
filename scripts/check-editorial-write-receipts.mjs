@@ -13,8 +13,10 @@ const boot='loadAdminCatalog();\n(async()=>{try{await refreshAudit();}catch(erro
 assert.ok(start>=0&&end>start&&view.slice(start,end).includes(boot));
 const source=view.slice(start,end).replace(boot,"")+"\nglobalThis.editor={state,refreshCourses,loadAdminCatalog,refreshAudit,lockAccess};";
 const clone=value=>JSON.parse(JSON.stringify(value));
-const fields=["course-title","course-slug","course-category","course-summary","course-sort",
-  "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+const courseFields=["course-title","course-slug","course-category","course-summary","course-sort",
+  "course-audience","course-suggested-knowledge"];
+const lessonFields=["lesson-title","lesson-slug","lesson-body","lesson-sort"];
+const fields=[...courseFields,...lessonFields];
 const courseButtons=["course-save","check-publication","publish","unpublish","delete-course"];
 const lessonButtons=["lesson-save","clear-lesson","preview-lesson","delete-lesson"];
 const ok=payload=>({status:200,payload});
@@ -61,11 +63,11 @@ async function harness({published=false,nextCourseId=3,nextLessonId=30}={}){
   for(const id of ["course-form","lesson-form","course-items","lesson-items","lesson-order-status","catalog-recovery",
     "new-course","retry-catalog","editorial-course-search","editorial-category-filter","editorial-state-filter","clear-editorial-filters",
     "editorial-lesson-search","clear-editorial-lesson-filter","editorial-lesson-filter-status"])layout.append(get(id));
-  get("course-form").append(...[...fields.slice(0,5),...courseButtons].map(get));
-  get("lesson-form").append(...[...fields.slice(5),...lessonButtons].map(get));
+  get("course-form").append(...[...courseFields,...courseButtons].map(get));
+  get("lesson-form").append(...[...lessonFields,...lessonButtons].map(get));
   for(const id of fields)get(id).value=id.endsWith("sort")?"0":"";
   get("course-category").value="metodologia";
-  get("lesson-form").reset=()=>{for(const id of fields.slice(5))get(id).value=id.endsWith("sort")?"0":"";};
+  get("lesson-form").reset=()=>{for(const id of lessonFields)get(id).value=id.endsWith("sort")?"0":"";};
   const server={courses:[1,2].map(id=>({id,slug:"curso-"+id,title:"Curso salvo "+id,category:"metodologia",
     summary:"Resumo salvo "+id,sort_order:0,is_published:published})),
     lessons:new Map([[1,[11,12].map((id,index)=>({id,slug:"aula-"+id,title:"Aula salva "+id,
@@ -325,5 +327,109 @@ await scenario("destructive and publication confirmation dialogs still cancel be
     await h.invoke(test.control);assert.equal(h.writes().length,0);assert.deepEqual(h.fields(),before.buffers);
     assert.equal(h.state.writeOutcomeUnknown,false);assert.equal(h.state.writePending,false);
   }
+});
+for(const path of ["/courses","/courses/1/lessons"]){
+  for(const [label,response] of [
+    ["503",()=>({status:503,payload:{error:"temporarily_unavailable"}})],
+    ["invalid 200",()=>ok({untrusted:"incomplete_catalog"})],
+    ["invalid JSON",()=>({status:200,json:async()=>{throw new SyntaxError("Synthetic invalid JSON");}})],
+    ["network failure",()=>{throw new Error("Synthetic interrupted recovery");}],
+  ]){
+    await scenario("C149 "+path+" "+label+" preserves all eleven drafts through repeated failed recovery",async()=>{
+      const test=cases[2],h=await prepared(test);
+      h.get("course-audience").value="  Público ainda não salvo 😀\nSegunda linha.  ";
+      h.get("course-suggested-knowledge").value="  Conhecimentos úteis em edição.  ";
+      h.get("course-sort").value="29";h.get("lesson-sort").value="17";
+      const before=snapshot(h);
+      h.control.hook=entry=>entry.method!=="GET"?ok({}):undefined;
+      await h.invoke(test.control);assertUncertain(h,test,before.buffers,before.query,before.selected);
+      h.server.courses[0].title="Novo título salvo por outra pessoa";
+      h.control.hook=entry=>entry.path===path?response():undefined;
+      for(let attempt=0;attempt<2;attempt++){
+        const count=h.requests.length;await h.invoke("retry-catalog");
+        assert.deepEqual(h.fields(),before.buffers);
+        assert.deepEqual([h.state.course?.id??null,h.state.lesson?.id??null],before.selected);
+        assert.equal(h.state.lessonQuery,before.query);assertOneWrite(h,test);
+        assert.equal(h.state.writeOutcomeUnknown,true);
+        assert.equal(h.state.catalogReady,false);assert.equal(h.state.lessonsReady,false);
+        assert.equal(h.state.catalogLoading,false);assert.equal(h.state.courses.length,0);assert.equal(h.state.lessons.length,0);
+        for(const id of [...fields,...courseButtons,...lessonButtons])assert.equal(h.get(id).disabled,true,id+" stays disabled");
+        assert.equal(h.get("catalog-recovery").hidden,false);assert.equal(h.get("retry-catalog").disabled,false);
+        assert.match(h.get("status").textContent,/campos não salvos foram mantidos/);
+        assert.deepEqual(paths(h).slice(count),path==="/courses"?["GET /courses"]:["GET /courses","GET /courses/1/lessons"]);
+      }
+      h.control.accept=false;const count=h.requests.length;await h.invoke("retry-catalog");
+      assert.equal(h.requests.length,count);assert.deepEqual(h.fields(),before.buffers);
+      h.control.accept=true;h.control.hook=null;await h.invoke("retry-catalog");
+      assert.equal(h.state.writeOutcomeUnknown,false);assert.equal(h.state.catalogReady,true);assert.equal(h.state.lessonsReady,true);
+      assert.equal(h.get("course-title").value,"Novo título salvo por outra pessoa");
+      assert.equal(h.get("lesson-body").value,"");assertOneWrite(h,test);
+    });
+  }
+}
+await scenario("C149 retains a new-course draft after a failed recovery and honors a valid empty catalog",async()=>{
+  const test=cases[0],h=await prepared(test);
+  h.get("course-audience").value="  Novo público literal 😀  ";
+  h.get("course-suggested-knowledge").value="  Sem conhecimento prévio obrigatório.  ";
+  const before=snapshot(h);
+  h.control.hook=entry=>entry.method!=="GET"?ok({}):undefined;
+  await h.invoke(test.control);
+  h.control.hook=entry=>entry.path==="/courses"?{status:503,payload:{}}:undefined;
+  await h.invoke("retry-catalog");assert.deepEqual(h.fields(),before.buffers);
+  assert.equal(h.state.course,null);assert.equal(h.get("course-slug").disabled,true);assertOneWrite(h,test);
+  h.server.courses=[];h.control.hook=null;await h.invoke("retry-catalog");
+  assert.equal(h.state.writeOutcomeUnknown,false);assert.equal(h.state.catalogReady,true);assert.equal(h.state.course,null);
+  assert.equal(h.get("course-title").value,"");assert.equal(h.get("new-course").disabled,false);assertOneWrite(h,test);
+});
+await scenario("C149 preserves an existing selected lesson and its independent course draft across either failed recovery read",async()=>{
+  for(const path of ["/courses","/courses/1/lessons"]){
+    const h=await harness(),test={method:"PATCH",path:"/lessons/11"};
+    h.get("course-title").value="  Curso independente em edição 😀  ";
+    h.get("course-audience").value="  Público independente em edição.  ";
+    h.get("course-suggested-knowledge").value="  Orientação independente.  ";
+    h.get("lesson-body").value="  Corpo literal da aula existente ainda não confirmado.  ";
+    const before=snapshot(h);
+    h.control.hook=entry=>entry.method==="PATCH"?{status:503,payload:{}}:undefined;
+    await h.invoke("lesson-form");
+    h.server.courses[0].is_published=true;h.server.courses[0].title="Versão concorrente publicada";
+    h.control.hook=entry=>entry.path===path?{status:503,payload:{}}:undefined;
+    await h.invoke("retry-catalog");
+    assert.deepEqual(h.fields(),before.buffers);assert.deepEqual([h.state.course?.id,h.state.lesson?.id],[1,11]);
+    assert.equal(h.get("lesson-title-heading").textContent,"Editar aula");
+    assert.equal(h.state.catalogReady,false);assert.equal(h.state.lessonsReady,false);assert.equal(h.state.writeOutcomeUnknown,true);
+    for(const id of [...fields,...courseButtons,...lessonButtons])assert.equal(h.get(id).disabled,true);
+    assertOneWrite(h,test);
+  }
+});
+for(const status of [403,419]){
+  await scenario("C149 "+status+" during either recovery read purges every private draft instead of restoring it",async()=>{
+    for(const path of ["/courses","/courses/1/lessons"]){
+      const test=cases[2],h=await prepared(test);
+      h.get("course-audience").value="PRIVADO-AUDIENCE";h.get("course-suggested-knowledge").value="PRIVADO-KNOWLEDGE";
+      h.control.hook=entry=>entry.method!=="GET"?ok({}):undefined;await h.invoke(test.control);
+      h.control.hook=entry=>entry.path===path?{status,payload:{error:"access_denied"}}:undefined;
+      await h.invoke("retry-catalog");assert.equal(h.state.accessDenied,true);
+      for(const id of fields.filter(id=>id!=="course-category"))assert.equal(h.get(id).value,"");
+      assert.equal(h.state.course,null);assert.equal(h.state.lesson,null);assert.equal(h.state.lessonQuery,"");
+      assert.equal(h.get("catalog-recovery").hidden,true);assert.equal(h.get("retry-catalog").disabled,true);
+      assertOneWrite(h,test);
+    }
+  });
+}
+await scenario("C149 a recovery JSON arriving after revocation cannot restore captured drafts",async()=>{
+  const test=cases[2],h=await prepared(test),seen=deferred(),gate=deferred();
+  h.get("course-audience").value="PRIVATE-LATE-DRAFT";
+  h.control.hook=entry=>entry.method!=="GET"?ok({}):undefined;await h.invoke(test.control);
+  h.control.hook=entry=>{
+    if(entry.path==="/audit")return {status:419,payload:{}};
+    if(entry.path==="/courses")return {status:200,json:async()=>{seen.release();await gate.promise;return clone({courses:h.server.courses});}};
+  };
+  const pending=h.invoke("retry-catalog");
+  try{await bounded(seen.promise);await h.editor.refreshAudit();assert.equal(h.state.accessDenied,true);}
+  finally{gate.release();}
+  await bounded(pending);
+  for(const id of fields.filter(id=>id!=="course-category"))assert.equal(h.get(id).value,"");
+  assert.equal(h.state.course,null);assert.equal(h.state.lesson,null);assertOneWrite(h,test);
+  assert.equal(h.get("catalog-recovery").hidden,true);
 });
 console.log("PASS editorial write receipts: "+scenarios+" actual-script scenarios; seven handlers, strict receipts, preserved drafts and manual recovery without replay");

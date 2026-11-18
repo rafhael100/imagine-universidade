@@ -14,6 +14,7 @@ function actualFunction(name){
   return source;
 }
 const source=["studentRecord","studentText","studentSlug","normalizeSearchText","splitLessonSections",
+  "clearLessonReflection","forgetLessonReflection",
   "lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
   "invalidateLessonSearch","renderLessonSearchControls",
   "el","say","lockAccess","discardErrorBody","api","invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
@@ -64,7 +65,7 @@ function harness(response={status:503,payload:{error:"tutor_unavailable"}}){
     progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,message:""},
     retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};
   const control={response};
-  const context=createContext({state,content,list,lessonsBox,status:get("status"),overall:get("overall-progress"),
+  const context=createContext({state,activeReflection:null,content,list,lessonsBox,status:get("status"),overall:get("overall-progress"),
     root:"/universidade/private",csrf:"synthetic-csrf",TextEncoder,navigationFocus:{sequence:0,activity:0},
     document:{createElement:tag=>new Node(tag),getElementById:get,querySelectorAll:()=>[]},
     selectCourse:(courseId,lessonId)=>navigations.push({courseId,lessonId}),

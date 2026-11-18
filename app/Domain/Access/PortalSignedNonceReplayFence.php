@@ -21,6 +21,7 @@ final readonly class PortalSignedNonceReplayFence
 {
     public function reserveOnce(PortalSignedClaimCandidate $candidate, int $nowEpoch): bool
     {
+        $startedAt = hrtime(true);
         if ($nowEpoch <= 0
             || $candidate->revision < 1
             || $candidate->issuedAtEpoch > $nowEpoch
@@ -42,7 +43,16 @@ final readonly class PortalSignedNonceReplayFence
                 'consumed_at' => now(),
             ]);
 
-            return $inserted === 1;
+            // SQL may wait for a lock while the signed claim expires. Advance
+            // the caller's epoch by monotonic elapsed time, rounding up just
+            // as PortalAccessGate does. Never replace the synthetic caller's
+            // clock with wall time or accept an already expired candidate.
+            $elapsedNs = hrtime(true) - $startedAt;
+            $checkedAt = $nowEpoch + intdiv($elapsedNs + 999_999_999, 1_000_000_000);
+
+            // A late/uncertain response must NOT release a consumed nonce:
+            // leave the unique hash in place so no replay can reuse it.
+            return $inserted === 1 && $candidate->expiresAtEpoch > $checkedAt;
         } catch (Throwable) {
             // Database error/outage is ALWAYS deny, never allow on failure.
             return false;

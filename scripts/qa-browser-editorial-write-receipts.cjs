@@ -7,6 +7,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
   context.setDefaultTimeout(8000);context.setDefaultNavigationTimeout(15000);
   const api=base+"/universidade/private/admin";
   const fields=["course-title","course-slug","course-category","course-summary","course-sort",
+    "course-audience","course-suggested-knowledge",
     "lesson-title","lesson-slug","lesson-body","lesson-sort"];
   const same=(left,right)=>JSON.stringify(left)===JSON.stringify(right),hash="a".repeat(64);
   const values=page=>page.evaluate(ids=>ids.map(id=>document.getElementById(id).value),fields);
@@ -35,7 +36,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       lessons:[11,12].map((id,index)=>({id,slug:"aula-"+id,title:"Aula salva "+id,
         body:"Conteúdo original da aula "+id+".\n\nSegundo parágrafo literal.",sort_order:index,
         status:published?"published":"draft",is_published:published}))};
-    const control={requests:[],writes:[],accept:true};
+    const control={requests:[],writes:[],accept:true,readFailure:null};
     page.on("dialog",dialog=>control.accept?dialog.accept():dialog.dismiss());
     await page.route(api+"/**",async route=>{
       const request=route.request(),entry={path:new URL(request.url()).pathname.replace("/universidade/private/admin",""),
@@ -46,7 +47,8 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         control.writes.push(entry);
         if(entry.path===test.path&&entry.method===test.method){payload=receipt;status=test.kind.endsWith("create")?201:200;}
         else{status=405;payload={error:"unexpected_fixture_write"};}
-      }else if(entry.path==="/courses")payload={courses:fixture.courses};
+      }else if(control.readFailure?.path===entry.path){status=control.readFailure.status;payload=control.readFailure.payload;}
+      else if(entry.path==="/courses")payload={courses:fixture.courses};
       else if(entry.path==="/courses/1/lessons")payload={lessons:fixture.lessons};
       else if(entry.path==="/courses/2/lessons")payload={lessons:[]};
       else if(entry.path==="/courses/1/publication-check")payload={course_id:1,version:1,lesson_count:2,
@@ -133,6 +135,51 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         check(control.writes.length===1&&noRefresh(control)&&same(await values(page),before)&&
           await page.locator("#"+test.button).isDisabled(),
           "C136 "+test.kind+" rejects a "+label+" instead of refreshing with an untrusted identifier");
+        await close(page);
+      }
+    }
+    for(const path of ["/courses","/courses/1/lessons"]){
+      stage="C149 failed recovery "+path;
+      const test=cases[2],{page,control}=await open(test);
+      await page.locator("#course-audience").fill("  Público local ainda não salvo 😀\nSegunda linha.  ");
+      await page.locator("#course-suggested-knowledge").fill("  Conhecimentos úteis ainda em edição.  ");
+      const before=await values(page),selected=await page.evaluate(()=>[state.course?.id??null,state.lesson?.id??null]);
+      await page.locator("#lesson-save").click();await frozen(page);
+      for(const failure of [{status:503,payload:{error:"unavailable"}},{status:200,payload:{untrusted:"incomplete"}}]){
+        control.readFailure={path,...failure};const requests=control.requests.length;
+        await page.locator("#retry-catalog").click();
+        await page.waitForFunction(()=>!state.catalogLoading&&document.getElementById("status").textContent.includes("campos não salvos foram mantidos"));
+        check(same(await values(page),before)&&same(await page.evaluate(()=>[state.course?.id??null,state.lesson?.id??null]),selected)&&
+          await page.locator("#editorial-lesson-search").inputValue()==="salva"&&control.writes.length===1&&
+          same(control.requests.slice(requests).map(entry=>entry.method+" "+entry.path),
+            path==="/courses"?["GET /courses"]:["GET /courses","GET /courses/1/lessons"]),
+          "C149 "+path+" "+failure.status+" keeps all eleven literal fields and exact selection/filter without replaying the uncertain write");
+        check(await page.evaluate(ids=>!state.catalogReady&&!state.lessonsReady&&state.writeOutcomeUnknown&&
+          state.courses.length===0&&state.lessons.length===0&&ids.every(id=>document.getElementById(id).disabled),fields)&&
+          await page.locator("#course-save").isDisabled()&&await page.locator("#lesson-save").isDisabled()&&
+          await page.locator("#retry-catalog").isEnabled(),
+          "C149 failed partial recovery keeps the retained buffers disabled and leaves only a new manual consultation available");
+      }
+      control.readFailure=null;await page.locator("#retry-catalog").click();
+      await page.waitForFunction(()=>state.catalogReady&&state.lessonsReady&&!state.catalogLoading&&!state.writeOutcomeUnknown);
+      check(await page.locator("#course-title").inputValue()==="Curso salvo 1"&&
+        await page.locator("#lesson-body").inputValue()===""&&control.writes.length===1,
+        "C149 only complete successful recovery replaces retained drafts with the current authorized server state");
+      await close(page);
+    }
+    for(const status of [403,419]){
+      for(const path of ["/courses","/courses/1/lessons"]){
+        stage="C149 revoked recovery "+path+" "+status;
+        const {page,control}=await open(cases[2]);
+        await page.locator("#course-audience").fill("PRIVATE-RECOVERY-DRAFT");
+        await page.locator("#lesson-save").click();await frozen(page);
+        control.readFailure={path,status,payload:{error:"access_denied"}};
+        await page.locator("#retry-catalog").click();
+        await page.waitForFunction(()=>state.accessDenied&&!state.catalogLoading);
+        check(await page.evaluate(ids=>state.course===null&&state.lesson===null&&
+          ids.filter(id=>id!=="course-category").every(id=>document.getElementById(id).value===""),fields)&&
+          await page.locator("#catalog-recovery").isHidden()&&control.writes.length===1,
+          "C149 "+status+" on "+path+" clears every private draft instead of restoring the failed-recovery snapshot");
         await close(page);
       }
     }

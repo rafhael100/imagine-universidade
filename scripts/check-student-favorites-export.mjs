@@ -16,6 +16,7 @@ assert.ok(stateSource,"The real student state must exist");
 const handler=view.match(/document\.getElementById\("export-favorites"\)\.addEventListener\("click",exportFavorites\);/)?.[0];
 assert.ok(handler,"Export must be an explicit click action");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentFavorites",
+  "clearLessonReflection","forgetLessonReflection",
   "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
   "invalidateLessonSearch","renderLessonSearchControls",
   "el","say","lockAccess","discardErrorBody","api","renderFavoriteControls","loadFavorites","loadLibrary",
@@ -49,7 +50,7 @@ function harness(){
   const control={export:{status:200,payload:payload()},favorites:{status:200,payload:{course_ids:[]}},
     initialize:{status:200,payload:{ready:true}},courses:{status:200,payload:{courses:[course]}},onCreate:null,clickError:false};
   let sequence=0,context;
-  context=createContext({
+  context=createContext({activeReflection:null,
     root:"/universidade/private",csrf:"synthetic-csrf",status:get("status"),overall:get("overall-progress"),navigationFocus:{sequence:0,activity:0},
     list:get("course-list"),lessonsBox:get("lesson-items"),content:get("lesson-content"),
     Blob,renderSimulator:()=>{},renderCourses:()=>context.renderFavoriteControls(),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,

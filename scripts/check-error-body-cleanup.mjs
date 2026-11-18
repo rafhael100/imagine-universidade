@@ -34,12 +34,13 @@ function harness(name){
     "editorialCourseFiltersAllowed","renderEditorialCourseFilters","editorialLessonListReady",
     "editorialLessonFiltersAllowed","renderEditorialLessonFilters","filteredEditorialLessons","normalizeEditorialSearch"]:
     ["invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
+      "clearLessonReflection","forgetLessonReflection",
       "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
       "invalidateLessonSearch","renderLessonSearchControls",
       "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus"];
   const source=["discardErrorBody","api","el","say","lockAccess",...extra].map(fn=>actual(view,fn)).join("\n");
   const initial=view.match(/const state=(\{[\s\S]*?\});/)?.[1];assert.ok(initial);
-  const context=createContext({
+  const context=createContext({activeReflection:null,
     root:"/universidade/private",base:"/universidade/private/admin",csrf:"synthetic-csrf",$:get,navigationFocus:{sequence:0,activity:0},
     note:get("status"),status:get("status"),list:get("course-list"),lessonsBox:get("lesson-items"),
     content:get("lesson-content"),overall:get("overall-progress"),

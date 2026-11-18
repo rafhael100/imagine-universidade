@@ -15,6 +15,7 @@ const start=view.indexOf('document.getElementById("reload-favorites").addEventLi
 const end=view.indexOf("// Recovery is manual",start);
 assert.ok(start>=0&&end>start,"Actual favorites/filter handlers must exist");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentLessons",
+  "clearLessonReflection","forgetLessonReflection",
   "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","discardErrorBody","api","progressLabel",
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
   "lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
@@ -69,7 +70,7 @@ function harness(initial=[]){
     progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,message:""},
     retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};
   const control={authoritative:new Set(initial),read:null,write:null};
-  const context=createContext({state,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),navigationFocus:{sequence:0,activity:0},
+  const context=createContext({state,activeReflection:null,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),navigationFocus:{sequence:0,activity:0},
     root:"/universidade/private",csrf:"synthetic-csrf",labels:{metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas"},
     renderPillars:()=>{},renderSimulator:()=>{},selectLesson:async()=>{},renderReadingPosition:()=>{},loadReadingPosition:async()=>null,
     document:{createElement:tag=>new Node(tag),getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},

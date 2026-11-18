@@ -1606,6 +1606,13 @@ $("load-more-audit").addEventListener("click",()=>{
 async function loadAdminCatalog(){
   if(state.accessDenied||state.writePending||state.catalogLoading)return;
   if(state.writeOutcomeUnknown&&!confirm("O resultado da última alteração editorial não foi confirmado. Consultar novamente o servidor poderá substituir os campos não salvos desta tela. Continuar?"))return;
+  // The consent permits replacement by a complete, validated read. Keep
+  // both literal drafts if either the catalog or its lesson read fails.
+  // These are disabled buffers, never a replacement for current authority.
+  const recoveryDraft=state.writeOutcomeUnknown?{
+    forms:lessonReorderFormSnapshot(),course:state.course,lesson:state.lesson,
+    lessonQuery:state.lessonQuery,lessonQueryCourseId:state.lessonQueryCourseId
+  }:null;
   state.catalogLoading=true;
   if(!state.catalogReady)$("new-course").disabled=true;
   const retry=$("retry-catalog"),recovery=$("catalog-recovery");
@@ -1626,17 +1633,35 @@ async function loadAdminCatalog(){
     }
   }catch(error){
     if(!state.accessDenied){
-      // A failed catalog read cannot keep stale editorial data on screen.
-      state.catalogReady=false;
+      // Invalidate navigation and all write authority even when an earlier
+      // read in this recovery already replaced part of the catalog.
+      state.catalogReady=false;state.lessonsReady=false;
       $("new-course").disabled=true;
-      state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
+      state.courses=[];state.lessons=[];
+      state.course=recoveryDraft?.course??null;state.lesson=recoveryDraft?.lesson??null;
+      if(recoveryDraft){
+        state.lessonQuery=recoveryDraft.lessonQuery;
+        state.lessonQueryCourseId=recoveryDraft.lessonQueryCourseId;
+      }
       ++state.lessonRequest;
-      renderCourses();renderLessons();fillCourse();resetLesson();
+      renderCourses();renderLessons();fillCourse();
+      if(recoveryDraft){
+        if(state.lesson)fillLesson();else resetLesson();
+        const restore=(ids,values)=>ids.forEach((id,index)=>{
+          $(id).value=values[index];$(id).disabled=true;
+        });
+        restore(["course-title","course-slug","course-category","course-summary","course-sort",
+          "course-audience","course-suggested-knowledge"],recoveryDraft.forms.course);
+        restore(["lesson-title","lesson-slug","lesson-body","lesson-sort"],recoveryDraft.forms.lesson);
+        freezeUncertainEditorialWrite();
+      }else resetLesson();
       $("course-items").replaceChildren();
       $("course-items").append(el("p","Cursos temporariamente indisponíveis.", "help"));
       $("lesson-items").replaceChildren();
       hideLessonPreview();clearPublicationCheck();
-      say(error.message);
+      say(recoveryDraft
+        ?"Não foi possível concluir a consulta. Os campos não salvos foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar."
+        :error.message);
       recovery.hidden=false;
     }
   }finally{

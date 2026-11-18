@@ -162,6 +162,13 @@
     .help-excerpt{margin:12px 0;padding:12px;border-left:3px solid var(--orange);background:#fff}
     .help-excerpt h5{font-size:14px;margin:0 0 6px}
     .help-source{font-size:12px;color:var(--muted)}
+    .lesson-reflection{margin-top:18px;padding:16px 18px;border:1px solid var(--line);border-radius:12px;background:#FAFBFC}
+    .lesson-reflection summary{cursor:pointer;font-weight:750;min-height:28px}
+    .lesson-reflection label{display:block;font-weight:750;margin:14px 0 6px}
+    .lesson-reflection textarea{display:block;width:100%;min-height:120px;resize:vertical;padding:11px;border:1px solid #C9D1DC;border-radius:9px;font:inherit;color:var(--ink);background:#fff}
+    .lesson-reflection p{font-size:13px;margin:10px 0;overflow-wrap:anywhere}
+    .reflection-review{overflow-wrap:anywhere}
+    .reflection-review:empty{display:none}
     .primary{background:var(--orange);border:1px solid var(--orange);padding:11px 16px;border-radius:10px;font-weight:850;color:#3D290F}
     .primary:hover{background:#FFAC48}
     .secondary{margin-left:9px;background:#fff;color:#70410C;border:1px solid #E5B56D;padding:11px 16px;border-radius:10px;font-weight:750}
@@ -339,6 +346,9 @@ const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,cour
   readingSnapshot:null,readingLoading:false,readingWriting:false,readingReturning:false,
   readingUncertain:false,readingRequest:0,readingMessage:"",
   readingExportLoading:false,readingExportRequest:0};
+// One temporary reflection panel, never serialized or sent to an endpoint.
+// Reusing its DOM for the same exact lesson avoids extra copies of the draft.
+let activeReflection=null;
 // This ephemeral intent controls only focus. A later interaction, another
 // navigation or leaving the page cancels delivery without changing requests
 // or personal state. Capture once at the explicit action, before any await.
@@ -405,6 +415,7 @@ function lockAccess(message){
   invalidateNavigationFocus();
   state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
+  forgetLessonReflection();
   renderCourseGuidance();
   resetLessonFilter();
   renderContextualCourses();
@@ -1318,6 +1329,7 @@ function reconcileCatalogSelection(){
   invalidateNavigationFocus();
   ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  forgetLessonReflection();
   resetLessonFilter();
   lessonsBox.replaceChildren();content.replaceChildren();
   const message=el("p","A leitura foi encerrada porque o curso deixou de constar no catálogo. Consulte a biblioteca para verificar os cursos disponíveis.","empty");
@@ -1382,6 +1394,7 @@ function renderCourses(){
 async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focusIntent=null){
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!state.courses.some(course=>course.id===id))return;
   if(preferredVersion!==null&&(!Number.isSafeInteger(preferredVersion)||preferredVersion<1))return;
+  if(state.courseId!==id)forgetLessonReflection();
   resetLessonFilter(state.courseId===id);
   // Invalidate prior course requests and lesson reads, including same-course clicks.
   const request=++state.courseRequest;
@@ -1398,6 +1411,7 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focu
     state.lessonFilter.courseId=id;state.lessonFilter.request=request;state.lessonFilter.ready=true;
     renderCourseGuidance();
     if(!lessons.length){
+      forgetLessonReflection();
       renderLessonFilter();
       const target=lessonNavigationTarget("p","Ainda não existem aulas publicadas neste curso.","empty");
       content.append(target);finishNavigationFocus(target,focusIntent);return;
@@ -1417,6 +1431,7 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focu
     // Never silently open another lesson in place of the requested result.
     const selected=preferredLessonId===null?null:lessons.find(item=>item.id===preferredLessonId);
     if(preferredLessonId!==null&&!selected){
+      forgetLessonReflection();
       const target=lessonNavigationTarget("p","Esta aula não está mais disponível na versão publicada atual.","empty");
       content.append(target);finishNavigationFocus(target,focusIntent);
       return;
@@ -1428,6 +1443,7 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focu
     if(state.courseRequest===request&&!state.accessDenied){
       // A transient lesson read may be retried by a deliberate click; never
       // automatically re-use old course content or bypass a revoked session.
+      forgetLessonReflection();
       say(error.message);resetLessonFilter(true);lessonsBox.replaceChildren();content.replaceChildren();
       const target=lessonNavigationTarget("p","As aulas não puderam ser carregadas.","empty");
       content.append(target);
@@ -1641,6 +1657,88 @@ function lessonHelpPanel(lesson,lessonRequest){
   });
   return panel;
 }
+// C147: voluntary self-review. Draft text stays only in this panel's input;
+// feedback is a reading guide plus literal excerpts, never a score or AI answer.
+function clearLessonReflection(){
+  if(activeReflection===null)return;
+  activeReflection.field.value="";
+  activeReflection.review.replaceChildren();
+  activeReflection.count.textContent="Até 2.000 caracteres. Você pode continuar a aula sem preencher.";
+  activeReflection.panel.open=false;
+}
+function forgetLessonReflection(){
+  if(activeReflection===null)return;
+  clearLessonReflection();
+  activeReflection.panel.remove();
+  activeReflection=null;
+}
+window.addEventListener("pagehide",clearLessonReflection);
+function lessonReflectionPanel(lesson,request){
+  if(activeReflection!==null&&(
+    activeReflection.courseId!==lesson.course_id||activeReflection.lessonId!==lesson.id||
+    activeReflection.version!==lesson.course_version||activeReflection.body!==lesson.body))forgetLessonReflection();
+  if(activeReflection!==null){
+    activeReflection.request=request;activeReflection.title=lesson.title;
+    const source=activeReflection.review.querySelector("[data-reflection-source]");
+    if(source)source.textContent="Fonte: "+lesson.title+" · versão "+lesson.course_version;
+    return activeReflection.panel;
+  }
+  const panel=el("details",undefined,"lesson-reflection");panel.dataset.lessonReflection="";
+  panel.append(el("summary","Reflexão opcional"));
+  const notice=el("p","Esta reflexão não é enviada nem salva. Ela é apagada ao sair desta aula, recarregar ou fechar a página, e quando o material mudar ou ficar indisponível.");
+  notice.id="lesson-reflection-notice";
+  const prompt=el("p","Como você explicaria a ideia da aula e a aplicaria a uma situação fictícia? Use suas próprias palavras.");
+  const label=el("label","Minha reflexão");label.htmlFor="lesson-reflection-text";
+  const field=el("textarea");field.id="lesson-reflection-text";field.rows=4;field.autocomplete="off";field.spellcheck=false;
+  field.setAttribute("aria-describedby","lesson-reflection-notice lesson-reflection-count lesson-reflection-privacy");
+  const privacy=el("p","Use apenas exemplos fictícios, sem nomes, senhas ou dados de clientes.","mini");privacy.id="lesson-reflection-privacy";
+  const count=el("p","Até 2.000 caracteres. Você pode continuar a aula sem preencher.","mini");count.id="lesson-reflection-count";
+  const actions=el("div",undefined,"help-actions");
+  const compare=el("button","Revisar com o material","secondary");compare.type="button";compare.dataset.reflectionReview="";
+  const clear=el("button","Apagar reflexão","secondary");clear.type="button";clear.dataset.reflectionClear="";
+  actions.append(compare,clear);
+  const review=el("div",undefined,"reflection-review");review.id="lesson-reflection-review";
+  review.setAttribute("role","status");review.setAttribute("aria-live","polite");
+  panel.append(notice,prompt,label,field,privacy,count,actions,review);
+  const owner={courseId:lesson.course_id,lessonId:lesson.id,version:lesson.course_version,title:lesson.title,body:lesson.body,
+    request,panel,field,count,review};activeReflection=owner;
+  const current=()=>activeReflection===owner&&!state.accessDenied&&state.libraryReady&&
+    state.courseId===owner.courseId&&state.lessonId===owner.lessonId&&state.lessonRequest===owner.request&&
+    state.courses.some(course=>course.id===owner.courseId)&&panel.isConnected&&content.contains(panel);
+  const updateCount=()=>{
+    const length=Array.from(field.value).length;
+    count.textContent=length+" de 2.000 caracteres"+(length>2000?". Reduza o texto para revisar.":". Preenchimento opcional.");
+  };
+  field.addEventListener("input",()=>{
+    if(!current())return;
+    updateCount();review.replaceChildren();
+  });
+  clear.addEventListener("click",()=>{
+    if(!current())return;
+    clearLessonReflection();panel.open=true;field.focus();
+  });
+  compare.addEventListener("click",()=>{
+    if(!current())return;
+    updateCount();review.replaceChildren();
+    if(!studentText(field.value,1,2000)){
+      review.append(el("p","Escreva uma reflexão de 1 a 2.000 caracteres para usar este roteiro, ou continue a aula sem preencher."));
+      field.focus();return;
+    }
+    review.append(el("p","Compare sua explicação com o material: a ideia principal ficou clara? Seu exemplo é fictício? Que detalhe você gostaria de rever?"));
+    const sections=splitLessonSections(lesson.body).filter(section=>
+      section.heading==="APLICAÇÃO OPCIONAL"||section.heading==="EXEMPLO FICTÍCIO").slice(0,2);
+    if(!sections.length)review.append(el("p","Esta aula não tem um exemplo ou aplicação separados. Use o texto completo acima para sua revisão."));
+    for(const section of sections){
+      const characters=Array.from(section.text),block=el("blockquote",undefined,"help-excerpt");
+      block.append(el("h5",section.heading),el("p",characters.slice(0,1000).join("")));
+      if(characters.length>1000)block.append(el("small","Trecho parcial. O texto completo está na aula."));
+      review.append(block);
+    }
+    const source=el("p","Fonte: "+owner.title+" · versão "+owner.version,"help-source");source.dataset.reflectionSource="";
+    review.append(source,el("p","Esta é uma revisão feita por você. Não há nota, correção automática ou envio ao tutor.","mini"));
+  });
+  return panel;
+}
 function nextPendingLessonId(currentId){
   const items=Array.from(lessonsBox.querySelectorAll("[data-lesson-id]"));
   const currentIndex=items.findIndex(btn=>Number(btn.dataset.lessonId)===currentId);
@@ -1681,6 +1779,7 @@ async function selectLesson(id,preferredVersion=null,focusIntent=null){
   const courseId=state.courseId;
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(courseId)||courseId<1)return;
   if(preferredVersion!==null&&(!Number.isSafeInteger(preferredVersion)||preferredVersion<1))return;
+  if(activeReflection!==null&&(activeReflection.courseId!==courseId||activeReflection.lessonId!==id))forgetLessonReflection();
   const request=++state.lessonRequest;
   state.lessonId=id;
   lessonsBox.querySelectorAll("[data-lesson-id]").forEach(btn=>btn.setAttribute("aria-current",String(Number(btn.dataset.lessonId)===id)));
@@ -1762,10 +1861,11 @@ async function selectLesson(id,preferredVersion=null,focusIntent=null){
     if(progress.completed)offerNextLesson(id);
     content.append(lessonReadingPositionAction(lesson,request));
     renderReadingPosition();
-    content.append(lessonHelpPanel(lesson,request));
+    content.append(lessonHelpPanel(lesson,request),lessonReflectionPanel(lesson,request));
     finishNavigationFocus(heading,focusIntent);
   }catch(error){
     if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id){
+      forgetLessonReflection();
       // A transient failure loading EITHER body or progress must not render
       // a partial lesson. The user chooses whether to retry; 403/419 always
       // purges and locks the UI. Never retry an old lesson selection.
@@ -2070,6 +2170,7 @@ document.getElementById("favorites-only").addEventListener("change",event=>{
   state.favoritesOnly=event.target.checked===true;
   ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  forgetLessonReflection();
   resetLessonFilter();
   lessonsBox.replaceChildren();content.replaceChildren();
   content.append(el("p","Escolha um curso para ver as aulas.","empty"));
@@ -2080,6 +2181,7 @@ document.getElementById("course-search").addEventListener("input",event=>{
   state.query=event.target.value.slice(0,80);
   ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  forgetLessonReflection();
   resetLessonFilter();
   lessonsBox.replaceChildren();content.replaceChildren();
   content.append(el("p","Escolha um curso para ver as aulas.","empty"));
@@ -2089,6 +2191,7 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
   if(state.accessDenied||!state.libraryReady)return;
   state.filter=btn.dataset.filter;++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  forgetLessonReflection();
   resetLessonFilter();
   document.querySelectorAll("[data-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));
   lessonsBox.replaceChildren();content.replaceChildren();content.append(el("p","Escolha um curso para ver as aulas.","empty"));renderCourses();
@@ -2156,6 +2259,7 @@ async function loadLibrary(){
   }catch(error){
     if(!state.accessDenied){
       state.libraryReady=false;state.courses=[];state.courseId=null;state.lessonId=null;
+      forgetLessonReflection();
       resetLessonFilter();
       document.getElementById("course-search").disabled=true;
       document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});

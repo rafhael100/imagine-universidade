@@ -17,6 +17,10 @@ Route::prefix('universidade/private')->group(function (): void {
         Route::get('/courses', [UniversityController::class, 'courses']);
         Route::get('/favorites', [UniversityController::class, 'favorites']);
         Route::get('/favorites/export', [UniversityController::class, 'exportFavorites']);
+        Route::get('/reading-position', [UniversityController::class, 'readingPosition']);
+        Route::get('/reading-position/export', [UniversityController::class, 'exportReadingPosition']);
+        Route::put('/reading-position', [UniversityController::class, 'saveReadingPosition']);
+        Route::delete('/reading-position', [UniversityController::class, 'clearReadingPosition']);
         Route::put('/courses/{courseId}/favorite', [UniversityController::class, 'favoriteCourse'])
             ->whereNumber('courseId');
         Route::delete('/courses/{courseId}/favorite', [UniversityController::class, 'unfavoriteCourse'])

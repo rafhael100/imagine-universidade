@@ -10,6 +10,7 @@ use App\Domain\Tutor\TutorGateway;
 use App\Domain\Tutor\TutorQuestion;
 use App\Domain\Learning\UniversityCatalogRepository;
 use App\Domain\Learning\UniversityTenantProvisioner;
+use App\Domain\Learning\ReadingPositionRevision;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -127,6 +128,95 @@ final class UniversityController
         return response()->json($favorites, 200, [
             'Content-Disposition' => 'attachment; filename="imagine-universidade-favoritos.json"',
         ]);
+    }
+
+    public function readingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $position = $this->catalog->readingPosition($grant, $revisions);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($position === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        return response()->json($position);
+    }
+
+    public function exportReadingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $position = $this->catalog->exportReadingPosition($grant, $revisions);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($position === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        return response()->json($position, 200, [
+            'Content-Disposition' => 'attachment; filename="imagine-universidade-posicao-leitura.json"',
+        ]);
+    }
+
+    /** @param array<string, mixed>|string $result */
+    private function readingPositionWriteResponse(array|string $result): JsonResponse
+    {
+        if (is_array($result)) {
+            return response()->json($result);
+        }
+        $status = match ($result) {
+            'access_denied' => 403,
+            'not_found' => 404,
+            'reading_position_changed' => 409,
+            default => 503,
+        };
+        return response()->json(['error' => $status === 503 ? 'temporarily_unavailable' : $result], $status);
+    }
+
+    public function saveReadingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $data = $request->validate([
+            'course_id' => ['required', 'integer', 'min:1', 'max:9007199254740991'],
+            'course_version' => ['required', 'integer', 'min:1', 'max:9007199254740991'],
+            'lesson_id' => ['required', 'integer', 'min:1', 'max:9007199254740991'],
+            'expected_revision' => ['required', 'string', 'max:'.ReadingPositionRevision::MAX_LENGTH],
+        ]);
+        $grant = $this->grant($request);
+        try {
+            $result = $this->catalog->saveReadingPosition(
+                $grant, (int) $data['course_id'], (int) $data['course_version'], (int) $data['lesson_id'],
+                $data['expected_revision'], $revisions,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        return $this->readingPositionWriteResponse($result);
+    }
+
+    public function clearReadingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $data = $request->validate([
+            'expected_revision' => ['required', 'string', 'max:'.ReadingPositionRevision::MAX_LENGTH],
+        ]);
+        $grant = $this->grant($request);
+        try {
+            $result = $this->catalog->clearReadingPosition(
+                $grant, $data['expected_revision'], $revisions,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        return $this->readingPositionWriteResponse($result);
     }
 
     public function favoriteCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse

@@ -62,6 +62,14 @@
     .course-favorite p{font-size:13px;font-weight:750;margin:0 0 8px;overflow-wrap:anywhere}
     .course-favorite .secondary{margin-left:0}
     .course-favorite[hidden]{display:none}
+    .reading-position{padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
+    .reading-position[hidden]{display:none}
+    .reading-position h3{font-size:15px;margin:0 0 6px}
+    .reading-position p,.reading-lesson-action p{font-size:13px;color:#565D56;margin:6px 0;overflow-wrap:anywhere}
+    .reading-position .secondary,.reading-lesson-action .secondary{margin-left:0}
+    .reading-position summary{cursor:pointer;min-height:44px;line-height:44px;font-size:13px;font-weight:750;width:fit-content}
+    .reading-position details>div{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 6px}
+    .reading-lesson-action{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
         .lesson-search-panel{background:#fff;border:1px solid var(--line);border-radius:var(--imagine-radius-panel);padding:17px 19px;margin-bottom:18px}
     .lesson-search-panel h2{font-size:18px;margin:0 0 6px}
     .lesson-search-panel p{font-size:13px;color:var(--muted);margin:0 0 10px}
@@ -136,7 +144,7 @@
     <h1 id="hero-title">Visitas. Leads. Clientes.</h1>
     <p>Aprenda com aulas rápidas, nossa metodologia e orientações práticas para aproveitar melhor os serviços Imagine.</p>
     <p id="overall-progress" class="overall-progress" aria-live="polite">Seu progresso será exibido após autorizar os cursos.</p>
-    <button type="button" id="resume-course" class="primary resume-btn" disabled>Retomar meus estudos</button>
+    <button type="button" id="resume-course" class="primary resume-btn" disabled>Continuar aulas pendentes</button>
     <button type="button" id="export-progress" class="secondary" disabled>Exportar meu progresso</button>
   </section>
   <section class="learning-path" aria-labelledby="path-title">
@@ -196,6 +204,20 @@
     </section>
     <section class="panel" aria-labelledby="lesson-panel-title">
       <div class="panel-head"><h2 id="lesson-panel-title">Sua aprendizagem</h2><p>Aulas curtas, sem provas, notas ou certificados.</p></div>
+      <section id="reading-position-panel" class="reading-position" aria-labelledby="reading-position-title" hidden>
+        <h3 id="reading-position-title">Aula guardada</h3>
+        <p id="reading-position-status" role="status" aria-live="polite"></p>
+        <button id="resume-reading-position" type="button" class="secondary" hidden disabled>Continuar da aula guardada</button>
+        <button id="reload-reading-position" type="button" class="secondary" hidden disabled>Consultar posição novamente</button>
+        <details id="reading-position-options">
+          <summary>Opções da posição</summary>
+          <div>
+            <button id="remove-reading-position" type="button" class="secondary" hidden disabled>Apagar posição guardada</button>
+            <button id="export-reading-position" type="button" class="secondary" disabled>Exportar minha posição</button>
+          </div>
+          <p id="reading-position-export-status" role="status" aria-live="polite" hidden></p>
+        </details>
+      </section>
       <div id="course-favorite-panel" class="course-favorite" hidden>
         <p id="favorite-course-title"></p>
         <button id="course-favorite-toggle" type="button" class="secondary" disabled>Salvar curso nos favoritos</button>
@@ -216,7 +238,10 @@ const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
   favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,
   favoriteWriting:false,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",
-  favoriteExportLoading:false,favoriteExportRequest:0};
+  favoriteExportLoading:false,favoriteExportRequest:0,
+  readingSnapshot:null,readingLoading:false,readingWriting:false,readingReturning:false,
+  readingUncertain:false,readingRequest:0,readingMessage:"",
+  readingExportLoading:false,readingExportRequest:0};
 const labels={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Treinamentos Imagine"};
 const overall=document.getElementById("overall-progress");
 function illustrativeFunnel(visits,leadRate,clientRate){
@@ -272,6 +297,15 @@ function lockAccess(message){
   document.getElementById("course-favorite-panel").hidden=true;
   document.getElementById("favorite-course-title").textContent="";
   document.getElementById("course-favorite-toggle").disabled=true;
+  state.readingSnapshot=null;state.readingUncertain=false;state.readingMessage="";
+  ++state.readingRequest;++state.readingExportRequest;
+  document.getElementById("reading-position-panel").hidden=true;
+  document.getElementById("reading-position-status").textContent="";
+  document.getElementById("reading-position-export-status").textContent="";
+  document.getElementById("reading-position-export-status").hidden=true;
+  document.getElementById("reading-position-options").open=false;
+  for(const id of ["resume-reading-position","reload-reading-position","remove-reading-position","export-reading-position"])
+    document.getElementById(id).disabled=true;
   ++state.courseRequest;++state.lessonRequest;++state.searchRequest;
   document.getElementById("lesson-search-query").value="";
   document.getElementById("lesson-search-query").disabled=true;
@@ -439,6 +473,230 @@ function validatedFavoriteReceipt(payload,courseId,favorite){
      typeof payload.favorite!=="boolean"||payload.favorite!==favorite)return null;
   return {course_id:payload.course_id,favorite:payload.favorite};
 }
+function readingTimestamp(value){
+  return typeof value==="string"&&value.length<=40&&
+    /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})?)?$/.test(value);
+}
+function readingTarget(value){
+  return studentRecord(value)&&["course_id","course_version","lesson_id"]
+    .every(key=>Number.isSafeInteger(value[key])&&value[key]>0);
+}
+function validatedReadingPosition(payload){
+  if(!studentRecord(payload)||payload.schema_version!==1||payload.scope!=="current_authenticated_student"||
+     !["none","available","unavailable"].includes(payload.status)||!studentText(payload.revision,1,2048))return null;
+  let position=null;
+  if(payload.status==="available"){
+    if(!readingTarget(payload.position)||!readingTimestamp(payload.position.saved_at))return null;
+    const item=payload.position;
+    position={course_id:item.course_id,course_version:item.course_version,lesson_id:item.lesson_id,saved_at:item.saved_at};
+  }else if(payload.position!==null)return null;
+  return {schema_version:1,scope:"current_authenticated_student",status:payload.status,revision:payload.revision,position};
+}
+function sameReadingTarget(snapshot,target){
+  return snapshot?.status==="available"&&readingTarget(target)&&
+    ["course_id","course_version","lesson_id"].every(key=>snapshot.position[key]===target[key]);
+}
+function validatedReadingReceipt(payload,target,previousRevision){
+  const snapshot=validatedReadingPosition(payload);
+  if(!snapshot||snapshot.revision===previousRevision||
+     (target===null?snapshot.status!=="none":!sameReadingTarget(snapshot,target)))return null;
+  return snapshot;
+}
+function readingPositionMessage(snapshot){
+  if(snapshot.status==="available")return "Você tem uma aula guardada para continuar.";
+  if(snapshot.status==="unavailable")return "A aula guardada não está disponível nesta versão. Você pode remover ou exportar a referência.";
+  return "Nenhuma aula guardada. Abra uma aula e guarde-a para continuar depois.";
+}
+function renderReadingPosition(){
+  const active=state.libraryReady&&!state.accessDenied;
+  const snapshot=active?state.readingSnapshot:null;
+  const busy=state.readingLoading||state.readingWriting||state.readingReturning;
+  document.getElementById("reading-position-panel").hidden=!active;
+  document.getElementById("reading-position-status").textContent=active?state.readingMessage:"";
+  const resume=document.getElementById("resume-reading-position"),reload=document.getElementById("reload-reading-position");
+  const remove=document.getElementById("remove-reading-position");
+  resume.hidden=!snapshot||snapshot.status!=="available";
+  resume.disabled=!active||busy||resume.hidden;
+  reload.hidden=!active||!!snapshot||state.readingLoading;
+  reload.disabled=!active||busy;
+  remove.hidden=!snapshot||snapshot.status==="none";
+  remove.disabled=!active||busy||remove.hidden;
+  document.getElementById("export-reading-position").disabled=!active||state.readingExportLoading===true;
+  const save=document.getElementById("save-reading-position");
+  if(save){
+    const target={course_id:Number(save.dataset.courseId),course_version:Number(save.dataset.courseVersion),lesson_id:Number(save.dataset.lessonId)};
+    const current=readingTarget(target)&&state.courses.some(course=>course.id===target.course_id)&&state.courseId===target.course_id&&state.lessonId===target.lesson_id&&
+      state.lessonRequest===Number(save.dataset.lessonRequest);
+    const already=!!snapshot&&sameReadingTarget(snapshot,target);
+    save.disabled=!active||!current||busy||!snapshot||state.readingUncertain||already;
+    save.textContent=already?"Esta aula está guardada":snapshot?"Guardar esta aula para continuar depois":"Consulte sua posição para guardar esta aula";
+    const hint=document.getElementById("reading-position-replace-hint");
+    if(hint)hint.textContent=snapshot&&snapshot.status!=="none"&&!already?"Esta ação substitui sua posição guardada anterior.":"";
+  }
+}
+async function loadReadingPosition(){
+  if(state.accessDenied||!state.libraryReady||state.readingLoading||state.readingWriting)return null;
+  const request=++state.readingRequest;
+  state.readingLoading=true;state.readingSnapshot=null;
+  state.readingMessage="Consultando sua posição...";renderReadingPosition();
+  try{
+    const payload=await api("/reading-position");
+    if(state.accessDenied||!state.libraryReady||state.readingRequest!==request)return null;
+    const snapshot=validatedReadingPosition(payload);
+    if(snapshot===null)throw new Error("invalid_reading_position");
+    state.readingSnapshot=snapshot;state.readingUncertain=false;
+    state.readingMessage=readingPositionMessage(snapshot);
+    return snapshot;
+  }catch(error){
+    if(!state.accessDenied&&state.libraryReady&&state.readingRequest===request){
+      state.readingSnapshot=null;
+      state.readingMessage=state.readingUncertain
+        ?"O resultado não pôde ser confirmado. Consulte sua posição novamente antes de alterar."
+        :"Não foi possível consultar sua posição. Tente consultar novamente.";
+    }
+    return null;
+  }finally{
+    state.readingLoading=false;renderReadingPosition();
+  }
+}
+function lessonReadingPositionAction(lesson,request){
+  const target={course_id:lesson.course_id,course_version:lesson.course_version,lesson_id:lesson.id};
+  const box=el("div",undefined,"reading-lesson-action"),button=el("button","Guardar esta aula para continuar depois","secondary");
+  button.id="save-reading-position";button.type="button";button.disabled=true;
+  button.dataset.courseId=String(target.course_id);button.dataset.courseVersion=String(target.course_version);
+  button.dataset.lessonId=String(target.lesson_id);button.dataset.lessonRequest=String(request);
+  button.addEventListener("click",()=>{
+    if(state.lessonRequest===request&&state.courseId===target.course_id&&state.lessonId===target.lesson_id)
+      void writeReadingPosition(target,request);
+  });
+  const hint=el("p","");hint.id="reading-position-replace-hint";
+  box.append(button,hint);return box;
+}
+async function writeReadingPosition(target=null,lessonRequest=null){
+  const previous=state.readingSnapshot;
+  if(state.accessDenied||!state.libraryReady||state.readingLoading||state.readingWriting||state.readingReturning||
+     state.readingUncertain||!previous)return;
+  if(target===null){if(previous.status==="none")return;}
+  else if(!readingTarget(target)||!state.courses.some(course=>course.id===target.course_id)||state.courseId!==target.course_id||state.lessonId!==target.lesson_id||
+          state.lessonRequest!==lessonRequest||sameReadingTarget(previous,target))return;
+  const request=++state.readingRequest;
+  const current=()=>!state.accessDenied&&state.libraryReady&&state.readingRequest===request;
+  const sameLesson=()=>target===null||(state.lessonRequest===lessonRequest&&state.courseId===target.course_id&&state.lessonId===target.lesson_id);
+  state.readingWriting=true;state.readingSnapshot=null;
+  ++state.readingExportRequest;
+  document.getElementById("reading-position-export-status").textContent="";
+  document.getElementById("reading-position-export-status").hidden=true;
+  state.readingMessage=target===null?"Removendo sua posição guardada...":"Guardando esta aula para continuar depois...";
+  renderReadingPosition();
+  let reconcile=false;
+  try{
+    const payload=await api("/reading-position",{method:target===null?"DELETE":"PUT",
+      body:target===null?{expected_revision:previous.revision}:{course_id:target.course_id,course_version:target.course_version,
+        lesson_id:target.lesson_id,expected_revision:previous.revision}});
+    if(!current())return;
+    if(!sameLesson()){
+      state.readingMessage="A seleção da aula mudou. Consulte sua posição para conferir a alteração.";
+      return;
+    }
+    const snapshot=validatedReadingReceipt(payload,target,previous.revision);
+    if(snapshot===null)throw new Error("invalid_reading_receipt");
+    state.readingSnapshot=snapshot;state.readingUncertain=false;
+    state.readingMessage=target===null?"Posição guardada removida.":"Aula guardada para continuar depois.";
+  }catch(error){
+    if(!current())return;
+    if(!sameLesson()){
+      state.readingUncertain=true;
+      state.readingMessage="A seleção da aula mudou. Consulte sua posição para conferir a alteração.";
+    }else if(error.httpStatus===409){
+      // An absence ticket can expire. Never silently renew it or retry the
+      // write: the next GET and next mutation both require explicit actions.
+      state.readingMessage="Sua posição mudou ou a consulta expirou. Consulte novamente antes de alterar.";
+    }else if(error.httpStatus===404||error.httpStatus===422){
+      state.readingMessage="Não foi possível guardar esta referência. Consulte sua posição novamente e reabra a aula.";
+    }else{
+      state.readingUncertain=true;reconcile=true;
+      state.readingMessage="Não foi possível confirmar a alteração. Vamos consultar sua posição atual.";
+    }
+  }finally{
+    state.readingWriting=false;renderReadingPosition();
+  }
+  if(reconcile&&current()){
+    const expectedRequest=state.readingRequest+1;
+    const snapshot=await loadReadingPosition();
+    if(!snapshot||state.accessDenied||!state.libraryReady||state.readingRequest!==expectedRequest||!sameLesson())return;
+    if(target===null&&snapshot.status==="none")state.readingMessage="Remoção confirmada após consulta.";
+    else if(target!==null&&sameReadingTarget(snapshot,target))state.readingMessage="Aula guardada confirmada após consulta.";
+    else if(snapshot.status==="unavailable")state.readingMessage="Há uma posição guardada, mas a aula está indisponível. A alteração anterior não pôde ser confirmada.";
+    else state.readingMessage="Consulta concluída. A posição atual não corresponde à alteração solicitada; confira antes de tentar novamente.";
+    renderReadingPosition();
+  }
+}
+async function resumeReadingPosition(){
+  const previous=state.readingSnapshot;
+  if(state.accessDenied||!state.libraryReady||state.readingLoading||state.readingWriting||state.readingReturning||
+     !previous||previous.status!=="available")return;
+  const courseRequest=state.courseRequest,lessonRequest=state.lessonRequest;
+  state.readingReturning=true;renderReadingPosition();
+  try{
+    const snapshot=await loadReadingPosition();
+    if(!snapshot||state.accessDenied||!state.libraryReady)return;
+    if(state.courseRequest!==courseRequest||state.lessonRequest!==lessonRequest){
+      state.readingMessage="Posição consultada. Clique em continuar quando quiser voltar.";return;
+    }
+    if(snapshot.revision!==previous.revision||!sameReadingTarget(snapshot,previous.position)){
+      state.readingMessage="Sua posição foi atualizada. Confira o estado atual antes de continuar.";return;
+    }
+    const target=snapshot.position;
+    if(!state.courses.some(course=>course.id===target.course_id)){
+      state.readingMessage="A aula guardada não está no catálogo carregado. Atualize a página para consultar os cursos atuais.";return;
+    }
+    openCourseWithAllFilters(target.course_id,target.lesson_id,target.course_version);
+  }finally{
+    state.readingReturning=false;renderReadingPosition();
+  }
+}
+function sanitizedReadingPositionExport(payload){
+  if(!studentRecord(payload)||payload.schema_version!==1||payload.scope!=="current_authenticated_student")return null;
+  let position=null;
+  if(payload.reading_position!==null){
+    const item=payload.reading_position;
+    if(!studentRecord(item)||!studentSlug(item.course_slug)||!studentSlug(item.lesson_slug)||
+       !Number.isSafeInteger(item.course_version)||item.course_version<1||!readingTimestamp(item.saved_at))return null;
+    position={course_slug:item.course_slug,course_version:item.course_version,lesson_slug:item.lesson_slug,saved_at:item.saved_at};
+  }
+  return {schema_version:1,scope:"current_authenticated_student",reading_position:position};
+}
+async function exportReadingPosition(){
+  if(state.accessDenied||!state.libraryReady||state.readingExportLoading)return;
+  const request=++state.readingExportRequest;
+  const current=()=>!state.accessDenied&&state.libraryReady&&state.readingExportRequest===request;
+  const message=document.getElementById("reading-position-export-status");
+  state.readingExportLoading=true;message.hidden=false;message.textContent="Preparando sua referência de leitura...";
+  renderReadingPosition();
+  try{
+    const payload=await api("/reading-position/export");
+    if(!current())return;
+    const sanitized=sanitizedReadingPositionExport(payload);
+    if(sanitized===null)throw new Error("invalid_reading_export");
+    const url=URL.createObjectURL(new Blob([JSON.stringify(sanitized,null,2)],{type:"application/json"}));
+    try{
+      if(!current())return;
+      const link=document.createElement("a");link.href=url;link.download="imagine-universidade-posicao-leitura.json";
+      document.body.append(link);try{link.click();}finally{link.remove();}
+      if(current())message.textContent="Arquivo da posição preparado. Guarde seus dados com segurança.";
+    }finally{setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  }catch(error){
+    if(current())message.textContent=error.message==="invalid_reading_export"
+      ?"A referência recebida não passou na validação de privacidade. Tente novamente mais tarde."
+      :"Não foi possível exportar sua posição. Você pode tentar novamente.";
+  }finally{
+    state.readingExportLoading=false;renderReadingPosition();
+  }
+}
+document.getElementById("reload-reading-position").addEventListener("click",()=>{void loadReadingPosition();});
+document.getElementById("resume-reading-position").addEventListener("click",()=>{void resumeReadingPosition();});
+document.getElementById("remove-reading-position").addEventListener("click",()=>{void writeReadingPosition();});
+document.getElementById("export-reading-position").addEventListener("click",()=>{void exportReadingPosition();});
 function renderFavoriteControls(){
   const active=state.libraryReady&&!state.accessDenied;
   const filter=document.getElementById("favorites-only"),retry=document.getElementById("reload-favorites");
@@ -605,7 +863,7 @@ function renderPillars(){
 }
 function renderCourses(){
   if(state.accessDenied||!state.libraryReady)return;
-  renderFavoriteControls();renderPillars();
+  renderFavoriteControls();renderReadingPosition();renderPillars();
   list.replaceChildren();
   const totals=state.courses.reduce((memo,c)=>{
     const p=progressLabel(c);memo.completed+=p.completed;memo.total+=p.total;return memo;
@@ -641,8 +899,9 @@ function renderCourses(){
     list.append(btn);
   }
 }
-async function selectCourse(id,preferredLessonId=null){
+async function selectCourse(id,preferredLessonId=null,preferredVersion=null){
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!state.courses.some(course=>course.id===id))return;
+  if(preferredVersion!==null&&(!Number.isSafeInteger(preferredVersion)||preferredVersion<1))return;
   // Invalidate prior course requests and lesson reads, including same-course clicks.
   const request=++state.courseRequest;
   ++state.lessonRequest;
@@ -672,7 +931,7 @@ async function selectCourse(id,preferredLessonId=null){
     }
     // With no search target, resume the first unfinished authorized lesson.
     const next=selected||lessons.find(item=>!Boolean(item.completed))||lessons[lessons.length-1];
-    await selectLesson(Number(next.id));
+    await selectLesson(Number(next.id),preferredVersion);
   }catch(error){
     if(state.courseRequest===request&&!state.accessDenied){
       // A transient lesson read may be retried by a deliberate click; never
@@ -685,7 +944,7 @@ async function selectCourse(id,preferredLessonId=null){
         // A search result keeps its exact lesson target across recovery.
         // If it disappeared meanwhile, show unavailable instead of resuming
         // an unrelated pending lesson from the same course.
-        if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId);
+        if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId,preferredVersion);
       });
       content.append(retry);
     }
@@ -883,9 +1142,10 @@ function offerNextLesson(id){
   advance.addEventListener("click",()=>{say("");selectLesson(nextId);});
   content.append(advance);
 }
-async function selectLesson(id){
+async function selectLesson(id,preferredVersion=null){
   const courseId=state.courseId;
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!Number.isSafeInteger(courseId)||courseId<1)return;
+  if(preferredVersion!==null&&(!Number.isSafeInteger(preferredVersion)||preferredVersion<1))return;
   const request=++state.lessonRequest;
   state.lessonId=id;
   lessonsBox.querySelectorAll("[data-lesson-id]").forEach(btn=>btn.setAttribute("aria-current",String(Number(btn.dataset.lessonId)===id)));
@@ -899,9 +1159,13 @@ async function selectLesson(id){
     const lesson=validatedStudentLesson(lessonPayload,id,courseId);
     const progress=validatedStudentProgress(progressPayload);
     if(lesson===null||progress===null)throw new Error("A aula ou o progresso recebido é inválido. Tente novamente.");
+    if(preferredVersion!==null&&lesson.course_version!==preferredVersion)
+      throw new Error("Esta aula não está disponível na versão guardada. Consulte sua posição novamente.");
     markLessonStatus(id,progress.completed);
     content.replaceChildren();
-    content.append(el("h3",lesson.title),lessonTextFragment(lesson.body));
+    const heading=el("h3",lesson.title);
+    content.append(heading,lessonTextFragment(lesson.body));
+    if(preferredVersion!==null){heading.tabIndex=-1;heading.focus();}
     const action=el("button",progress.completed?"✓ Aula concluída":"Marcar como concluída","primary");
     action.type="button";action.disabled=progress.completed;
     async function confirmCompletion(message){
@@ -955,6 +1219,8 @@ async function selectLesson(id){
     });
     content.append(action);
     if(progress.completed)offerNextLesson(id);
+    content.append(lessonReadingPositionAction(lesson,request));
+    renderReadingPosition();
     content.append(lessonHelpPanel(lesson,request));
   }catch(error){
     if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id){
@@ -967,13 +1233,13 @@ async function selectLesson(id){
       const retry=el("button","Tentar abrir aula novamente","secondary lesson-detail-retry");
       retry.type="button";
       retry.addEventListener("click",()=>{
-        if(!state.accessDenied&&state.lessonId===id)selectLesson(id);
+        if(!state.accessDenied&&state.lessonId===id)selectLesson(id,preferredVersion);
       });
       content.append(retry);
     }
   }
 }
-function openCourseWithAllFilters(target,preferredLessonId=null){
+function openCourseWithAllFilters(target,preferredLessonId=null,preferredVersion=null){
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(target)||target<1)return;
   if(!state.courses.some(course=>course.id===target))return;
   state.filter="todos";state.query="";state.favoritesOnly=false;
@@ -982,7 +1248,7 @@ function openCourseWithAllFilters(target,preferredLessonId=null){
     btn.setAttribute("aria-pressed",String(btn.dataset.filter==="todos"));
   });
   say("");
-  selectCourse(target,preferredLessonId);
+  selectCourse(target,preferredLessonId,preferredVersion);
 }
 // Read-only search results are rendered with textContent, never HTML.
 // A 403/419 revokes and purges them; late responses cannot restore results.
@@ -1214,6 +1480,12 @@ async function loadLibrary(){
   ++state.favoriteExportRequest;
   document.getElementById("favorites-export-status").textContent="";
   document.getElementById("favorites-export-status").hidden=true;
+  ++state.readingRequest;++state.readingExportRequest;
+  state.readingSnapshot=null;state.readingUncertain=false;
+  state.readingMessage="Consulte sua posição após carregar a biblioteca.";
+  document.getElementById("reading-position-export-status").textContent="";
+  document.getElementById("reading-position-export-status").hidden=true;
+  renderReadingPosition();
   renderFavoriteControls();
   document.getElementById("course-search").disabled=true;
   document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
@@ -1246,6 +1518,7 @@ async function loadLibrary(){
     // Favorites load separately: their failure cannot hold libraryLoading
     // open or block lessons, educational search, progress or completion.
     void loadFavorites();
+    void loadReadingPosition();
   }catch(error){
     if(!state.accessDenied){
       state.libraryReady=false;state.courses=[];state.courseId=null;state.lessonId=null;

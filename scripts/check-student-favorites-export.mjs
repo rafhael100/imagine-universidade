@@ -45,7 +45,7 @@ function harness(){
   context=createContext({
     root:"/universidade/private",csrf:"synthetic-csrf",status:get("status"),overall:get("overall-progress"),
     list:get("course-list"),lessonsBox:get("lesson-items"),content:get("lesson-content"),
-    Blob,renderSimulator:()=>{},renderCourses:()=>context.renderFavoriteControls(),
+    Blob,renderSimulator:()=>{},renderCourses:()=>context.renderFavoriteControls(),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,
     document:{body,getElementById:get,querySelectorAll:()=>[],createElement:tag=>{
       const node=new Node(tag);
       if(tag==="a")node.click=()=>{

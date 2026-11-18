@@ -60,7 +60,7 @@ function harness(initial=[]){
   const control={authoritative:new Set(initial),read:null,write:null};
   const context=createContext({state,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),
     root:"/universidade/private",csrf:"synthetic-csrf",labels:{metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas"},
-    renderPillars:()=>{},renderSimulator:()=>{},selectLesson:async()=>{},
+    renderPillars:()=>{},renderSimulator:()=>{},selectLesson:async()=>{},renderReadingPosition:()=>{},loadReadingPosition:async()=>null,
     document:{createElement:tag=>new Node(tag),getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
     fetch:async(url,options)=>{
       const path=url.replace("/universidade/private","");

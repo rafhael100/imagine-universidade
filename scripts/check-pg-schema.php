@@ -21,6 +21,8 @@ $expected = [
     'educational_audit_events|educational_organizations',
     'educational_course_favorites|educational_organizations',
     'educational_course_favorites|educational_courses',
+    'educational_reading_positions|educational_organizations',
+    'educational_reading_positions|educational_lessons',
 ];
 
 if (
@@ -120,7 +122,31 @@ try {
     }
     echo "PASS private favorites minimal columns and non-null scoped keys\n";
 
-    echo "\n12 PostgreSQL schema invariants verified. No records were mutated.\n";
+    $positionIndex = $pdo->query(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'
+         AND indexname = 'edu_reading_position_org_subject_uq'"
+    )->fetchColumn();
+    if (!is_string($positionIndex) || !str_contains($positionIndex, 'UNIQUE INDEX')
+        || !str_contains($positionIndex, '(educational_organization_id, subject_key)')) {
+        abortCheck('Reading positions require one unique slot per tenant and subject.');
+    }
+    echo "PASS private reading position scoped UNIQUE\n";
+
+    $positionColumns = $pdo->query(
+        "SELECT column_name, character_maximum_length, is_nullable
+         FROM information_schema.columns WHERE table_schema = 'public'
+         AND table_name = 'educational_reading_positions' ORDER BY column_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if (array_column($positionColumns, 'column_name') !== [
+        'educational_lesson_id', 'educational_organization_id', 'revision', 'saved_at', 'subject_key',
+    ] || array_column($positionColumns, 'is_nullable') !== ['YES', 'NO', 'NO', 'YES', 'NO']
+        || (int) $positionColumns[2]['character_maximum_length'] !== 67
+        || (int) $positionColumns[4]['character_maximum_length'] !== 120) {
+        abortCheck('Reading position schema must keep only scoped keys, revision and an erasable reference/date.');
+    }
+    echo "PASS private reading position minimal columns and erasable reference\n";
+
+    echo "\n16 PostgreSQL schema invariants verified. No records were mutated.\n";
 } catch (Throwable $e) {
     // The schema checker must never log connection secrets or exception trace.
     abortCheck('PostgreSQL connection/schema inspection failed.');

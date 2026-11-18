@@ -134,17 +134,26 @@ O runner cobre, em sequência:
    conteúdo revisado. A auditoria precisa conter as alterações feitas.
 4. Duas sessões de aluno: catálogo compartilhado e favoritos privados que
    persistem após recarga. Remover o favorito de uma empresa preserva o da outra.
+   A posição de leitura só aparece após ação explícita; persiste sem cruzar
+   empresas. Retomar limpa filtros que ocultavam o curso e abre a aula e versão
+   exatas, sem criar uma nova gravação.
 5. Conclusão de aula em uma empresa, com progresso independente na outra.
 6. Tutor padrão indisponível com 503 real, mantendo útil o trecho literal
-   autorizado sem gravar outra conclusão.
+   autorizado sem gravar outra conclusão ou mover a posição de leitura.
 7. Retirada editorial: catálogo e favoritos visíveis ficam vazios, a aula antiga
    retorna 404 e a remoção da preferência própria retida continua possível.
+   O marcador fica indisponível; a exportação conserva apenas a referência
+   histórica própria. Removê-lo numa empresa mantém o da outra.
 8. Edição e republicação da nova versão: favorito retido reaparece, favorito
    removido não volta, progresso atual começa pendente e a exportação conserva
    a conclusão da versão histórica.
+   A posição antiga não aponta automaticamente à nova versão: uma nova ação
+   explícita salva a aula revisada e sua exportação passa a identificar a versão 2.
 9. Revogação de uma empresa: escrita retorna 403, a interface purga conteúdo
    privado e não repete a operação. A outra empresa permanece autorizada. A
    restauração da elegibilidade comprova que a remoção negada não apagou o favorito.
+   A posição também é purgada da tela; um novo carregamento autorizado restaura
+   a preferência retida sem inventar outro salvamento.
 
 A verificação final lê o mesmo SQLite e confirma sessões e registros de estudo
 persistidos. O bootstrap convencional também confirma que o provider da

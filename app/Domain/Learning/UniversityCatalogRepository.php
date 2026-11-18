@@ -241,6 +241,271 @@ final class UniversityCatalogRepository
         ];
     }
 
+    /** @return array<string, mixed> */
+    private function readingPositionEnvelope(string $status, string $revision, ?array $position = null): array
+    {
+        return [
+            'schema_version' => 1,
+            'scope' => 'current_authenticated_student',
+            'status' => $status,
+            'revision' => $revision,
+            'position' => $position,
+        ];
+    }
+
+    /** One private row and its exact historical reference, without content. */
+    private function readingPositionRecord(int $org, string $subject): ?stdClass
+    {
+        return DB::table('educational_reading_positions as p')
+            ->leftJoin('educational_lessons as l', 'l.id', '=', 'p.educational_lesson_id')
+            ->leftJoin('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
+            ->leftJoin('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
+            ->where('p.educational_organization_id', $org)->where('p.subject_key', $subject)
+            ->first(['p.revision', 'p.educational_lesson_id', 'p.saved_at',
+                'l.id as lesson_id', 'l.slug as lesson_slug', 'l.is_published as lesson_published',
+                'v.version as course_version', 'v.status as version_status',
+                'c.id as course_id', 'c.slug as course_slug', 'c.educational_organization_id as content_org',
+                'c.is_shared', 'c.is_published as course_published']);
+    }
+
+    private function normalizeReadingPositionRecord(stdClass $record, ReadingPositionRevision $revisions): void
+    {
+        if (!is_string($record->revision) || !$revisions->isStored($record->revision)
+            || ($record->educational_lesson_id === null) !== ($record->saved_at === null)
+            || ($record->saved_at !== null && (!is_string($record->saved_at) || trim($record->saved_at) === ''))) {
+            throw new \UnexpectedValueException('Invalid private reading position.');
+        }
+        if ($record->saved_at !== null) {
+            // PostgreSQL timestamptz can return +00, while SQLite preserves the
+            // inserted string. Keep this new API independent of DB formatting.
+            if (preg_match('/\A\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::?\d{2})?)?\z/D', $record->saved_at) !== 1) {
+                throw new \UnexpectedValueException('Invalid private reading timestamp.');
+            }
+            $utc = new \DateTimeZone('UTC');
+            $date = new \DateTimeImmutable($record->saved_at, $utc);
+            $errors = \DateTimeImmutable::getLastErrors();
+            if (is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) {
+                throw new \UnexpectedValueException('Invalid private reading timestamp.');
+            }
+            $record->saved_at = $date->setTimezone($utc)->format('Y-m-d\TH:i:s\Z');
+        }
+    }
+
+    /** @return array<string, mixed>|null Null is unavailable, never an empty preference. */
+    public function readingPosition(PortalGrant $grant, ReadingPositionRevision $revisions): ?array
+    {
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return null;
+        }
+        $record = $this->readingPositionRecord($org, $grant->subjectId);
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return null;
+        }
+        if ($record === null) {
+            // This encrypted precondition is short-lived and creates no row.
+            return $this->readingPositionEnvelope('none', $revisions->absent($grant, time()));
+        }
+        $this->normalizeReadingPositionRecord($record, $revisions);
+        if ($record->educational_lesson_id === null) {
+            return $this->readingPositionEnvelope('none', $record->revision);
+        }
+        if ($record->lesson_id === null || (int) $record->content_org !== $editorialOrg
+            || !(bool) $record->is_shared || !(bool) $record->course_published
+            || $record->version_status !== 'published' || !(bool) $record->lesson_published) {
+            return $this->readingPositionEnvelope('unavailable', $record->revision);
+        }
+
+        return $this->readingPositionEnvelope('available', $record->revision, [
+            'course_id' => (int) $record->course_id,
+            'course_version' => (int) $record->course_version,
+            'lesson_id' => (int) $record->lesson_id,
+            'saved_at' => $record->saved_at,
+        ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function exportReadingPosition(PortalGrant $grant, ReadingPositionRevision $revisions): ?array
+    {
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return null;
+        }
+        $record = $this->readingPositionRecord($org, $grant->subjectId);
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return null;
+        }
+        $position = null;
+        if ($record !== null) {
+            $this->normalizeReadingPositionRecord($record, $revisions);
+            if ($record->educational_lesson_id !== null && $record->lesson_id !== null
+                && (int) $record->content_org === $editorialOrg && (bool) $record->is_shared
+                && in_array($record->version_status, ['published', 'archived'], true)) {
+                $position = [
+                    'course_slug' => (string) $record->course_slug,
+                    'course_version' => (int) $record->course_version,
+                    'lesson_slug' => (string) $record->lesson_slug,
+                    'saved_at' => $record->saved_at,
+                ];
+            }
+        }
+
+        return ['schema_version' => 1, 'scope' => 'current_authenticated_student',
+            'reading_position' => $position];
+    }
+
+    /**
+     * Exact lesson/version selected by an explicit action. A stored token can
+     * only update its matching private slot; it can never create a missing one.
+     *
+     * @return array<string, mixed>|string Snapshot, or a fixed error code.
+     */
+    public function saveReadingPosition(
+        PortalGrant $grant,
+        int $courseId,
+        int $courseVersion,
+        int $lessonId,
+        string $expectedRevision,
+        ReadingPositionRevision $revisions,
+        ?callable $verifyFreshGrant = null,
+    ): array|string {
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return 'access_denied';
+        }
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return 'temporarily_unavailable';
+        }
+        if ($courseId < 1 || $courseVersion < 1 || $lessonId < 1) {
+            return 'not_found';
+        }
+        if ($expectedRevision === '' || strlen($expectedRevision) > ReadingPositionRevision::MAX_LENGTH) {
+            return 'reading_position_changed';
+        }
+
+        try {
+            return DB::transaction(function () use ($grant, $org, $editorialOrg, $courseId, $courseVersion,
+                $lessonId, $expectedRevision, $revisions, $verifyFreshGrant): array|string {
+                // Publication and preference writes share course -> version order.
+                $course = DB::table('educational_courses')->where('id', $courseId)
+                    ->where('educational_organization_id', $editorialOrg)
+                    ->where('is_shared', true)->where('is_published', true)
+                    ->lockForUpdate()->first(['id']);
+                if ($course === null) {
+                    return 'not_found';
+                }
+                $version = DB::table('educational_course_versions')->where('educational_course_id', $courseId)
+                    ->where('version', $courseVersion)->where('status', 'published')
+                    ->lockForUpdate()->first(['id']);
+                if ($version === null || !DB::table('educational_lessons')->where('id', $lessonId)
+                    ->where('educational_course_version_id', $version->id)->where('is_published', true)->exists()) {
+                    return 'not_found';
+                }
+                $slot = DB::table('educational_reading_positions')
+                    ->where('educational_organization_id', $org)->where('subject_key', $grant->subjectId);
+                $current = (clone $slot)->lockForUpdate()->first(['revision']);
+                if ($current !== null && (!is_string($current->revision) || !$revisions->isStored($current->revision))) {
+                    throw new \UnexpectedValueException('Invalid private reading revision.');
+                }
+                if (($current === null && !$revisions->matchesAbsence($expectedRevision, $grant, time()))
+                    || ($current !== null && (!$revisions->isStored($expectedRevision)
+                        || !hash_equals($current->revision, $expectedRevision)))) {
+                    return 'reading_position_changed';
+                }
+                // No state is created/updated before this live authority check.
+                if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::VIEW, $verifyFreshGrant)) {
+                    return 'access_denied';
+                }
+                // A slow authority response must not extend an absence ticket.
+                if ($current === null && !$revisions->matchesAbsence($expectedRevision, $grant, time())) {
+                    return 'reading_position_changed';
+                }
+                $revision = $revisions->next();
+                $savedAt = now()->utc()->format('Y-m-d\TH:i:s\Z');
+                $values = ['educational_lesson_id' => $lessonId, 'revision' => $revision, 'saved_at' => $savedAt];
+                if ($current === null) {
+                    $inserted = DB::table('educational_reading_positions')->insertOrIgnore([
+                        'educational_organization_id' => $org, 'subject_key' => $grant->subjectId,
+                        ...$values,
+                    ]);
+                    if ($inserted !== 1) {
+                        // A competing first write wins the unique private key.
+                        // Do not treat an unrelated ignored constraint as success.
+                        if ((clone $slot)->exists()) {
+                            return 'reading_position_changed';
+                        }
+                        throw new \UnexpectedValueException('Reading position insertion failed.');
+                    }
+                    // A different course can contend for the same previously
+                    // absent private key after our pre-write check. INSERT may
+                    // wait for that transaction and proceed if it rolls back.
+                    // Recheck after the wait; throwing is essential to roll back
+                    // this insertion rather than commit a failure receipt.
+                    if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::VIEW, $verifyFreshGrant)) {
+                        throw new ReadingPositionWriteRejected('access_denied');
+                    }
+                    if (!$revisions->matchesAbsence($expectedRevision, $grant, time())) {
+                        throw new ReadingPositionWriteRejected('reading_position_changed');
+                    }
+                } elseif ((clone $slot)->where('revision', $expectedRevision)->update($values) !== 1) {
+                    return 'reading_position_changed';
+                }
+
+                return $this->readingPositionEnvelope('available', $revision, [
+                    'course_id' => $courseId, 'course_version' => $courseVersion,
+                    'lesson_id' => $lessonId, 'saved_at' => $savedAt,
+                ]);
+            });
+        } catch (ReadingPositionWriteRejected $rejected) {
+            return $rejected->reasonCode;
+        }
+    }
+
+    /** @return array<string, mixed>|string */
+    public function clearReadingPosition(
+        PortalGrant $grant,
+        string $expectedRevision,
+        ReadingPositionRevision $revisions,
+        ?callable $verifyFreshGrant = null,
+    ): array|string {
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return 'access_denied';
+        }
+        $org = $this->orgId($grant);
+        if ($org === null) {
+            return 'temporarily_unavailable';
+        }
+        if (!$revisions->isStored($expectedRevision)) {
+            return 'reading_position_changed';
+        }
+
+        return DB::transaction(function () use ($grant, $org, $expectedRevision, $revisions, $verifyFreshGrant): array|string {
+            // Clearing needs no content access or course lock. It never waits
+            // for a course after holding this private slot, avoiding inversion.
+            $slot = DB::table('educational_reading_positions')
+                ->where('educational_organization_id', $org)->where('subject_key', $grant->subjectId);
+            $current = (clone $slot)->lockForUpdate()->first(['revision']);
+            if ($current === null || !is_string($current->revision)
+                || !hash_equals($current->revision, $expectedRevision)) {
+                return 'reading_position_changed';
+            }
+            if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::VIEW, $verifyFreshGrant)) {
+                return 'access_denied';
+            }
+            $revision = $revisions->next();
+            if ((clone $slot)->where('revision', $expectedRevision)->update([
+                'educational_lesson_id' => null, 'saved_at' => null, 'revision' => $revision,
+            ]) !== 1) {
+                return 'reading_position_changed';
+            }
+
+            return $this->readingPositionEnvelope('none', $revision);
+        });
+    }
+
     public function favoriteCourse(PortalGrant $grant, int $courseId, ?callable $verifyFreshGrant = null): bool
     {
         $org = $this->orgId($grant);

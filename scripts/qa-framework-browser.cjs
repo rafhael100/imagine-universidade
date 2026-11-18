@@ -216,6 +216,62 @@ async function exportFavorites(student,expectedSlugs){
       typeof row.saved_at==="string"&&/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.test(row.saved_at)),
     "The browser must download only this student's course references and original save timestamps");
 }
+async function readingSnapshot(student){
+  const response=await student.context.request.get(base+"/universidade/private/reading-position",{
+    headers:{Accept:"application/json"},
+  });
+  const payload=await json(response,"Reading position snapshot");
+  check(response.status()===200&&payload.schema_version===1&&payload.scope==="current_authenticated_student"&&
+    ["none","available","unavailable"].includes(payload.status)&&
+    typeof payload.revision==="string"&&payload.revision.length>0&&payload.revision.length<=2048&&
+    JSON.stringify(Object.keys(payload).sort())===JSON.stringify(["position","revision","schema_version","scope","status"]),
+    "The reading position snapshot must be scoped to the authenticated student and carry an opaque precondition");
+  return payload;
+}
+async function saveReadingPosition(student,courseId,version,lessonId){
+  await student.page.waitForFunction(()=>document.getElementById("save-reading-position")?.disabled===false);
+  const response=await clickResponse(student.page,"#save-reading-position","PUT","/universidade/private/reading-position");
+  const receipt=await json(response,"Reading position save");
+  const request=response.request().postDataJSON();
+  await waitText(student.page,"reading-position-status","Aula guardada para continuar depois");
+  check(response.status()===200&&receipt.status==="available"&&receipt.position?.course_id===courseId&&
+    receipt.position.course_version===version&&receipt.position.lesson_id===lessonId&&
+    typeof receipt.position.saved_at==="string"&&/^r1\.[a-f0-9]{64}$/.test(receipt.revision)&&
+    request.course_id===courseId&&request.course_version===version&&request.lesson_id===lessonId&&
+    typeof request.expected_revision==="string"&&request.expected_revision!==receipt.revision&&
+    JSON.stringify(Object.keys(request).sort())===JSON.stringify(["course_id","course_version","expected_revision","lesson_id"])&&
+    await student.page.locator("#save-reading-position").isDisabled(),
+    "Saving a position through the real UI must conditionally pin the exact lesson and version without completing it");
+  return receipt;
+}
+async function openReadingOptions(student){
+  if(!await student.page.locator("#reading-position-options").evaluate(node=>node.open)){
+    await student.page.locator("#reading-position-options > summary").click();
+  }
+}
+async function exportReadingPosition(student,expectedVersion){
+  await openReadingOptions(student);
+  const [download,response]=await Promise.all([
+    student.page.waitForEvent("download"),
+    responseFor(student.page,"GET","/universidade/private/reading-position/export"),
+    student.page.locator("#export-reading-position").click(),
+  ]);
+  check(response.status()===200&&(response.headers()["cache-control"]||"").includes("no-store")&&
+    response.headers()["content-disposition"]==='attachment; filename="imagine-universidade-posicao-leitura.json"',
+    "The reading position download must use a private response and its fixed attachment name");
+  let payload;
+  try{payload=JSON.parse(fs.readFileSync(await download.path(),"utf8"));}
+  finally{await download.delete();}
+  const position=payload.reading_position;
+  check(download.suggestedFilename()==="imagine-universidade-posicao-leitura.json"&&
+    payload.schema_version===1&&payload.scope==="current_authenticated_student"&&
+    JSON.stringify(Object.keys(payload).sort())===JSON.stringify(["reading_position","schema_version","scope"])&&
+    (expectedVersion===null?position===null:
+      position?.course_slug==="curso-framework-sintetico"&&position.course_version===expectedVersion&&
+      position.lesson_slug==="aula-principal-sintetica"&&typeof position.saved_at==="string"&&
+      JSON.stringify(Object.keys(position).sort())===JSON.stringify(["course_slug","course_version","lesson_slug","saved_at"])),
+    "A downloaded reading reference must contain only this student's exact saved version, slugs and date, or null after removal");
+}
 async function publish(editor,courseId,version){
   const before=await clickResponse(editor.page,"#check-publication","GET",
     "/universidade/private/admin/courses/"+courseId+"/publication-check");
@@ -378,6 +434,31 @@ async function main(){
     "Removing one company's favorite must preserve the same person's other-company preference");
   await favorite(studentA,courseId,true);
 
+  enterStage("explicit private reading position");
+  const emptyA=await readingSnapshot(studentA),emptyB=await readingSnapshot(studentB);
+  check(emptyA.status==="none"&&emptyA.position===null&&emptyB.status==="none"&&emptyB.position===null,
+    "Navigating and favoriting courses must not automatically create a reading position");
+  const savedPositionA=await saveReadingPosition(studentA,courseId,1,firstLessonId);
+  await openStudent(studentA,courseId,firstTitle);
+  await studentA.page.waitForFunction(()=>document.getElementById("resume-reading-position").disabled===false);
+  const isolatedPositionB=await readingSnapshot(studentB);
+  check(await studentA.page.locator("#save-reading-position").isDisabled()&&
+    isolatedPositionB.status==="none"&&isolatedPositionB.position===null&&
+    !await studentA.page.locator("#lesson-content button.primary").isDisabled(),
+    "The saved position must survive reload, stay private to the company and leave completion pending");
+  const writesBeforeResume=countWrites("student-a");
+  await studentA.page.locator('[data-filter="sistemas"]').click();
+  const resumed=await clickResponse(studentA.page,"#resume-reading-position","GET",
+    "/universidade/private/lessons/"+firstLessonId);
+  const resumedLesson=await json(resumed,"Resumed exact reading position");
+  await studentA.page.getByRole("heading",{name:firstTitle,exact:true}).waitFor({state:"visible"});
+  check(resumed.status()===200&&resumedLesson.lesson?.id===firstLessonId&&
+    resumedLesson.lesson.course_id===courseId&&resumedLesson.lesson.course_version===1&&
+    await studentA.page.locator('[data-filter="todos"]').getAttribute("aria-pressed")==="true"&&
+    countWrites("student-a")===writesBeforeResume,
+    "Explicit resume must clear obstructing filters, open the saved exact version and remain read-only");
+  const savedPositionB=await saveReadingPosition(studentB,courseId,1,firstLessonId);
+
   enterStage("completion and disabled tutor");
   const completion=await clickResponse(studentA.page,"#lesson-content button.primary","POST",
     "/universidade/private/lessons/"+firstLessonId+"/complete");
@@ -407,6 +488,10 @@ async function main(){
     "The default disabled tutor must return real 503 while literal authorized material remains useful");
   check(countWrites("student-a")===tutorWrites+1&&await studentA.page.locator("#lesson-content button.primary").isDisabled(),
     "The tutor fallback must not create another completion or mutate learning state");
+  const unchangedPosition=await readingSnapshot(studentA);
+  check(unchangedPosition.revision===savedPositionA.revision&&
+    unchangedPosition.position?.saved_at===savedPositionA.position.saved_at,
+    "Completion, reload and contextual help must not move or refresh the explicit reading preference");
 
   enterStage("withdrawal and retained private history");
   const withdrawn=await confirmResponse(editor.page,"#unpublish","POST",
@@ -424,6 +509,9 @@ async function main(){
     check(await student.page.locator("#course-list [data-course-id]").count()===0&&
       await student.page.locator("#lesson-content h3").count()===0,
       "Withdrawn material and its favorite must disappear from each real student catalogue");
+    await waitText(student.page,"reading-position-status","A aula guardada não está disponível");
+    check(await student.page.locator("#resume-reading-position").isHidden(),
+      "Withdrawal must make the exact reading position unavailable without offering another lesson");
   }
   const oldSource=await studentA.context.request.get(base+"/universidade/private/lessons/"+firstLessonId,
     {headers:{Accept:"application/json"}});
@@ -435,6 +523,22 @@ async function main(){
   check(removeWithdrawn.status()===200&&removal.course_id===courseId&&removal.favorite===false,
     "The owner may remove a retained withdrawn favorite through the real CSRF-protected API");
   await exportFavorites(studentB,[]);
+  const withdrawnPosition=await readingSnapshot(studentA);
+  check(withdrawnPosition.status==="unavailable"&&withdrawnPosition.position===null&&
+    withdrawnPosition.revision===savedPositionA.revision,
+    "A withdrawn reading position must hide navigable details while retaining its own revision for removal");
+  await exportReadingPosition(studentA,1);
+  await openReadingOptions(studentB);
+  const removedPosition=await clickResponse(studentB.page,"#remove-reading-position","DELETE","/universidade/private/reading-position");
+  const positionRemoval=await json(removedPosition,"Reading position removal");
+  await waitText(studentB.page,"reading-position-status","Posição guardada removida");
+  check(removedPosition.status()===200&&positionRemoval.status==="none"&&positionRemoval.position===null&&
+    positionRemoval.revision!==savedPositionB.revision&&/^r1\.[a-f0-9]{64}$/.test(positionRemoval.revision),
+    "Removing an unavailable position through the UI must erase the reference and replace its concurrency revision");
+  await exportReadingPosition(studentB,null);
+  const otherPosition=await readingSnapshot(studentA);
+  check(otherPosition.status==="unavailable"&&otherPosition.revision===savedPositionA.revision,
+    "Removing one company's reading position must preserve the other company's independent preference");
 
   enterStage("republication and independent current progress");
   await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"']").click();
@@ -453,6 +557,11 @@ async function main(){
   check(!(await studentA.page.locator("#lesson-content button.primary").isDisabled())&&
     (await studentA.page.locator("#lesson-content button.primary").innerText()).includes("Marcar como concluída"),
     "The new version starts pending without inheriting an archived lesson completion");
+  await waitText(studentA.page,"reading-position-status","A aula guardada não está disponível");
+  check(await studentA.page.locator("#resume-reading-position").isHidden(),
+    "Republication must not silently remap an archived reading position to the new version");
+  const revisedPosition=await saveReadingPosition(studentA,courseId,2,newLessonId);
+  await exportReadingPosition(studentA,2);
   const historyResponse=await studentA.context.request.get(base+"/universidade/private/progress/export",{
     headers:{Accept:"application/json"},
   });
@@ -474,6 +583,10 @@ async function main(){
     await studentA.page.locator("#course-favorite-panel").isHidden()&&
     await studentA.page.locator("#course-favorite-toggle").isDisabled(),
     "Real eligibility revocation must purge private content and disable favorite writes");
+  check(await studentA.page.locator("#reading-position-panel").isHidden()&&
+    await studentA.page.locator("#resume-reading-position").isDisabled()&&
+    await studentA.page.locator("#export-reading-position").isDisabled(),
+    "Eligibility revocation must also purge reading-position controls and block exports");
   check(businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length===readsBefore,
     "Revocation must not trigger an automatic favorite retry or reconciliation GET");
   const otherCompany=await studentB.context.request.get(base+"/universidade/private/courses",{
@@ -485,12 +598,17 @@ async function main(){
   await openStudent(studentA,courseId,revisedTitle);
   check((await studentA.page.locator("#course-favorite-toggle").getAttribute("aria-pressed"))==="true",
     "The denied removal must preserve the preference after a new eligible page load");
+  await studentA.page.waitForFunction(()=>document.getElementById("resume-reading-position").disabled===false);
+  const restoredPosition=await readingSnapshot(studentA);
+  check(restoredPosition.status==="available"&&restoredPosition.revision===revisedPosition.revision&&
+    restoredPosition.position?.lesson_id===newLessonId,
+    "A new eligible page load may restore the retained position without inventing another save");
   await studentA.page.screenshot({path:path.join(evidenceDir,"framework-student.png"),fullPage:true});
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
     synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
+      "explicit reading position","reading position export","completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

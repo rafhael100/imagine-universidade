@@ -221,7 +221,7 @@ assert.equal(otherCourseFixture([{id:1,lessons_total:1,lessons_completed:0}],1),
 assert.equal(otherCourseFixture(null,1),null,"dados inválidos");
 assert.match(studentProgressUI,/nextCourse.dataset.nextCourse=""/,"aluno: botão de próximo curso");
 assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>openCourseWithAllFilters\(nextCourseId\)\)/,"aluno: troca segura de curso");
-assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null\)/,"aluno: navegação segura por curso e aula selecionada");
+assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null,preferredVersion=null\)/,"aluno: navegação segura por curso, aula selecionada e versão opcional");
 assert.match(studentProgressUI,/if\(state.accessDenied\|\|!state.libraryReady\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
 console.log("PASS cross-course resume: próximo curso incompleto, sem voltar ao atual");
 
@@ -308,7 +308,7 @@ assert.equal(maliciousBlocks[0].text,malicious,"aula: conteúdo potencialmente h
 assert.match(studentProgressUI,/function lessonTextFragment\(body\)/,"aula: construção de DOM");
 assert.match(studentProgressUI,/wrapper.append\(el\("h4",section.heading\)\)/,"aula: estrutura semântica");
 assert.match(studentProgressUI,/wrapper.append\(el\("p",section.text\)\)/,"aula: texto seguro");
-assert.match(studentProgressUI,/content.append\(el\("h3",lesson.title\),lessonTextFragment\(lesson.body\)\)/);
+assert.match(studentProgressUI,/const heading=el\("h3",lesson.title\);\s+content.append\(heading,lessonTextFragment\(lesson.body\)\)/);
 assert.doesNotMatch(studentProgressUI,/\.innerHTML\s*=/,"aula: nunca interpretar HTML de currículo");
 console.log("PASS lesson sections: semântica acessível e texto seguro sem HTML");
 
@@ -498,14 +498,15 @@ assert.match(adminRecoveryUI,/state\.lesson\?\.id===Number\(b\.dataset\.lesson\)
 console.log("PASS editorial navigation: unsaved course and lesson changes require explicit discard");
 
 assert.ok(studentProgressUI.includes('const retry=el("button","Tentar carregar aulas","secondary lesson-retry")'),"student: failed lesson read must offer manual retry");
-assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId);'),"student: lesson retry preserves exact search target in current authorized course");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id)selectCourse(id,preferredLessonId,preferredVersion);'),"student: lesson retry preserves exact search target and optional saved version in current authorized course");
 assert.ok(adminRecoveryUI.includes('retry.id="retry-lessons"'),"admin: failed lesson read must offer manual retry");
 assert.ok(adminRecoveryUI.includes('if(!state.accessDenied&&!state.writePending&&state.course?.id===courseId)'),"admin: retry forbidden after revocation or concurrent edit");
 console.log("PASS both private lesson lists: fail-closed manual recovery without stale data");
 
 assert.ok(studentProgressUI.includes('"secondary lesson-detail-retry"'),"student: a failed detail or progress read offers deliberate retry");
 assert.ok(studentProgressUI.includes('if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id)'),"student: stale or revoked lesson responses do not show retry");
-assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id)selectLesson(id);'),"student: retry only while same lesson and permission context remains active");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id)selectLesson(id,preferredVersion);'),"student: retry only while same lesson and permission context remains active, preserving optional saved version");
+assert.ok(studentProgressUI.includes('if(preferredVersion!==null&&lesson.course_version!==preferredVersion)'),"student: saved reading navigation refuses a different lesson version");
 console.log("PASS individual lesson read: no partial body or progress and no revoked retry");
 
 assert.match(adminRecoveryUI,/function mustConfirmBrowserExit\(\)/,"admin: beforeunload gate is explicit");
@@ -697,7 +698,7 @@ function studentFlowFixture(){
   const messages=[],marks=[],calls=[];
   const filters=["todos","metodologia"].map(filter=>{const node=studentTestNode("button");node.dataset.filter=filter;return node;});
   const context={state,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
-    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),renderCourses:()=>{},renderSimulator:()=>{},renderFavoriteControls:()=>{},loadFavorites:async()=>false,
+    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),lessonReadingPositionAction:()=>studentTestNode("div"),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,renderCourses:()=>{},renderSimulator:()=>{},renderFavoriteControls:()=>{},loadFavorites:async()=>false,
     markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
   return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
 }
@@ -880,6 +881,7 @@ await import("./check-publication-response.mjs");
 await import("./check-student-help.mjs");
 await import("./check-student-favorites.mjs");
 await import("./check-student-favorites-export.mjs");
+await import("./check-student-reading-position.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

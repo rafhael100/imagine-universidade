@@ -124,3 +124,11 @@ servidor temporário por socket; o ajuste em `qa-staging-postgres-http.sh`
 passa a exigir consulta TCP autenticada, com prazo e diagnóstico de etapa.
 Essa correção de infraestrutura exige sua própria execução. A liberação
 operacional continua bloqueada pelos critérios já registrados.
+
+A correção foi verificada em seguida no commit
+`0e51b459eba3d7961364b63241a3196730d749f0`,
+[Actions #44202018163](https://github.com/rafhael100/imagine-universidade/actions/runs/44202018163):
+**os seis jobs passaram**, incluindo a consulta TCP, as migrações com owner
+separado do runtime, HTTP privado e armazenamento de sessão no PostgreSQL.
+As 341 verificações Chromium e as 63 do percurso real pelo framework também
+passaram novamente. Esse resultado não libera os critérios operacionais.

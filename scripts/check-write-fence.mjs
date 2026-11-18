@@ -9,6 +9,7 @@ const provisioner = read("app/Domain/Learning/UniversityTenantProvisioner.php");
 const bindings = read("app/Providers/AppServiceProvider.php");
 const feature = read("tests/Feature/PortalBoundaryFlowTest.php");
 const favoritesFeature = read("tests/Feature/FavoriteCoursesFlowTest.php");
+const positionFeature = read("tests/Feature/ReadingPositionFlowTest.php");
 
 function section(text, start, end) {
   const first = text.indexOf(start);
@@ -27,6 +28,8 @@ assert.ok(repository.includes("$verifyFreshGrant === null"));
 assert.match(bindings, /bind\(PortalAuthority::class, UnavailablePortalAuthority::class\)/);
 
 const writes = [
+  ["saveReadingPosition", "clearReadingPosition", "VIEW"],
+  ["clearReadingPosition", "favoriteCourse", "VIEW"],
   ["favoriteCourse", "unfavoriteCourse", "VIEW"],
   ["unfavoriteCourse", "searchPublishedLessons", "VIEW"],
   ["complete", "audit", "VIEW"],
@@ -66,6 +69,8 @@ assert.ok(initialization.includes("PortalAccessGate $gate"));
 assert.ok(initialization.includes("freshGrant($request, $gate, $grant)"));
 
 const controllers = [
+  ["saveReadingPosition", "clearReadingPosition"],
+  ["clearReadingPosition", "favoriteCourse"],
   ["favoriteCourse", "unfavoriteCourse"],
   ["unfavoriteCourse", "searchLessons"],
   ["complete", "adminAudit"],
@@ -105,4 +110,12 @@ for (const regression of [
 ]) {
   assert.ok(favoritesFeature.includes(regression), "missing private preference regression: " + regression);
 }
-console.log("PASS: all 12 HTTP write paths use transaction-scoped Portal validation, including private favorites, tenant provisioning and 2 publish actions.");
+for (const regression of [
+  "test_revocation_during_target_read_prevents_initial_insert",
+  "test_revocation_during_replacement_or_removal_preserves_the_exact_existing_row",
+  "test_authority_revoked_after_a_contended_insert_rolls_back_the_new_slot",
+  "test_internal_writes_require_a_matching_live_grant_and_do_not_trust_the_revision_as_authority",
+]) {
+  assert.ok(positionFeature.includes(regression), "missing private reading position regression: " + regression);
+}
+console.log("PASS: all 14 HTTP write paths use transaction-scoped Portal validation, including private favorites/reading positions, tenant provisioning and 2 publish actions.");

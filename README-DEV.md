@@ -11,6 +11,7 @@ Esta branch contém a aplicação candidata Laravel 13 / PHP 8.3+, com dependên
 | Acesso | Rotas privadas dependem de credencial de sessão verificada pelo Portal e empresa autorizada. A implementação padrão nega todo acesso enquanto a integração real estiver pendente. |
 | Biblioteca do aluno | Catálogo compartilhado publicado, categorias, pesquisa privada, trilhas e retomada de aula pendente. Respostas incompletas não ativam conteúdo ou ações. |
 | Aprendizagem | Leitura textual, conclusão opcional, próxima aula/curso e exportação do progresso próprio. Sem provas, notas, certificados ou classificação. |
+| Aula guardada | Uma posição explícita por pessoa e empresa, com retorno à aula e versão exatas, remoção e exportação da referência. Navegação e conclusão não salvam posição automaticamente. Conflitos exigem nova consulta e ação; versões retiradas não são remapeadas. |
 | Favoritos | Cursos salvos por pessoa e empresa, filtro opcional e exportação própria de referências/data. Referências retidas de cursos retirados podem ser exportadas, sem acesso ao conteúdo. A indisponibilidade da lista não bloqueia o estudo. |
 | Ajuda contextual | Trechos literais da aula autorizada, fonte e versão; pergunta opcional pelo contrato do Tutor. Indisponibilidade da IA mantém o estudo estático. O gateway externo permanece desativado. |
 | Editor | Cadastro, edição, prévia, conferência de versão e publicação/retirada de cursos. Rascunhos de curso e aula são preservados durante as gravações relacionadas. |
@@ -63,5 +64,7 @@ Os resultados válidos são os associados ao SHA exato da [PR #85](https://githu
 Permanecem a fonte oficial de elegibilidade/revogação, o estabelecimento da sessão SSO, as permissões editoriais oficiais, a comunicação privada entre serviços e a homologação de infraestrutura, restauração, privacidade e conteúdo. A dependência central está no [Portal #886](https://github.com/rafhael100/imagine-portal/issues/886).
 
 A política aprovada prevê 120 dias para progresso e favoritos após a perda da última elegibilidade. O relógio de retenção depende do evento oficial de perda; a aplicação não inventa esse evento nem o substitui por data de criação do registro.
+
+A posição de leitura é uma preferência pessoal mínima, sem histórico de visualizações. Remover apaga a referência e sua data, mantendo somente a revisão vazia necessária para rejeitar gravações antigas. Esse estado também deve entrar na futura retenção autorizada. Tickets de ausência expiram em cinco minutos; uma eliminação excepcional antecipada precisa invalidar sessões/tickets antes de remover o estado de concorrência. Nenhum purger operacional foi habilitado.
 
 O desenvolvimento pode prosseguir sobre o código candidato sem declarar essas condições concluídas. O estado de liberação continua `HOLD_NO_GO`, sem merge ou deploy automáticos. Segredos, dados reais e cópias de bancos operacionais não pertencem ao repositório nem às fixtures de teste.

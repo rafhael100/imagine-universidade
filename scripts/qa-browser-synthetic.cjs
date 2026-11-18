@@ -100,6 +100,15 @@ const server=http.createServer((req,res)=>{
   if(p==="/universidade/private/favorites"&&req.method==="GET"){
     return send(res,200,{course_ids:[]});
   }
+  // Existing journeys use an empty synthetic position. C-121 mutations and
+  // failures belong to isolated per-page routes in its dedicated module.
+  if(p==="/universidade/private/reading-position"&&req.method==="GET"){
+    return send(res,200,{schema_version:1,scope:"current_authenticated_student",
+      status:"none",revision:"r1."+"a".repeat(64),position:null});
+  }
+  if(p==="/universidade/private/reading-position/export"&&req.method==="GET"){
+    return send(res,200,{schema_version:1,scope:"current_authenticated_student",reading_position:null});
+  }
   if(p==="/universidade/private/search"&&req.method==="POST"){
     lessonSearchReads++;
     if(denyLessonSearchOnce){denyLessonSearchOnce=false;return send(res,403,{error:"access_denied"});}
@@ -481,6 +490,7 @@ async function inspect(page,name){
     await require("./qa-browser-student-help.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-favorites.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-favorites-export.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-reading-position.cjs")({browser,base,ensureLocalPage,check,pageErrors});
 
     // An uncertain POST may already have committed. Compare read-only
     // authoritative progress before any second write is available.

@@ -42,12 +42,20 @@ try {
         $counts = [];
         foreach (['sessions', 'educational_organizations', 'educational_courses',
             'educational_course_versions', 'educational_lessons',
-            'educational_lesson_progress', 'educational_course_favorites'] as $table) {
+            'educational_lesson_progress', 'educational_course_favorites',
+            'educational_reading_positions'] as $table) {
             $counts[$table] = \Illuminate\Support\Facades\DB::table($table)->count();
         }
         if ($counts['sessions'] < 3 || $counts['educational_organizations'] < 3
             || $counts['educational_courses'] < 1 || $counts['educational_lesson_progress'] < 1) {
             throw new \RuntimeException('Framework/browser flow did not persist its actual session and learning records.');
+        }
+        $savedPositions = \Illuminate\Support\Facades\DB::table('educational_reading_positions')
+            ->whereNotNull('educational_lesson_id')->whereNotNull('saved_at')->count();
+        $emptyPositions = \Illuminate\Support\Facades\DB::table('educational_reading_positions')
+            ->whereNull('educational_lesson_id')->whereNull('saved_at')->count();
+        if ($counts['educational_reading_positions'] !== 2 || $savedPositions !== 1 || $emptyPositions !== 1) {
+            throw new \RuntimeException('Reading preferences must persist as one saved reference and one cleared concurrency slot.');
         }
         $report = ['schema_version' => 1, 'scope' => 'synthetic_framework_browser_only',
             'database_driver' => 'sqlite', 'session_driver' => 'database',

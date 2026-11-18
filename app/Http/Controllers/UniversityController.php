@@ -11,6 +11,7 @@ use App\Domain\Tutor\TutorQuestion;
 use App\Domain\Learning\UniversityCatalogRepository;
 use App\Domain\Learning\UniversityTenantProvisioner;
 use App\Domain\Learning\ReadingPositionRevision;
+use App\Domain\Learning\EditorialLessonOrderConflict;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -688,17 +689,35 @@ final class UniversityController
     public function updateLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
     {
         $grant = $this->grant($request);
+        $raw = $request->all();
+        if (array_key_exists('expected_sort_order', $raw)
+            && (!is_int($raw['expected_sort_order']) || $raw['expected_sort_order'] < 0
+                || $raw['expected_sort_order'] > 9999 || !array_key_exists('sort_order', $raw)
+                || !is_int($raw['sort_order']) || $raw['sort_order'] < 0 || $raw['sort_order'] > 9999)) {
+            return response()->json(['error' => 'invalid_order'], 422);
+        }
         $input = $request->validate([
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'body' => ['required', 'string', 'min:10', 'max:30000'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
+            'expected_sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
 
-        return $this->catalog->updateLesson(
-            $grant,
-            $lessonId, $input,
-            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
-        )
+        try {
+            $saved = $this->catalog->updateLesson(
+                $grant,
+                $lessonId, $input,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (EditorialLessonOrderConflict) {
+            // This path never committed. Do not disclose a conflict after
+            // the live authority changed while the request was completing.
+            if ($this->freshGrant($request, $gate, $grant) === null) {
+                return response()->json(['error' => 'access_denied'], 403);
+            }
+            return response()->json(['error' => 'draft_order_changed'], 409);
+        }
+        return $saved
             ? response()->json(['saved' => true])
             : response()->json(['error' => 'not_found_or_published'], 404);
     }

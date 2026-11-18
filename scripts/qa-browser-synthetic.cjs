@@ -825,6 +825,7 @@ async function inspect(page,name){
     await require("./qa-browser-editorial-catalog-filters.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-lesson-reorder.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-lesson-filters.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-lesson-order-patch.cjs")({browser,base,ensureLocalPage,check,pageErrors});
 
     // C-111: the real publication handler must reject incomplete HTTP 200
     // diagnostics before confirmation or mutation. These per-page routes

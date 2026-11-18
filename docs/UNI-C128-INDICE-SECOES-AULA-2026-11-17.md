@@ -133,3 +133,11 @@ Arquivos entregues:
 - Este documento.
 
 Não foi efetuado stage, commit, push ou deploy por este trabalho. Revisão visual e confirmação de navegador dependem da integração e de sua rodada de CI; nenhum resultado foi presumido.
+
+## Confirmação integrada em 18/11/2026
+
+O [run 44225106281](https://github.com/rafhael100/imagine-universidade/actions/runs/44225106281), no SHA **8099229f696331625264e2792d0c3b75a937ff3a**, aprovou os **seis jobs**. A suíte completa registrou **683 verificações Chromium** e **206 verificações pelo Laravel/SQLite real**, com persistência aprovada e sem respostas de negócio simuladas nesse segundo percurso.
+
+O módulo C128 completou **20 verificações Chromium** e o percurso real confirmou **6 verificações** de índice e parágrafos. As capturas reais do índice e do corpo foram inspecionadas em 1440 e 390 px: texto literal completo, botões legíveis e disposição sem transbordamento horizontal.
+
+Esta evidência substitui as pendências de execução descritas na preparação acima somente para esse SHA. Não valida alterações posteriores e não altera revisão humana, integração operacional, os 13 gates HOLD_NO_GO ou a proibição de merge/deploy.

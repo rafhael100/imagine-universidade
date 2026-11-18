@@ -1242,16 +1242,24 @@ $("delete-lesson").addEventListener("click",async()=>{
 });
 $("lesson-form").addEventListener("submit",async event=>{
   event.preventDefault();if(!state.course||!draft())return;
+  const baseline=state.lesson===null?null:{id:state.lesson.id,sort_order:state.lesson.sort_order};
   const payload={title:$("lesson-title").value.trim(),slug:$("lesson-slug").value.trim(),
     body:$("lesson-body").value.trim(),sort_order:intField("lesson-sort")};
   if(!payload.title||payload.body.length<10){say("Preencha título e conteúdo.");return;}
-  const courseId=state.course.id,lessonId=state.lesson?.id??null;
+  const courseId=state.course.id,lessonId=baseline?.id??null;
   if(!beginWrite())return;
   try{
     let savedLessonId=lessonId;
     if(lessonId!==null){
-      const {slug,...data}=payload;
-      await api("/lessons/"+lessonId,"PATCH",data);
+      const {slug,sort_order,...data}=payload;
+      // Saving text must not replay an order that another editor changed.
+      // Only an explicit numeric change carries the order baseline as a
+      // condition; a conflict follows the existing manual recovery fence.
+      if(sort_order!==baseline.sort_order){
+        data.sort_order=sort_order;data.expected_sort_order=baseline.sort_order;
+      }
+      const receipt=await api("/lessons/"+lessonId,"PATCH",data);
+      if(receipt?.saved!==true)throw new Error("invalid_lesson_save_receipt");
     }else{
       const result=await api("/courses/"+courseId+"/lessons","POST",payload);
       savedLessonId=result?.id??null;

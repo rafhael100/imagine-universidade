@@ -3,12 +3,13 @@
 declare(strict_types=1);
 
 /**
- * C129: actual repository, parameterized batches and two PostgreSQL sessions.
+ * C129/C133: actual repository, order edits and two PostgreSQL sessions.
  * Committed fixtures exist only for real contention and are removed by their
  * captured parent IDs. Run after migrations and before editorial seeding.
  */
 use App\Domain\Access\PortalAccessGate;
 use App\Domain\Access\PortalGrant;
+use App\Domain\Learning\EditorialLessonOrderConflict;
 use App\Domain\Learning\UniversityCatalogRepository;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Events\QueryExecuted;
@@ -345,6 +346,127 @@ try {
         reorderPgCheck($archiveRows === reorderPgRows($fixture['archive'])
             && DB::table('educational_courses')->where('id', $course)->value('is_published') === false,
             'the publication boundary and historical version remain unchanged');
+
+        $stage = 'patch_preserves_reordered_position';
+        $firstLesson = $expected[0]['id'];
+        $confirmed = $repository->reorderDraftLessons($grant, $course, $lesson, 'up', $expected, $live);
+        reorderPgCheck(is_array($confirmed) && $confirmed['changed'] === true
+            && (int) DB::table('educational_lessons')->where('id', $firstLesson)->value('sort_order') === 1,
+            'the C133 fixture starts with a real reorder that changed the older editor position');
+        $confirmedOrder = $confirmed['order'];
+        $patchAuditBefore = DB::table('educational_audit_events')
+            ->where('educational_organization_id', $organizations['imagine-editorial'])->count();
+        $patchCourseLocked = false;
+        $patchReorderBlocked = false;
+        $patchDecisions = 0;
+        $patchTitle = 'Título editado sem intenção de mover';
+        $patchBody = 'Texto fictício editado depois de outra pessoa reordenar o curso.';
+        $saved = $repository->updateLesson($grant, $firstLesson, ['title' => $patchTitle, 'body' => $patchBody],
+            static function () use ($grant, $peer, $repository, $course, $firstLesson, $confirmedOrder, $live,
+                &$patchCourseLocked, &$patchReorderBlocked, &$patchDecisions): PortalGrant {
+                $patchDecisions++;
+                reorderPgCheck(DB::transactionLevel() > 0,
+                    'the content-only PATCH revalidates authority inside its transaction');
+                $patchCourseLocked = reorderPgBlocked($peer, 'course', $course);
+                try {
+                    reorderPgOnPeer(static fn () => $repository->reorderDraftLessons($grant, $course, $firstLesson,
+                        'up', $confirmedOrder, $live));
+                } catch (QueryException $error) {
+                    $patchReorderBlocked = ($error->errorInfo[0] ?? null) === '55P03';
+                }
+                return $grant;
+            });
+        $edited = DB::table('educational_lessons')->where('id', $firstLesson)->first();
+        reorderPgCheck($saved === true && $patchDecisions === 1 && $patchCourseLocked && $patchReorderBlocked
+            && $edited->title === $patchTitle && $edited->body === $patchBody
+            && $confirmedOrder === reorderPgOrder($version)
+            && $patchAuditBefore + 1 === DB::table('educational_audit_events')
+                ->where('educational_organization_id', $organizations['imagine-editorial'])->count(),
+            'PATCH omission preserves the complete reordered sequence while a real peer reorder waits on the same course');
+
+        $stage = 'patch_matching_order_guard';
+        $guardedTitle = 'Título com movimento explícito confirmado';
+        $guardedBody = 'Conteúdo fictício acompanhado de uma alteração explícita da ordem.';
+        $saved = $repository->updateLesson($grant, $firstLesson, [
+            'title' => $guardedTitle, 'body' => $guardedBody, 'sort_order' => 7000, 'expected_sort_order' => 1,
+        ], $live);
+        $edited = DB::table('educational_lessons')->where('id', $firstLesson)->first();
+        reorderPgCheck($saved === true && (int) $edited->sort_order === 7000
+            && $edited->title === $guardedTitle && $edited->body === $guardedBody,
+            'a matching per-lesson order precondition keeps the boolean success contract and saves its explicit value');
+
+        $stage = 'patch_stale_order_guard';
+        $beforeGuardConflict = reorderPgRows($version);
+        $guardAuditBefore = DB::table('educational_audit_events')
+            ->where('educational_organization_id', $organizations['imagine-editorial'])->count();
+        foreach ([2, 7000] as $targetOrder) {
+            $conflict = false;
+            try {
+                reorderPgOnPeer(static fn () => $repository->updateLesson($grant, $firstLesson, [
+                    'title' => 'Título antigo que não deve entrar', 'body' => 'Texto antigo que o conflito deve preservar fora do banco.',
+                    'sort_order' => $targetOrder, 'expected_sort_order' => 1,
+                ], $live));
+            } catch (EditorialLessonOrderConflict) {
+                $conflict = true;
+            }
+            reorderPgCheck($conflict && $beforeGuardConflict === reorderPgRows($version)
+                && $guardAuditBefore === DB::table('educational_audit_events')
+                    ->where('educational_organization_id', $organizations['imagine-editorial'])->count()
+                && DB::connection('c129_reorder_peer')->transactionLevel() === 0,
+                'the peer rejects its older order baseline without content, timestamp or audit changes, even for an already-matching destination');
+        }
+
+        $stage = 'patch_legacy_and_domain_guard';
+        $saved = $repository->updateLesson($grant, $firstLesson, [
+            'title' => $guardedTitle, 'body' => $guardedBody, 'sort_order' => 9,
+        ], $live);
+        reorderPgCheck($saved === true
+            && (int) DB::table('educational_lessons')->where('id', $firstLesson)->value('sort_order') === 9,
+            'an explicit legacy order without the optional precondition remains supported');
+        $beforeInvalidGuard = reorderPgRows($version);
+        $invalidAuditBefore = DB::table('educational_audit_events')
+            ->where('educational_organization_id', $organizations['imagine-editorial'])->count();
+        $invalid = $repository->updateLesson($grant, $firstLesson, [
+            'title' => $patchTitle, 'body' => $patchBody, 'sort_order' => 1, 'expected_sort_order' => '9',
+        ], $live);
+        $missingTarget = $repository->updateLesson($grant, $firstLesson, [
+            'title' => $patchTitle, 'body' => $patchBody, 'expected_sort_order' => 9,
+        ], $live);
+        $invalidTarget = $repository->updateLesson($grant, $firstLesson, [
+            'title' => $patchTitle, 'body' => $patchBody, 'sort_order' => '1', 'expected_sort_order' => 9,
+        ], $live);
+        $denied = $repository->updateLesson($grant, $firstLesson, [
+            'title' => $patchTitle, 'body' => $patchBody, 'sort_order' => 1, 'expected_sort_order' => 9,
+        ], static fn (): PortalGrant => PortalGrant::deny('synthetic_revocation'));
+        reorderPgCheck($invalid === false && $missingTarget === false && $invalidTarget === false && $denied === false
+            && $beforeInvalidGuard === reorderPgRows($version)
+            && $invalidAuditBefore === DB::table('educational_audit_events')
+                ->where('educational_organization_id', $organizations['imagine-editorial'])->count(),
+            'direct domain callers cannot omit or coerce either guarded order value, and a live denial still prevents every update');
+
+        $stage = 'patch_rollback_after_audit';
+        $patchFault = (object) ['armed' => true];
+        DB::listen(static function (QueryExecuted $query) use ($patchFault): void {
+            if ($patchFault->armed && str_contains($query->sql, 'educational_audit_events')
+                && preg_match('/^\s*insert\b/i', $query->sql)) {
+                $patchFault->armed = false;
+                throw new RuntimeException('Synthetic patch failure after audit insertion.');
+            }
+        });
+        $patchFailed = false;
+        try {
+            $repository->updateLesson($grant, $firstLesson, [
+                'title' => $patchTitle, 'body' => $patchBody, 'sort_order' => 4, 'expected_sort_order' => 9,
+            ], $live);
+        } catch (RuntimeException $error) {
+            $patchFailed = $error->getMessage() === 'Synthetic patch failure after audit insertion.';
+        }
+        reorderPgCheck($patchFailed && !$patchFault->armed && DB::transactionLevel() === 0
+            && $beforeInvalidGuard === reorderPgRows($version)
+            && $invalidAuditBefore === DB::table('educational_audit_events')
+                ->where('educational_organization_id', $organizations['imagine-editorial'])->count()
+            && $archiveRows === reorderPgRows($fixture['archive']),
+            'a failed guarded PATCH rolls back its content, order, timestamp and inserted audit without changing the archive');
     } finally {
         $operationStage = $stage;
         $stage = 'cleanup';
@@ -376,7 +498,7 @@ try {
         DB::disconnect('c129_reorder_peer');
         $stage = $operationStage;
     }
-    echo "PASS lesson reorder PG: actual repository, bounded chunks, two sessions, conflicts and rollback; owned fixtures removed.\n";
+    echo "PASS lesson reorder PG: actual repository, bounded chunks, guarded PATCH, two sessions, conflicts and rollback; owned fixtures removed.\n";
 } catch (Throwable $error) {
     // Never print SQL, credentials, payloads, actor keys or stack traces.
     fwrite(STDERR, 'FAIL lesson reorder PG at '.$stage.' ('.get_class($error).").\n");

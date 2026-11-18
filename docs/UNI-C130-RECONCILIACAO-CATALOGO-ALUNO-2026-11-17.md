@@ -147,3 +147,11 @@ não há aprovação de runtime atribuída ao código ainda não executado.
 - Este documento.
 
 Não houve alteração de backend, schema, rota, grants, formato de exportação ou mecanismo de autorização. Não houve stage, commit, push ou deploy neste trabalho.
+
+## Confirmação integrada em 18/11/2026
+
+O [run 44225106281](https://github.com/rafhael100/imagine-universidade/actions/runs/44225106281), no SHA **8099229f696331625264e2792d0c3b75a937ff3a**, aprovou os **seis jobs**. A suíte completa registrou **683 verificações Chromium** e **206 verificações pelo Laravel/SQLite real**, com persistência aprovada e sem respostas de negócio simuladas nesse segundo percurso.
+
+O módulo C130 completou **23 verificações Chromium** e o percurso real confirmou **4 verificações** de curso retirado. O catálogo real vazio encerrou a seleção anterior, preservou a referência de leitura e limpou também a localização de aulas C132, mantendo os limites de requisições e de escrita.
+
+Esta evidência substitui as pendências de execução descritas na preparação acima somente para esse SHA. Não valida alterações posteriores e não altera revisão humana, integração operacional, os 13 gates HOLD_NO_GO ou a proibição de merge/deploy.

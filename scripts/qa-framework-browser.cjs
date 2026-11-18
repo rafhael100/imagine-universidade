@@ -408,6 +408,33 @@ async function progressHistory(student,availability){
     "Reading the real history must preserve current study, filters, favorites and reading position without a navigation or mutation action");
   return rows[0]??null;
 }
+async function exportProgress(student){
+  const writes=countWrites(student.profile);
+  const [download,response]=await Promise.all([
+    student.page.waitForEvent("download"),
+    responseFor(student.page,"GET","/universidade/private/progress/export"),
+    student.page.locator("#export-progress").click(),
+  ]);
+  check(response.status()===200&&
+    (response.headers()["cache-control"]||"").includes("no-store")&&
+    response.headers()["content-disposition"]==='attachment; filename="imagine-universidade-progresso.json"',
+    "The real progress download must use the private response and fixed attachment name");
+  const received=await json(response,"Private progress download");
+  let payload;
+  try{payload=JSON.parse(fs.readFileSync(await download.path(),"utf8"));}
+  finally{await download.delete();}
+  check(download.suggestedFilename()==="imagine-universidade-progresso.json"&&
+    payload.schema_version===1&&payload.scope==="current_authenticated_student"&&
+    JSON.stringify(Object.keys(payload).sort())===JSON.stringify(["completions","schema_version","scope"])&&
+    Array.isArray(payload.completions)&&payload.completions.length<=5000&&
+    payload.completions.every(row=>JSON.stringify(Object.keys(row).sort())===
+      JSON.stringify(["completed_at","course_slug","course_version","lesson_slug"])&&
+      Number.isSafeInteger(row.course_version)&&row.course_version>0&&typeof row.completed_at==="string"&&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(row.completed_at))&&
+    JSON.stringify(payload)===JSON.stringify(received)&&countWrites(student.profile)===writes,
+    "The real UI must download every authorized progress reference with canonical UTC dates and no business write");
+  return payload;
+}
 async function exportFavorites(student,expectedSlugs){
   const [download,response]=await Promise.all([
     student.page.waitForEvent("download"),
@@ -551,6 +578,112 @@ async function editorialLessonFilter(editor,courseId,firstLessonId,temporaryLess
     businessRequests.filter(request=>request.profile===editor.profile).length===requests,
     "Restoring the original literal fields must leave a clean unfiltered draft for the existing real reorder journey without any write");
   await page.setViewportSize({width:1440,height:1000});
+}
+async function openConcurrentLessonEditor(courseId,lessonId){
+  enterStage("second real editorial session before reordering");
+  const peer=await session("editor");
+  await peer.page.goto(base+"/universidade/private/admin/app");
+  await peer.page.locator("#course-items [data-course='"+courseId+"']").click();
+  await peer.page.locator("#lesson-items [data-lesson='"+lessonId+"']").click();
+  await peer.page.locator("#editorial-lesson-search").fill("temporaria");
+  peer.courseSummary=(await peer.page.locator("#course-summary").inputValue())+" Rascunho independente da segunda sessão.";
+  await peer.page.locator("#course-summary").fill(peer.courseSummary);
+  check(await peer.page.evaluate(id=>state.lesson?.id===id&&state.lesson.sort_order===0,lessonId)&&
+    await peer.page.locator("#lesson-sort").inputValue()==="0"&&
+    await peer.page.locator("#editorial-lesson-search").inputValue()==="temporaria",
+    "A second real editorial session must retain the original lesson order and its independent unsaved course draft before reordering");
+  return peer;
+}
+async function concurrentLessonEdits(editor,peer,courseId,firstLessonId,lessonId){
+  enterStage("content edits and guarded order across real editorial sessions");
+  const root="/universidade/private/admin",route=root+"/lessons/"+lessonId;
+  const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
+    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+  const page=peer.page,writes=countWrites(editor.profile);
+  const savedTitle=await page.locator("#lesson-title").inputValue();
+  const savedBody=(await page.locator("#lesson-body").inputValue())+"\nTexto salvo pela segunda sessão editorial.";
+  await page.locator("#lesson-body").fill(savedBody);
+  const textSaved=await clickResponse(page,"#lesson-save","PATCH",route);
+  const textReceipt=await json(textSaved,"Concurrent text-only lesson save");
+  await page.waitForFunction(id=>!state.writePending&&state.lessonsReady&&state.lesson?.id===id&&state.lesson.sort_order===1,lessonId);
+  check(textSaved.status()===200&&textReceipt.saved===true&&
+    (textSaved.headers()["cache-control"]||"").includes("no-store")&&
+    JSON.stringify(textSaved.request().postDataJSON())===JSON.stringify({title:savedTitle,body:savedBody}),
+    "Saving only text from an older real session must omit both order fields and preserve the concurrent reorder in the database");
+  check(await page.locator("#lesson-sort").inputValue()==="1"&&await page.locator("#lesson-body").inputValue()===savedBody&&
+    await page.locator("#course-summary").inputValue()===peer.courseSummary&&
+    await page.locator("#editorial-lesson-search").inputValue()==="temporaria"&&
+    await page.locator("#lesson-items [data-lesson='"+lessonId+"']").getAttribute("aria-current")==="true",
+    "The confirmed text save must adopt the server's current order while preserving the other form, filtered list and lesson selection");
+  // Refresh through the current UI before changing the order from the first
+  // session, so this deliberate edit does not also replay old lesson text.
+  await editor.page.locator("#course-items [data-course='"+courseId+"']").click();
+  await editor.page.locator("#lesson-items [data-lesson='"+lessonId+"']").click();
+  await editor.page.locator("#lesson-sort").fill("2");
+  const moved=await clickResponse(editor.page,"#lesson-save","PATCH",route);
+  const movedReceipt=await json(moved,"Explicit guarded lesson order");
+  await editor.page.waitForFunction(id=>!state.writePending&&state.lessonsReady&&state.lesson?.id===id&&state.lesson.sort_order===2,lessonId);
+  check(moved.status()===200&&movedReceipt.saved===true&&
+    JSON.stringify(moved.request().postDataJSON())===JSON.stringify({title:savedTitle,body:savedBody,sort_order:2,expected_sort_order:1})&&
+    await editor.page.locator("#lesson-body").inputValue()===savedBody,
+    "An explicit real order edit must send its exact previous order and keep the freshly read lesson content");
+  const auditBeforeResponse=await editor.context.request.get(base+root+"/audit",{headers:{Accept:"application/json"}});
+  const auditBefore=(await json(auditBeforeResponse,"Audit before stale order edit")).events
+    .filter(event=>event.action==="lesson.updated"&&event.resource_id===lessonId);
+  await page.locator("#lesson-body").fill(savedBody+"\nRascunho em conflito que deve permanecer local.");
+  await page.locator("#lesson-sort").fill("3");
+  const pending=await fields(page,fieldIds),requests=businessRequests.length;
+  const conflict=await clickResponse(page,"#lesson-save","PATCH",route);
+  const failure=await json(conflict,"Stale real order precondition");
+  await page.waitForFunction(()=>state.writeOutcomeUnknown&&!state.writePending);
+  check(conflict.status()===409&&failure.error==="draft_order_changed"&&
+    (conflict.headers()["cache-control"]||"").includes("no-store")&&
+    conflict.request().postDataJSON().expected_sort_order===1&&conflict.request().postDataJSON().sort_order===3&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&
+    businessRequests.slice(requests).filter(request=>request.profile===editor.profile).length===1&&
+    countWrites(editor.profile)===writes+3,
+    "A stale real order edit must return 409 and preserve both local drafts without any automatic read, retry or additional mutation");
+  const currentResponse=await editor.context.request.get(base+root+"/courses/"+courseId+"/lessons",{headers:{Accept:"application/json"}});
+  const current=(await json(currentResponse,"Lesson after rejected order edit")).lessons.find(lesson=>lesson.id===lessonId);
+  const auditAfterResponse=await editor.context.request.get(base+root+"/audit",{headers:{Accept:"application/json"}});
+  const auditAfter=(await json(auditAfterResponse,"Audit after rejected order edit")).events
+    .filter(event=>event.action==="lesson.updated"&&event.resource_id===lessonId);
+  check(currentResponse.status()===200&&current.sort_order===2&&current.title===savedTitle&&current.body===savedBody&&
+    auditBeforeResponse.status()===200&&auditAfterResponse.status()===200&&auditBefore.length===2&&
+    JSON.stringify(auditAfter)===JSON.stringify(auditBefore),
+    "The real conflict must leave lesson text, stored order and its audit history unchanged");
+  await page.screenshot({path:path.join(evidenceDir,"framework-lesson-order-conflict.png"),fullPage:true});
+  const beforeCancel=businessRequests.length;
+  page.once("dialog",dialog=>dialog.dismiss());await page.locator("#retry-catalog").click();
+  check(await page.evaluate(()=>state.writeOutcomeUnknown)&&JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&
+    businessRequests.length===beforeCancel,
+    "Canceling the real recovery confirmation must preserve the conflicting drafts without querying or replaying the edit");
+  const dialogue=page.waitForEvent("dialog").then(async dialog=>{
+    const matches=dialog.type()==="confirm"&&dialog.message().startsWith("O resultado da última alteração editorial não foi confirmado.");
+    if(matches)await dialog.accept();else await dialog.dismiss();return matches;
+  });
+  await page.locator("#retry-catalog").click();const confirmed=await dialogue;
+  await page.waitForFunction(()=>state.catalogReady&&state.lessonsReady&&!state.catalogLoading&&!state.writeOutcomeUnknown);
+  await page.locator("#lesson-items [data-lesson='"+lessonId+"']").click();
+  check(confirmed&&await page.locator("#lesson-sort").inputValue()==="2"&&await page.locator("#lesson-body").inputValue()===savedBody&&
+    await page.locator("#editorial-lesson-search").inputValue()==="temporaria"&&countWrites(editor.profile)===writes+3,
+    "An accepted manual recovery must load the current real order, retain the same-course query and wait for a new explicit edit");
+  await page.locator("#lesson-sort").fill("1");
+  const restored=await clickResponse(page,"#lesson-save","PATCH",route);
+  const restoreReceipt=await json(restored,"Order edit after manual recovery");
+  await page.waitForFunction(id=>!state.writePending&&state.lessonsReady&&state.lesson?.id===id&&state.lesson.sort_order===1,lessonId);
+  check(restored.status()===200&&restoreReceipt.saved===true&&
+    JSON.stringify(restored.request().postDataJSON())===JSON.stringify({title:savedTitle,body:savedBody,sort_order:1,expected_sort_order:2})&&
+    countWrites(editor.profile)===writes+4,
+    "A new deliberate edit after recovery must use the new order baseline and succeed without replaying the rejected request");
+  await editor.page.locator("#course-items [data-course='"+courseId+"']").click();
+  await editor.page.locator("#lesson-items [data-lesson='"+lessonId+"']").click();
+  check(await editor.page.evaluate(({first,lesson})=>JSON.stringify(state.lessons.map(item=>({id:item.id,sort_order:item.sort_order})))===
+      JSON.stringify([{id:first,sort_order:0},{id:lesson,sort_order:1}])&&state.lesson?.id===lesson&&
+      !editorialHasUnsavedChanges(),{first:firstLessonId,lesson:lessonId})&&
+    await editor.page.locator("#lesson-body").inputValue()===savedBody&&countWrites(editor.profile)===writes+4,
+    "Both real sessions must reconcile to the preserved lesson text and restored complete order before the existing draft deletion continues");
+  await peer.context.close();contexts.splice(contexts.indexOf(peer.context),1);
 }
 async function editorialLessonReorder(editor,courseId,firstLessonId,temporaryLessonId){
   enterStage("atomic editorial lesson order");
@@ -871,7 +1004,9 @@ async function main(){
   const temporaryLessonId=(await json(temporaryLesson,"Temporary lesson creation")).id;
   await editor.page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"'][aria-current='true']").waitFor();
   await editorialLessonFilter(editor,courseId,firstLessonId,temporaryLessonId);
+  const parallelLessonEditor=await openConcurrentLessonEditor(courseId,temporaryLessonId);
   await editorialLessonReorder(editor,courseId,firstLessonId,temporaryLessonId);
+  await concurrentLessonEdits(editor,parallelLessonEditor,courseId,firstLessonId,temporaryLessonId);
   const deletedLesson=await confirmResponse(editor.page,"#delete-lesson","DELETE",
     adminRoot+"/lessons/"+temporaryLessonId,"Excluir esta aula em rascunho");
   await waitText(editor.page,"status","Aula em rascunho excluída.");
@@ -1192,15 +1327,13 @@ async function main(){
     "Republication must not silently remap an archived reading position to the new version");
   const revisedPosition=await saveReadingPosition(studentA,courseId,2,newLessonId);
   await exportReadingPosition(studentA,2);
-  const historyResponse=await studentA.context.request.get(base+"/universidade/private/progress/export",{
-    headers:{Accept:"application/json"},
-  });
-  const history=await json(historyResponse,"Historical progress export");
-  check(historyResponse.status()===200&&history.scope==="current_authenticated_student"&&
+  const history=await exportProgress(studentA);
+  check(history.scope==="current_authenticated_student"&&
     Array.isArray(history.completions)&&history.completions.length===1&&
     history.completions[0].course_slug==="curso-framework-sintetico"&&history.completions[0].course_version===1&&
-    history.completions[0].lesson_slug==="aula-principal-sintetica",
-    "A real private export must preserve the original version's completion after republication");
+    history.completions[0].lesson_slug==="aula-principal-sintetica"&&
+    history.completions[0].completed_at===originalCompletion.completed_at,
+    "A real browser download must preserve the original version and exact UTC completion timestamp after republication");
 
   const contextualPeerId=await contextualCoursesJourney(editor,studentA,{
     courseId,lessonId:newLessonId,title:revisedTitle,version:2,position:revisedPosition,history
@@ -1270,7 +1403,7 @@ async function main(){
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
-    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","local editorial lesson search","atomic lesson reorder","publication hash","audit","editorial overview","private favorites","favorites export download",
+    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","local editorial lesson search","atomic lesson reorder","concurrent text and order edits","publication hash","audit","editorial overview","private favorites","favorites export download",
       "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","local student lesson locator","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");

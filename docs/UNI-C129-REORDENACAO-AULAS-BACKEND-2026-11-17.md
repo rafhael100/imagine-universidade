@@ -316,3 +316,11 @@ interface C129 ou a alterações posteriores.
 Verificação local realizada nesta entrega: `git diff --check`. PHP,
 PostgreSQL, Chromium e laboratórios não foram executados localmente. A evidência
 de runtime deverá ser vinculada ao SHA integrado que executar a CI.
+
+## Confirmação integrada em 18/11/2026
+
+O [run 44225106281](https://github.com/rafhael100/imagine-universidade/actions/runs/44225106281), no SHA **8099229f696331625264e2792d0c3b75a937ff3a**, aprovou os **seis jobs**. A suíte completa registrou **683 verificações Chromium** e **206 verificações pelo Laravel/SQLite real**, com persistência aprovada e sem respostas de negócio simuladas nesse segundo percurso.
+
+O backend repetiu **296 testes PHP / 3.398 asserções**, com o probe transacional PostgreSQL aprovado. Foram confirmados também o módulo de interface com **26 verificações Chromium** e as **8 verificações** de reordenação pelo Laravel real. Os **15 caminhos de escrita**, 16 invariantes de schema e 24 verificações de privilégios permaneceram aprovados.
+
+Esta evidência substitui as pendências de execução descritas na preparação acima somente para esse SHA. Não valida alterações posteriores e não altera revisão humana, integração operacional, os 13 gates HOLD_NO_GO ou a proibição de merge/deploy.

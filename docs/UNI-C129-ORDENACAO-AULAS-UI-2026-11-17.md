@@ -166,3 +166,11 @@ estática. As asserções anteriores permanecem presentes.
 PHP, PostgreSQL, Chromium e a persistência real deste recorte dependem da
 execução dos jobs existentes de CI. Os resultados acima não afirmam execução
 desses ambientes, aprovação humana do acervo ou implantação.
+
+## Confirmação integrada em 18/11/2026
+
+O [run 44225106281](https://github.com/rafhael100/imagine-universidade/actions/runs/44225106281), no SHA **8099229f696331625264e2792d0c3b75a937ff3a**, aprovou os **seis jobs**. A suíte completa registrou **683 verificações Chromium** e **206 verificações pelo Laravel/SQLite real**, com persistência aprovada e sem respostas de negócio simuladas nesse segundo percurso.
+
+O módulo C129 completou **26 verificações Chromium** e o percurso real confirmou **8 verificações** de ordem, conteúdo, recibo e auditoria. As capturas reais desktop e 390 px foram inspecionadas: posições completas e controles Subir/Descer permanecem legíveis, com as ações de fronteira desabilitadas e sem transbordamento horizontal.
+
+Esta evidência substitui as pendências de execução descritas na preparação acima somente para esse SHA. Não valida alterações posteriores e não altera revisão humana, integração operacional, os 13 gates HOLD_NO_GO ou a proibição de merge/deploy.

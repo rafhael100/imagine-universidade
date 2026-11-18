@@ -101,3 +101,11 @@ Arquivos funcionais: a view do aluno, o checker focal, o módulo Chromium e esta
 - `scripts/check-student-favorites-export.mjs` e `scripts/check-error-body-cleanup.mjs`: dependências reais da limpeza de acesso; ambos já obtêm o estado da view.
 
 Na integração, o checker focal e o módulo Chromium foram adicionados aos runners existentes. O módulo é isolado e não altera fixtures compartilhadas. O percurso Laravel/SQLite prepara mais **7 verificações** sobre a aula realmente criada e publicada pelo editor: título sem acento, slug, exclusão do corpo, aula fixada sem inflar contagem, limpeza por Enter/Espaço, foco, preservação do estado e ausência de HTTP em 1440/390 px. A retirada C130 também confere input vazio/desabilitado, bloco oculto e status vazio. Foram preparadas capturas `framework-student-lesson-filter-desktop.png` e `framework-student-lesson-filter-mobile.png`; ainda dependem da execução no SHA integrado. Nenhuma resposta de negócio é simulada nesse percurso. Workflows, rotas e backend permanecem inalterados.
+
+## Confirmação integrada em 18/11/2026
+
+O [run 44225106281](https://github.com/rafhael100/imagine-universidade/actions/runs/44225106281), no SHA **8099229f696331625264e2792d0c3b75a937ff3a**, aprovou os **seis jobs**. A suíte completa registrou **683 verificações Chromium** e **206 verificações pelo Laravel/SQLite real**, com persistência aprovada e sem respostas de negócio simuladas nesse segundo percurso.
+
+O módulo C132 completou **32 verificações Chromium** e o percurso real confirmou **7 verificações** de localização de aulas. As capturas reais desktop e 390 px foram inspecionadas: campo, botão Limpar e aviso de zero resultados com aula aberta fora do filtro permanecem legíveis. A jornada também confirmou sequência, preservação do estudo e ausência de HTTP ao filtrar.
+
+Esta evidência substitui as pendências de execução descritas na preparação acima somente para esse SHA. Não valida alterações posteriores e não altera revisão humana, integração operacional, os 13 gates HOLD_NO_GO ou a proibição de merge/deploy.

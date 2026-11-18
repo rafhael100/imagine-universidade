@@ -871,11 +871,14 @@ final class UniversityCatalogRepository
             'schema_version' => 1,
             'scope' => 'current_authenticated_student',
             'completions' => array_map(
-                static fn (stdClass $item): array => [
+                fn (stdClass $item): array => [
                     'course_slug' => (string) $item->course_slug,
                     'course_version' => (int) $item->course_version,
                     'lesson_slug' => (string) $item->lesson_slug,
-                    'completed_at' => (string) $item->completed_at,
+                    // PDO PostgreSQL may use a short offset such as +00.
+                    // Share the private-reference UTC format; a bad stored
+                    // value must abort the complete export, never invent a date.
+                    'completed_at' => $this->privateReferenceTimestamp($item->completed_at),
                 ],
                 $entries,
             ),
@@ -1676,15 +1679,26 @@ final class UniversityCatalogRepository
         });
     }
 
-    /** @param array{title:string,body:string,sort_order?:int} $input */
+    /**
+     * @param array{title:string,body:string,sort_order?:int,expected_sort_order?:int} $input
+     * @throws EditorialLessonOrderConflict Only for a well-formed stale order precondition.
+     */
     public function updateLesson(PortalGrant $grant, int $lessonId, array $input, ?callable $verifyFreshGrant = null): bool
     {
+        $guardedOrder = array_key_exists('expected_sort_order', $input);
+        if ($guardedOrder && (!is_int($input['expected_sort_order'])
+            || $input['expected_sort_order'] < 0 || $input['expected_sort_order'] > 9999
+            || !array_key_exists('sort_order', $input) || !is_int($input['sort_order'])
+            || $input['sort_order'] < 0 || $input['sort_order'] > 9999)) {
+            // Direct domain callers must not silently drop a malformed guard.
+            return false;
+        }
         $org = $this->adminOrgId($grant);
         if ($org === null || $lessonId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $lessonId, $input, $verifyFreshGrant): bool {
+        return DB::transaction(function () use ($grant, $org, $lessonId, $input, $guardedOrder, $verifyFreshGrant): bool {
             $courseId = DB::table('educational_lessons as l')
                 ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
                 ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
@@ -1716,7 +1730,7 @@ final class UniversityCatalogRepository
                 ->where('c.is_shared', true)
                 ->where('c.is_published', false)
                 ->where('v.status', 'draft')
-                ->select('l.id')->first();
+                ->select('l.id', 'l.sort_order')->first();
             if ($row === null) {
                 return false;
             }
@@ -1726,12 +1740,23 @@ final class UniversityCatalogRepository
                 return false;
             }
 
-            $changed = DB::table('educational_lessons')->where('id', $row->id)->update([
+            // All editorial writers serialize on the course above. Compare
+            // the current row only after that lock and the live grant check.
+            if ($guardedOrder && $input['expected_sort_order'] !==
+                $this->editorialOrderInteger($row->sort_order, 0, 9999)) {
+                throw new EditorialLessonOrderConflict('The draft lesson order changed.');
+            }
+            $changes = [
                 'title' => $input['title'],
                 'body' => $input['body'],
-                'sort_order' => $input['sort_order'] ?? 0,
                 'updated_at' => now(),
-            ]) > 0;
+            ];
+            // PATCH omission preserves the locked row's order. Creation keeps
+            // its existing zero default; explicit legacy values still apply.
+            if (array_key_exists('sort_order', $input)) {
+                $changes['sort_order'] = $input['sort_order'];
+            }
+            $changed = DB::table('educational_lessons')->where('id', $row->id)->update($changes) > 0;
             if ($changed) {
                 $this->audit($grant, $org, 'lesson.updated', 'lesson', $lessonId);
             }

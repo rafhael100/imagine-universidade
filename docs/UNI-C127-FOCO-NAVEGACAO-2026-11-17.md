@@ -177,3 +177,11 @@ invocam diretamente o handler continuam cobrindo também a consulta curta.
 | Compreensão acessível — BASE-UNI-02-02 / 02-06 | `splitLessonSections` reconhece rótulos editoriais literais; `lessonTextFragment` exibe cada seção como um único parágrafo | Orientação em textos longos por seções existentes e parágrafos, sem inventar resumo, conteúdo ou marcação executável |
 
 Esses recortes podem ser desenvolvidos na base local com dados sintéticos. Integração de identidade e eventos oficiais de perda/restabelecimento depende do Portal; tutoria por modelo e mídia protegida dependem dos respectivos contratos/provedores; canais oficiais de suporte e comunicação dependem do ecossistema. Persistir feedback exige definir finalidade e retenção próprias, sem estender por suposição a política existente de progresso/favoritos. A revisão humana de materiais reais continua sendo distinta do desenvolvimento desses mecanismos.
+
+## Confirmação integrada em 18/11/2026
+
+O [run 44225106281](https://github.com/rafhael100/imagine-universidade/actions/runs/44225106281), no SHA **8099229f696331625264e2792d0c3b75a937ff3a**, aprovou os **seis jobs**. A suíte completa registrou **683 verificações Chromium** e **206 verificações pelo Laravel/SQLite real**, com persistência aprovada e sem respostas de negócio simuladas nesse segundo percurso.
+
+O módulo C127 completou suas **37 verificações Chromium** e o percurso real confirmou as **5 verificações de foco**. O cenário de consulta inválida alcançou o handler com `texto!`; o blur controlado invalidou a intenção sem foco tardio. Isso não é prova de troca nativa de janela ou uso de tecnologia assistiva.
+
+Esta evidência substitui as pendências de execução descritas na preparação acima somente para esse SHA. Não valida alterações posteriores e não altera revisão humana, integração operacional, os 13 gates HOLD_NO_GO ou a proibição de merge/deploy.

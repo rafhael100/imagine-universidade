@@ -126,7 +126,7 @@ try {
         $oldVersion = $version($reissued, 1, 'archived');
         $liveVersion = $version($reissued, 2, 'published');
         $oldId = $complete($organizations['qa-history-a'], 'same-person', $oldVersion['lessons'][0], '2020-01-01 00:00:00+00');
-        $liveId = $complete($organizations['qa-history-a'], 'same-person', $liveVersion['lessons'][0]);
+        $liveId = $complete($organizations['qa-history-a'], 'same-person', $liveVersion['lessons'][0], '2026-11-17T10:00:00Z');
         $ownIds[] = $oldId; $ownIds[] = $liveId;
         $ownLessons[$oldId] = $oldVersion['lessons'][0]; $ownLessons[$liveId] = $liveVersion['lessons'][0];
         $ownIds = array_reverse($ownIds);
@@ -139,7 +139,41 @@ try {
             $complete($organizations['qa-history-a'], 'same-person', $excludedVersion['lessons'][0]);
         }
         $grant = PortalGrant::allow('qa-history-a', 'same-person', PortalAccessGate::VIEW, 1, time() + 60);
+        $stage = 'canonical_progress_export';
         $exportBefore = $repository->exportProgress($grant);
+        historyPgCheck(is_array($exportBefore)
+            && array_keys($exportBefore) === ['schema_version', 'scope', 'completions']
+            && $exportBefore['schema_version'] === 1 && $exportBefore['scope'] === 'current_authenticated_student'
+            && count($exportBefore['completions']) === count($ownIds),
+            'export remains v1 and contains every own published or archived reference without foreign records');
+        $canonical = true;
+        foreach ($exportBefore['completions'] as $entry) {
+            $expectedDate = $entry['course_slug'] === 'qa-history-reissued' && $entry['course_version'] === 1
+                ? '2020-01-01T00:00:00Z' : '2026-11-17T10:00:00Z';
+            if (array_keys($entry) !== ['course_slug', 'course_version', 'lesson_slug', 'completed_at']
+                || $entry['completed_at'] !== $expectedDate
+                || !in_array($entry['course_slug'], ['qa-history-volume', 'qa-history-reissued'], true)) {
+                $canonical = false;
+            }
+        }
+        historyPgCheck($canonical, 'actual short-offset and UTC inputs export only canonical UTC dates and reference fields');
+        $originalZone = (string) DB::selectOne("SELECT current_setting('TimeZone') AS zone")->zone;
+        $storedBefore = DB::table('educational_lesson_progress')->orderBy('id')->get()
+            ->map(static fn (object $row): array => (array) $row)->all();
+        foreach ([['UTC', '+00'], ['Etc/GMT-3', '+03'], ['Asia/Kolkata', '+05:30']] as [$zone, $offset]) {
+            // Transaction-local settings and bound allowlisted values only.
+            // PDO now returns three real PostgreSQL textual representations
+            // of the same instant; no completion row is edited by this read.
+            DB::selectOne("SELECT set_config('TimeZone', ?, true)", [$zone]);
+            $raw = DB::table('educational_lesson_progress')->where('id', $liveId)->value('completed_at');
+            historyPgCheck(is_string($raw) && str_ends_with($raw, $offset)
+                && $repository->exportProgress($grant) === $exportBefore,
+                'the real export DTO is unchanged when PostgreSQL returns a different legitimate timezone offset');
+        }
+        DB::selectOne("SELECT set_config('TimeZone', ?, true)", [$originalZone]);
+        historyPgCheck(DB::table('educational_lesson_progress')->orderBy('id')->get()
+            ->map(static fn (object $row): array => (array) $row)->all() === $storedBefore,
+            'canonical export reads leave all stored completion data and original timestamps unchanged');
         $reading = false;
         $unexpected = [];
         $metadataReads = [];

@@ -440,6 +440,78 @@ final class PortalBoundaryFlowTest extends TestCase
         self::assertSame(2, $authority->checks, 'Both live Portal checks must occur.');
     }
 
+    /**
+     * The synthetic authority deliberately changes the server session while
+     * returning a still-valid grant for the initial tenant.
+     * A post-commit HTTP check would be too late for these writes.
+     */
+    private function authorityWithMidCheckSessionSwitch(string $key, string $value): object
+    {
+        $authority = new class($key, $value) implements PortalAuthority {
+            public int $checks = 0;
+
+            public function __construct(
+                private readonly string $key,
+                private readonly string $value,
+            ) {
+            }
+
+            public function verify(
+                string $serverSessionCredential,
+                string $companyId,
+                string $permission,
+            ): PortalGrant {
+                $this->checks++;
+                if ($serverSessionCredential !== 'synthetic-client-a-session'
+                    || $companyId !== 'test-client-a'
+                    || $permission !== PortalAccessGate::VIEW) {
+                    return PortalGrant::deny('synthetic_context_mismatch');
+                }
+
+                if ($this->checks === 2) {
+                    request()->session()->put($this->key, $this->value);
+                }
+
+                return PortalGrant::allow(
+                    'test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 1, time() + 30,
+                );
+            }
+        };
+
+        $this->app->instance(PortalAuthority::class, $authority);
+        return $authority;
+    }
+
+    public function test_session_company_switch_during_fresh_grant_prevents_completion_commit(): void
+    {
+        [, $lessonId] = $this->createPublishedCourse();
+        $this->asClientA();
+        $authority = $this->authorityWithMidCheckSessionSwitch(
+            'portal_company_id', 'test-client-b',
+        );
+
+        $this->postJson("/universidade/private/lessons/{$lessonId}/complete")
+            ->assertNotFound()->assertJsonPath('error', 'not_found');
+
+        self::assertSame(2, $authority->checks);
+        self::assertSame(0, DB::table('educational_lesson_progress')->count());
+    }
+
+    public function test_session_credential_switch_during_fresh_grant_prevents_favorite_commit(): void
+    {
+        [$courseId] = $this->createPublishedCourse();
+        $this->asClientA();
+        $authority = $this->authorityWithMidCheckSessionSwitch(
+            'portal_server_credential', 'synthetic-client-b-session',
+        );
+
+        $this->putJson("/universidade/private/courses/{$courseId}/favorite")
+            ->assertNotFound()->assertJsonPath('error', 'not_found');
+
+        self::assertSame(2, $authority->checks);
+        self::assertSame(0, DB::table('educational_course_favorites')->count());
+    }
+
     public function test_portal_outage_during_admin_audit_read_hides_response(): void
     {
         $this->asEditor();

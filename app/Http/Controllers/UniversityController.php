@@ -82,7 +82,12 @@ final class UniversityController
             }
 
             $latest = $gate->authorize($credential, $company, $expected->permission, time());
-            if (!$latest->allowed
+            // A session may change while the live Portal lookup waits.
+            // Check the server-held values again before this grant can be
+            // used in a transaction or a read of private references.
+            if ($request->session()->get('portal_server_credential') !== $credential
+                || $request->session()->get('portal_company_id') !== $company
+                || !$latest->allowed
                 || $latest->companyId !== $expected->companyId
                 || $latest->subjectId !== $expected->subjectId
                 || $latest->revision !== $expected->revision

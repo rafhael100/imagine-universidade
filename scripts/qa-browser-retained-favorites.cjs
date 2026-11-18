@@ -248,15 +248,43 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     }
     {
       stage="late retained body after revocation";const {page,control}=await open(),held=heldResponse("revoked retained response");
+      let finishLifecycle;
+      const lifecycle=new Promise(resolve=>{finishLifecycle=resolve;});
+      const target=request=>request.method()==="GET"&&request.url()===api+"/favorites/retained";
+      page.on("requestfinished",request=>{if(target(request))finishLifecycle("finished");});
+      page.on("requestfailed",request=>{if(target(request))finishLifecycle("failed");});
+      // Observe the real in-page cleanup, without reading its payload or
+      // replacing the Response. The application still calls it without await.
+      // A host-side Response.finished() wait did not settle in this scenario;
+      // reader completion/lock release is the actual condition under test.
+      await page.evaluate(()=>{
+        const original=discardErrorBody;
+        window.__retainedCleanup={calls:0,settled:false,bodyUsed:false,locked:true};
+        discardErrorBody=function(response){
+          const tracked=response.status===200&&new URL(response.url).pathname==="/universidade/private/favorites/retained";
+          if(tracked)window.__retainedCleanup.calls++;
+          return original(response).finally(()=>{
+            if(tracked){window.__retainedCleanup.settled=true;
+              window.__retainedCleanup.bodyUsed=response.bodyUsed;
+              window.__retainedCleanup.locked=response.body?.locked??true;}
+          });
+        };
+      });
       await page.locator("#retained-favorites-panel summary").click();control.retained=held.response;
       const response=page.waitForResponse(api+"/favorites/retained");
       await page.locator("#reload-retained-favorites").click();await held.wait();control.favorites={status:403,payload:{}};
       await page.evaluate(()=>loadFavorites());await page.waitForFunction(()=>state.accessDenied);
-      held.release({status:200,payload:envelope()});await bounded((await response).finished(),"revoked retained body");
+      held.release({status:200,payload:envelope()});const late=await response;
+      await page.waitForFunction(()=>window.__retainedCleanup.settled,null,{timeout:8000});
+      const terminal=await bounded(lifecycle,"revoked retained request lifecycle");
       await page.waitForLoadState("networkidle");
-      check(await page.locator("[data-retained-course-id]").count()===0&&await page.locator("#retained-favorites-panel").isHidden()&&
+      const cleanup=await page.evaluate(()=>window.__retainedCleanup);
+      check(late.status()===200&&["finished","failed"].includes(terminal)&&
+        cleanup.calls===1&&cleanup.settled&&cleanup.bodyUsed&&!cleanup.locked&&
+        await page.locator("[data-retained-course-id]").count()===0&&await page.locator("#retained-favorites-panel").isHidden()&&
         await page.evaluate(()=>state.retained.rows.length===0&&!state.retained.unconfirmed)&&control.writes.length===0,
-        "C123 a late successful body cannot restore private references after revocation");
+        "C123 a late successful body is released by the actual cleanup and cannot restore private references after revocation");
+      console.log("PASS C123 revoked-body lifecycle: "+terminal+"; actual cleanup settled and response reader unlocked.");
       await close(page);
     }
   }catch(error){

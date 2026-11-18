@@ -634,12 +634,34 @@ async function main(){
     countWrites("editor")===archiveWrites&&
     await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"'][aria-current='true']").count()===1,
     "Browsing an archived version must preserve both unsaved forms, current draft selection and the write count");
+  const beforeFilters=businessRequests.filter(request=>request.profile==="editor").length;
+  await editor.page.locator("#editorial-course-search").fill("Termo sem correspondência no cadastro");
+  await editor.page.locator("#editorial-category-filter").selectOption("sistemas");
+  await editor.page.locator("#editorial-state-filter").selectOption("published");
+  check(await editor.page.locator("#course-items [data-course]").count()===1&&
+    await editor.page.locator("#course-items [data-course='"+courseId+"'][data-outside-filter='true'][aria-current='true']").count()===1&&
+    (await editor.page.locator("#editorial-filter-status").textContent()).includes("0 de 1 curso")&&
+    JSON.stringify(await fields(editor.page,archiveFields))===JSON.stringify(pendingArchiveFields)&&
+    (await editor.page.locator("#editorial-version-content").textContent()).includes("Um visitante fictício")&&
+    businessRequests.filter(request=>request.profile==="editor").length===beforeFilters,
+    "Local editorial filters must keep the selected nonmatching course, both drafts and archived reader without another request");
+  await editor.page.locator("#editorial-catalog-panel").screenshot({path:path.join(evidenceDir,"framework-editorial-filters-desktop.png")});
   await editor.page.locator("#editorial-versions-panel").screenshot({path:path.join(evidenceDir,"framework-archive-desktop.png")});
   await editor.page.setViewportSize({width:390,height:844});
   check(await editor.page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),
-    "The real archived lesson reader must remain within the narrow mobile viewport");
+    "The real archived reader and editorial catalogue controls must remain within the narrow mobile viewport");
+  await editor.page.locator("#editorial-catalog-panel").screenshot({path:path.join(evidenceDir,"framework-editorial-filters-mobile.png")});
   await editor.page.locator("#editorial-versions-panel").screenshot({path:path.join(evidenceDir,"framework-archive-mobile.png")});
   await editor.page.setViewportSize({width:1440,height:1000});
+  await editor.page.locator("#clear-editorial-filters").click();
+  check(await editor.page.locator("#editorial-course-search").inputValue()===""&&
+    await editor.page.locator("#editorial-category-filter").inputValue()==="todos"&&
+    await editor.page.locator("#editorial-state-filter").inputValue()==="todos"&&
+    await editor.page.locator("#course-items [data-outside-filter]").count()===0&&
+    await editor.page.locator("#course-items [data-course='"+courseId+"'][aria-current='true']").count()===1&&
+    JSON.stringify(await fields(editor.page,archiveFields))===JSON.stringify(pendingArchiveFields)&&
+    businessRequests.filter(request=>request.profile==="editor").length===beforeFilters,
+    "Clearing editorial filters must restore the full navigation and preserve the same unsaved content without network activity");
   for(let index=0;index<archiveFields.length;index++){
     await editor.page.locator("#"+archiveFields[index]).fill(cleanArchiveFields[index]);
   }

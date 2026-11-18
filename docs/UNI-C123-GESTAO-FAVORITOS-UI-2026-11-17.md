@@ -103,7 +103,19 @@ O checker focal cobre campos permitidos, tipos, calendário, ordem, duplicação
 
 O módulo Chromium prepara **37 verificações**, com contexto isolado e fixtures por página. Ele cobre o fluxo visível, páginas de 50, último cursor removido, respostas malformadas, falha versus vazio, remoção incerta, escrita compartilhada, navegação e revogação. Esperas por respostas controladas e limpeza têm prazo, e a etapa corrente é registrada antes da limpeza se houver falha.
 
-O módulo não foi executado localmente. A execução do navegador sintético e do percurso com Laravel/banco reais fica para a CI; este documento não atribui aprovação de CI ao novo painel antes desse resultado.
+O módulo não foi executado localmente. A execução do navegador sintético e do percurso com Laravel/banco reais é exclusiva da CI.
+
+### Primeira execução e sincronização do teste
+
+O [run 44211440898](https://github.com/rafhael100/imagine-universidade/actions/runs/44211440898), no SHA `89c8767add9f290733c35fdaeafac5606a30ab2e`, concluiu cinco dos seis jobs com sucesso. O backend passou em **245 testes PHP / 2.801 asserções** (39 Unit/169 e 206 Feature/2.632), incluindo os 28 novos testes de favoritos retidos; o probe PostgreSQL e os 16 invariantes de schema passaram. Portal, Docker, imagens e pacote editorial também passaram.
+
+O job de navegador expirou na última verificação C123, ao aguardar `Response.finished()` no host após a revogação. A espera por `networkidle` ainda não havia sido executada. O log não demonstra, isoladamente, que o corpo continuava pendente na página, e o percurso Laravel posterior não foi executado nesse run.
+
+Na versão fixada Playwright 1.58.2, [`Response.finished()`](https://github.com/microsoft/playwright/blob/v1.58.2/packages/playwright-core/src/client/network.ts) aguarda a promessa concluída pelo evento de requisição finalizada. O [tratamento de `requestfailed`](https://github.com/microsoft/playwright/blob/v1.58.2/packages/playwright-core/src/client/browserContext.ts) não resolve essa mesma promessa. Um cancelamento pode, portanto, encerrar a requisição sem resolver essa espera; a causa concreta do caso ainda depende do diagnóstico da nova CI.
+
+O teste passou a observar a chamada e a conclusão do **helper real da página**, sem substituir o `Response`, decodificar conteúdo ou mudar a API da aplicação. Exige uma chamada, `bodyUsed`, liberação do leitor, evento terminal `requestfinished` ou `requestfailed`, resposta 200, `networkidle`, painel privado vazio/oculto e ausência de escritas. A ausência do descarte continua falhando. O diagnóstico registra somente o tipo fixo de evento terminal e a liberação do leitor; não afirma que um corpo cancelado foi integralmente lido. A revogação da aplicação continua imediata e não aguarda esse helper.
+
+Essa alteração é de sincronização e observação do teste, revisada independentemente. A aprovação integral do navegador C123 continua pendente da execução no novo SHA; resultados anteriores não são atribuídos ao código alterado.
 
 ## Limites preservados
 

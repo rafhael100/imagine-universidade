@@ -34,7 +34,13 @@
     .catalog-recovery{margin:0 10px 13px;padding:15px;border:1px solid #E8C99F;background:#FFF8F0;border-radius:12px}
     .catalog-recovery p{font-size:13px;color:#65431B;margin:0 0 10px}
     .catalog-recovery[hidden]{display:none}
-    .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%}
+    .catalog-filters{padding:14px;border-bottom:1px solid var(--line);display:grid;gap:10px}
+    .catalog-filters .field{margin:0}
+    .catalog-filter-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+    .catalog-filters p{font-size:12px;margin:0;overflow-wrap:anywhere}
+    .catalog-filter-count{padding:10px 14px 0;font-size:12px;margin:0;overflow-wrap:anywhere}
+    .catalog-pinned{font-weight:750;color:#70410C}
+    .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%;min-width:0;overflow-wrap:anywhere}
     .item:hover{background:#F8F9FB}.item[aria-current="true"]{background:#FFF3E2;border-color:#F2D2AA}
     .item strong{display:block;font-size:14px}.item small{display:block;color:#505650;font-size:12px;margin-top:3px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:5px;margin-bottom:14px}
@@ -123,8 +129,18 @@
     </div>
   </section>
   <div class="layout">
-    <section class="panel" aria-labelledby="courses-title">
+    <section id="editorial-catalog-panel" class="panel" aria-labelledby="courses-title">
       <div class="panel-header"><h2 id="courses-title">Cursos</h2><button type="button" class="primary" id="new-course">+ Novo</button></div>
+      <div class="catalog-filters" role="search" aria-label="Buscar no catálogo editorial">
+        <div class="field"><label for="editorial-course-search">Buscar curso</label><input id="editorial-course-search" type="search" maxlength="120" placeholder="Título, slug ou descrição" autocomplete="off" disabled></div>
+        <div class="catalog-filter-row">
+          <div class="field"><label for="editorial-category-filter">Categoria</label><select id="editorial-category-filter" disabled><option value="todos">Todas</option><option value="metodologia">Metodologia</option><option value="negocios">Negócios</option><option value="sistemas">Sistemas Imagine</option></select></div>
+          <div class="field"><label for="editorial-state-filter">Publicação</label><select id="editorial-state-filter" disabled><option value="todos">Todos</option><option value="published">Publicados</option><option value="draft">Rascunhos</option></select></div>
+        </div>
+        <button type="button" id="clear-editorial-filters" class="secondary" disabled>Limpar filtros</button>
+        <p>Os filtros usam os dados salvos e mantêm o curso em edição visível.</p>
+      </div>
+      <p id="editorial-filter-status" class="catalog-filter-count" role="status" aria-live="polite"></p>
       <div id="course-items" class="items"><p>Carregando cursos...</p></div>
       <div id="catalog-recovery" class="catalog-recovery" hidden>
         <p role="alert">Não foi possível consultar os cursos. Verifique a conexão e tente novamente. Uma sessão expirada exige novo acesso pelo Portal.</p>
@@ -219,6 +235,7 @@ const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
 const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,
+  courseQuery:"",courseCategory:"todos",courseStatus:"todos",
   overviewSnapshot:null,overviewRequest:0,overviewLoading:false,overviewAttempted:false,
   overviewMessage:"A visão do acervo estará disponível após carregar os cursos.",
   archive:{courseId:null,versions:[],nextBefore:null,selectedVersion:null,lessons:[],nextAfter:null,lesson:null,bodyLessonId:null,
@@ -233,6 +250,7 @@ function say(message){
 function beginWrite(){
   if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
   state.writePending=true;
+  renderEditorialCourseFilters();
   ++state.courseRequest;++state.lessonRequest;
   invalidateEditorialOverview("O acervo pode ter mudado. Atualize a visão após concluir a alteração.");
   invalidateEditorialArchive("O acervo pode ter mudado. Consulte as versões após concluir a alteração.");
@@ -244,6 +262,7 @@ function beginWrite(){
 }
 function finishWrite(){
   state.writePending=false;
+  renderEditorialCourseFilters();
   const layout=document.querySelector(".layout");
   layout.setAttribute("aria-busy","false");
   layout.inert=state.accessDenied;
@@ -258,6 +277,7 @@ function freezeUncertainEditorialWrite(){
   if(state.accessDenied)return;
   state.writeOutcomeUnknown=true;
   state.catalogReady=false;state.lessonsReady=false;
+  renderEditorialCourseFilters();
   ++state.courseRequest;++state.lessonRequest;
   for(const id of ["new-course","course-save","lesson-save","delete-course",
       "delete-lesson","publish","unpublish","check-publication",
@@ -282,6 +302,8 @@ function lockAccess(message){
   state.accessDenied=true;state.accessMessage=message;state.catalogReady=false;state.lessonsReady=false;
   document.querySelector(".layout").inert=true;
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
+  state.courseQuery="";state.courseCategory="todos";state.courseStatus="todos";
+  renderEditorialCourseFilters();
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
   $("catalog-recovery").hidden=true;
@@ -739,13 +761,68 @@ function fillLesson(){
   $("lesson-body").value=lesson.body;$("lesson-title-heading").textContent="Editar aula";
   updateEditorialControls();
 }
+function editorialCourseFiltersAllowed(){
+  return state.catalogReady&&!state.accessDenied&&!state.writePending&&!state.writeOutcomeUnknown;
+}
+function normalizeEditorialSearch(text){
+  return String(text??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
+}
+function filteredEditorialCourses(){
+  const term=normalizeEditorialSearch((state.courseQuery||"").trim());
+  const category=state.courseCategory||"todos",status=state.courseStatus||"todos";
+  const matches=state.courses.filter(course=>(category==="todos"||course.category===category)&&
+    (status==="todos"||(status==="published"?course.is_published:!course.is_published))&&
+    (!term||normalizeEditorialSearch([course.title,course.slug,course.summary,cats[course.category]||""].join(" ")).includes(term)));
+  const selected=state.courses.find(course=>course.id===state.course?.id)??null;
+  const pinned=selected&&!matches.some(course=>course.id===selected.id)?selected:null;
+  return {matches,pinned};
+}
+function renderEditorialCourseFilters(){
+  const active=editorialCourseFiltersAllowed();
+  $("editorial-course-search").value=state.courseQuery||"";
+  $("editorial-category-filter").value=state.courseCategory||"todos";
+  $("editorial-state-filter").value=state.courseStatus||"todos";
+  for(const id of ["editorial-course-search","editorial-category-filter","editorial-state-filter"]){$(id).disabled=!active;}
+  $("clear-editorial-filters").disabled=!active||(!(state.courseQuery||"")&&
+    (state.courseCategory||"todos")==="todos"&&(state.courseStatus||"todos")==="todos");
+  const message=$("editorial-filter-status");
+  if(state.accessDenied){message.textContent="";return;}
+  if(!state.catalogReady||state.writeOutcomeUnknown){message.textContent="Consulte o catálogo para usar a busca e os filtros.";return;}
+  const {matches,pinned}=filteredEditorialCourses();
+  message.textContent="Resultados: "+matches.length+" de "+state.courses.length+" curso"+(state.courses.length===1?"":"s")+"."+
+    (pinned?" O curso em edição também permanece visível.":"");
+}
+function updateEditorialCourseFilters(){
+  if(!editorialCourseFiltersAllowed())return;
+  const category=$("editorial-category-filter").value,status=$("editorial-state-filter").value;
+  if(!["todos","metodologia","negocios","sistemas"].includes(category)||
+    !["todos","published","draft"].includes(status)){renderEditorialCourseFilters();return;}
+  state.courseQuery=String($("editorial-course-search").value).slice(0,120);
+  state.courseCategory=category;state.courseStatus=status;
+  // Filtering only redraws navigation. It does not select a course, refill a
+  // form, invalidate a preflight or fetch/write editorial data.
+  renderCourses();
+}
+$("editorial-course-search").addEventListener("input",updateEditorialCourseFilters);
+$("editorial-category-filter").addEventListener("change",updateEditorialCourseFilters);
+$("editorial-state-filter").addEventListener("change",updateEditorialCourseFilters);
+$("clear-editorial-filters").addEventListener("click",()=>{
+  if(!editorialCourseFiltersAllowed())return;
+  state.courseQuery="";state.courseCategory="todos";state.courseStatus="todos";
+  renderCourses();$("editorial-course-search").focus();
+});
 function renderCourses(){
+  renderEditorialCourseFilters();
   if(state.accessDenied)return;
   $("course-items").replaceChildren();
+  if(!state.catalogReady){$("course-items").append(el("p","Consulte o catálogo para ver os cursos.","help"));return;}
   if(!state.courses.length){$("course-items").append(el("p","Nenhum curso cadastrado."));return;}
-  for(const c of state.courses){
+  const {matches,pinned}=filteredEditorialCourses();
+  if(!matches.length)$("course-items").append(el("p","Nenhum curso corresponde à busca e aos filtros.","help"));
+  for(const c of pinned?[pinned,...matches]:matches){
     const b=el("button",undefined,"item");b.type="button";b.dataset.course=String(c.id);
     b.setAttribute("aria-current",String(c.id===state.course?.id));
+    if(pinned?.id===c.id){b.dataset.outsideFilter="true";b.append(el("small","Em edição · fora do filtro","catalog-pinned"));}
     b.append(el("strong",c.title),el("small",(cats[c.category]||"Curso")+" · "+(c.is_published?"Publicado":"Rascunho")));
     $("course-items").append(b);
   }
@@ -792,6 +869,7 @@ async function refreshCourses(preferredId=state.course?.id??null){
   // A failed refresh after an editorial write must never leave the old
   // catalog eligible for another mutation merely because it was once valid.
   state.catalogReady=false;
+  renderEditorialCourseFilters();
   invalidateEditorialOverview("Consulte os cursos e atualize a visão para conferir os números do acervo.");
   invalidateEditorialArchive("Consulte as versões arquivadas após carregar os cursos.");
   $("new-course").disabled=true;
@@ -1205,6 +1283,7 @@ async function loadAdminCatalog(){
   }finally{
     state.catalogLoading=false;
     if(!state.accessDenied)retry.disabled=false;
+    renderEditorialCourseFilters();
     renderEditorialOverview();
     renderEditorialArchive();
     // Only the first fully validated catalogue starts an automatic overview

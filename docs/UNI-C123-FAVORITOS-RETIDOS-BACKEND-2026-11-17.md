@@ -178,7 +178,17 @@ Arquivos de ambiente e URLs alternativas de conexão são recusados.
 Diagnósticos de falha mostram apenas fase fixa e classe da exceção, sem SQL,
 credenciais, mensagens ou rastros.
 
-Os testes PHP e o probe PostgreSQL estão preparados para a CI; não foram
-executados no ambiente local. A revisão de código e as verificações estáticas
-não substituem a evidência de execução desses laboratórios. Integrações de
-workflow e percurso real de navegador ficam sob coordenação do integrador.
+Os testes PHP e o probe PostgreSQL não foram executados no ambiente local.
+No [run 44211440898](https://github.com/rafhael100/imagine-universidade/actions/runs/44211440898),
+SHA `89c8767add9f290733c35fdaeafac5606a30ab2e`, o backend passou em **245 testes /
+2.801 asserções**, incluindo os 28 Feature deste contrato. O probe PostgreSQL
+confirmou o snapshot 50+1, isolamento, cursores removidos/estrangeiros e acima
+de `int4`, UTC, retirada/republicação, sentinelas inválidas e rollback. Os
+16 invariantes de schema e os outros probes permaneceram aprovados.
+
+Cinco dos seis jobs desse run passaram. O navegador expirou em uma espera do
+harness após revogação; o percurso real posterior não executou. O diagnóstico
+e o ajuste de sincronização estão documentados no
+[registro da interface C123](UNI-C123-GESTAO-FAVORITOS-UI-2026-11-17.md).
+Esses resultados validam o backend desse SHA, sem antecipar aprovação do
+conjunto ou de commits posteriores.

@@ -195,6 +195,12 @@ a republicação atualiza a disponibilidade sem recriar o item removido.
 Capturas em 1440 e 390 pixels registram a referência indisponível, sem título
 ou link para o conteúdo retirado. A revogação apaga também esse painel.
 
+Os filtros editoriais C-124 são exercitados durante a edição dos dois
+rascunhos e a leitura histórica. O curso selecionado permanece visível fora
+dos critérios, sem ser contado como resultado; filtrar e limpar preservam os
+campos e o leitor, sem novas requisições. Capturas em 1440 e 390 pixels
+registram os controles e o estado fora do filtro.
+
 O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
 conferência final de 30 segundos. O início de cada fase é registrado com um nome
 fixo. Um timeout produz falha, nunca aprovação parcial. O percurso passou a

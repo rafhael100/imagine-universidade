@@ -21,6 +21,7 @@ const source=["studentRecord","studentText","studentSlug","validatedStudentCours
   "contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory",
   "invalidateNavigationFocus","beginNavigationFocus","finishNavigationFocus","lessonNavigationTarget",
+  "reconcileCatalogSelection",
   "renderCourses","loadFavorites","toggleCourseFavorite","selectCourse","openCourseWithAllFilters","loadLibrary"]
   .map(actual).join("\n")+"\n"+view.slice(start,end);
 const courses=[

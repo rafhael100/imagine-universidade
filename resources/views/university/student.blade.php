@@ -1226,6 +1226,19 @@ document.getElementById("contextual-courses-toggle").addEventListener("click",()
   state.contextualCoursesVisible=!state.contextualCoursesVisible;
   renderContextualCourses();
 });
+function reconcileCatalogSelection(){
+  // Only a newly validated full catalogue can establish course absence.
+  // Local filters and progress changes must not discard a current lesson.
+  if(state.accessDenied||!state.libraryReady||state.courseId===null||
+     state.courses.some(course=>course.id===state.courseId))return false;
+  invalidateNavigationFocus();
+  ++state.courseRequest;++state.lessonRequest;
+  state.courseId=null;state.lessonId=null;
+  lessonsBox.replaceChildren();content.replaceChildren();
+  const message=el("p","A leitura foi encerrada porque o curso deixou de constar no catálogo. Consulte a biblioteca para verificar os cursos disponíveis.","empty");
+  message.dataset.courseUnavailable="";content.append(message);
+  return true;
+}
 function renderCourses(){
   renderContextualCourses();
   renderProgressHistory();
@@ -1593,6 +1606,7 @@ async function selectLesson(id,preferredVersion=null,focusIntent=null){
         const refreshed=validatedStudentCourses(latest);
         if(refreshed===null)throw new Error("Resumo do progresso indisponível.");
         state.courses=refreshed;
+        reconcileCatalogSelection();
         renderCourses();
       }catch(refreshError){
         if(!state.accessDenied&&state.lessonRequest===request&&state.lessonId===id)
@@ -1942,6 +1956,7 @@ async function loadLibrary(){
     const courses=validatedStudentCourses(payload);
     if(courses===null)throw new Error("O catálogo recebido é inválido. Tente novamente.");
     state.courses=courses;state.libraryReady=true;
+    reconcileCatalogSelection();
     document.getElementById("course-search").disabled=false;
     document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=false;});
     document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=false;});

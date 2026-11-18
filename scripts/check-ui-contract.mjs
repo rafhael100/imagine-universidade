@@ -133,6 +133,7 @@ const fakeContext={
   state:fakeState,
   api:path=>new Promise(resolve=>pendingLessons.push({path,resolve})),
   renderLessons:()=>{},
+  renderLessonReorderControls:()=>{},
   resetLesson:()=>{},
   fillCourse:()=>{},
   updateEditorialControls:()=>{},
@@ -399,7 +400,7 @@ const result=new Script(writeStart+"\n"+writeEnd+"\n"+
     state:{accessDenied:false,writePending:false,catalogReady:true,course:null,lessonsReady:true,courseRequest:0,lessonRequest:0},
     document:{querySelector:()=>fakeLayout},say:()=>{},
     invalidateEditorialOverview:()=>{},renderEditorialOverview:()=>{},
-    invalidateEditorialArchive:()=>{},renderEditorialArchive:()=>{},renderEditorialCourseFilters:()=>{}
+    invalidateEditorialArchive:()=>{},renderEditorialArchive:()=>{},renderEditorialCourseFilters:()=>{},renderLessonReorderControls:()=>{}
   });
 assert.equal(result.first,true);
 assert.equal(result.duplicate,false,"double-click cannot start second POST");
@@ -585,7 +586,7 @@ const frozen= new Script(freezeFn+"\nfreezeUncertainEditorialWrite();"+
   {filename:"ambiguous-editorial-no-replay"}).runInNewContext({
   state:{accessDenied:false,writeOutcomeUnknown:false,catalogReady:true,lessonsReady:true,courseRequest:0,lessonRequest:0},
   $:id=>elements[id]??{disabled:false},clearPublicationCheck:()=>{},hideLessonPreview:()=>{},
-  say:m=>{statusMessage=m;},invalidateEditorialOverview:()=>{},invalidateEditorialArchive:()=>{},renderEditorialCourseFilters:()=>{},
+  say:m=>{statusMessage=m;},invalidateEditorialOverview:()=>{},invalidateEditorialArchive:()=>{},renderEditorialCourseFilters:()=>{},renderLessonReorderControls:()=>{},
 });
 assert.equal(frozen.unknown,true,"editor: error after possible commit must freeze writes");
 assert.equal(frozen.catalog,false,"editor: no cached catalogue authority after ambiguous write");
@@ -705,6 +706,7 @@ function studentFlowFixture(){
     renderContextualCourses:()=>{},
     invalidateProgressHistory:()=>{},renderProgressHistory:()=>{},
     invalidateNavigationFocus:()=>{},beginNavigationFocus:()=>null,finishNavigationFocus:()=>{},lessonNavigationTarget:studentTestNode,
+    reconcileCatalogSelection:()=>{},
     markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
   return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
 }
@@ -893,8 +895,10 @@ await import("./check-contextual-courses.mjs");
 await import("./check-progress-history.mjs");
 await import("./check-student-navigation-focus.mjs");
 await import("./check-lesson-sections.mjs");
+await import("./check-student-catalog-reconciliation.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 await import("./check-editorial-version-history.mjs");
 await import("./check-editorial-catalog-filters.mjs");
+await import("./check-lesson-reorder.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

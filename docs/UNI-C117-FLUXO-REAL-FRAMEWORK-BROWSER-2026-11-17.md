@@ -227,6 +227,21 @@ do índice e corpo completo em 1440 e 390 pixels complementam a inspeção.
 As páginas que recebem gestos de foco são trazidas à frente e aguardam
 visibilidade/foco antes da ação. Esses percursos novos dependem da CI integrada.
 
+C129 usa as duas aulas já criadas no começo do percurso, antes da exclusão da
+temporária. Verifica campos sujos sem POST, snapshot de publicação, movimento
+com empate, reversão pela aula não selecionada, dois recibos, seleção e texto
+preservados. Leituras HTTP reais conferem a ordem persistida e exatamente dois
+eventos de auditoria. Capturas desktop/móvel registram os controles. O percurso
+continua excluindo a aula temporária; nenhuma fixture final adicional é criada.
+
+C130 mantém a página do aluno A aberta durante a retirada editorial e invoca
+sua função existente de reautorização da biblioteca. O catálogo real vazio deve
+limpar a seleção, corpo, ajuda e seções, preservando a autoridade global e a
+revisão da posição retida. A etapa confere exatamente a inicialização e três
+GETs existentes, sem conclusão ou preferência adicional. Os demais ensaios de
+retirada/republicação permanecem intactos. Esses dois complementos receberam
+revisão independente; execução real depende da CI do SHA integrado.
+
 O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
 conferência final de 30 segundos. O início de cada fase é registrado com um nome
 fixo. Um timeout produz falha, nunca aprovação parcial. O percurso passou a

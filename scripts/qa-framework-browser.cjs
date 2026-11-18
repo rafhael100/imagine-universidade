@@ -232,6 +232,36 @@ async function lessonSectionNavigation(student){
   await page.locator(".lesson-text").screenshot({path:path.join(evidenceDir,"framework-lesson-sections-mobile.png")});
   await page.setViewportSize({width:1440,height:1000});
 }
+async function reconcileWithdrawnReader(student,courseId,lessonId,readingRevision){
+  enterStage("withdrawn course in an already open reader");
+  const page=student.page;
+  const before=await page.evaluate(()=>({courseId:state.courseId,lessonId:state.lessonId,
+    courseRequest:state.courseRequest,lessonRequest:state.lessonRequest}));
+  check(before.courseId===courseId&&before.lessonId===lessonId&&await page.locator("#lesson-content h3").count()===1,
+    "The reconciliation journey must begin with the previously authorized lesson still open in its existing page");
+  await page.bringToFront();await page.waitForFunction(()=>document.hasFocus()&&document.visibilityState==="visible");
+  await page.locator(".skip-link").focus();
+  const start=businessRequests.length;
+  // Exercise the existing reauthorization function against real Laravel HTTP.
+  // The document and its selected lesson remain in place; no response is mocked.
+  await page.evaluate(()=>{void loadLibrary();});
+  await page.waitForFunction(()=>state.libraryReady&&!state.libraryLoading&&!state.favoritesLoading&&!state.readingLoading);
+  check(await page.evaluate(previous=>!state.accessDenied&&state.courseId===null&&state.lessonId===null&&
+    state.courseRequest>previous.courseRequest&&state.lessonRequest>previous.lessonRequest,before)&&
+    await page.locator("#lesson-items [data-lesson-id]").count()===0&&await page.locator("#lesson-content h3").count()===0&&
+    await page.locator(".lesson-text,.lesson-help").count()===0&&
+    (await page.locator("[data-course-unavailable]").textContent()).includes("curso deixou de constar no catálogo"),
+    "A fresh real catalogue that omits the selected course must clear its old body, help, section actions and lesson selection");
+  check(await page.evaluate(()=>state.libraryReady&&!state.accessDenied&&
+    document.activeElement?.classList.contains("skip-link"))&&await page.locator("#course-search").isEnabled()&&
+    await page.evaluate(revision=>state.readingSnapshot?.status==="unavailable"&&state.readingSnapshot.revision===revision,readingRevision),
+    "Course withdrawal must preserve global eligibility, the current focus and the exact retained reading revision");
+  const requests=businessRequests.slice(start).filter(request=>request.profile===student.profile);
+  const expected=["POST /universidade/private/initialize","GET /universidade/private/courses",
+    "GET /universidade/private/favorites","GET /universidade/private/reading-position"];
+  check(JSON.stringify(requests.map(request=>request.method+" "+request.path).sort())===JSON.stringify(expected.sort()),
+    "Real catalogue reconciliation must use only the existing initialization and three reads, without completion, preference or history writes");
+}
 async function favorite(student,courseId,desired){
   const response=await clickResponse(student.page,"#course-favorite-toggle",desired?"PUT":"DELETE",
     "/universidade/private/courses/"+courseId+"/favorite");
@@ -395,6 +425,86 @@ async function exportReadingPosition(student,expectedVersion){
       position.lesson_slug==="aula-principal-sintetica"&&typeof position.saved_at==="string"&&
       JSON.stringify(Object.keys(position).sort())===JSON.stringify(["course_slug","course_version","lesson_slug","saved_at"])),
     "A downloaded reading reference must contain only this student's exact saved version, slugs and date, or null after removal");
+}
+async function editorialLessonReorder(editor,courseId,firstLessonId,temporaryLessonId){
+  enterStage("atomic editorial lesson order");
+  const page=editor.page,route="/universidade/private/admin/courses/"+courseId+"/lessons/reorder";
+  const move=(id,direction)=>"#lesson-items [data-move-lesson='"+id+"'][data-direction='"+direction+"']";
+  const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
+    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+  const original=await fields(page,fieldIds),writes=countWrites(editor.profile);
+  const originalLessons=await page.evaluate(()=>state.lessons.map(lesson=>({id:lesson.id,slug:lesson.slug,
+    title:lesson.title,body:lesson.body,status:lesson.status,is_published:lesson.is_published})).sort((a,b)=>a.id-b.id));
+  const rows=()=>page.locator("#lesson-items [data-lesson-row]").evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.lessonRow)));
+  check(JSON.stringify(await rows())===JSON.stringify([firstLessonId,temporaryLessonId])&&
+    await page.locator(move(firstLessonId,"up")).isDisabled()&&await page.locator(move(temporaryLessonId,"down")).isDisabled()&&
+    await page.locator(move(temporaryLessonId,"up")).isEnabled(),
+    "The real draft must expose exact full-list positions and disable only the impossible boundary moves");
+  await page.locator("#course-title").fill(original[0]+" pendente");
+  await page.locator("#lesson-body").fill(original[7]+"\nRascunho local pendente.");
+  const pending=await fields(page,fieldIds);
+  await page.locator(move(temporaryLessonId,"up")).evaluate(button=>button.dispatchEvent(new MouseEvent("click",{bubbles:true})));
+  check(await page.locator(move(temporaryLessonId,"up")).isDisabled()&&
+    (await page.locator("#lesson-order-status").textContent()).includes("antes de mudar a ordem")&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&countWrites(editor.profile)===writes,
+    "Unsaved course and lesson fields must block even a dispatched reorder event without a POST or discarded text");
+  await page.locator("#course-title").fill(original[0]);await page.locator("#lesson-body").fill(original[7]);
+  await page.waitForFunction(selector=>!document.querySelector(selector).disabled,move(temporaryLessonId,"up"));
+  const preflight=await clickResponse(page,"#check-publication","GET",
+    "/universidade/private/admin/courses/"+courseId+"/publication-check");
+  const diagnostic=await json(preflight,"Pre-reorder publication snapshot");
+  await page.locator("#publication-readiness").waitFor({state:"visible"});
+  check(preflight.status()===200&&diagnostic.course_id===courseId&&diagnostic.version===1&&diagnostic.ready===true,
+    "The order test must begin with a real publication diagnostic for this exact draft");
+  const expected=[{id:firstLessonId,sort_order:0},{id:temporaryLessonId,sort_order:0}];
+  const target=[{id:temporaryLessonId,sort_order:0},{id:firstLessonId,sort_order:1}];
+  const moved=await clickResponse(page,move(temporaryLessonId,"up"),"POST",route);
+  const receipt=await json(moved,"Atomic lesson reorder"),request=moved.request().postDataJSON();
+  await waitText(page,"status","Ordem das aulas atualizada.");
+  await page.waitForFunction(id=>!state.writePending&&state.lessons[0]?.id===id,temporaryLessonId);
+  check(moved.status()===200&&(moved.headers()["cache-control"]||"").includes("no-store")&&
+    JSON.stringify(request)===JSON.stringify({lesson_id:temporaryLessonId,direction:"up",expected_order:expected})&&
+    JSON.stringify(Object.keys(receipt).sort())===JSON.stringify(["changed","course_id","course_version","direction","lesson_id","order","schema_version","scope","status"])&&
+    receipt.schema_version===1&&receipt.scope==="current_editorial_draft"&&receipt.course_id===courseId&&
+    receipt.course_version===1&&receipt.status==="draft"&&receipt.lesson_id===temporaryLessonId&&receipt.direction==="up"&&
+    receipt.changed===true&&JSON.stringify(receipt.order)===JSON.stringify(target),
+    "Moving a tied lesson must send the full original order and receive the exact private normalized destination");
+  check(JSON.stringify(await rows())===JSON.stringify([temporaryLessonId,firstLessonId])&&
+    await page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"']").getAttribute("aria-current")==="true"&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(original)&&await page.locator("#publication-readiness").isHidden(),
+    "The first real move must preserve both forms and the selected lesson while invalidating the earlier publication diagnostic");
+  const reversed=await clickResponse(page,move(firstLessonId,"up"),"POST",route);
+  const reverseReceipt=await json(reversed,"Reverse exact lesson order"),reverseRequest=reversed.request().postDataJSON();
+  await waitText(page,"status","Ordem das aulas atualizada.");
+  await page.waitForFunction(id=>!state.writePending&&state.lessons[0]?.id===id,firstLessonId);
+  const restored=[{id:firstLessonId,sort_order:0},{id:temporaryLessonId,sort_order:1}];
+  const expectedFields=[...original];expectedFields[8]="1";
+  check(reversed.status()===200&&reverseReceipt.changed===true&&reverseReceipt.lesson_id===firstLessonId&&
+    JSON.stringify(reverseRequest)===JSON.stringify({lesson_id:firstLessonId,direction:"up",expected_order:target})&&
+    JSON.stringify(reverseReceipt.order)===JSON.stringify(restored)&&
+    JSON.stringify(await rows())===JSON.stringify([firstLessonId,temporaryLessonId])&&
+    await page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"']").getAttribute("aria-current")==="true"&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(expectedFields)&&
+    await page.evaluate(()=>!editorialHasUnsavedChanges()),
+    "Moving the other lesson back must retain the selection and update only its confirmed sort field without leaving a false dirty form");
+  const stored=await editor.context.request.get(base+"/universidade/private/admin/courses/"+courseId+"/lessons",{headers:{Accept:"application/json"}});
+  const storedLessons=(await json(stored,"Stored reordered lessons")).lessons;
+  const audit=await editor.context.request.get(base+"/universidade/private/admin/audit",{headers:{Accept:"application/json"}});
+  const events=(await json(audit,"Reorder audit")).events.filter(event=>event.action==="course.lessons_reordered"&&event.resource_id===courseId);
+  check(stored.status()===200&&storedLessons.every(lesson=>[false,0].includes(lesson.is_published))&&
+    JSON.stringify(storedLessons.map(lesson=>({id:lesson.id,sort_order:lesson.sort_order})))===JSON.stringify(restored)&&
+    JSON.stringify(storedLessons.map(lesson=>({id:lesson.id,slug:lesson.slug,title:lesson.title,body:lesson.body,
+      status:lesson.status,is_published:Boolean(lesson.is_published)})).sort((a,b)=>a.id-b.id))===JSON.stringify(originalLessons)&&
+    audit.status()===200&&events.length===2&&events.every(event=>event.resource_kind==="course"&&!Object.hasOwn(event,"actor_key"))&&
+    countWrites(editor.profile)===writes+2,
+    "The real database must preserve both lesson bodies and identities, store the final order and audit exactly the two explicit moves");
+  await page.locator("#lesson-items").screenshot({path:path.join(evidenceDir,"framework-lesson-reorder-desktop.png")});
+  await page.setViewportSize({width:390,height:844});
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(expectedFields)&&countWrites(editor.profile)===writes+2,
+    "The mobile editor must keep reorder controls within 390 pixels without altering forms or sending another write");
+  await page.locator("#lesson-items").screenshot({path:path.join(evidenceDir,"framework-lesson-reorder-mobile.png")});
+  await page.setViewportSize({width:1440,height:1000});
 }
 async function publish(editor,courseId,version){
   const before=await clickResponse(editor.page,"#check-publication","GET",
@@ -634,6 +744,7 @@ async function main(){
   const temporaryLesson=await clickResponse(editor.page,"#lesson-save","POST",adminRoot+"/courses/"+courseId+"/lessons");
   const temporaryLessonId=(await json(temporaryLesson,"Temporary lesson creation")).id;
   await editor.page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"'][aria-current='true']").waitFor();
+  await editorialLessonReorder(editor,courseId,firstLessonId,temporaryLessonId);
   const deletedLesson=await confirmResponse(editor.page,"#delete-lesson","DELETE",
     adminRoot+"/lessons/"+temporaryLessonId,"Excluir esta aula em rascunho");
   await waitText(editor.page,"status","Aula em rascunho excluída.");
@@ -681,7 +792,7 @@ async function main(){
   const audited=await clickResponse(editor.page,"#refresh-audit","GET",adminRoot+"/audit");
   const audit=await json(audited,"Editorial audit");
   const actions=new Set((audit.events||[]).map(event=>event.action));
-  check(audited.status()===200&&["course.created","course.updated","course.deleted","lesson.created",
+  check(audited.status()===200&&["course.created","course.updated","course.deleted","course.lessons_reordered","lesson.created",
     "lesson.updated","lesson.deleted","course.published"].every(action=>actions.has(action)),
     "SQLite must persist the actual editorial audit for all exercised mutations");
   await editor.page.locator("#audit-items .audit-row").first().waitFor({state:"visible"});
@@ -809,6 +920,7 @@ async function main(){
   const newLessonId=Number(await editor.page.locator("#lesson-items [data-lesson]").first().getAttribute("data-lesson"));
   check(Number.isSafeInteger(newLessonId)&&newLessonId>0&&newLessonId!==firstLessonId,
     "The new draft must have a new lesson identity instead of overwriting historical progress");
+  await reconcileWithdrawnReader(studentA,courseId,firstLessonId,savedPositionA.revision);
   for(const student of [studentA,studentB]){
     await student.page.goto(base+"/universidade/private/app");
     await waitText(student.page,"favorites-status","Nenhum favorito disponível");
@@ -1030,8 +1142,8 @@ async function main(){
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
-    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","revocation"],
+    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","atomic lesson reorder","publication hash","audit","editorial overview","private favorites","favorites export download",
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

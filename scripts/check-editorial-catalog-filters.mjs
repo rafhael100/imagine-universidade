@@ -43,6 +43,14 @@ class Node{
   replaceChildren(...nodes){this.ownText="";this.children=nodes;}
   setAttribute(name,value){this.attributes[name]=String(value);}
   addEventListener(type,handler){const list=this.events.get(type)||[];list.push(handler);this.events.set(type,list);}
+  all(){return this.children.flatMap(node=>[node,...node.all()]);}
+  querySelectorAll(selector){
+    if(selector.startsWith("[data-")){
+      const key=selector.slice(6,-1).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());
+      return this.all().filter(node=>Object.hasOwn(node.dataset,key));
+    }
+    return this.all().filter(node=>selector.split(",").some(tag=>node.tagName===tag.trim().toUpperCase()));
+  }
   focus(){this.focused=true;}
   scrollIntoView(){}
 }

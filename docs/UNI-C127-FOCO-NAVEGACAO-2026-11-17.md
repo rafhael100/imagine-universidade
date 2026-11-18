@@ -115,7 +115,23 @@ anterior de posição guardada mantém a asserção de foco com a mesma precondi
 A sintaxe passou. A aprovação desses novos percursos depende da execução
 integrada de CI; nenhum navegador foi executado localmente.
 
-## Próximos recortes identificados, sem implementação nesta entrega
+## Diagnóstico da primeira execução integrada
+
+No SHA `b8667e730489fd4ba585dc01a4e58e8385f9efeb`, a
+[execução 44219355416](https://github.com/rafhael100/imagine-universidade/actions/runs/44219355416)
+aprovou validação, paridade Portal, Docker, imagem candidata e pacote editorial.
+O navegador completou os primeiros casos de foco e parou após a próxima aula:
+um seletor não escopado `[data-lesson-id='12']` encontrou a aula da lista e o
+botão da posição guardada. O erro foi `strict mode violation` no harness,
+antes da execução de C128 e da jornada Laravel dessa rodada.
+
+Os seis seletores de aula restantes no módulo C127 foram limitados a
+`#lesson-items [data-lesson-id=...]`. Nenhuma asserção, contagem ou regra do
+produto foi removida para acomodar o resultado. A sintaxe passou; o efeito da
+correção e os percursos ainda não executados dependem da próxima CI integrada.
+O último conjunto completo aprovado continua sendo C126 no SHA `b67b9a4`.
+
+## Recortes identificados durante a preparação
 
 | Capacidade aprovada | Evidência no código atual | Recorte útil e limite |
 | --- | --- | --- |

@@ -21,6 +21,7 @@ const source=["studentRecord","studentText","studentSlug","validatedStudentCours
   "contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory",
   "invalidateNavigationFocus",
+  "reconcileCatalogSelection",
   "sanitizedProgressExport","sanitizedFavoritesExport","exportFavorites"].map(actual).join("\n")+"\n"+handler;
 const row={course_slug:"curso-retirado",saved_at:"2026-11-17 12:34:56"};
 const payload=()=>({schema_version:1,scope:"current_authenticated_student",favorites:[{...row}]});

@@ -120,7 +120,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await page.locator("[data-next-lesson]").focus();await page.keyboard.press("Enter");await target(page,"Aula 12");
       check(await focused(page)==="lesson-navigation-target",
         "C127 activating next lesson replaces its button and leaves focus on the newly loaded heading");
-      fixture.completed.add(12);await page.locator("[data-lesson-id='12']").click();await target(page,"Aula 12");
+      fixture.completed.add(12);await page.locator("#lesson-items [data-lesson-id='12']").click();await target(page,"Aula 12");
       await page.locator("[data-next-course]").click();await target(page,"Aula 21");
       check(await focused(page)==="lesson-navigation-target"&&await page.evaluate(()=>state.courseId===2),
         "C127 next-course activation focuses the authorized target after its source button is removed");
@@ -218,7 +218,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       check(await focused(page)==="lesson-search-query"&&await focusCount(page)===count,
         "C127 a retry never recaptures focus after the user chooses another control while waiting");
       control.overrides.set("/lessons/12/progress",ok({completed:"false"}));
-      await page.locator("[data-lesson-id='12']").click();await target(page,"A aula está temporariamente indisponível.");
+      await page.locator("#lesson-items [data-lesson-id='12']").click();await target(page,"A aula está temporariamente indisponível.");
       check(await focused(page)==="lesson-navigation-target"&&await page.locator("#lesson-content h3").count()===0,
         "C127 malformed progress gives a useful error focus destination without rendering partial lesson content");
       await close(page);
@@ -243,8 +243,8 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     }
     {
       stage="latest lesson owns focus";const {page,hold}=await open();await select(page,1);const held=hold("/lessons/11");
-      await page.locator("[data-lesson-id='11']").click();await held.seen();
-      await page.locator("[data-lesson-id='12']").click();await target(page,"Aula 12");const count=await focusCount(page);
+      await page.locator("#lesson-items [data-lesson-id='11']").click();await held.seen();
+      await page.locator("#lesson-items [data-lesson-id='12']").click();await target(page,"Aula 12");const count=await focusCount(page);
       held.release();await held.terminal();
       check(await focused(page)==="lesson-navigation-target"&&await focusCount(page)===count&&
         (await page.locator("#lesson-navigation-target").innerText())==="Aula 12",
@@ -253,9 +253,9 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     }
     for(const nextCourse of [false,true]){
       stage="stale sequence button";const {page,fixture,control}=await open();fixture.completed.add(11);if(nextCourse)fixture.completed.add(12);
-      await select(page,1,"Aula 12");if(!nextCourse){await page.locator("[data-lesson-id='11']").click();await target(page,"Aula 11");}
+      await select(page,1,"Aula 12");if(!nextCourse){await page.locator("#lesson-items [data-lesson-id='11']").click();await target(page,"Aula 11");}
       const old=await page.locator(nextCourse?"[data-next-course]":"[data-next-lesson]").elementHandle();
-      await select(page,1,"Aula 12");if(!nextCourse){await page.locator("[data-lesson-id='11']").click();await target(page,"Aula 11");}
+      await select(page,1,"Aula 12");if(!nextCourse){await page.locator("#lesson-items [data-lesson-id='11']").click();await target(page,"Aula 11");}
       const count=await focusCount(page),requests=control.requests.length;
       await page.evaluate(node=>node.click(),old);
       await page.waitForLoadState("networkidle",{timeout:8000});

@@ -703,6 +703,43 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
+    public function reorderDraftLessons(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        $lessonId = $request->input('lesson_id');
+        $direction = $request->input('direction');
+        $expectedOrder = $request->input('expected_order');
+        // A bounded linear domain validator avoids quadratic wildcard/distinct
+        // validation and accepts JSON integers only, not coercible strings.
+        if (!is_int($lessonId) || !is_string($direction) || !is_array($expectedOrder)) {
+            return response()->json(['error' => 'invalid_order'], 422);
+        }
+        try {
+            $result = $this->catalog->reorderDraftLessons(
+                $grant, $courseId, $lessonId, $direction, $expectedOrder,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            $result = 'temporarily_unavailable';
+        }
+        if (is_array($result)) {
+            // Never recheck after commit and misreport a committed write as denied.
+            return response()->json($result);
+        }
+        // Errors/no-commit outcomes must not outlive a changed live authority.
+        if ($result !== 'access_denied' && $this->freshGrant($request, $gate, $grant) === null) {
+            $result = 'access_denied';
+        }
+        $status = match ($result) {
+            'access_denied' => 403,
+            'not_found' => 404,
+            'invalid_order' => 422,
+            'draft_order_changed', 'order_limit_exceeded' => 409,
+            default => 503,
+        };
+        return response()->json(['error' => $status === 503 ? 'temporarily_unavailable' : $result], $status);
+    }
+
     public function deleteDraftLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
     {
         $grant = $this->grant($request);

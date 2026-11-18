@@ -44,6 +44,10 @@
     .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%;min-width:0;overflow-wrap:anywhere}
     .item:hover{background:#F8F9FB}.item[aria-current="true"]{background:#FFF3E2;border-color:#F2D2AA}
     .item strong{display:block;font-size:14px}.item small{display:block;color:#505650;font-size:12px;margin-top:3px}
+    .lesson-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0;border:1px solid var(--line);border-radius:10px;padding:4px}
+    .lesson-row>.item{flex:1 1 230px;width:auto}.lesson-order-actions{display:flex;gap:6px;padding:4px;flex-wrap:wrap}
+    .lesson-order-actions .secondary{padding:7px 10px;font-size:12px}
+    .lesson-order-status{font-size:12px;margin:0 0 9px;overflow-wrap:anywhere}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:5px;margin-bottom:14px}
     .field label{font-size:12px;font-weight:750;color:#465369}.span{grid-column:1/-1}
     input,select,textarea{padding:11px;border:1px solid #D7DDE5;border-radius:10px;min-width:0;width:100%;color:var(--ink);background:white}
@@ -172,6 +176,7 @@
         </form>
         <hr>
         <h3>Aulas do curso</h3>
+        <p id="lesson-order-status" class="lesson-order-status" role="status" aria-live="polite">Selecione um curso para consultar a ordem das aulas.</p>
         <div id="lesson-items" class="items"><p class="help">Selecione um curso.</p></div>
         <form id="lesson-form">
           <h3 id="lesson-title-heading">Nova aula</h3>
@@ -252,6 +257,7 @@ function beginWrite(){
   if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
   state.writePending=true;
   renderEditorialCourseFilters();
+  renderLessonReorderControls();
   ++state.courseRequest;++state.lessonRequest;
   invalidateEditorialOverview("O acervo pode ter mudado. Atualize a visão após concluir a alteração.");
   invalidateEditorialArchive("O acervo pode ter mudado. Consulte as versões após concluir a alteração.");
@@ -269,6 +275,7 @@ function finishWrite(){
   layout.inert=state.accessDenied;
   renderEditorialOverview();
   renderEditorialArchive();
+  renderLessonReorderControls();
 }
 // A server may commit an editorial mutation before its HTTP response is
 // lost. Do not let a rejected/ambiguous response unlock a second write.
@@ -291,6 +298,7 @@ function freezeUncertainEditorialWrite(){
   clearPublicationCheck();hideLessonPreview();
   invalidateEditorialOverview("Consulte novamente os cursos para confirmar a alteração antes de atualizar a visão do acervo.");
   invalidateEditorialArchive("Confirme a alteração consultando os cursos antes de abrir as versões arquivadas.");
+  renderLessonReorderControls();
   say("O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
 }
 function clearPublicationCheck(){
@@ -318,6 +326,7 @@ function lockAccess(message){
   document.querySelectorAll(".layout button,.layout input,.layout select,.layout textarea,.audit-panel button")
     .forEach(field=>{if("value" in field&&field.tagName!=="SELECT")field.value="";field.disabled=true;});
   $("publication-status").textContent="Acesso encerrado";
+  $("lesson-order-status").textContent="";$("lesson-order-status").hidden=true;
   invalidateEditorialOverview("");
   invalidateEditorialArchive("");
   say(message);
@@ -712,6 +721,7 @@ function updateEditorialControls(){
   $("lesson-slug").disabled=!c||!editable||state.lesson!==null;
   $("delete-lesson").disabled=!c||!editable||!state.lesson||
     state.lesson.is_published||state.lesson.status!=="draft";
+  renderLessonReorderControls();
 }
 function previewLessonParts(body){
   const markers=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
@@ -831,13 +841,163 @@ function renderCourses(){
 function renderLessons(){
   if(state.accessDenied)return;
   $("lesson-items").replaceChildren();
-  if(!state.lessons.length){$("lesson-items").append(el("p",state.course&&!state.lessonsReady?"Verificando aulas autorizadas...":"Nenhuma aula cadastrada.","help"));return;}
-  for(const l of state.lessons){
+  if(!state.lessons.length){
+    $("lesson-items").append(el("p",state.course&&!state.lessonsReady?"Verificando aulas autorizadas...":"Nenhuma aula cadastrada.","help"));
+    renderLessonReorderControls();return;
+  }
+  const courseId=state.course?.id??null,request=state.lessonRequest;
+  const ordered=state.lessons.slice().sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id);
+  for(const [index,l] of ordered.entries()){
+    const row=el("div",undefined,"lesson-row");row.dataset.lessonRow=String(l.id);
     const btn=el("button",undefined,"item");btn.type="button";btn.dataset.lesson=String(l.id);
     btn.setAttribute("aria-current",String(l.id===state.lesson?.id));
-    btn.append(el("strong",l.title),el("small",l.status+" · "+(l.is_published?"Publicada":"Rascunho")));
-    $("lesson-items").append(btn);
+    btn.append(el("strong",l.title),el("small","Posição "+(index+1)+" · "+l.status+" · "+(l.is_published?"Publicada":"Rascunho")));
+    const actions=el("div",undefined,"lesson-order-actions");
+    for(const direction of ["up","down"]){
+      const move=el("button",direction==="up"?"↑ Subir":"↓ Descer","secondary");move.type="button";
+      move.dataset.moveLesson=String(l.id);move.dataset.direction=direction;
+      move.setAttribute("aria-label",(direction==="up"?"Subir aula: ":"Descer aula: ")+l.title);
+      move.addEventListener("click",()=>{
+        if(state.course?.id===courseId&&state.lessonRequest===request&&move.isConnected&&
+           row.contains(move)&&$("lesson-items").contains(row))
+          void reorderLesson(l.id,direction);
+      });
+      actions.append(move);
+    }
+    row.append(btn,actions);$("lesson-items").append(row);
   }
+  renderLessonReorderControls();
+}
+function validatedLessonOrder(order){
+  if(!Array.isArray(order)||order.length>5000)return null;
+  const ids=new Set(),pairs=[];
+  for(const item of order){
+    if(!item||typeof item!=="object"||Array.isArray(item)||
+       !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
+       !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999)return null;
+    const previous=pairs[pairs.length-1];
+    if(previous&&(previous.sort_order>item.sort_order||
+       (previous.sort_order===item.sort_order&&previous.id>=item.id)))return null;
+    ids.add(item.id);pairs.push({id:item.id,sort_order:item.sort_order});
+  }
+  return pairs;
+}
+function draftLessonOrder(){
+  if(!Array.isArray(state.lessons)||state.lessons.length>5000||
+     state.lessons.some(lesson=>!lesson||lesson.status!=="draft"||lesson.is_published!==false))return null;
+  return validatedLessonOrder(state.lessons.map(lesson=>({id:lesson.id,sort_order:lesson.sort_order}))
+    .sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id));
+}
+function lessonReorderTarget(expectedOrder,lessonId,direction){
+  const order=validatedLessonOrder(expectedOrder);
+  if(order===null||!Number.isSafeInteger(lessonId)||lessonId<1||!["up","down"].includes(direction))return null;
+  const index=order.findIndex(lesson=>lesson.id===lessonId);
+  if(index<0)return null;
+  const neighbor=index+(direction==="up"?-1:1);
+  if(neighbor<0||neighbor>=order.length)return {order,boundary:true};
+  [order[index],order[neighbor]]=[order[neighbor],order[index]];
+  return {order:order.map((lesson,position)=>({id:lesson.id,sort_order:position})),boundary:false};
+}
+function validatedLessonReorderReceipt(payload,courseId,lessonId,direction,expectedOrder){
+  const target=lessonReorderTarget(expectedOrder,lessonId,direction);
+  if(!target||!payload||typeof payload!=="object"||Array.isArray(payload)||
+     !Number.isSafeInteger(courseId)||courseId<1||payload.schema_version!==1||
+     payload.scope!=="current_editorial_draft"||payload.course_id!==courseId||
+     !Number.isSafeInteger(payload.course_version)||payload.course_version<1||payload.status!=="draft"||
+     payload.lesson_id!==lessonId||payload.direction!==direction||typeof payload.changed!=="boolean"||
+     (target.boundary&&payload.changed)||!Array.isArray(payload.order)||payload.order.length!==target.order.length)return null;
+  for(let index=0;index<target.order.length;index++){
+    const actual=payload.order[index],expected=target.order[index];
+    if(!actual||typeof actual!=="object"||Array.isArray(actual)||
+       actual.id!==expected.id||actual.sort_order!==expected.sort_order)return null;
+  }
+  return {schema_version:1,scope:"current_editorial_draft",course_id:courseId,course_version:payload.course_version,
+    status:"draft",lesson_id:lessonId,direction,changed:payload.changed,order:target.order};
+}
+function lessonReorderFormSnapshot(){
+  const values=ids=>ids.map(id=>String($(id).value));
+  return {courseId:state.course?.id??null,lessonId:state.lesson?.id??null,
+    course:values(["course-title","course-slug","course-category","course-summary","course-sort"]),
+    lesson:values(["lesson-title","lesson-slug","lesson-body","lesson-sort"])};
+}
+function lessonReorderDirtyForms(snapshot=lessonReorderFormSnapshot()){
+  const c=state.course,l=state.lesson;
+  const course=[c?.title??"",c?.slug??"",c?.category??"metodologia",c?.summary??"",String(c?.sort_order??0)];
+  const lesson=[l?.title??"",l?.slug??"",l?.body??"",String(l?.sort_order??0)];
+  return {course:snapshot.course.some((value,index)=>value!==course[index]),
+    lesson:snapshot.lesson.some((value,index)=>value!==lesson[index])};
+}
+function renderLessonReorderControls(){
+  const message=$("lesson-order-status"),course=state.course;
+  const order=draftLessonOrder();
+  const valid=!state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&state.lessonsReady&&
+    course?.is_published===false&&order!==null&&
+    (state.lesson===null||order.some(lesson=>lesson.id===state.lesson.id));
+  const dirty=valid?lessonReorderDirtyForms():{course:false,lesson:false};
+  const ready=valid&&!state.writePending&&!state.catalogLoading&&!dirty.course&&!dirty.lesson;
+  const positions=new Map((order||[]).map((lesson,index)=>[lesson.id,index]));
+  $("lesson-items").querySelectorAll("[data-move-lesson]").forEach(button=>{
+    const index=positions.get(Number(button.dataset.moveLesson))??-1;
+    button.disabled=!ready||index<0||
+      (button.dataset.direction==="up"?index===0:index===order.length-1);
+  });
+  message.hidden=state.accessDenied;
+  message.textContent=state.accessDenied?"":!course?"Selecione um curso para consultar a ordem das aulas.":
+    course.is_published?"A ordem desta versão publicada é somente leitura.":
+    !valid?"Consulte os cursos e as aulas para conferir a ordem antes de movimentar.":
+    state.writePending?"Aplicando alteração editorial...":
+    dirty.course||dirty.lesson?"Salve os formulários antes de mudar a ordem. Se ambos foram alterados, salve a aula primeiro.":
+    order.length<2?"Inclua pelo menos duas aulas em rascunho para usar Subir e Descer.":
+    "Use Subir e Descer para mover uma aula por vez. As posições são confirmadas pelo servidor.";
+}
+async function reorderLesson(lessonId,direction){
+  if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||state.catalogLoading||
+     !state.catalogReady||!state.lessonsReady||state.course?.is_published!==false)return;
+  const expected=draftLessonOrder(),target=lessonReorderTarget(expected,lessonId,direction);
+  if(!target||state.lesson!==null&&!expected.some(lesson=>lesson.id===state.lesson.id))return;
+  const forms=lessonReorderFormSnapshot(),dirty=lessonReorderDirtyForms(forms);
+  if(dirty.course||dirty.lesson){
+    say(dirty.course&&dirty.lesson
+      ?"Salve primeiro a aula e depois o curso antes de mudar a ordem. Os campos não salvos foram mantidos."
+      :"Salve as alterações "+(dirty.lesson?"da aula":"do curso")+" antes de mudar a ordem. Os campos não salvos foram mantidos.");
+    renderLessonReorderControls();return;
+  }
+  if(target.boundary)return;
+  const courseId=state.course.id;
+  if(!beginWrite())return;
+  const courseRequest=state.courseRequest,lessonRequest=state.lessonRequest;
+  clearPublicationCheck();hideLessonPreview();
+  try{
+    const payload=await api("/courses/"+courseId+"/lessons/reorder","POST",{
+      lesson_id:lessonId,direction,expected_order:expected});
+    if(state.accessDenied)return;
+    const receipt=validatedLessonReorderReceipt(payload,courseId,lessonId,direction,expected);
+    if(receipt===null)throw new Error("invalid_lesson_order_receipt");
+    const current=lessonReorderFormSnapshot(),order=draftLessonOrder();
+    if(state.course?.id!==courseId||state.course.is_published||state.courseRequest!==courseRequest||
+       state.lessonRequest!==lessonRequest||!state.catalogReady||!state.lessonsReady||
+       current.courseId!==forms.courseId||current.lessonId!==forms.lessonId||
+       current.course.some((value,index)=>value!==forms.course[index])||
+       current.lesson.some((value,index)=>value!==forms.lesson[index])||order===null||
+       JSON.stringify(order)!==JSON.stringify(expected)){
+      freezeUncertainEditorialWrite();
+      say("Os formulários ou a seleção mudaram durante a alteração de ordem. Os campos atuais foram preservados. Consulte novamente os cursos e aulas antes de continuar.");
+      return;
+    }
+    // The receipt authorizes only these order pairs. Keep current form text,
+    // selected IDs and filters; never refill either form after this mutation.
+    const lessons=new Map(state.lessons.map(lesson=>[lesson.id,lesson]));
+    state.lessons=receipt.order.map(pair=>({...lessons.get(pair.id),sort_order:pair.sort_order}));
+    state.lesson=state.lessons.find(lesson=>lesson.id===forms.lessonId)||null;
+    if(state.lesson)$("lesson-sort").value=String(state.lesson.sort_order);
+    renderLessons();
+    say(receipt.changed?"Ordem das aulas atualizada.":"Ordem das aulas confirmada. Nenhuma nova alteração foi necessária.");
+  }catch(error){
+    if(!state.accessDenied){
+      freezeUncertainEditorialWrite();
+      say("A ordem não pôde ser confirmada. Não repita o movimento: consulte novamente os cursos e aulas antes de continuar.");
+    }
+  }finally{finishWrite();}
 }
 // Validate the catalogue as a whole BEFORE setting catalogReady. A 200
 // response containing missing/duplicate IDs or invalid editorial metadata
@@ -871,6 +1031,7 @@ async function refreshCourses(preferredId=state.course?.id??null){
   // catalog eligible for another mutation merely because it was once valid.
   state.catalogReady=false;
   renderEditorialCourseFilters();
+  renderLessonReorderControls();
   invalidateEditorialOverview("Consulte os cursos e atualize a visão para conferir os números do acervo.");
   invalidateEditorialArchive("Consulte as versões arquivadas após carregar os cursos.");
   $("new-course").disabled=true;
@@ -1166,6 +1327,8 @@ async function publicationCheck(){
 }
 $("course-form").addEventListener("input",clearPublicationCheck);
 $("lesson-form").addEventListener("input",clearPublicationCheck);
+$("course-form").addEventListener("input",renderLessonReorderControls);
+$("lesson-form").addEventListener("input",renderLessonReorderControls);
 $("check-publication").addEventListener("click",async()=>{
   try{await publicationCheck();}catch(error){say(error.message);}
 });
@@ -1285,6 +1448,7 @@ async function loadAdminCatalog(){
     state.catalogLoading=false;
     if(!state.accessDenied)retry.disabled=false;
     renderEditorialCourseFilters();
+    renderLessonReorderControls();
     renderEditorialOverview();
     renderEditorialArchive();
     // Only the first fully validated catalogue starts an automatic overview

@@ -64,6 +64,8 @@ Route::prefix('universidade/private')->group(function (): void {
             ->whereNumber('courseId');
         Route::post('/courses/{courseId}/lessons', [UniversityController::class, 'createLesson'])
             ->whereNumber('courseId');
+        Route::post('/courses/{courseId}/lessons/reorder', [UniversityController::class, 'reorderDraftLessons'])
+            ->where('courseId', '[1-9][0-9]{0,15}');
         Route::patch('/lessons/{lessonId}', [UniversityController::class, 'updateLesson'])
             ->whereNumber('lessonId');
         Route::delete('/lessons/{lessonId}', [UniversityController::class, 'deleteDraftLesson'])

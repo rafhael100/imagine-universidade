@@ -1739,6 +1739,190 @@ final class UniversityCatalogRepository
         });
     }
 
+    /** @return array{expected:array<int,array{id:int,sort_order:int}>,target:array<int,array{id:int,sort_order:int}>}|null */
+    private function lessonReorderPlan(int $lessonId, string $direction, array $expectedOrder): ?array
+    {
+        if ($lessonId < 1 || $lessonId > 9007199254740991
+            || !in_array($direction, ['up', 'down'], true)
+            || !array_is_list($expectedOrder) || count($expectedOrder) < 1 || count($expectedOrder) > 10000) {
+            return null;
+        }
+        $ids = [];
+        $expected = [];
+        $position = null;
+        $previous = null;
+        foreach ($expectedOrder as $index => $row) {
+            if (!is_array($row) || count($row) !== 2 || !array_key_exists('id', $row)
+                || !array_key_exists('sort_order', $row) || !is_int($row['id'])
+                || $row['id'] < 1 || $row['id'] > 9007199254740991 || isset($ids[$row['id']])
+                || !is_int($row['sort_order']) || $row['sort_order'] < 0 || $row['sort_order'] > 9999
+                || ($previous !== null && ($row['sort_order'] < $previous['sort_order']
+                    || ($row['sort_order'] === $previous['sort_order'] && $row['id'] <= $previous['id'])))) {
+                return null;
+            }
+            $ids[$row['id']] = true;
+            $previous = ['id' => $row['id'], 'sort_order' => $row['sort_order']];
+            $expected[] = $previous;
+            if ($row['id'] === $lessonId) {
+                $position = $index;
+            }
+        }
+        if ($position === null) {
+            return null;
+        }
+        $neighbor = $position + ($direction === 'up' ? -1 : 1);
+        if ($neighbor < 0 || $neighbor >= count($expected)) {
+            // A boundary no-op preserves even non-contiguous numeric orders.
+            return ['expected' => $expected, 'target' => $expected];
+        }
+        $target = $expected;
+        [$target[$position], $target[$neighbor]] = [$target[$neighbor], $target[$position]];
+        foreach ($target as $index => &$row) {
+            $row['sort_order'] = $index;
+        }
+        unset($row);
+        return ['expected' => $expected, 'target' => $target];
+    }
+
+    private function editorialOrderInteger(mixed $value, int $minimum, int $maximum): int
+    {
+        if ((!is_int($value) && !is_string($value))
+            || (is_string($value) && preg_match('/\A(?:0|[1-9][0-9]*)\z/D', $value) !== 1)) {
+            throw new \UnexpectedValueException('Invalid editorial order integer.');
+        }
+        $integer = filter_var($value, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => $minimum, 'max_range' => $maximum,
+        ]]);
+        if ($integer === false) {
+            throw new \UnexpectedValueException('Invalid editorial order integer.');
+        }
+        return $integer;
+    }
+
+    /**
+     * One explicit adjacent move against a complete canonical snapshot.
+     * The destination is derived from that snapshot, never from a later order.
+     * No-op and duplicate intentions do not update timestamps or write audits.
+     *
+     * @param array<int,array{id:int,sort_order:int}> $expectedOrder
+     * @return array<string,mixed>|string Receipt or a fixed error code.
+     */
+    public function reorderDraftLessons(
+        PortalGrant $grant,
+        int $courseId,
+        int $lessonId,
+        string $direction,
+        array $expectedOrder,
+        ?callable $verifyFreshGrant = null,
+    ): array|string {
+        if (!$this->grantUsable($grant, PortalAccessGate::MANAGE)
+            || $grant->companyId !== self::EDITORIAL_ORGANIZATION_KEY) {
+            return 'access_denied';
+        }
+        if ($courseId < 1 || $courseId > 9007199254740991) {
+            return 'not_found';
+        }
+        $plan = $this->lessonReorderPlan($lessonId, $direction, $expectedOrder);
+        if ($plan === null) {
+            return 'invalid_order';
+        }
+        $org = $this->adminOrgId($grant);
+        if ($org === null) {
+            return 'temporarily_unavailable';
+        }
+
+        try {
+            return DB::transaction(function () use ($grant, $org, $courseId, $lessonId, $direction,
+                $plan, $verifyFreshGrant): array|string {
+                // Every existing editorial write first locks this same course.
+                $course = DB::table('educational_courses')->where('id', $courseId)
+                    ->where('educational_organization_id', $org)->where('is_shared', true)
+                    ->lockForUpdate()->first(['id', 'is_published']);
+                if ($course === null) {
+                    return 'not_found';
+                }
+                if (!in_array($course->is_published, [false, 0, '0'], true)) {
+                    return 'draft_order_changed';
+                }
+                $version = DB::table('educational_course_versions')->where('educational_course_id', $courseId)
+                    ->orderByDesc('version')->lockForUpdate()->first(['id', 'version', 'status']);
+                if ($version === null || $version->status !== 'draft') {
+                    return 'draft_order_changed';
+                }
+                $versionId = $this->editorialOrderInteger($version->id, 1, 9007199254740991);
+                $versionNumber = $this->editorialOrderInteger($version->version, 1, 9007199254740991);
+                // Sentinel rejects the whole operation, never a partial order.
+                // ID lock order stays stable while display order is compared in memory.
+                $rows = DB::table('educational_lessons')->where('educational_course_version_id', $versionId)
+                    ->orderBy('id')->limit(10001)->lockForUpdate()->get(['id', 'sort_order', 'is_published']);
+                if ($rows->count() > 10000) {
+                    return 'order_limit_exceeded';
+                }
+                $current = [];
+                foreach ($rows as $row) {
+                    if (!in_array($row->is_published, [false, 0, '0'], true)) {
+                        return 'draft_order_changed';
+                    }
+                    $current[] = [
+                        'id' => $this->editorialOrderInteger($row->id, 1, 9007199254740991),
+                        'sort_order' => $this->editorialOrderInteger($row->sort_order, 0, 9999),
+                    ];
+                }
+                usort($current, static fn (array $a, array $b): int =>
+                    ($a['sort_order'] <=> $b['sort_order']) ?: ($a['id'] <=> $b['id']));
+                if ($current !== $plan['expected'] && $current !== $plan['target']) {
+                    return 'draft_order_changed';
+                }
+                // Also reauthorize no-ops; they still return protected metadata.
+                if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
+                    return 'access_denied';
+                }
+                $changed = $current !== $plan['target'];
+                if ($changed) {
+                    $oldOrders = array_column($current, 'sort_order', 'id');
+                    $updates = array_values(array_filter($plan['target'], static fn (array $row): bool =>
+                        $oldOrders[$row['id']] !== $row['sort_order']));
+                    $now = now();
+                    // At most 40 parameterized UPDATEs for the 10,000-row capacity.
+                    // Each chunk remains inside this one transaction and all locks.
+                    foreach (array_chunk($updates, 256) as $chunk) {
+                        $cases = [];
+                        $bindings = [];
+                        foreach ($chunk as $row) {
+                            $cases[] = 'WHEN ? THEN CAST(? AS INTEGER)';
+                            $bindings[] = $row['id'];
+                            $bindings[] = $row['sort_order'];
+                        }
+                        $bindings[] = $now;
+                        $bindings[] = $versionId;
+                        foreach ($chunk as $row) {
+                            $bindings[] = $row['id'];
+                        }
+                        $sql = 'UPDATE educational_lessons SET sort_order = CASE id '.implode(' ', $cases)
+                            .' ELSE sort_order END, updated_at = ? WHERE educational_course_version_id = ?'
+                            .' AND is_published = FALSE AND id IN ('.implode(',', array_fill(0, count($chunk), '?')).')';
+                        if (DB::update($sql, $bindings) !== count($chunk)) {
+                            throw new \UnexpectedValueException('Editorial order update was incomplete.');
+                        }
+                    }
+                    $this->audit($grant, $org, 'course.lessons_reordered', 'course', $courseId);
+                    // A denial after any chunk/audit MUST throw inside the transaction.
+                    if (!$this->freshWriteGrantMatches($grant, PortalAccessGate::MANAGE, $verifyFreshGrant)) {
+                        throw new EditorialOrderWriteRejected('Editorial order authority changed.');
+                    }
+                }
+                return [
+                    'schema_version' => 1, 'scope' => 'current_editorial_draft',
+                    'course_id' => $courseId, 'course_version' => $versionNumber, 'status' => 'draft',
+                    'lesson_id' => $lessonId, 'direction' => $direction, 'changed' => $changed,
+                    'order' => $plan['target'],
+                ];
+            });
+        } catch (EditorialOrderWriteRejected) {
+            return 'access_denied';
+        }
+    }
+
     /**
      * Exclui somente aula de rascunho editorial ainda não publicada e sem
      * progresso. Mantém versões publicadas/arquivadas e histórico intactos.

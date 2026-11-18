@@ -296,6 +296,9 @@ async function inspect(page,name){
     const pageErrors=[];
     page.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
 
+    // Offline reviewer is tested with real file:// Chromium and CSV roundtrip.
+    await require("./qa-browser-editorial-offline.cjs")({browser,out,check});
+
     // Temporary Portal/backend outage: no automatic retry, explicit
     // accessible recovery; authorized data appears only after a new
     // server-side initialize + catalog request succeeds.

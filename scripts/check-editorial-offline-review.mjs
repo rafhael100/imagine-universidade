@@ -19,6 +19,8 @@ try{
   pass(html.includes('lang="pt-BR"')&&html.includes("NÃO É APROVAÇÃO"),"review labels");
   pass(html.includes("Visitas → Leads → Clientes")&&html.includes("35 aulas"),"full source");
   pass(html.includes("CLAIMED_HUMAN_APPROVED"),"claim is not authenticated");
+  pass(html.includes("id='import'")&&html.includes("Importação recusada"),
+    "safe CSV reimport offered and errors reported");
   pass(!html.includes("<script src=")&&!html.includes("localStorage")&&
     !html.includes("XMLHttpRequest"),"no external scripts or persistence");
   pass(html.includes("connect-src 'none'")&&html.includes("default-src 'none'"),

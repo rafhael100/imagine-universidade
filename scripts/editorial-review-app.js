@@ -109,11 +109,73 @@
       message("CSV exportado. Declarações NÃO são aprovação verificada ou publicação.");
     }catch(error){message(String(error.message),true);}
   }
+  // Existing CSV can be imported locally to resume review on another day.
+  // Hashes and 35 unique lesson identities must match the CURRENT source.
+  function parseCsv(text){
+    if(typeof text!=="string"||text.length>1000000)throw Error("CSV excede 1 MB.");
+    const raw=text.replace(/^\uFEFF/u,"");
+    const delimiter=raw.split(/\r?\n/u,1)[0].includes('";"')?";":",";
+    const rows=[];
+    let row=[],field="",quoted=false,atStart=true;
+    for(let i=0;i<raw.length;i++){
+      const ch=raw[i];
+      if(quoted){
+        if(ch==='"'){
+          if(raw[i+1]==='"'){field+='"';i++;}
+          else quoted=false;
+        }else field+=ch;
+      }else if(ch==='"'&&atStart){quoted=true;atStart=false;}
+      else if(ch===delimiter){row.push(field);field="";atStart=true;}
+      else if(ch==='\n'){row.push(field);rows.push(row);row=[];field="";atStart=true;}
+      else if(ch==='\r'){
+        if(raw[i+1]!=='\n')throw Error("Quebra de linha CSV inválida.");
+      }else{
+        if(ch==='"')throw Error("Aspas CSV inválidas.");
+        field+=ch;atStart=false;
+      }
+    }
+    if(quoted)throw Error("Aspas CSV não fechadas.");
+    if(field!==""||row.length){row.push(field);rows.push(row);}
+    return rows;
+  }
+  async function importCsv(file){
+    if(!file)return;
+    try{
+      if(file.size>1000000)throw Error("CSV excede 1 MB.");
+      if(dirty&&!window.confirm("Importar substituirá as observações não exportadas. Continuar?"))
+        return;
+      const parsed=parseCsv(await file.text());
+      const header=["course_slug","lesson_slug","content_sha256","review_status",
+        "reviewer","evidence_ref","notes"];
+      if(parsed.length!==36||JSON.stringify(parsed[0])!==JSON.stringify(header))
+        throw Error("CSV deve conter as 35 aulas e o cabeçalho original.");
+      const expected=new Map(items.map(item=>[key(item),item]));
+      const next=new Map();
+      for(const values of parsed.slice(1)){
+        if(values.length!==7)throw Error("Colunas CSV inválidas.");
+        const id=values[0]+"/"+values[1],lesson=expected.get(id);
+        if(!lesson||next.has(id))throw Error("Aula inexistente ou duplicada: "+id);
+        if(values[2]!==lesson.content_sha256)throw Error("Hash desatualizado: "+id);
+        const item={status:values[3],reviewer:values[4],evidence:values[5],notes:values[6]};
+        valid(item,id);
+        next.set(id,item);
+      }
+      if(next.size!==35)throw Error("CSV incompleto.");
+      // All-or-nothing: a malformed file never replaces one existing row.
+      for(const [id,item] of next)state.set(id,item);
+      dirty=true;
+      render();
+      message("CSV carregado localmente. Nenhuma aprovação humana foi autenticada.");
+    }catch(error){
+      message("Importação recusada: "+String(error.message),true);
+    }finally{$("import").value="";}
+  }
   $("lessons").addEventListener("change",e=>choose(Number(e.target.value)));
   $("previous").addEventListener("click",()=>choose(current-1));
   $("next").addEventListener("click",()=>choose(current+1));
   ["status","reviewer","evidence","notes"].forEach(id=>$(id).addEventListener("input",update));
   $("export").addEventListener("click",exportCsv);
+  $("import").addEventListener("change",e=>{void importCsv(e.target.files[0]);});
   window.addEventListener("beforeunload",e=>{
     if(dirty){e.preventDefault();e.returnValue="";}
   });

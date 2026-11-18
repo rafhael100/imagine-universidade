@@ -313,6 +313,8 @@ jobs:
           test -f public/assets/imagine-tokens.css
           test -f preview/current.html
           node --check scripts/qa-browser-synthetic.cjs
+          node --check scripts/qa-browser-editorial-offline.cjs
+          node --check scripts/editorial-review-app.js
           node preview/current-check.mjs
       - name: Real Chromium and accessibility QA with synthetic fixture
         shell: bash

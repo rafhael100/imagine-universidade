@@ -36,7 +36,8 @@
     .catalog-recovery[hidden]{display:none}
     .catalog-filters{padding:14px;border-bottom:1px solid var(--line);display:grid;gap:10px}
     .catalog-filters .field{margin:0}
-    .catalog-filter-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+    .catalog-filter-row{display:flex;flex-wrap:wrap;gap:8px}
+    .catalog-filter-row .field{flex:1 1 160px;min-width:0}
     .catalog-filters p{font-size:12px;margin:0;overflow-wrap:anywhere}
     .catalog-filter-count{padding:10px 14px 0;font-size:12px;margin:0;overflow-wrap:anywhere}
     .catalog-pinned{font-weight:750;color:#70410C}

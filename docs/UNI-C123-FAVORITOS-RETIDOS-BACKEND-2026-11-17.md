@@ -192,3 +192,9 @@ e o ajuste de sincronização estão documentados no
 [registro da interface C123](UNI-C123-GESTAO-FAVORITOS-UI-2026-11-17.md).
 Esses resultados validam o backend desse SHA, sem antecipar aprovação do
 conjunto ou de commits posteriores.
+
+A execução integrada seguinte, [run 44213874334](https://github.com/rafhael100/imagine-universidade/actions/runs/44213874334),
+SHA `fad8c3916a44ca91f843c36d1c9ea26396d0800f`, passou nos seis jobs,
+mantendo os **245 testes / 2.801 asserções**, o probe PostgreSQL e os 16
+invariantes. A interface C123 passou também no laboratório sintético e no
+percurso real Laravel/SQLite; o registro da interface detalha as evidências.

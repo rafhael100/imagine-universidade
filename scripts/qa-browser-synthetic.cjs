@@ -814,6 +814,7 @@ async function inspect(page,name){
     createdCourseInLab=false;
 
     await require("./qa-browser-editor-drafts.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-contextual-courses.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-overview.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-version-history.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-editorial-catalog-filters.cjs")({browser,base,ensureLocalPage,check,pageErrors});

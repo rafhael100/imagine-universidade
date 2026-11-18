@@ -90,9 +90,25 @@ e 390 pixels complementam a verificação de largura da página.
 
 Os checkers anteriores de escrita e limpeza HTTP receberam somente as novas
 dependências de renderização; as asserções originais permanecem. O checker
-principal completo passou durante a implementação inicial. As contagens finais
-e evidências de CI serão registradas com o SHA correspondente, sem atribuir
-resultados de uma execução anterior ao novo código.
+principal completo passou durante a implementação inicial.
+
+### CI e inspeção visual
+
+O [run 44213874334](https://github.com/rafhael100/imagine-universidade/actions/runs/44213874334),
+SHA `fad8c3916a44ca91f843c36d1c9ea26396d0800f`, passou nos **seis jobs**.
+Foram **245 testes PHP / 2.801 asserções**, **475 verificações Chromium** e
+**119 verificações no percurso Laravel/SQLite real**. As 19 verificações
+sintéticas C124 e as duas verificações reais de filtrar/limpar passaram;
+a conferência final de persistência também passou. Permaneceram 16 invariantes
+de schema e 24 verificações de privilégios.
+
+As capturas reais em 1440 e 390 pixels confirmaram a contagem, a indicação do
+curso em edição fora do filtro e a preservação da navegação, sem transbordamento
+horizontal. A inspeção encontrou o texto de categoria comprimido no seletor
+da coluna desktop estreita. O ajuste seguinte usa quebra de linha flexível:
+os dois seletores ficam lado a lado quando há largura e ocupam linhas próprias
+quando necessário. Essa correção visual entra na próxima CI, sem atribuir ao
+run anterior a validação de CSS alterado posteriormente.
 
 Nenhuma tabela, permissão, escrita HTTP ou binding operacional foi alterado.
 Os treze gates, a integração Portal pendente e os limites de publicação e

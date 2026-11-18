@@ -701,6 +701,7 @@ function studentFlowFixture(){
   const context={state,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
     el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),lessonReadingPositionAction:()=>studentTestNode("div"),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,renderCourses:()=>{},renderSimulator:()=>{},renderFavoriteControls:()=>{},loadFavorites:async()=>false,
     invalidateRetainedFavorites:()=>{},
+    renderContextualCourses:()=>{},
     markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
   return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
 }
@@ -885,6 +886,7 @@ await import("./check-student-favorites.mjs");
 await import("./check-student-favorites-export.mjs");
 await import("./check-retained-favorites.mjs");
 await import("./check-student-reading-position.mjs");
+await import("./check-contextual-courses.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 await import("./check-editorial-version-history.mjs");

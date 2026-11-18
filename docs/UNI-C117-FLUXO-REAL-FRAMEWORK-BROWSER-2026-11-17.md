@@ -201,6 +201,14 @@ dos critérios, sem ser contado como resultado; filtrar e limpar preservam os
 campos e o leitor, sem novas requisições. Capturas em 1440 e 390 pixels
 registram os controles e o estado fora do filtro.
 
+O percurso C-125 acrescenta um segundo curso fictício pela interface editorial,
+depois das verificações anteriores de catálogo único. O aluno oculta/mostra a
+sugestão sem requisições e abre/retorna entre os dois cursos da mesma categoria
+por leituras autorizadas. Os snapshots próprios de favoritos, conclusões e
+posição/revisão devem permanecer idênticos. Capturas do painel em 1440 e 390
+pixels e a purga após revogação completam essa verificação. O curso adicional
+não recebe dados pessoais de estudo; bootstrap e identidades não mudam.
+
 O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
 conferência final de 30 segundos. O início de cada fase é registrado com um nome
 fixo. Um timeout produz falha, nunca aprovação parcial. O percurso passou a

@@ -367,6 +367,124 @@ async function archivedLessonPreview(editor,courseId,version,lessonId,expectedBo
     JSON.stringify(Object.keys(archived.lesson).sort())===JSON.stringify(["body","id","slug","sort_order","title"]),
     "An explicit archive selection must render only the historical lesson from its exact course and version");
 }
+async function contextualCoursesJourney(editor,student,source){
+  // Run only after the original single-course/withdrawal/archive assertions.
+  // This additional synthetic publication is made entirely through the real
+  // editorial UI; it is not seeded and never receives personal learning data.
+  enterStage("contextual courses with a real editorial peer");
+  const adminRoot="/universidade/private/admin";
+  const peerTitle="Aula contextual sintética de negócios";
+  await editor.page.locator("#new-course").click();
+  await editor.page.locator("#course-title").fill("Outro curso sintético de negócios");
+  await editor.page.locator("#course-slug").fill("curso-contextual-framework-sintetico");
+  await editor.page.locator("#course-category").selectOption("negocios");
+  await editor.page.locator("#course-summary").fill("Material fictício para testar escolha livre entre cursos da mesma categoria.");
+  await editor.page.locator("#course-sort").fill("10");
+  const created=await clickResponse(editor.page,"#course-save","POST",adminRoot+"/courses");
+  const peerId=(await json(created,"Contextual course creation")).id;
+  await waitText(editor.page,"status","Rascunho salvo.");
+  check(created.status()===201&&Number.isSafeInteger(peerId)&&peerId>0&&peerId!==source.courseId,
+    "The contextual peer must be a distinct real course created through the editorial UI");
+  await editor.page.locator("#lesson-title").fill(peerTitle);
+  await editor.page.locator("#lesson-slug").fill("aula-contextual-framework-sintetica");
+  await editor.page.locator("#lesson-body").fill("Exemplo totalmente fictício para estudar negócios.\n\nA escolha deste curso é opcional e não registra avaliação.");
+  const lessonCreated=await clickResponse(editor.page,"#lesson-save","POST",adminRoot+"/courses/"+peerId+"/lessons");
+  const peerLessonId=(await json(lessonCreated,"Contextual lesson creation")).id;
+  await waitText(editor.page,"status","Aula salva em rascunho.");
+  check(lessonCreated.status()===201&&Number.isSafeInteger(peerLessonId)&&peerLessonId>0&&peerLessonId!==source.lessonId,
+    "The contextual peer lesson must be persisted by the real Laravel endpoint");
+  await publish(editor,peerId,1);
+
+  const catalogueResponse=await student.context.request.get(base+"/universidade/private/courses",{headers:{Accept:"application/json"}});
+  const catalogue=await json(catalogueResponse,"Contextual authorized catalogue");
+  check(catalogueResponse.status()===200&&Array.isArray(catalogue.courses)&&
+    JSON.stringify(catalogue.courses.map(course=>course.id))===JSON.stringify([source.courseId,peerId])&&
+    catalogue.courses.every(course=>course.category==="negocios"),
+    "The real published catalogue must contain exactly the two expected courses in editorial order and the same category");
+  await openStudent(student,source.courseId,source.title);
+  await student.page.waitForFunction(()=>!state.libraryLoading&&!state.favoritesLoading&&state.favoritesReady&&
+    !state.readingLoading&&state.readingSnapshot?.status==="available");
+
+  const personalSnapshot=async()=>{
+    const payload={};
+    for(const [key,endpoint] of [["favorites","/favorites/export"],["progress","/progress/export"],["position","/reading-position"]]){
+      const response=await student.context.request.get(base+"/universidade/private"+endpoint,{headers:{Accept:"application/json"}});
+      const value=await json(response,"Contextual private snapshot");
+      if(response.status()!==200||value.schema_version!==1||value.scope!=="current_authenticated_student")
+        throw new Error("Contextual comparison requires valid private snapshots from the real backend");
+      payload[key]=value;
+    }
+    return payload;
+  };
+  const before=await personalSnapshot();
+  check(before.favorites.favorites.length===1&&before.favorites.favorites[0].course_slug==="curso-framework-sintetico"&&
+    JSON.stringify(before.progress)===JSON.stringify(source.history)&&
+    JSON.stringify(before.position)===JSON.stringify(source.position),
+    "The real contextual journey must start with the exact existing favorite, historical completion and saved reading revision");
+  const buttons=student.page.locator("#contextual-courses-list [data-contextual-course-id]");
+  check(await buttons.count()===1&&await buttons.first().getAttribute("data-contextual-course-id")===String(peerId)&&
+    (await student.page.locator("#contextual-courses-status").innerText()).includes("Negócios, a mesma categoria")&&
+    businessRequests.filter(request=>request.profile===student.profile&&
+      request.path==="/universidade/private/courses/"+peerId+"/lessons").length===0,
+    "A real same-category suggestion must explain its category without preloading the other course");
+
+  enterStage("contextual visibility without requests");
+  const requestCount=businessRequests.filter(request=>request.profile===student.profile).length;
+  const writes=countWrites(student.profile);
+  const selected=await student.page.locator("#lesson-content h3").innerText();
+  const resumeDisabled=await student.page.locator("#resume-course").isDisabled();
+  await student.page.locator("#contextual-courses-toggle").click();
+  check(await buttons.count()===0&&await student.page.locator("#contextual-courses-toggle").getAttribute("aria-expanded")==="false"&&
+    (await student.page.locator("#contextual-courses-toggle").innerText()).includes("Mostrar sugestões nesta visita"),
+    "The real student may hide contextual suggestions explicitly");
+  await student.page.locator("#contextual-courses-toggle").click();
+  check(await buttons.count()===1&&await student.page.locator("#contextual-courses-toggle").getAttribute("aria-expanded")==="true"&&
+    businessRequests.filter(request=>request.profile===student.profile).length===requestCount&&countWrites(student.profile)===writes&&
+    await student.page.locator("#lesson-content h3").innerText()===selected&&
+    await student.page.locator("#resume-course").isDisabled()===resumeDisabled,
+    "Showing and hiding suggestions must make zero private requests or writes and preserve the selected lesson and pending-course action");
+
+  enterStage("explicit real contextual navigation");
+  const navigationStart=businessRequests.length;
+  const opened=await clickResponse(student.page,"[data-contextual-course-id='"+peerId+"']","GET",
+    "/universidade/private/lessons/"+peerLessonId);
+  const peerLesson=await json(opened,"Contextual peer lesson");
+  await student.page.getByRole("heading",{name:peerTitle,exact:true}).waitFor({state:"visible"});
+  check(opened.status()===200&&peerLesson.lesson?.id===peerLessonId&&peerLesson.lesson.course_id===peerId&&
+    peerLesson.lesson.course_version===1&&await student.page.locator("#lesson-content button.primary").isEnabled()&&
+    await student.page.locator("#course-favorite-toggle").getAttribute("aria-pressed")==="false",
+    "The explicit contextual click must read the real peer lesson without completing or favoriting it");
+  const returned=await clickResponse(student.page,"[data-contextual-course-id='"+source.courseId+"']","GET",
+    "/universidade/private/lessons/"+source.lessonId);
+  const sourceLesson=await json(returned,"Contextual return lesson");
+  await student.page.getByRole("heading",{name:source.title,exact:true}).waitFor({state:"visible"});
+  check(returned.status()===200&&sourceLesson.lesson?.id===source.lessonId&&
+    sourceLesson.lesson.course_id===source.courseId&&sourceLesson.lesson.course_version===source.version,
+    "The return suggestion must reauthorize the exact currently published source lesson");
+  const requests=businessRequests.slice(navigationStart).filter(request=>request.profile===student.profile);
+  const expectedRoutes=[
+    "/universidade/private/courses/"+peerId+"/lessons","/universidade/private/lessons/"+peerLessonId,
+    "/universidade/private/lessons/"+peerLessonId+"/progress","/universidade/private/courses/"+source.courseId+"/lessons",
+    "/universidade/private/lessons/"+source.lessonId,"/universidade/private/lessons/"+source.lessonId+"/progress"
+  ];
+  // Body and progress start together. Require the exact multiset of six
+  // routes without imposing a browser event order on concurrent reads.
+  check(requests.length===expectedRoutes.length&&requests.every(request=>request.method==="GET")&&
+    JSON.stringify(requests.map(request=>request.path).sort())===JSON.stringify(expectedRoutes.sort())&&
+    countWrites(student.profile)===writes,
+    "The real contextual round trip must perform only the existing six authorized reads and no learning mutation");
+  check(JSON.stringify(await personalSnapshot())===JSON.stringify(before),
+    "The actual SQLite favorite timestamps, historical completions and reading reference/revision must be identical after the contextual round trip");
+  await student.page.locator("#contextual-courses-panel").screenshot({
+    path:path.join(evidenceDir,"framework-contextual-courses-desktop.png")});
+  await student.page.setViewportSize({width:390,height:844});
+  check(await student.page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),
+    "The real contextual suggestion must fit the narrow mobile viewport");
+  await student.page.locator("#contextual-courses-panel").screenshot({
+    path:path.join(evidenceDir,"framework-contextual-courses-mobile.png")});
+  await student.page.setViewportSize({width:1440,height:1000});
+  return peerId;
+}
 
 async function main(){
   enterStage("health");
@@ -709,6 +827,10 @@ async function main(){
     history.completions[0].lesson_slug==="aula-principal-sintetica",
     "A real private export must preserve the original version's completion after republication");
 
+  const contextualPeerId=await contextualCoursesJourney(editor,studentA,{
+    courseId,lessonId:newLessonId,title:revisedTitle,version:2,position:revisedPosition,history
+  });
+
   enterStage("revocation, purge and retained preference");
   const readsBefore=businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length;
   setAuthority("student-a",false);
@@ -728,6 +850,11 @@ async function main(){
     await studentA.page.locator("#retained-favorites-list [data-retained-course-id]").count()===0&&
     await studentA.page.locator("#reload-retained-favorites").isDisabled(),
     "Eligibility revocation must purge retained references and disable the private manager");
+  check(await studentA.page.locator("#contextual-courses-panel").isHidden()&&
+    await studentA.page.locator("#contextual-courses-list [data-contextual-course-id]").count()===0&&
+    (await studentA.page.locator("#contextual-courses-status").textContent())===""&&
+    await studentA.page.locator("#contextual-courses-toggle").isDisabled(),
+    "Eligibility revocation must purge the real category suggestions and disable their controls");
   check(businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length===readsBefore,
     "Revocation must not trigger an automatic favorite retry or reconciliation GET");
   const otherCompany=await studentB.context.request.get(base+"/universidade/private/courses",{
@@ -744,12 +871,15 @@ async function main(){
   check(restoredPosition.status==="available"&&restoredPosition.revision===revisedPosition.revision&&
     restoredPosition.position?.lesson_id===newLessonId,
     "A new eligible page load may restore the retained position without inventing another save");
+  check(await studentA.page.locator("#course-list [data-course-id='"+courseId+"']").count()===1&&
+    await studentA.page.locator("#contextual-courses-list [data-contextual-course-id='"+contextualPeerId+"']").count()===1,
+    "A newly eligible page may suggest the independently published peer while preserving the selected source course");
   await studentA.page.screenshot({path:path.join(evidenceDir,"framework-student.png"),fullPage:true});
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
     synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","contextual courses without personal ranking","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

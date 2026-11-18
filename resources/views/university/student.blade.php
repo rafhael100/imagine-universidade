@@ -109,6 +109,15 @@
     .lesson-items{border-bottom:1px solid var(--line);padding:10px}
     .lesson-content{padding:25px}
     .lesson-content h3{font-size:22px;letter-spacing:-.5px;margin:0 0 12px}
+    .contextual-courses{padding:20px 25px;border-top:1px solid var(--line);background:#FAFBFC}
+    .contextual-courses h3{font-size:17px;margin:0 0 7px}
+    .contextual-courses p{font-size:13px;color:#565D56;margin:10px 0}
+    .contextual-courses .secondary{margin-left:0;padding:8px 12px;font-size:12px}
+    .contextual-courses-list{list-style:none;padding:0;margin:12px 0 0;display:grid;gap:8px}
+    .contextual-course{width:100%;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);overflow-wrap:anywhere}
+    .contextual-course:hover{border-color:#E5B56D;background:#FFF8EE}
+    .contextual-course strong,.contextual-course span{display:block}
+    .contextual-course span{font-size:12px;color:#70410C;margin-top:4px}
     .lesson-text{overflow-wrap:anywhere;color:#4B5769;margin:12px 0 20px}
     .lesson-text h4{font-size:15px;color:#70410C;font-weight:800;letter-spacing:.2px;margin:20px 0 8px}
     .lesson-text p{white-space:pre-wrap;margin:0 0 17px}
@@ -240,6 +249,12 @@
       </div>
       <div id="lesson-items" class="lesson-items"></div>
       <article id="lesson-content" class="lesson-content"><p class="empty">Selecione um curso para visualizar as aulas.</p></article>
+      <section id="contextual-courses-panel" class="contextual-courses" aria-labelledby="contextual-courses-title" hidden>
+        <h3 id="contextual-courses-title">Outros cursos deste tema</h3>
+        <button id="contextual-courses-toggle" type="button" class="secondary" aria-controls="contextual-courses-list" aria-expanded="false" disabled>Ocultar sugestões nesta visita</button>
+        <p id="contextual-courses-status" role="status" aria-live="polite"></p>
+        <ul id="contextual-courses-list" class="contextual-courses-list"></ul>
+      </section>
     </section>
   </div>
   <footer class="footer">Universidade Imagine · Educação prática para clientes elegíveis · Resultados comerciais nunca são garantidos.</footer>
@@ -252,6 +267,7 @@ const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
+  contextualCoursesVisible:true,contextualRequest:0,
   favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,
   favoriteWriting:false,favoriteWriteRequest:0,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",
   favoriteExportLoading:false,favoriteExportRequest:0,
@@ -300,6 +316,7 @@ function lockAccess(message){
   if(state.accessDenied)return;
   state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
+  renderContextualCourses();
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;
   state.favoriteWriting=false;state.favoriteOutcomeUnknown=false;state.favoritesOnly=false;
   ++state.favoriteWriteRequest;
@@ -1019,7 +1036,54 @@ function renderPillars(){
     box.append(button);
   }
 }
+function contextualCourses(courses,currentId){
+  if(!Array.isArray(courses)||!Number.isSafeInteger(currentId)||currentId<1)return [];
+  const current=courses.find(course=>course.id===currentId);
+  if(!current)return [];
+  // Input is the already validated published catalogue. Keep its editorial
+  // order and use category alone, without ranking or personal activity.
+  return courses.filter(course=>course.id!==currentId&&course.category===current.category).slice(0,3);
+}
+function renderContextualCourses(){
+  const generation=++state.contextualRequest;
+  const panel=document.getElementById("contextual-courses-panel"),list=document.getElementById("contextual-courses-list");
+  const toggle=document.getElementById("contextual-courses-toggle"),message=document.getElementById("contextual-courses-status");
+  const current=state.libraryReady&&!state.accessDenied?state.courses.find(course=>course.id===state.courseId):null;
+  panel.hidden=!current;list.replaceChildren();message.textContent="";
+  toggle.disabled=!current;
+  const shown=!!current&&state.contextualCoursesVisible;
+  list.hidden=!shown;toggle.setAttribute("aria-expanded",String(shown));
+  toggle.textContent=state.contextualCoursesVisible?"Ocultar sugestões nesta visita":"Mostrar sugestões nesta visita";
+  if(!current)return;
+  if(!shown){message.textContent="As sugestões estão ocultas nesta visita.";return;}
+  const courses=contextualCourses(state.courses,current.id),selection=state.courseRequest;
+  const category=current.category,fromId=current.id;
+  message.textContent=courses.length
+    ?"Outros cursos de "+labels[category]+", a mesma categoria deste curso. Você escolhe se deseja abri-los."
+    :"Não há outros cursos de "+labels[category]+" no catálogo atual.";
+  for(const course of courses){
+    const item=el("li"),button=el("button",undefined,"contextual-course"),id=course.id;
+    button.type="button";button.dataset.contextualCourseId=String(id);
+    button.append(el("strong",course.title),el("span","Abrir curso"));
+    button.addEventListener("click",()=>{
+      // A removed button retains its closure. Recheck both source context
+      // and target against the current authorized catalogue before opening.
+      if(state.accessDenied||!state.libraryReady||!state.contextualCoursesVisible||
+         state.contextualRequest!==generation||state.courseRequest!==selection||state.courseId!==fromId)return;
+      const source=state.courses.find(item=>item.id===fromId),target=state.courses.find(item=>item.id===id);
+      if(!source||source.category!==category||!target||target.id===fromId||target.category!==category)return;
+      openCourseWithAllFilters(id);
+    });
+    item.append(button);list.append(item);
+  }
+}
+document.getElementById("contextual-courses-toggle").addEventListener("click",()=>{
+  if(state.accessDenied||!state.libraryReady||!state.courses.some(course=>course.id===state.courseId))return;
+  state.contextualCoursesVisible=!state.contextualCoursesVisible;
+  renderContextualCourses();
+});
 function renderCourses(){
+  renderContextualCourses();
   if(state.accessDenied||!state.libraryReady)return;
   renderFavoriteControls();renderReadingPosition();renderPillars();
   list.replaceChildren();
@@ -1639,6 +1703,7 @@ async function loadLibrary(){
   if(state.accessDenied||state.libraryLoading)return;
   invalidateRetainedFavorites();
   state.libraryLoading=true;state.libraryReady=false;
+  renderContextualCourses();
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;++state.favoritesRequest;
   // Keep an outstanding export single-flight, but invalidate its download
   // when library authorization starts again, even if the new load succeeds.

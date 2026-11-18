@@ -115,7 +115,15 @@ Na versão fixada Playwright 1.58.2, [`Response.finished()`](https://github.com/
 
 O teste passou a observar a chamada e a conclusão do **helper real da página**, sem substituir o `Response`, decodificar conteúdo ou mudar a API da aplicação. Exige uma chamada, `bodyUsed`, liberação do leitor, evento terminal `requestfinished` ou `requestfailed`, resposta 200, `networkidle`, painel privado vazio/oculto e ausência de escritas. A ausência do descarte continua falhando. O diagnóstico registra somente o tipo fixo de evento terminal e a liberação do leitor; não afirma que um corpo cancelado foi integralmente lido. A revogação da aplicação continua imediata e não aguarda esse helper.
 
-Essa alteração é de sincronização e observação do teste, revisada independentemente. A aprovação integral do navegador C123 continua pendente da execução no novo SHA; resultados anteriores não são atribuídos ao código alterado.
+Essa alteração é de sincronização e observação do teste, revisada independentemente. A aprovação integral só foi registrada depois da nova execução descrita a seguir; os resultados anteriores não foram atribuídos ao código alterado.
+
+### Execução completa no SHA integrado C124
+
+O [run 44213874334](https://github.com/rafhael100/imagine-universidade/actions/runs/44213874334), SHA `fad8c3916a44ca91f843c36d1c9ea26396d0800f`, passou nos **seis jobs**. O backend manteve **245 testes / 2.801 asserções**. O navegador sintético passou em **475 verificações**, incluindo as 37 C123 e as 19 C124; o percurso real Laravel/SQLite passou em **119 verificações**, seguido da conferência de persistência.
+
+O diagnóstico do caso tardio registrou `requestfailed`, com o helper real concluído, corpo utilizado e leitor destravado. A rede ficou ociosa e a tela permaneceu purgada. Isso confirma o evento terminal observado neste caso, sem inferir uma causa adicional do cancelamento nem afirmar leitura integral de um corpo cancelado.
+
+O fluxo real consultou as referências antes/depois da retirada, preservou a data original, removeu somente o favorito da segunda empresa, manteve o da primeira e conferiu a disponibilidade depois da republicação. A revogação limpou o painel. As capturas reais em 1440 e 390 pixels foram inspecionadas: slug, data UTC, indisponibilidade e ação de remoção estão legíveis, sem título/link de conteúdo retirado nem transbordamento horizontal.
 
 ## Limites preservados
 

@@ -18,6 +18,7 @@ const source=["studentRecord","studentText","studentSlug","validatedStudentCours
   "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","discardErrorBody","api","progressLabel",
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
   "invalidateRetainedFavorites","renderRetainedFavorites",
+  "contextualCourses","renderContextualCourses",
   "renderCourses","loadFavorites","toggleCourseFavorite","selectCourse","openCourseWithAllFilters","loadLibrary"]
   .map(actual).join("\n")+"\n"+view.slice(start,end);
 const courses=[
@@ -58,6 +59,7 @@ function harness(initial=[]){
     accessDenied:false,accessMessage:"",libraryReady:true,libraryLoading:false,exportLoading:false,searchRequest:0,
     favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,favoriteWriting:false,
     favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",favoriteWriteRequest:0,
+    contextualCoursesVisible:true,contextualRequest:0,
     retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};
   const control={authoritative:new Set(initial),read:null,write:null};
   const context=createContext({state,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),

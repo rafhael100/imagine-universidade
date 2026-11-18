@@ -227,7 +227,15 @@ const server=http.createServer((req,res)=>{
 });
 const results={screenshots:[],accessibility:[],assertions:0};
 let lastCheck="browser startup";
-function check(value,message){assert.ok(value,message);results.assertions++;lastCheck=message;}
+const suiteStartedAt=Date.now();
+function check(value,message){
+  assert.ok(value,message);
+  results.assertions++;
+  lastCheck=message;
+  if(results.assertions%100===0){
+    console.log("Synthetic browser checkpoint: "+results.assertions+" assertions; elapsed "+Math.round((Date.now()-suiteStartedAt)/1000)+"s; last="+message);
+  }
+}
 async function ensureLocalPage(page){
   page.setDefaultTimeout(15000);
   page.setDefaultNavigationTimeout(20000);
@@ -271,12 +279,16 @@ async function inspect(page,name){
 (async()=>{
   await new Promise((resolve,reject)=>server.once("error",reject).listen(port,host,resolve));
   const browser=await chromium.launch({headless:true,timeout:30000});
+  // This full run executes ~900 real browser checks plus embedded modules.
+  // A hard 180-second cap raced the normal ~180-second successful run,
+  // closing Chromium mid-action without an assertion failure. Keep a bounded
+  // five-minute watchdog below the 25-minute isolated CI job limit.
   const deadline=setTimeout(()=>{
-    console.error("Synthetic browser deadline after last check: "+lastCheck);
+    console.error("Synthetic browser deadline after "+Math.round((Date.now()-suiteStartedAt)/1000)+"s and "+results.assertions+" checks; last check: "+lastCheck);
     process.exitCode=1;
     const forcedExit=setTimeout(()=>process.exit(1),5000);forcedExit.unref();
     void browser.close().catch(()=>{}).finally(()=>{server.closeAllConnections();server.close();});
-  },180000);deadline.unref();
+  },300000);deadline.unref();
   try{
     const context=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:"reduce"});
     const page=await context.newPage();

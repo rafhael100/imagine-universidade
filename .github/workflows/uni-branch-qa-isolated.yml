@@ -120,6 +120,7 @@ jobs:
           node ops/staging/check-compose-static.mjs
           bash ops/staging/check-compose-syntax.sh
           node scripts/check-release-gate-policy.mjs
+          node scripts/check-university-readiness-pack.mjs
           node scripts/check-write-fence.mjs
           node scripts/check-ui-contract.mjs
           node scripts/check-learning-content.mjs
@@ -199,6 +200,26 @@ jobs:
         with:
           name: imagine-universidade-revisao-editorial-PENDENTE
           path: ${{ runner.temp }}/universidade-editorial-review/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Build P0 release blockers report from versioned manifest only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
+          test ! -e .env && test ! -e .env.production
+          node scripts/check-university-readiness-pack.mjs
+          node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/universidade-release-readiness"
+          grep -Fq 'HOLD_NO_GO' "$RUNNER_TEMP/universidade-release-readiness/readiness.json"
+          grep -Fq 'NÃO É APROVAÇÃO' "$RUNNER_TEMP/universidade-release-readiness/PENDENCIAS-LANCAMENTO.md"
+          echo "PASS read-only release report: no GO, grant, approval, merge or deploy."
+
+      - name: Upload P0 launch blockers for coordination (not deployment approval)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-PENDENCIAS-LANCAMENTO-P0
+          path: ${{ runner.temp }}/universidade-release-readiness/
           retention-days: 14
           if-no-files-found: error
 

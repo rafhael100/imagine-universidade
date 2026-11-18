@@ -197,6 +197,88 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         "C144 "+status+" purges guidance with the rest of the editor and prevents recovery under revoked authority");
       await close(page);
     }
+    {
+      stage="C145 Unicode maxima and complete preview";const {page,server,control}=await open();
+      const courseTitle="🧭".repeat(200),summary="🌱".repeat(500),lessonTitle="📘".repeat(200);
+      const body="😀".repeat(29990)+"<b>FIM</b>";
+      await page.locator("#course-title").fill(courseTitle);await page.locator("#course-summary").fill(summary);
+      await page.locator("#course-save").click();await saved(page);
+      check(control.writes.length===1&&control.writes[0].method==="PATCH"&&control.writes[0].path==="/courses/1"&&
+        control.writes[0].body.title===courseTitle&&control.writes[0].body.summary===summary&&
+        await page.locator("#course-title").inputValue()===courseTitle&&await page.locator("#course-summary").inputValue()===summary&&
+        await page.evaluate(()=>["course-title","course-summary","lesson-title","lesson-body"].every(id=>{
+          const field=document.getElementById(id);return !field.hasAttribute("maxlength")&&!field.hasAttribute("minlength");
+        })&&["course-slug","lesson-slug"].every(id=>document.getElementById(id).getAttribute("maxlength")==="120")),
+        "C145 200-character course titles and 500-character summaries round-trip without UTF-16 limits while slug limits stay intact");
+      const courseBuffer=(await values(page)).slice(0,7);
+      await page.locator("#lesson-title").fill(lessonTitle);await page.locator("#lesson-body").fill(body);
+      const buffers=await values(page),before=control.requests.length;
+      await page.locator("#preview-lesson").click();await page.locator("#lesson-preview").waitFor({state:"visible"});
+      check(await page.locator("#preview-title").textContent()===lessonTitle&&await page.locator("#preview-body").textContent()===body&&
+        await page.locator("#preview-body p").count()===1&&await page.locator("#preview-body p *").count()===0&&
+        same(await values(page),buffers)&&control.requests.length===before,
+        "C145 the local preview preserves all 30000 Unicode characters and the literal final marker without HTTP or form changes");
+      await page.locator("#lesson-save").click();
+      await page.waitForFunction(()=>!state.writePending&&!state.writeOutcomeUnknown&&document.getElementById("status").textContent==="Aula salva em rascunho.");
+      check(control.writes.length===2&&control.writes[1].method==="PATCH"&&control.writes[1].path==="/lessons/11"&&
+        control.writes[1].body.title===lessonTitle&&control.writes[1].body.body===body&&
+        await page.locator("#lesson-title").inputValue()===lessonTitle&&await page.locator("#lesson-body").inputValue()===body&&
+        same((await values(page)).slice(0,7),courseBuffer),
+        "C145 a 200-character lesson title and 30000-character body save intact without replacing the sibling course fields");
+      await page.reload();await page.waitForFunction(()=>state.catalogReady&&!state.catalogLoading&&!state.auditLoading&&!state.overviewLoading);
+      await page.locator("#course-items [data-course='1']").click();await page.waitForFunction(()=>state.course?.id===1&&state.lessonsReady);
+      await page.locator("#lesson-items [data-lesson='11']").click();await page.waitForFunction(()=>state.lesson?.id===11);
+      check(await page.locator("#course-title").inputValue()===courseTitle&&await page.locator("#course-summary").inputValue()===summary&&
+        await page.locator("#lesson-title").inputValue()===lessonTitle&&await page.locator("#lesson-body").inputValue()===body&&
+        server.courses[0].title===courseTitle&&server.lessons.get(1)[0].body===body&&control.writes.length===2,
+        "C145 a fresh page accepts the same maximum Unicode texts through both catalog and lesson parsers with no extra write");
+      await close(page);
+    }
+    {
+      stage="C145 local bounds and recovery";const {page,server,control}=await open();
+      async function rejected(field,text,button,{preview=false}={}){
+        const target=page.locator("#"+field),original=await target.inputValue();await target.fill(text);
+        const buffers=await values(page),before=control.requests.length;
+        await page.locator("#"+button).click();
+        const refused=()=>page.waitForFunction(id=>document.activeElement===document.getElementById(id)&&
+          document.getElementById("status").textContent.length>0&&!state.writePending&&!state.writeOutcomeUnknown,field);
+        await refused();
+        if(preview){await page.locator("#preview-lesson").click();await refused();}
+        const intact=await target.inputValue()===text&&same(await values(page),buffers)&&control.requests.length===before&&
+          control.writes.length===0&&await page.evaluate(()=>state.catalogReady&&state.lessonsReady&&!state.accessDenied)&&
+          (!preview||(await page.locator("#lesson-preview").isHidden()&&await page.locator("#preview-body").textContent()===""));
+        await target.fill(original);return intact;
+      }
+      for(const [field,limit] of [["course-title",200],["course-summary",500]]){
+        check(await rejected(field,"🧭".repeat(limit+1),"course-save"),
+          "C145 "+field+" rejects one Unicode character above its limit while preserving all forms and sending no HTTP");
+      }
+      check(await rejected("course-title","🧭".repeat(2),"course-save"),
+        "C145 a two-character course title is rejected by its Unicode minimum without losing fields or sending HTTP");
+      await page.locator("#course-audience").fill("  Orientação irmã ainda não salva.  ");
+      for(const [field,limit] of [["lesson-title",200],["lesson-body",30000]]){
+        check(await rejected(field,"📘".repeat(limit+1),"lesson-save",{preview:true}),
+          "C145 "+field+" rejects one extra Unicode character in save and preview with both drafts intact and no HTTP");
+      }
+      for(const [field,count] of [["lesson-title",2],["lesson-body",9]]){
+        check(await rejected(field,"📘".repeat(count),"lesson-save",{preview:true}),
+          "C145 "+field+" rejects a below-minimum Unicode value consistently in save and preview without HTTP");
+      }
+      const courseBuffer=(await values(page)).slice(0,7),title="📘".repeat(3),body="🧭".repeat(10);
+      await page.locator("#lesson-title").fill(title);await page.locator("#lesson-body").fill(body);
+      await page.locator("#preview-lesson").click();await page.locator("#lesson-preview").waitFor({state:"visible"});
+      const preview=await page.locator("#preview-body").textContent();await page.locator("#lesson-save").click();
+      await page.waitForFunction(()=>!state.writePending&&!state.writeOutcomeUnknown&&document.getElementById("status").textContent==="Aula salva em rascunho.");
+      const preserved=same((await values(page)).slice(0,7),courseBuffer);
+      await page.locator("#course-title").fill(title);await page.locator("#course-summary").fill("");
+      await page.locator("#course-save").click();await saved(page);
+      check(preview===body&&preserved&&control.writes.length===2&&
+        same(control.writes.map(entry=>entry.method+" "+entry.path),["PATCH /lessons/11","PATCH /courses/1"])&&
+        server.courses[0].title===title&&server.courses[0].summary===""&&server.lessons.get(1)[0].title===title&&
+        server.lessons.get(1)[0].body===body&&await page.locator("#lesson-body").inputValue()===body,
+        "C145 explicit correction to three-character titles and a ten-character body recovers preview and saves while preserving the sibling draft");
+      await close(page);
+    }
   }catch(error){console.error("C144 editor failed at "+stage+": "+String(error?.message||error).slice(0,240));throw error;}
   finally{await bounded(context.close(),"context cleanup");}
 };

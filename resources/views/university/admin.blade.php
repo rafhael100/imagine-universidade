@@ -161,10 +161,10 @@
       <div class="panel-body">
         <form id="course-form">
           <div class="grid">
-            <div class="field span"><label for="course-title">Título</label><input id="course-title" maxlength="200" required></div>
+            <div class="field span"><label for="course-title">Título</label><input id="course-title" required></div>
             <div class="field"><label for="course-slug">Identificador do curso</label><input id="course-slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
             <div class="field"><label for="course-category">Categoria</label><select id="course-category"><option value="metodologia">Metodologia</option><option value="negocios">Negócios</option><option value="sistemas">Sistemas Imagine</option></select></div>
-            <div class="field span"><label for="course-summary">Descrição curta</label><textarea id="course-summary" maxlength="500"></textarea></div>
+            <div class="field span"><label for="course-summary">Descrição curta</label><textarea id="course-summary"></textarea></div>
             <div class="field span"><label for="course-audience">Para quem</label><textarea id="course-audience" aria-describedby="course-context-help"></textarea></div>
             <div class="field span"><label for="course-suggested-knowledge">Conhecimentos úteis</label><textarea id="course-suggested-knowledge" aria-describedby="course-context-help"></textarea></div>
             <p id="course-context-help" class="help span">Orientações opcionais para escolher o curso. Até 500 caracteres em cada campo. Conhecimentos úteis são sugestões, sem pré-requisito obrigatório.</p>
@@ -193,10 +193,10 @@
         <form id="lesson-form">
           <h3 id="lesson-title-heading">Nova aula</h3>
           <div class="grid">
-            <div class="field span"><label for="lesson-title">Título da aula</label><input id="lesson-title" maxlength="200" required></div>
+            <div class="field span"><label for="lesson-title">Título da aula</label><input id="lesson-title" required></div>
             <div class="field"><label for="lesson-slug">Identificador</label><input id="lesson-slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
             <div class="field"><label for="lesson-sort">Ordem</label><input id="lesson-sort" type="number" min="0" max="9999" step="1" value="0"></div>
-            <div class="field span"><label for="lesson-body">Conteúdo (texto simples)</label><textarea id="lesson-body" minlength="10" maxlength="30000" required></textarea></div>
+            <div class="field span"><label for="lesson-body">Conteúdo (texto simples)</label><textarea id="lesson-body" required></textarea></div>
           </div>
           <div class="actions"><button class="primary" id="lesson-save" type="submit">Salvar aula</button><button class="secondary" type="button" id="clear-lesson">Nova aula</button><button class="secondary" type="button" id="preview-lesson">Pré-visualizar aula</button><button class="secondary danger" type="button" id="delete-lesson" disabled>Excluir rascunho</button></div>
         </form>
@@ -745,7 +745,7 @@ function updateEditorialControls(){
 }
 function previewLessonParts(body){
   const markers=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
-  return String(body||"").slice(0,30000)
+  return String(body||"")
     .split(/\n\n(?=(?:EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE)\n)/)
     .map((chunk,index)=>{
       const nl=chunk.indexOf("\n");
@@ -763,7 +763,13 @@ function showLessonPreview(){
   if(state.accessDenied||!state.course||state.course.is_published)return;
   const title=$("lesson-title").value.trim();
   const body=$("lesson-body").value.trim();
-  if(!title||body.length<10){say("Informe título e conteúdo antes de pré-visualizar.");return;}
+  const titleLength=Array.from(title).length,bodyLength=Array.from(body).length;
+  if(titleLength<3||titleLength>200){
+    say("O título da aula deve ter entre 3 e 200 caracteres. Os campos foram mantidos.");$("lesson-title").focus();return;
+  }
+  if(bodyLength<10||bodyLength>30000){
+    say("O conteúdo deve ter entre 10 e 30000 caracteres. Os campos foram mantidos.");$("lesson-body").focus();return;
+  }
   hideLessonPreview();
   $("preview-title").textContent=title;
   for(const section of previewLessonParts(body)){
@@ -1087,10 +1093,10 @@ function validatedAdminCourses(payload){
        !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
        typeof item.slug!=="string"||item.slug.length>120||
        !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug)||
-       typeof item.title!=="string"||!item.title.trim()||item.title.length>200||
+       typeof item.title!=="string"||!item.title.trim()||item.title.length>400||Array.from(item.title).length>200||
        !["metodologia","negocios","sistemas"].includes(item.category)||
        !(item.summary===null||typeof item.summary==="string")||
-       (typeof item.summary==="string"&&item.summary.length>500)||
+       (typeof item.summary==="string"&&(item.summary.length>1000||Array.from(item.summary).length>500))||
        ["audience","suggested_knowledge"].some(field=>item[field]!==undefined&&item[field]!==null&&
          (typeof item[field]!=="string"||item[field].length>1000||Array.from(item[field]).length>500))||
        !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
@@ -1136,8 +1142,8 @@ function validatedAdminLessons(payload){
        !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
        typeof item.slug!=="string"||item.slug.length>120||
        !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug)||slugs.has(item.slug)||
-       typeof item.title!=="string"||!item.title.trim()||item.title.length>200||
-       typeof item.body!=="string"||item.body.length>30000||
+       typeof item.title!=="string"||!item.title.trim()||item.title.length>400||Array.from(item.title).length>200||
+       typeof item.body!=="string"||item.body.length>60000||Array.from(item.body).length>30000||
        !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
        !["draft","published","archived"].includes(item.status)||
        ![true,false,0,1].includes(item.is_published))return null;
@@ -1215,7 +1221,13 @@ $("course-form").addEventListener("submit",async event=>{
     audience:state.course.audience??"",suggested_knowledge:state.course.suggested_knowledge??""};
   const payload={title:$("course-title").value.trim(),slug:$("course-slug").value.trim(),
     category:$("course-category").value,summary:$("course-summary").value.trim(),sort_order:intField("course-sort")};
-  if(!payload.title){say("Informe o título.");return;}
+  const titleLength=Array.from(payload.title).length;
+  if(titleLength<3||titleLength>200){
+    say("O título deve ter entre 3 e 200 caracteres. Os campos foram mantidos.");$("course-title").focus();return;
+  }
+  if(Array.from(payload.summary).length>500){
+    say("A descrição curta deve ter no máximo 500 caracteres. Os campos foram mantidos.");$("course-summary").focus();return;
+  }
   for(const [field,id,label] of [["audience","course-audience","Para quem"],
     ["suggested_knowledge","course-suggested-knowledge","Conhecimentos úteis"]]){
     const value=$(id).value.trim();
@@ -1288,7 +1300,13 @@ $("lesson-form").addEventListener("submit",async event=>{
   const baseline=state.lesson===null?null:{id:state.lesson.id,sort_order:state.lesson.sort_order};
   const payload={title:$("lesson-title").value.trim(),slug:$("lesson-slug").value.trim(),
     body:$("lesson-body").value.trim(),sort_order:intField("lesson-sort")};
-  if(!payload.title||payload.body.length<10){say("Preencha título e conteúdo.");return;}
+  const titleLength=Array.from(payload.title).length,bodyLength=Array.from(payload.body).length;
+  if(titleLength<3||titleLength>200){
+    say("O título da aula deve ter entre 3 e 200 caracteres. Os campos foram mantidos.");$("lesson-title").focus();return;
+  }
+  if(bodyLength<10||bodyLength>30000){
+    say("O conteúdo deve ter entre 10 e 30000 caracteres. Os campos foram mantidos.");$("lesson-body").focus();return;
+  }
   const courseId=state.course.id,lessonId=baseline?.id??null;
   if(!beginWrite())return;
   try{

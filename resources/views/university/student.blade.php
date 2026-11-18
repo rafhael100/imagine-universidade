@@ -248,7 +248,7 @@
     <form id="lesson-search-form" role="search">
       <label for="lesson-search-query" class="sr-only">Palavra ou expressão da aula</label>
       <div class="lesson-search-fields">
-        <input id="lesson-search-query" aria-label="Pesquisar texto das aulas" maxlength="60" minlength="3" required placeholder="Ex.: atendimento respeitoso" autocomplete="off" disabled>
+        <input id="lesson-search-query" aria-label="Pesquisar texto das aulas" required placeholder="Ex.: atendimento respeitoso" autocomplete="off" disabled>
         <button id="lesson-search-submit" type="submit" class="secondary" disabled>Pesquisar aulas</button>
       </div>
     </form>

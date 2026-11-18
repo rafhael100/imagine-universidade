@@ -10,9 +10,10 @@ const view=readFileSync(new URL("../resources/views/university/admin.blade.php",
 const start=view.indexOf('"use strict";'),end=view.lastIndexOf("</script>");
 const boot='loadAdminCatalog();\n(async()=>{try{await refreshAudit();}catch(error){say(error.message);}})();';
 assert.ok(start>=0&&end>start&&view.slice(start,end).includes(boot));
-const exposed=["state","validatedAdminCourses","refreshCourses","refreshLessons","loadAdminCatalog","lockAccess",
+const exposed=["state","validatedAdminCourses","validatedAdminLessons","refreshCourses","refreshLessons","loadAdminCatalog","lockAccess",
   "publicationCheck","courseHasUnsavedEdits","editorialHasUnsavedChanges","mustConfirmBrowserExit",
-  "lessonReorderFormSnapshot","lessonReorderDirtyForms","reorderLesson"];
+  "lessonReorderFormSnapshot","lessonReorderDirtyForms","reorderLesson","previewLessonParts",
+  "validatedArchivedLesson","renderEditorialArchive"];
 const source=view.slice(start,end).replace(boot,"")+"\nglobalThis.editor={"+exposed.join(",")+"};";
 const clone=value=>JSON.parse(JSON.stringify(value));
 const guidanceFields=["course-audience","course-suggested-knowledge"];
@@ -70,7 +71,7 @@ async function harness({load=true,published=false,legacy=false}={}){
   for(const id of fields)get(id).value=id.endsWith("sort")?"0":"";
   get("course-category").value="metodologia";
   get("lesson-form").reset=()=>{for(const id of lessonFields)get(id).value=id.endsWith("sort")?"0":"";};
-  const server={nextCourseId:3,hash:"a".repeat(64),courses:[1,2].map(id=>({id,slug:"curso-"+id,title:"Curso salvo "+id,
+  const server={nextCourseId:3,nextLessonId:31,hash:"a".repeat(64),courses:[1,2].map(id=>({id,slug:"curso-"+id,title:"Curso salvo "+id,
     category:"metodologia",summary:"Resumo salvo "+id,sort_order:0,is_published:published,
     ...(legacy?{}:{audience:"Pessoas que organizam o atendimento.",suggested_knowledge:"Conhecer a rotina pode ajudar."})})),
     lessons:new Map([[1,[11,12].map((id,index)=>({id,slug:"aula-"+id,title:"Aula salva "+id,
@@ -89,6 +90,12 @@ async function harness({load=true,published=false,legacy=false}={}){
     if(course&&entry.method==="PATCH"){
       Object.assign(server.courses.find(row=>row.id===Number(course[1])),entry.body);server.hash="b".repeat(64);
       return ok({saved:true});
+    }
+    const lessonList=entry.path.match(/^\/courses\/(\d+)\/lessons$/);
+    if(lessonList&&entry.method==="POST"){
+      const id=server.nextLessonId++;
+      server.lessons.get(Number(lessonList[1])).push({id,...entry.body,status:"draft",is_published:false});
+      return {status:201,payload:{id,status:"draft"}};
     }
     const lesson=entry.path.match(/^\/lessons\/(\d+)$/);
     if(lesson&&entry.method==="PATCH"){
@@ -269,7 +276,9 @@ await scenario("a changed guidance buffer during reorder is detected by the exis
 });
 await scenario("uncertain save preserves both guidance fields and the lesson until explicit manual recovery",async()=>{
   const h=await harness();await h.input("course-audience","  Público salvo com resposta perdida.  ");
-  await h.input("course-suggested-knowledge","  Conhecimento útil preservado.  ");const buffers=h.values();
+  await h.input("course-suggested-knowledge","  Conhecimento útil preservado.  ");
+  await h.input("course-title","  "+"🧭".repeat(200)+"  ");await h.input("course-summary","  "+"🧭".repeat(500)+"  ");
+  const buffers=h.values();
   h.control.hook=entry=>{if(entry.method==="PATCH"){h.commit(entry);return {status:503,payload:{}};}};
   await h.invoke("course-form");assert.equal(h.state.writeOutcomeUnknown,true);assert.deepEqual(h.values(),buffers);
   for(const id of guidanceFields)assert.equal(h.get(id).disabled,true);
@@ -279,6 +288,7 @@ await scenario("uncertain save preserves both guidance fields and the lesson unt
   assert.equal(h.state.writeOutcomeUnknown,false);assert.equal(h.state.lesson.id,11);
   assert.equal(h.get("course-audience").value,"Público salvo com resposta perdida.");
   assert.equal(h.get("course-suggested-knowledge").value,"Conhecimento útil preservado.");
+  assert.equal(h.get("course-title").value,"🧭".repeat(200));assert.equal(h.get("course-summary").value,"🧭".repeat(500));
   assert.equal(h.writes().length,1);for(const id of guidanceFields)assert.equal(h.get(id).disabled,false);
 });
 await scenario("malformed context makes a catalog unavailable rather than enabling a partial or empty editor",async()=>{
@@ -295,4 +305,98 @@ for(const status of [403,419])await scenario(status+" purges new context fields 
   for(const id of fields){if(id!=="course-category")assert.equal(h.get(id).value,"");assert.equal(h.get(id).disabled,true);}
   await h.invoke("course-form");assert.equal(h.requests.length,1);assert.equal(h.writes().length,1);
 });
-console.log("PASS editorial course context: "+scenarios+" actual-script scenarios; Unicode, omission, explicit clearing, sibling drafts, preflight and authority fences");
+await scenario("editorial response maxima count Unicode without tightening legacy read minima or truncating rows",async()=>{
+  const h=await harness({load:false}),course=stored(h),lesson=h.server.lessons.get(1)[0];
+  for(const [title,summary] of [["🧭".repeat(101),"🧭".repeat(251)],["🧭".repeat(200),"🧭".repeat(500)],["x",null]]){
+    const result=h.editor.validatedAdminCourses({courses:[{...course,title,summary}]});
+    assert.ok(result);assert.equal(result[0].title,title);assert.equal(result[0].summary,summary??"");
+  }
+  for(const [title,body] of [["🧭".repeat(101),"🧭".repeat(15001)],["🧭".repeat(200),"🧭".repeat(30000)],["x",""],["x","x"]]){
+    const result=h.editor.validatedAdminLessons({lessons:[{...lesson,title,body}]});
+    assert.ok(result);assert.equal(result[0].title,title);assert.equal(result[0].body,body);
+  }
+  for(const [field,limit] of [["title",200],["summary",500]])for(const character of ["x","🧭"]){
+    assert.equal(h.editor.validatedAdminCourses({courses:[course,{...course,id:3,slug:"curso-3",[field]:character.repeat(limit+1)}]}),null);
+  }
+  for(const [field,limit] of [["title",200],["body",30000]])for(const character of ["x","🧭"]){
+    assert.equal(h.editor.validatedAdminLessons({lessons:[lesson,{...lesson,id:32,slug:"aula-32",[field]:character.repeat(limit+1)}]}),null);
+  }
+  assert.equal(h.editor.validatedAdminCourses({courses:[{...course,title:" "}]}),null);
+  assert.equal(h.editor.validatedAdminLessons({lessons:[{...lesson,body:null}]}),null);
+});
+await scenario("text inputs leave Unicode bounds to the real handlers while retaining required fields and slug bounds",async()=>{
+  for(const id of ["course-title","course-summary","lesson-title","lesson-body"]){
+    const tag=view.match(new RegExp('<(?:input|textarea)\\b[^>]*id="'+id+'"[^>]*>'))[0];
+    assert.doesNotMatch(tag,/\b(?:minlength|maxlength)=/);
+    if(id!=="course-summary")assert.match(tag,/\brequired\b/);
+  }
+  for(const id of ["course-slug","lesson-slug"]){
+    assert.match(view.match(new RegExp('<input\\b[^>]*id="'+id+'"[^>]*>'))[0],/maxlength="120"/);
+  }
+});
+await scenario("course and lesson POST/PATCH accept Unicode boundary payloads and re-read their complete saved text",async()=>{
+  for(const create of [true,false]){
+    const h=await harness();if(create)await h.invoke("new-course");
+    await h.input("course-title","🧭".repeat(200));await h.input("course-summary","🧭".repeat(500));
+    if(create)h.get("course-slug").value="curso-unicode";
+    await h.invoke("course-form");const courseWrite=h.writes()[0];
+    assert.equal(courseWrite.method,create?"POST":"PATCH");assert.equal(h.state.writeOutcomeUnknown,false);
+    assert.equal(courseWrite.body.title,"🧭".repeat(200));assert.equal(courseWrite.body.summary,"🧭".repeat(500));
+    assert.equal(h.get("course-title").value,courseWrite.body.title);assert.equal(h.get("course-summary").value,courseWrite.body.summary);
+    if(create){await h.invoke("clear-lesson");h.get("lesson-slug").value="aula-unicode";}
+    await h.input("lesson-title","🧭".repeat(200));await h.input("lesson-body","🧭".repeat(30000));
+    const courseBuffers=h.values().slice(0,7);await h.invoke("lesson-form");const lessonWrite=h.writes()[1];
+    assert.equal(lessonWrite.method,create?"POST":"PATCH");assert.equal(h.state.writeOutcomeUnknown,false);
+    assert.equal(lessonWrite.body.title,"🧭".repeat(200));assert.equal(lessonWrite.body.body,"🧭".repeat(30000));
+    assert.equal(h.get("lesson-title").value,lessonWrite.body.title);assert.equal(h.get("lesson-body").value,lessonWrite.body.body);
+    assert.deepEqual(h.values().slice(0,7),courseBuffers);assert.equal(h.writes().length,2);
+    await h.input("lesson-title","🧭".repeat(3));await h.input("lesson-body","🧭".repeat(10));await h.invoke("lesson-form");
+    assert.equal(h.writes()[2].body.title,"🧭".repeat(3));assert.equal(h.writes()[2].body.body,"🧭".repeat(10));
+    await h.input("course-title","🧭".repeat(3));await h.input("course-summary","");await h.invoke("course-form");
+    assert.equal(h.writes()[3].body.title,"🧭".repeat(3));assert.equal(h.writes()[3].body.summary,"");
+    assert.equal(h.state.catalogReady,true);assert.equal(h.state.lessonsReady,true);
+  }
+});
+await scenario("invalid Unicode bounds stop POST/PATCH and local previews with focus, literal buffers and no HTTP",async()=>{
+  for(const create of [true,false])for(const form of ["course-form","lesson-form"]){
+    const h=await harness();
+    if(create)await h.invoke(form==="course-form"?"new-course":"clear-lesson");
+    const vectors=form==="course-form"
+      ?[["course-title","🧭".repeat(2)],["course-title","🧭".repeat(201)],["course-title","x".repeat(201)],
+        ["course-summary","🧭".repeat(501)],["course-summary","x".repeat(501)]]
+      :[["lesson-title","🧭".repeat(2)],["lesson-title","🧭".repeat(201)],["lesson-title","x".repeat(201)],
+        ["lesson-body","🧭".repeat(5)],["lesson-body","🧭".repeat(9)],["lesson-body","🧭".repeat(30001)],["lesson-body","x".repeat(30001)]];
+    for(const [id,text] of vectors){
+      if(form==="course-form"){
+        h.get("course-title").value="Título válido";h.get("course-summary").value="Resumo válido";h.get("course-slug").value="curso-unicode";
+      }else{
+        h.get("lesson-title").value="Aula válida";h.get("lesson-body").value="Conteúdo válido para o teste.";h.get("lesson-slug").value="aula-unicode";
+      }
+      await h.input(id,"  "+text+"  ");const buffers=h.values();h.get(id).focused=false;
+      if(form==="lesson-form"){
+        await h.invoke("preview-lesson");assert.equal(h.get("lesson-preview").hidden,true);
+        assert.equal(h.get(id).focused,true);h.get(id).focused=false;
+      }
+      await h.invoke(form);assert.equal(h.get(id).focused,true);assert.match(h.get("status").textContent,/caracteres/);
+      assert.deepEqual(h.values(),buffers);assert.equal(h.requests.length,0);
+      assert.equal(h.state.writePending,false);assert.equal(h.state.writeOutcomeUnknown,false);
+    }
+  }
+});
+await scenario("local and archived previews preserve a validated 30000-codepoint body as literal text to its final character",async()=>{
+  const h=await harness(),tail="<b>FIM</b>",body="🧭".repeat(30000-tail.length)+tail,title="🧭".repeat(200);
+  await h.input("lesson-title",title);await h.input("lesson-body",body);const buffers=h.values();
+  await h.invoke("preview-lesson");assert.equal(h.get("lesson-preview").hidden,false);
+  assert.equal(h.get("preview-title").textContent,title);assert.equal(h.get("preview-body").textContent,body);
+  assert.equal(h.get("preview-body").querySelectorAll("b").length,0);assert.deepEqual(h.values(),buffers);assert.equal(h.requests.length,0);
+  assert.equal(h.editor.previewLessonParts(body)[0].text,body);
+  const expected={id:111,slug:"aula-historica",title,sort_order:0};
+  const archived=h.editor.validatedArchivedLesson({schema_version:1,scope:"editorial_archived_content",course_id:1,
+    course_version:1,status:"archived",lesson:{...expected,body}},1,1,expected);
+  assert.ok(archived);Object.assign(h.state.archive,{courseId:1,selectedVersion:1,versionsLoaded:true,lessonsLoaded:true,
+    versions:[{version:1,status:"archived",lesson_count:1}],lessons:[expected],lesson:archived});
+  h.editor.renderEditorialArchive();const content=h.get("editorial-version-content");
+  assert.equal(content.hidden,false);assert.equal(content.querySelector(".archive-text").textContent,body);
+  assert.equal(content.querySelectorAll("b").length,0);assert.deepEqual(h.values(),buffers);assert.equal(h.requests.length,0);
+});
+console.log("PASS editorial course context: "+scenarios+" actual-script scenarios; Unicode bounds and intact previews, omission, explicit clearing, sibling drafts, preflight and authority fences");

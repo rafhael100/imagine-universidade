@@ -47,3 +47,9 @@ Quatro capturas estão preparadas: `framework-course-guidance-editor-desktop.png
 ## Limites mantidos
 
 O trabalho permanece na PR de rascunho, sem merge, deploy, VPS, DNS ou acesso operacional. `UnavailablePortalAuthority` e `DisabledTutorGateway` continuam como padrões; os 13 gates permanecem `HOLD_NO_GO`/`NOT_VERIFIED`. A mudança não altera elegibilidade, cobrança, retenção ou dados de clientes e não cria prova, nota, certificado ou ranking.
+
+## Evidência do SHA integrado C144
+
+A execução [Actions 44239547982](https://github.com/rafhael100/imagine-universidade/actions/runs/44239547982), no SHA `33e89a34c6fabc22df63e968a164589caf377479`, concluiu os seis jobs com sucesso: **400 testes PHP / 5.325 asserções** (39 Unit/169 e 361 Feature/5.156), **17 invariantes PostgreSQL**, **837 verificações Chromium sintéticas** e **259 verificações no Laravel real**, com persistência aprovada. Os nove métodos Feature, a verificação das colunas opcionais, os 33 checks sintéticos e os 14 da jornada preparados acima foram executados.
+
+As quatro capturas reais de editor e aluno foram examinadas em desktop e 390 px: campos e rótulos legíveis, texto literal e quebras preservadas, sem transbordamento horizontal. O artefato `14398524869` foi baixado e verificado pelo SHA-256 `9693271925084ed24b2dfa889ab2426a7ef8829380605f4ecacad1d95df84301`. Esse resultado substitui a pendência de runtime descrita na preparação; a PR continua em rascunho e os gates operacionais permanecem `HOLD_NO_GO`/`NOT_VERIFIED`.

@@ -154,6 +154,26 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       check(h.control.requests.length===inputStart&&same(await ids(h.page),[])&&await h.page.locator("#lesson-search-navigation").isHidden()&&
         await h.page.evaluate(()=>state.searchQuery===""&&state.searchNextCursor===null&&!state.searchBusy),
         "C140 changing then rejecting a query clears its page and cursor without sending HTTP");
+      stage="Unicode search input";
+      const unicodeQuery="𐐀".repeat(60),queryField=h.page.locator("#lesson-search-query");
+      const unicodeBefore=await snapshot(h.page),unicodeStart=h.control.requests.length;
+      await queryField.fill("");await queryField.focus();await h.page.keyboard.insertText(unicodeQuery);
+      await queryField.press("Enter");await resultsReady(h.page);
+      check(await queryField.inputValue()===unicodeQuery&&h.control.requests.length===unicodeStart+1&&
+        same(searches(h.control).at(-1).body,{query:unicodeQuery,paginated:true})&&
+        searches(h.control).at(-1).url===api+"/search"&&await snapshot(h.page)===unicodeBefore&&
+        h.page.url()===url&&h.control.writes.length===0&&await h.page.evaluate(()=>window.__searchStorageCalls===0),
+        "C146 native input must retain all 60 Unicode letters and submit the exact private query without changing study state URL or storage");
+      for(const length of [2,61]){
+        const invalidQuery="𐐀".repeat(length),before=h.control.requests.length;
+        await queryField.fill("");await queryField.focus();await h.page.keyboard.insertText(invalidQuery);
+        await queryField.press("Enter");
+        await h.page.waitForFunction(()=>document.getElementById("lesson-search-results").textContent.includes("3 a 60"));
+        check(await queryField.inputValue()===invalidQuery&&h.control.requests.length===before&&
+          await snapshot(h.page)===unicodeBefore&&same(await ids(h.page),[])&&h.control.writes.length===0&&
+          await h.page.evaluate(()=>state.searchQuery===""&&state.searchNextCursor===null&&!state.searchBusy),
+          "C146 a "+length+"-character Unicode query must remain intact and be rejected locally without a request or stale search page");
+      }
       await close(h.page);
     }
     for(const status of [409,422,503]){

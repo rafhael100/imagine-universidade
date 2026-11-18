@@ -15,6 +15,7 @@ function actualFunction(name){
 }
 const source=["studentRecord","studentText","studentSlug","normalizeSearchText","splitLessonSections",
   "lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "invalidateLessonSearch","renderLessonSearchControls",
   "el","say","lockAccess","discardErrorBody","api","invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus","beginNavigationFocus",
   "lessonTextFragment","validatedStudentHelp","lessonHelpExcerpts","lessonHelpPanel"]

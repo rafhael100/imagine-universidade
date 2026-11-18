@@ -35,6 +35,7 @@ function harness(name){
     "editorialLessonFiltersAllowed","renderEditorialLessonFilters","filteredEditorialLessons","normalizeEditorialSearch"]:
     ["invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
       "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+      "invalidateLessonSearch","renderLessonSearchControls",
       "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus"];
   const source=["discardErrorBody","api","el","say","lockAccess",...extra].map(fn=>actual(view,fn)).join("\n");
   const initial=view.match(/const state=(\{[\s\S]*?\});/)?.[1];assert.ok(initial);

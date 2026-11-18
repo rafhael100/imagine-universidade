@@ -628,6 +628,7 @@ const studentFunction=name=>{
 };
 const studentNormalizers=["studentRecord","studentText","studentSlug","validatedStudentCourses",
   "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "invalidateLessonSearch","renderLessonSearchControls",
   "validatedStudentLessons","validatedStudentLesson","validatedStudentProgress"].map(studentFunction).join("\n");
 const studentParsers=new Script(studentNormalizers+"\n({validatedStudentCourses,validatedStudentLessons,validatedStudentLesson,validatedStudentProgress,studentText})")
   .runInNewContext({});
@@ -877,10 +878,14 @@ assert.match(searchController,/function searchLessons\(Request \$request, Portal
 assert.match(searchController,/if \(\$this->freshGrant\(\$request, \$gate, \$grant\) === null\)/,
   "search results cannot be emitted after grant revocation");
 assert.match(studentProgressUI,/id="lesson-search-form"/,"student must expose private lesson search");
-assert.match(studentProgressUI,/function validLessonSearchResults\(payload\)/,"student must check result shape");
-assert.match(studentProgressUI,/api\("\/search",\{method:"POST",body:\{query:phrase\}\}\)/,
-  "student must never place search terms in query URL");
-assert.match(studentProgressUI,/if\(!state\.accessDenied&&state\.searchRequest===request&&b\.isConnected&&results\.contains\(b\)\)\s+openCourseWithAllFilters\(hit\.course_id,hit\.lesson_id,null,beginNavigationFocus\(\)\)/,
+assert.match(studentProgressUI,/function validLessonSearchResults\(payload,cursor=null\)/,"student must check page and cursor shape");
+assert.match(studentProgressUI,/const body=\{query:phrase,paginated:true\};if\(cursor!==null\)body\.cursor=cursor;/,
+  "student must opt into pagination and put the phrase and optional cursor only in the request body");
+assert.match(studentProgressUI,/api\("\/search",\{method:"POST",body\}\)/,
+  "student must keep the search URL free of terms and cursors");
+assert.match(studentProgressUI,/const current=\(\)=>!state\.accessDenied&&state\.libraryReady&&!state\.libraryLoading&&\s+request===state\.searchRequest&&state\.searchQuery===phrase;/,
+  "search responses and result clicks must belong to the current authorized library and query generation");
+assert.match(studentProgressUI,/if\(current\(\)&&!state\.searchBusy&&b\.isConnected&&results\.contains\(b\)&&state\.courses\.some\(course=>course\.id===hit\.course_id\)\)\s+openCourseWithAllFilters\(hit\.course_id,hit\.lesson_id,null,beginNavigationFocus\(\)\)/,
   "result must open an authorized selected lesson");
 assert.match(studentProgressUI,/document\.getElementById\("lesson-search-results"\)\.replaceChildren\(\)/,
   "search results must be purged on Portal denial");
@@ -898,6 +903,7 @@ await import("./check-progress-history.mjs");
 await import("./check-progress-export-timestamps.mjs");
 await import("./check-progress-export-version.mjs");
 await import("./check-student-navigation-focus.mjs");
+await import("./check-private-search-pages.mjs");
 await import("./check-lesson-sections.mjs");
 await import("./check-student-catalog-reconciliation.mjs");
 await import("./check-student-lesson-filter.mjs");

@@ -5,6 +5,7 @@ declare(strict_types=1);
 /** Actual private completion-history query on disposable CI PostgreSQL, before seeding. */
 use App\Domain\Access\PortalAccessGate;
 use App\Domain\Access\PortalGrant;
+use App\Domain\Learning\PublishedLessonSearchCursor;
 use App\Domain\Learning\UniversityCatalogRepository;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Events\QueryExecuted;
@@ -139,6 +140,156 @@ try {
             $complete($organizations['qa-history-a'], 'same-person', $excludedVersion['lessons'][0]);
         }
         $grant = PortalGrant::allow('qa-history-a', 'same-person', PortalAccessGate::VIEW, 1, time() + 60);
+
+        // C140 reuses the real published fixtures and the existing disposable
+        // Laravel connection. A savepoint restores every temporary ordering /
+        // publication change before the original history assertions below.
+        $stage = 'c140_search_key';
+        historyPgCheck($config->get('app.key') === 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+            'C140 search uses only the existing synthetic encryption key');
+        $searchBefore = [];
+        foreach (['educational_courses', 'educational_course_versions', 'educational_lessons',
+            'educational_lesson_progress', 'educational_audit_events'] as $table) {
+            $searchBefore[$table] = DB::table($table)->orderBy('id')->get()
+                ->map(static fn (object $row): array => (array) $row)->all();
+        }
+        $searchReading = false;
+        $searchQueries = [];
+        $searchUnexpected = [];
+        $afterSearchPage = null;
+        DB::listen(static function (QueryExecuted $query) use (&$searchReading, &$searchQueries,
+            &$searchUnexpected, &$afterSearchPage): void {
+            if (!$searchReading) { return; }
+            if (!preg_match('/^\s*select\b/i', $query->sql)
+                || preg_match('/educational_(lesson_progress|course_favorites|reading_positions|audit_events)/', $query->sql)) {
+                $searchUnexpected[] = true;
+            }
+            if (str_contains($query->sql, 'educational_lessons')) {
+                $searchQueries[] = $query;
+                if ($afterSearchPage !== null && str_contains(strtolower($query->sql), 'limit 9')) {
+                    $action = $afterSearchPage;
+                    $afterSearchPage = null;
+                    // Only the test's explicit concurrent-state fixture edit
+                    // is excluded from the read-only production query watch.
+                    $searchReading = false;
+                    try { $action(); } finally { $searchReading = true; }
+                }
+            }
+        });
+        $searchRead = static function (PortalGrant $current, ?string $cursor = null, string $phrase = 'restricted')
+            use ($repository, &$searchReading): array|string {
+            $searchReading = true;
+            try { return $repository->searchPublishedLessonsPage($current, $phrase, $cursor); }
+            finally { $searchReading = false; }
+        };
+        DB::beginTransaction();
+        try {
+            $stage = 'c140_search_pages';
+            foreach ($volumeVersion['lessons'] as $index => $lessonId) {
+                DB::table('educational_lessons')->where('id', $lessonId)->update(['sort_order' => intdiv($index, 4)]);
+            }
+            $expectedSearch = [...$volumeVersion['lessons'], ...$liveVersion['lessons']];
+            $firstSearch = $searchRead($grant);
+            historyPgCheck(is_array($firstSearch) && array_keys($firstSearch) === ['schema_version', 'scope', 'results', 'next_cursor']
+                && $firstSearch['schema_version'] === 1 && $firstSearch['scope'] === 'current_published_editorial_lessons'
+                && count($firstSearch['results']) === 8 && is_string($firstSearch['next_cursor']),
+                'C140 actual repository and codec return a bounded opt-in first page');
+            $foundSearch = array_column($firstSearch['results'], 'lesson_id');
+            $nextSearch = $firstSearch['next_cursor'];
+            $searchPageCount = 1;
+            while ($nextSearch !== null && $searchPageCount < 8) {
+                $nextPage = $searchRead($grant, $nextSearch);
+                if (!is_array($nextPage)) { throw new RuntimeException('Search continuation failed.'); }
+                $foundSearch = [...$foundSearch, ...array_column($nextPage['results'], 'lesson_id')];
+                $nextSearch = $nextPage['next_cursor'];
+                $searchPageCount++;
+            }
+            historyPgCheck($searchPageCount === 7 && $nextSearch === null && $foundSearch === $expectedSearch
+                && count($foundSearch) === 56 && count(array_unique($foundSearch)) === 56,
+                'C140 seven real keyset pages preserve course and lesson ties without duplicates or skipped references');
+            $searchReading = true;
+            try { $legacySearch = $repository->searchPublishedLessons($grant, 'restricted'); }
+            finally { $searchReading = false; }
+            historyPgCheck($legacySearch === $firstSearch['results']
+                && array_keys($legacySearch[0]) === ['course_id', 'course_title', 'lesson_id', 'lesson_title', 'snippet'],
+                'C140 legacy first-page results and five-field allowlist stay unchanged');
+            $boundedSearchQueries = array_values(array_filter($searchQueries,
+                static fn (QueryExecuted $query): bool => str_contains(strtolower($query->sql), 'limit 9')));
+            $boundedSearch = count($boundedSearchQueries) === 8;
+            foreach ($boundedSearchQueries as $query) {
+                $boundedSearch = $boundedSearch && !str_contains(strtolower($query->sql), 'offset')
+                    && !str_contains($query->sql, 'restricted') && in_array('%restricted%', $query->bindings, true);
+            }
+            historyPgCheck($boundedSearch,
+                'C140 PostgreSQL executes actual bound LIKE and 9-row sentinel queries without OFFSET or mirrored search SQL');
+            $codec = new PublishedLessonSearchCursor();
+            $searchAnchor = $codec->decode($firstSearch['next_cursor'], 'restricted');
+            historyPgCheck(is_array($searchAnchor) && $searchAnchor['lesson_id'] === $volumeVersion['lessons'][7]
+                && $searchAnchor['course_version'] === 1000001 && $searchAnchor['course_version_id'] === $volumeVersion['id']
+                && strlen($firstSearch['next_cursor']) <= 2048
+                && preg_match('/\A[\x21-\x7E]+\z/D', $firstSearch['next_cursor']) === 1,
+                'C140 authenticated opaque cursor binds the exact version and ordering with safe integers');
+
+            $stage = 'c140_search_scope';
+            $beforeInvalidSearch = count($searchQueries);
+            historyPgCheck($searchRead($grant, substr($firstSearch['next_cursor'], 0, -3).'abc') === 'invalid_cursor'
+                && $searchRead($grant, $firstSearch['next_cursor'], 'different') === 'invalid_cursor'
+                && count($searchQueries) === $beforeInvalidSearch,
+                'C140 tampered and query-mismatched cursors fail before any content lookup');
+            $secondSearch = $searchRead($grant, $firstSearch['next_cursor']);
+            $otherSearch = $searchRead(PortalGrant::allow('qa-history-b', 'same-person', PortalAccessGate::VIEW, 1, time() + 60),
+                $firstSearch['next_cursor']);
+            historyPgCheck(is_array($secondSearch) && is_array($otherSearch)
+                && $secondSearch['results'] === $otherSearch['results']
+                && array_column($secondSearch['results'], 'lesson_id') === array_slice($expectedSearch, 8, 8),
+                'C140 eligible companies share only published editorial hits, never archived, private or client-owned fixtures');
+            $ordersRejected = true;
+            foreach ([['educational_courses', $volume, 0], ['educational_lessons', $searchAnchor['lesson_id'], 1]] as [$table, $id, $original]) {
+                DB::table($table)->where('id', $id)->update(['sort_order' => 9999]);
+                $ordersRejected = $ordersRejected && $searchRead($grant, $firstSearch['next_cursor']) === 'search_context_changed';
+                DB::table($table)->where('id', $id)->update(['sort_order' => $original]);
+            }
+            historyPgCheck($ordersRejected, 'C140 changing either component of the current anchor order requires a search restart');
+            DB::table('educational_courses')->where('id', $volume)->update(['is_published' => false]);
+            $unpublishedSearch = $searchRead($grant, $firstSearch['next_cursor']);
+            DB::table('educational_courses')->where('id', $volume)->update(['is_published' => true]);
+            DB::table('educational_course_versions')->where('id', $volumeVersion['id'])->update(['version' => 1000002]);
+            $changedVersionSearch = $searchRead($grant, $firstSearch['next_cursor']);
+            DB::table('educational_course_versions')->where('id', $volumeVersion['id'])->update(['version' => 1000001]);
+            historyPgCheck($unpublishedSearch === 'search_context_changed' && $changedVersionSearch === 'search_context_changed',
+                'C140 publication and the exact current version are rechecked instead of remapping an old cursor');
+            $largeBoundRejected = true;
+            foreach (['course_version', 'course_sort_order', 'lesson_sort_order'] as $field) {
+                $largeCursor = $codec->encode('restricted', [...$searchAnchor, $field => 2147483648]);
+                $largeBoundRejected = $largeBoundRejected && $searchRead($grant, $largeCursor) === 'search_context_changed';
+            }
+            historyPgCheck($largeBoundRejected, 'C140 safe outlying authenticated bounds return context errors without PostgreSQL int4 overflow');
+
+            $stage = 'c140_search_after_read';
+            $afterSearchPage = static function () use ($volume): void {
+                DB::table('educational_courses')->where('id', $volume)->update(['is_published' => false]);
+            };
+            $changedDuringSearch = $searchRead($grant, $firstSearch['next_cursor']);
+            historyPgCheck($afterSearchPage === null && $changedDuringSearch === 'search_context_changed',
+                'C140 an anchor withdrawn during the actual page SELECT is rejected by the second scoped lookup');
+            DB::table('educational_courses')->where('id', $volume)->update(['is_published' => true]);
+            historyPgCheck($searchRead(PortalGrant::deny(), $firstSearch['next_cursor']) === 'access_denied'
+                && $searchRead(PortalGrant::allow('imagine-editorial', 'editor', PortalAccessGate::VIEW, 1, time() + 30),
+                    $firstSearch['next_cursor']) === 'access_denied',
+                'C140 a cursor never grants access to denied or editorial identities');
+            historyPgCheck($searchUnexpected === [], 'C140 production search makes only editorial SELECTs and no private learning or audit reads');
+        } finally {
+            $searchReading = false;
+            $afterSearchPage = null;
+            DB::rollBack();
+        }
+        $searchRestored = true;
+        foreach ($searchBefore as $table => $rows) {
+            $searchRestored = $searchRestored && DB::table($table)->orderBy('id')->get()
+                ->map(static fn (object $row): array => (array) $row)->all() === $rows;
+        }
+        historyPgCheck($searchRestored, 'C140 savepoint restores all original fixtures before the existing history and export checks');
+
         $stage = 'canonical_progress_export';
         $exportBefore = $repository->exportProgress($grant);
         historyPgCheck(is_array($exportBefore)

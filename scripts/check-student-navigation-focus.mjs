@@ -116,7 +116,8 @@ async function harness({boot=true,server=serverState()}={}){
     if(path==="/favorites")return ok({course_ids:server.favoriteIds});
     if(path==="/favorites/retained")return ok({schema_version:1,scope:"current_authenticated_student",favorites:[],next_after_course_id:null});
     if(path==="/reading-position"&&method==="GET")return ok(server.snapshot);
-    if(path==="/search")return ok({results:[{course_id:1,lesson_id:12,course_title:"Curso 1",lesson_title:"Aula 12",snippet:"Texto sintético."}]});
+    if(path==="/search")return ok({schema_version:1,scope:"current_published_editorial_lessons",next_cursor:null,
+      results:[{course_id:1,lesson_id:12,course_title:"Curso 1",lesson_title:"Aula 12",snippet:"Texto sintético."}]});
     if(/^\/courses\/\d+\/favorite$/.test(path)){
       const id=Number(path.split("/")[2]),favorite=method==="PUT";
       server.favoriteIds=server.favoriteIds.filter(value=>value!==id);if(favorite)server.favoriteIds.push(id);

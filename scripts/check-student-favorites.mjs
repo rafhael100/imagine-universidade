@@ -18,6 +18,7 @@ const source=["studentRecord","studentText","studentSlug","validatedStudentCours
   "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","discardErrorBody","api","progressLabel",
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
   "lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "invalidateLessonSearch","renderLessonSearchControls",
   "invalidateRetainedFavorites","renderRetainedFavorites",
   "contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory",

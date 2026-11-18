@@ -92,3 +92,9 @@ O percurso Laravel real parou após a verificação 29: o runner tentou interpre
 A correção do runner abrange somente as três respostas de erro originadas pela UI que ainda eram interpretadas: os conflitos de ordem de aula/curso e o Tutor desativado. Exige o status 409/503, Content-Type JSON, headers privados/no-store e ausência de redirecionamento. Mantém as verificações de dados/auditoria intactos, campos locais, recuperação manual, material literal e ausência de mutações. Não altera o produto, não espera `Response.finished`, não simula resposta nem repete a requisição. Os DTOs exatos seguem testados pelos Feature C133/C137, PortalBoundaryFlowTest e C138.
 
 A sintaxe do runner e o diff passaram. A aprovação completa depende da próxima CI. A fonte primária do [Playwright v1.58.2](https://github.com/microsoft/playwright/blob/v1.58.2/packages/playwright-core/src/server/network.ts) distingue a leitura do corpo, que aguarda o término da resposta, dos metadados de status/headers já recebidos.
+
+## Runtime confirmado após a correção do ensaio
+
+O SHA `f458bacef4dbc32ca59b4dfbf0db7b833f65294f`, [run 44233262064](https://github.com/rafhael100/imagine-universidade/actions/runs/44233262064), encerrou os **seis jobs com sucesso**. Os logs confirmam **359 testes PHP / 4.726 asserções** (39 Unit/169 e 320 Feature/4.557), **746 verificações Chromium sintéticas**, **232 verificações pelo Laravel/SQLite real** e a conferência final de persistência com negação padrão preservada. Os conflitos de aula/curso e a indisponibilidade do Tutor completaram o percurso com a observação de status/headers e os efeitos já exigidos.
+
+Essa execução inclui C138 e a correção textual C139. Não inclui a busca paginada C140, ainda em integração no momento deste registro. Nenhum gate de lançamento foi satisfeito por esses laboratórios.

@@ -96,6 +96,8 @@
     .lesson-search-result:hover{background:#FFF5E8}
     .lesson-search-result strong,.lesson-search-result small{display:block}
     .lesson-search-result small{color:var(--muted);margin-top:3px;font-size:12px}
+    .lesson-search-navigation{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+    .lesson-search-navigation[hidden]{display:none}
     .pill{border:1px solid var(--line);background:white;border-radius:999px;padding:9px 14px;font-weight:750;font-size:13px}
     .pill[aria-pressed="true"]{background:#FFF0D9;border-color:#F0BD7C;color:#8A4700}
     .main{display:grid;grid-template-columns:1fr 1.4fr;gap:20px;align-items:start}
@@ -245,6 +247,10 @@
       </div>
     </form>
     <div id="lesson-search-results" class="lesson-search-results" role="status" aria-live="polite"></div>
+    <div id="lesson-search-navigation" class="lesson-search-navigation" role="group" aria-label="Páginas da busca de aulas" hidden>
+      <button id="lesson-search-next" type="button" class="secondary" disabled>Próximos resultados</button>
+      <button id="lesson-search-restart" type="button" class="secondary" disabled>Recomeçar busca</button>
+    </div>
   </section>
   <div class="main">
     <section class="panel" aria-labelledby="courses-title">
@@ -302,7 +308,7 @@ const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
-const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
+const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,searchQuery:"",searchNextCursor:null,searchPage:0,
   lessonFilter:{query:"",courseId:null,request:0,ready:false},
   contextualCoursesVisible:true,contextualRequest:0,
   progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,
@@ -414,11 +420,8 @@ function lockAccess(message){
   document.getElementById("reading-position-options").open=false;
   for(const id of ["resume-reading-position","reload-reading-position","remove-reading-position","export-reading-position"])
     document.getElementById(id).disabled=true;
-  ++state.courseRequest;++state.lessonRequest;++state.searchRequest;
-  document.getElementById("lesson-search-query").value="";
-  document.getElementById("lesson-search-query").disabled=true;
-  document.getElementById("lesson-search-submit").disabled=true;
-  document.getElementById("lesson-search-results").replaceChildren();
+  ++state.courseRequest;++state.lessonRequest;
+  invalidateLessonSearch({clearInput:true});
   list.replaceChildren();lessonsBox.replaceChildren();content.replaceChildren();
   document.getElementById("pillar-cards").replaceChildren();
   document.getElementById("pillar-cards").append(el("p","Jornada indisponível. Volte ao Portal.","empty"));
@@ -1746,11 +1749,32 @@ function openCourseWithAllFilters(target,preferredLessonId=null,preferredVersion
 }
 // Read-only search results are rendered with textContent, never HTML.
 // A 403/419 revokes and purges them; late responses cannot restore results.
-function validLessonSearchResults(payload){
-  if(!payload||!Array.isArray(payload.results)||payload.results.length>8)return null;
+function renderLessonSearchControls(){
+  const allowed=!state.accessDenied&&state.libraryReady&&!state.libraryLoading;
+  document.getElementById("lesson-search-query").disabled=!allowed;
+  document.getElementById("lesson-search-submit").disabled=!allowed||state.searchBusy;
+  document.getElementById("lesson-search-navigation").hidden=!state.searchQuery;
+  document.getElementById("lesson-search-next").disabled=!allowed||state.searchBusy||state.searchNextCursor===null;
+  document.getElementById("lesson-search-restart").disabled=!allowed||state.searchBusy||!state.searchQuery;
+}
+function invalidateLessonSearch({clearInput=false,advance=true}={}){
+  if(advance)++state.searchRequest;
+  state.searchBusy=false;state.searchQuery="";state.searchNextCursor=null;state.searchPage=0;
+  document.getElementById("lesson-search-results").replaceChildren();
+  if(clearInput)document.getElementById("lesson-search-query").value="";
+  renderLessonSearchControls();
+}
+function validLessonSearchCursor(value){
+  return typeof value==="string"&&value.length>0&&value.length<=2048&&/^[\x21-\x7E]+$/.test(value);
+}
+function validLessonSearchResults(payload,cursor=null){
+  if(!studentRecord(payload)||payload.schema_version!==1||payload.scope!=="current_published_editorial_lessons"||
+     !Array.isArray(payload.results)||payload.results.length>8||
+     !(payload.next_cursor===null||validLessonSearchCursor(payload.next_cursor))||
+     (payload.next_cursor!==null&&(payload.results.length!==8||payload.next_cursor===cursor)))return null;
   const unique=new Set(),results=[];
   for(const item of payload.results){
-    if(!item||!Number.isSafeInteger(item.course_id)||item.course_id<1||
+    if(!studentRecord(item)||!Number.isSafeInteger(item.course_id)||item.course_id<1||
        !Number.isSafeInteger(item.lesson_id)||item.lesson_id<1||
        !studentText(item.course_title,3,200)||!studentText(item.lesson_title,3,200)||
        !studentText(item.snippet,0,180)||
@@ -1762,30 +1786,32 @@ function validLessonSearchResults(payload){
       course_title:item.course_title,lesson_title:item.lesson_title,
       snippet:item.snippet});
   }
-  return results;
+  return {results,next_cursor:payload.next_cursor};
 }
-document.getElementById("lesson-search-form").addEventListener("submit",async event=>{
-  event.preventDefault();
+async function searchLessonPage(phrase,cursor=null,page=1){
   if(state.accessDenied||!state.libraryReady||state.searchBusy||state.libraryLoading)return;
-  const input=document.getElementById("lesson-search-query");
-  const phrase=input.value.trim().replace(/ +/g," ");
+  if(!studentText(phrase,3,60)||!/^[\p{L}\p{N} -]+$/u.test(phrase)||
+     (cursor!==null&&!validLessonSearchCursor(cursor))||!Number.isSafeInteger(page)||page<1)return;
   const results=document.getElementById("lesson-search-results");
-  const button=document.getElementById("lesson-search-submit");
-  if(!studentText(phrase,3,60)||!/^[\p{L}\p{N} -]+$/u.test(phrase)){
-    results.replaceChildren(el("p","Informe de 3 a 60 letras ou números para pesquisar.","empty"));
-    return;
-  }
   const request=++state.searchRequest;
-  state.searchBusy=true;button.disabled=true;
+  state.searchBusy=true;state.searchQuery=phrase;state.searchNextCursor=null;state.searchPage=0;
+  renderLessonSearchControls();
   results.replaceChildren(el("p","Procurando aulas publicadas...","empty"));
+  const current=()=>!state.accessDenied&&state.libraryReady&&!state.libraryLoading&&
+    request===state.searchRequest&&state.searchQuery===phrase;
   try{
-    const payload=await api("/search",{method:"POST",body:{query:phrase}});
-    if(state.accessDenied||request!==state.searchRequest)return;
-    const hits=validLessonSearchResults(payload);
-    if(hits===null)throw new Error("A pesquisa retornou dados inesperados. Tente novamente.");
+    const body={query:phrase,paginated:true};if(cursor!==null)body.cursor=cursor;
+    const payload=await api("/search",{method:"POST",body});
+    if(!current())return;
+    const verified=validLessonSearchResults(payload,cursor);
+    if(verified===null)throw new Error("invalid_search_page");
+    const hits=verified.results;
+    state.searchNextCursor=verified.next_cursor;state.searchPage=page;
     results.replaceChildren();
+    results.append(el("p","Página "+page+": "+hits.length+" "+(hits.length===1?"resultado":"resultados")+" para “"+phrase+"”.","mini"));
     if(!hits.length){
-      results.append(el("p","Nenhuma aula publicada encontrada para esta expressão.","empty"));
+      results.append(el("p",cursor===null?"Nenhuma aula publicada encontrada para esta expressão.":
+        "Nenhuma outra aula publicada encontrada nesta página. Recomece a busca para consultar o catálogo atual.","empty"));
       return;
     }
     for(const hit of hits){
@@ -1794,20 +1820,54 @@ document.getElementById("lesson-search-form").addEventListener("submit",async ev
       b.append(el("strong",hit.lesson_title),
         el("small","Curso: "+hit.course_title),el("small",hit.snippet));
       b.addEventListener("click",()=>{
-        if(!state.accessDenied&&state.searchRequest===request&&b.isConnected&&results.contains(b))
+        if(current()&&!state.searchBusy&&b.isConnected&&results.contains(b)&&state.courses.some(course=>course.id===hit.course_id))
           openCourseWithAllFilters(hit.course_id,hit.lesson_id,null,beginNavigationFocus());
       });
       results.append(b);
     }
   }catch(error){
-    if(!state.accessDenied&&request===state.searchRequest)
-      results.replaceChildren(el("p","A pesquisa está indisponível. Tente novamente.","empty"));
+    if(current()){
+      state.searchNextCursor=null;state.searchPage=0;
+      const message=error.httpStatus===409
+        ?"O conteúdo da busca mudou. Recomece a busca para consultar os resultados atuais."
+        :error.httpStatus===422
+          ?"Não foi possível validar a continuação desta busca. Recomece a busca para continuar."
+          :"A pesquisa está indisponível. Recomece a busca para tentar novamente.";
+      results.replaceChildren(el("p",message,"empty"));
+    }
   }finally{
     if(request===state.searchRequest){
       state.searchBusy=false;
-      if(!state.accessDenied&&state.libraryReady)button.disabled=false;
+      renderLessonSearchControls();
     }
   }
+}
+document.getElementById("lesson-search-form").addEventListener("submit",async event=>{
+  event.preventDefault();
+  if(state.accessDenied||!state.libraryReady||state.searchBusy||state.libraryLoading)return;
+  const phrase=document.getElementById("lesson-search-query").value.trim().replace(/ +/g," ");
+  if(!studentText(phrase,3,60)||!/^[\p{L}\p{N} -]+$/u.test(phrase)){
+    // No request is active here. A rejected query must still detach the
+    // former page and its controls before the user starts another search.
+    invalidateLessonSearch({advance:false});
+    document.getElementById("lesson-search-results").append(el("p","Informe de 3 a 60 letras ou números para pesquisar.","empty"));
+    return;
+  }
+  await searchLessonPage(phrase);
+});
+document.getElementById("lesson-search-query").addEventListener("input",event=>{
+  if(state.accessDenied||!state.libraryReady||state.libraryLoading)return;
+  if(state.searchQuery&&event.target.value.trim().replace(/ +/g," ")!==state.searchQuery)
+    invalidateLessonSearch();
+});
+document.getElementById("lesson-search-next").addEventListener("click",async()=>{
+  if(state.accessDenied||!state.libraryReady||state.libraryLoading||state.searchBusy||
+     !state.searchQuery||state.searchNextCursor===null)return;
+  await searchLessonPage(state.searchQuery,state.searchNextCursor,state.searchPage+1);
+});
+document.getElementById("lesson-search-restart").addEventListener("click",async()=>{
+  if(state.accessDenied||!state.libraryReady||state.libraryLoading||state.searchBusy||!state.searchQuery)return;
+  await searchLessonPage(state.searchQuery);
 });
 document.querySelectorAll(".sim-inputs input").forEach(field=>{
   field.addEventListener("input",renderSimulator);
@@ -1994,6 +2054,7 @@ async function loadLibrary(){
   invalidateRetainedFavorites();
   invalidateProgressHistory();
   state.libraryLoading=true;state.libraryReady=false;
+  invalidateLessonSearch();
   renderLessonFilter();
   renderContextualCourses();
   renderProgressHistory();
@@ -2050,7 +2111,8 @@ async function loadLibrary(){
       resetLessonFilter();
       document.getElementById("course-search").disabled=true;
       document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
-      ++state.courseRequest;++state.lessonRequest;++state.searchRequest;
+      ++state.courseRequest;++state.lessonRequest;
+      invalidateLessonSearch();
       lessonsBox.replaceChildren();content.replaceChildren();
       document.getElementById("pillar-cards").replaceChildren();
       document.getElementById("resume-course").disabled=true;
@@ -2070,6 +2132,7 @@ async function loadLibrary(){
   }finally{
     state.libraryLoading=false;
     if(!state.accessDenied)retry.disabled=false;
+    renderLessonSearchControls();
   }
 }
 document.getElementById("retry-library").addEventListener("click",loadLibrary);

@@ -17,6 +17,7 @@ const handler=view.match(/document\.getElementById\("export-favorites"\)\.addEve
 assert.ok(handler,"Export must be an explicit click action");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentFavorites",
   "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "invalidateLessonSearch","renderLessonSearchControls",
   "el","say","lockAccess","discardErrorBody","api","renderFavoriteControls","loadFavorites","loadLibrary",
   "invalidateRetainedFavorites","renderRetainedFavorites",
   "contextualCourses","renderContextualCourses",

@@ -957,6 +957,100 @@ async function archivedLessonPreview(editor,courseId,version,lessonId,expectedBo
     JSON.stringify(Object.keys(archived.lesson).sort())===JSON.stringify(["body","id","slug","sort_order","title"]),
     "An explicit archive selection must render only the historical lesson from its exact course and version");
 }
+async function paginatedSearchJourney(student,peer,source,personalSnapshot){
+  enterStage("explicit private search pages against real Laravel");
+  const page=student.page,route="/universidade/private/search",phrase="pesquisa sequencial";
+  const results=page.locator("#lesson-search-results [data-search-lesson]");
+  const before=await personalSnapshot(),requestStart=businessRequests.length;
+  const selection=await page.evaluate(()=>JSON.stringify({courseId:state.courseId,lessonId:state.lessonId,
+    filter:state.filter,query:state.query,favoriteIds:state.favoriteIds,favoritesOnly:state.favoritesOnly,
+    readingSnapshot:state.readingSnapshot}));
+  const searchRequests=()=>businessRequests.slice(requestStart).filter(request=>
+    request.profile===student.profile&&request.path===route);
+  const ids=()=>results.evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.searchLesson)));
+  const ready=number=>page.waitForFunction(number=>!state.searchBusy&&state.searchPage===number,
+    number,{timeout:8000});
+  const matchesRequest=(response,cursor=null)=>{
+    const data=response.request().postDataJSON();
+    return data&&typeof data==="object"&&!Array.isArray(data)&&data.query===phrase&&data.paginated===true&&
+      JSON.stringify(Object.keys(data).sort())===JSON.stringify(cursor===null?["paginated","query"]:["cursor","paginated","query"])&&
+      (cursor===null||data.cursor===cursor);
+  };
+  const validPage=payload=>payload&&payload.schema_version===1&&
+    payload.scope==="current_published_editorial_lessons"&&Array.isArray(payload.results)&&
+    payload.results.length<=8&&JSON.stringify(Object.keys(payload).sort())===
+      JSON.stringify(["next_cursor","results","schema_version","scope"])&&
+    payload.results.every(hit=>hit.course_id===peer.courseId&&
+      JSON.stringify(Object.keys(hit).sort())===
+        JSON.stringify(["course_id","course_title","lesson_id","lesson_title","snippet"]))&&
+    (payload.next_cursor===null||typeof payload.next_cursor==="string"&&
+      payload.next_cursor.length>0&&payload.next_cursor.length<=2048&&/^[\x21-\x7e]+$/.test(payload.next_cursor));
+
+  await page.locator("#lesson-search-query").fill(phrase);
+  const firstResponse=await clickResponse(page,"#lesson-search-submit","POST",route);
+  const first=await json(firstResponse,"First real search page");await ready(1);
+  check(firstResponse.status()===200&&validPage(first)&&typeof first.next_cursor==="string"&&
+    matchesRequest(firstResponse)&&
+    new URL(firstResponse.url()).search===""&&(firstResponse.headers()["cache-control"]||"").includes("no-store"),
+    "The real search must opt into a private bounded page without placing the phrase or cursor in its URL");
+  check(JSON.stringify(first.results.map(hit=>hit.lesson_id))===JSON.stringify(peer.lessonIds.slice(0,8))&&
+    JSON.stringify(await ids())===JSON.stringify(peer.lessonIds.slice(0,8))&&
+    searchRequests().length===1&&await page.locator("#lesson-search-next").isEnabled()&&
+    await page.evaluate(()=>JSON.stringify({courseId:state.courseId,lessonId:state.lessonId,
+      filter:state.filter,query:state.query,favoriteIds:state.favoriteIds,favoritesOnly:state.favoritesOnly,
+      readingSnapshot:state.readingSnapshot}))===selection,
+    "The first real search page must display exactly eight authorized lessons without navigating or prefetching");
+  await page.locator(".lesson-search-panel").screenshot({path:path.join(evidenceDir,"framework-search-page-desktop.png")});
+
+  const nextResponse=await clickResponse(page,"#lesson-search-next","POST",route);
+  const next=await json(nextResponse,"Next real search page");await ready(2);
+  check(nextResponse.status()===200&&validPage(next)&&next.next_cursor===null&&
+    matchesRequest(nextResponse,first.next_cursor)&&
+    new URL(nextResponse.url()).search==="",
+    "Only an explicit next-page click may send the exact opaque cursor with its original phrase");
+  check(JSON.stringify(next.results.map(hit=>hit.lesson_id))===JSON.stringify(peer.lessonIds.slice(8))&&
+    JSON.stringify(await ids())===JSON.stringify(peer.lessonIds.slice(8))&&searchRequests().length===2&&
+    await page.locator("#lesson-search-next").isDisabled()&&await page.locator("#lesson-search-restart").isEnabled()&&
+    await page.getByRole("heading",{name:source.title,exact:true}).isVisible(),
+    "The final real page must replace the earlier eight results with the ninth lesson and keep study unchanged");
+  await page.setViewportSize({width:390,height:844});
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await results.count()===1,
+    "The real search page and its navigation must fit the narrow mobile viewport");
+  await page.locator(".lesson-search-panel").screenshot({path:path.join(evidenceDir,"framework-search-page-mobile.png")});
+  await page.setViewportSize({width:1440,height:1000});
+
+  const lastId=peer.lessonIds.at(-1);
+  const opened=await clickResponse(page,'#lesson-search-results [data-search-lesson="'+lastId+'"]',"GET",
+    "/universidade/private/lessons/"+lastId);
+  const lesson=await json(opened,"Last-page exact search lesson");
+  await page.getByRole("heading",{name:peer.lastTitle,exact:true}).waitFor({state:"visible"});
+  check(opened.status()===200&&lesson.lesson?.id===lastId&&lesson.lesson.course_id===peer.courseId&&
+    lesson.lesson.course_version===1&&await page.locator("#lesson-navigation-target").evaluate(node=>
+      node===document.activeElement&&node.tagName==="H3")&&
+    await page.locator("#lesson-content button.primary").isEnabled(),
+    "A real result on the next page must open and focus its exact pending lesson without marking it complete");
+  const returned=await clickResponse(page,"[data-contextual-course-id='"+source.courseId+"']","GET",
+    "/universidade/private/lessons/"+source.lessonId);
+  const restored=await json(returned,"Study restored after paginated search");
+  await page.getByRole("heading",{name:source.title,exact:true}).waitFor({state:"visible"});
+  check(returned.status()===200&&restored.lesson?.id===source.lessonId&&restored.lesson.course_version===source.version&&
+    JSON.stringify(await ids())===JSON.stringify(peer.lessonIds.slice(8)),
+    "Returning to study must preserve the independent global search page and the exact published source lesson");
+
+  const restartedResponse=await clickResponse(page,"#lesson-search-restart","POST",route);
+  const restarted=await json(restartedResponse,"Restarted real search");await ready(1);
+  check(restartedResponse.status()===200&&validPage(restarted)&&
+    matchesRequest(restartedResponse)&&
+    JSON.stringify(await ids())===JSON.stringify(peer.lessonIds.slice(0,8))&&searchRequests().length===3,
+    "An explicit restart must omit the cursor and replace the final page with the first eight results");
+  check(JSON.stringify(await personalSnapshot())===JSON.stringify(before),
+    "Real search pagination and exact result navigation must preserve favorites, completions and reading revision");
+  const requests=businessRequests.slice(requestStart).filter(request=>request.profile===student.profile);
+  check(requests.filter(request=>request.method!=="GET").length===3&&
+    requests.filter(request=>request.method!=="GET").every(request=>request.method==="POST"&&request.path===route),
+    "The entire real search journey must issue only three read-only search POSTs and no learning mutation");
+}
+
 async function contextualCoursesJourney(editor,student,source){
   // Run only after the original single-course/withdrawal/archive assertions.
   // This additional synthetic publication is made entirely through the real
@@ -977,12 +1071,30 @@ async function contextualCoursesJourney(editor,student,source){
     "The contextual peer must be a distinct real course created through the editorial UI");
   await editor.page.locator("#lesson-title").fill(peerTitle);
   await editor.page.locator("#lesson-slug").fill("aula-contextual-framework-sintetica");
-  await editor.page.locator("#lesson-body").fill("Exemplo totalmente fictício para estudar negócios.\n\nA escolha deste curso é opcional e não registra avaliação.");
+  await editor.page.locator("#lesson-body").fill("Exemplo totalmente fictício para estudar negócios.\n\nA escolha deste curso é opcional e não registra avaliação.\n\nPesquisa sequencial somente no laboratório sintético.");
+  await editor.page.locator("#lesson-sort").fill("0");
   const lessonCreated=await clickResponse(editor.page,"#lesson-save","POST",adminRoot+"/courses/"+peerId+"/lessons");
   const peerLessonId=(await json(lessonCreated,"Contextual lesson creation")).id;
   await waitText(editor.page,"status","Aula salva em rascunho.");
   check(lessonCreated.status()===201&&Number.isSafeInteger(peerLessonId)&&peerLessonId>0&&peerLessonId!==source.lessonId,
     "The contextual peer lesson must be persisted by the real Laravel endpoint");
+  const searchLessonIds=[peerLessonId];
+  for(let index=1;index<9;index++){
+    await editor.page.locator("#clear-lesson").click();
+    await editor.page.locator("#lesson-title").fill("Resultado sintético "+(index+1)+" de busca");
+    await editor.page.locator("#lesson-slug").fill("resultado-busca-sintetico-"+(index+1));
+    await editor.page.locator("#lesson-body").fill("Pesquisa sequencial somente no laboratório sintético.\n\nMaterial fictício para percorrer resultados sem alterar o estudo.");
+    await editor.page.locator("#lesson-sort").fill(String(index));
+    const response=await clickResponse(editor.page,"#lesson-save","POST",adminRoot+"/courses/"+peerId+"/lessons");
+    const receipt=await json(response,"Real search fixture lesson");
+    await waitText(editor.page,"status","Aula salva em rascunho.");
+    if(response.status()!==201||!Number.isSafeInteger(receipt.id)||receipt.id<1||receipt.status!=="draft")
+      throw new Error("Search pagination requires confirmed real draft lesson creation");
+    searchLessonIds.push(receipt.id);
+  }
+  check(new Set(searchLessonIds).size===9&&await editor.page.evaluate(ids=>
+    JSON.stringify(state.lessons.map(lesson=>lesson.id))===JSON.stringify(ids),searchLessonIds),
+    "Nine real ordered lessons must exist in the same peer course before the search pagination journey");
   await publish(editor,peerId,1);
 
   const catalogueResponse=await student.context.request.get(base+"/universidade/private/courses",{headers:{Accept:"application/json"}});
@@ -1078,6 +1190,8 @@ async function contextualCoursesJourney(editor,student,source){
   await student.page.locator("#contextual-courses-panel").screenshot({
     path:path.join(evidenceDir,"framework-contextual-courses-mobile.png")});
   await student.page.setViewportSize({width:1440,height:1000});
+  await paginatedSearchJourney(student,{courseId:peerId,lessonIds:searchLessonIds,
+    lastTitle:"Resultado sintético 9 de busca"},source,personalSnapshot);
   return peerId;
 }
 
@@ -1509,6 +1623,11 @@ async function main(){
     (await studentA.page.locator("#contextual-courses-status").textContent())===""&&
     await studentA.page.locator("#contextual-courses-toggle").isDisabled(),
     "Eligibility revocation must purge the real category suggestions and disable their controls");
+  check(await studentA.page.locator("#lesson-search-results [data-search-lesson]").count()===0&&
+    await studentA.page.locator("#lesson-search-query").inputValue()===""&&
+    await studentA.page.locator("#lesson-search-next").isDisabled()&&
+    await studentA.page.locator("#lesson-search-restart").isDisabled(),
+    "Real revocation must also purge the populated search page, its phrase and every continuation action");
   check(businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length===readsBefore,
     "Revocation must not trigger an automatic favorite retry or reconciliation GET");
   const otherCompany=await studentB.context.request.get(base+"/universidade/private/courses",{
@@ -1518,6 +1637,10 @@ async function main(){
     "Revoking one company must leave the other company independently authorized");
   setAuthority("student-a",true);
   await openStudent(studentA,courseId,revisedTitle);
+  check(await studentA.page.locator("#lesson-search-results [data-search-lesson]").count()===0&&
+    await studentA.page.locator("#lesson-search-query").inputValue()===""&&
+    await studentA.page.locator("#lesson-search-next").isDisabled(),
+    "A newly eligible real page must wait for a new explicit search instead of restoring the old cursor");
   check((await studentA.page.locator("#course-favorite-toggle").getAttribute("aria-pressed"))==="true",
     "The denied removal must preserve the preference after a new eligible page load");
   await studentA.page.waitForFunction(()=>document.getElementById("resume-reading-position").disabled===false);
@@ -1535,7 +1658,7 @@ async function main(){
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
     synthetic_profiles:3,scenarios:["csrf","editorial CRUD","local editorial lesson search","atomic lesson reorder","concurrent text and order edits","concurrent course text and order edits","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","progress export download","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","local student lesson locator","revocation"],
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","progress export download","contextual courses without personal ranking","private search pagination","manual completion history","explicit navigation focus","local lesson section index","local student lesson locator","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

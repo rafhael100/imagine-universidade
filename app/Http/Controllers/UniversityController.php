@@ -13,6 +13,7 @@ use App\Domain\Learning\UniversityTenantProvisioner;
 use App\Domain\Learning\ReadingPositionRevision;
 use App\Domain\Learning\EditorialLessonOrderConflict;
 use App\Domain\Learning\EditorialCourseOrderConflict;
+use App\Domain\Learning\PublishedLessonSearchCursor;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -336,22 +337,40 @@ final class UniversityController
             'query' => ['required', 'string', 'min:3', 'max:60',
                 'regex:/\A[\p{L}\p{N} -]{3,60}\z/u'],
         ]);
+        // Read new flags before the empty-string middleware's normalization.
+        // The opt-in is a JSON boolean; legacy query-only callers stay intact.
+        $raw = $request->isJson() ? json_decode($request->getContent(), true) : $request->all();
+        $raw = is_array($raw) ? $raw : [];
+        $paginated = $raw['paginated'] ?? false;
+        $cursor = $raw['cursor'] ?? null;
+        $invalidCursor = (array_key_exists('paginated', $raw) && !is_bool($raw['paginated']))
+            || ($cursor !== null && ($paginated !== true || !is_string($cursor) || $cursor === ''
+                || strlen($cursor) > PublishedLessonSearchCursor::MAX_LENGTH
+                || preg_match('/\A[\x21-\x7E]+\z/D', $cursor) !== 1));
         try {
-            $results = $this->catalog->searchPublishedLessons($grant, (string) $data['query']);
+            $results = $invalidCursor ? 'invalid_cursor' : ($paginated === true
+                ? $this->catalog->searchPublishedLessonsPage($grant, (string) $data['query'], $cursor)
+                : $this->catalog->searchPublishedLessons($grant, (string) $data['query']));
         } catch (\Throwable) {
-            return response()->json(['error' => 'temporarily_unavailable'], 503);
+            $results = 'temporarily_unavailable';
         }
 
-        if ($results === null) {
-            return response()->json(['error' => 'temporarily_unavailable'], 503);
-        }
+        // This read uses POST to keep query terms out of URLs. GET middleware
+        // does not recheck it, so denial must win after success AND any failure.
         if ($this->freshGrant($request, $gate, $grant) === null) {
             return response()->json(['error' => 'access_denied'], 403);
         }
-
-        return response()->json(['results' => $results], 200, [
-            'Cache-Control' => 'private, no-store',
-        ]);
+        if (is_array($results)) {
+            return response()->json($paginated === true ? $results : ['results' => $results], 200, [
+                'Cache-Control' => 'private, no-store',
+            ]);
+        }
+        return match ($results) {
+            'access_denied' => response()->json(['error' => 'access_denied'], 403),
+            'invalid_cursor' => response()->json(['error' => 'invalid_cursor'], 422),
+            'search_context_changed' => response()->json(['error' => 'search_context_changed'], 409),
+            default => response()->json(['error' => 'temporarily_unavailable'], 503),
+        };
     }
 
     public function exportProgress(Request $request, PortalAccessGate $gate): JsonResponse

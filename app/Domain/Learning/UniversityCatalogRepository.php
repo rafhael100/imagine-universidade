@@ -6,6 +6,7 @@ namespace App\Domain\Learning;
 
 use App\Domain\Access\PortalGrant;
 use App\Domain\Access\PortalAccessGate;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use stdClass;
 
@@ -706,15 +707,37 @@ final class UniversityCatalogRepository
             return null;
         }
 
-        $normalized = trim(preg_replace('/\s+/u', ' ', $query) ?? '');
-        // Reject SQL wildcards and controls rather than interpolating raw LIKE.
-        // This is a bounded literal phrase, never a full-text SQL expression.
-        if (preg_match('/\A[\p{L}\p{N} -]{3,60}\z/u', $normalized) !== 1) {
+        $normalized = $this->normalizedSearchQuery($query);
+        if ($normalized === null) {
             return null;
         }
 
+        $rows = $this->publishedLessonSearchQuery($editorialOrg, $normalized)
+            ->orderBy('c.sort_order')->orderBy('c.id')
+            ->orderBy('l.sort_order')->orderBy('l.id')
+            ->limit(9)
+            ->get(['l.id as lesson_id', 'l.title as lesson_title',
+                'l.body', 'c.id as course_id', 'c.title as course_title'])
+            ->all();
+
+        // Controller also rechecks the actual Portal authority before output.
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return null;
+        }
+        return $this->publishedLessonSearchResults(array_slice($rows, 0, 8), $normalized);
+    }
+
+    private function normalizedSearchQuery(string $query): ?string
+    {
+        $normalized = trim(preg_replace('/\s+/u', ' ', $query) ?? '');
+        // A bounded literal phrase; SQL wildcards and controls are not a language.
+        return preg_match('/\A[\p{L}\p{N} -]{3,60}\z/u', $normalized) === 1 ? $normalized : null;
+    }
+
+    private function publishedLessonSearchQuery(int $editorialOrg, string $normalized): Builder
+    {
         $pattern = '%'.mb_strtolower($normalized, 'UTF-8').'%';
-        $rows = DB::table('educational_lessons as l')
+        return DB::table('educational_lessons as l')
             ->join('educational_course_versions as v', 'v.id', '=', 'l.educational_course_version_id')
             ->join('educational_courses as c', 'c.id', '=', 'v.educational_course_id')
             ->where('c.educational_organization_id', $editorialOrg)
@@ -726,22 +749,14 @@ final class UniversityCatalogRepository
                 $builder->whereRaw('LOWER(l.title) LIKE ?', [$pattern])
                     ->orWhereRaw('LOWER(l.body) LIKE ?', [$pattern])
                     ->orWhereRaw('LOWER(c.title) LIKE ?', [$pattern]);
-            })
-            ->orderBy('c.sort_order')->orderBy('c.id')
-            ->orderBy('l.sort_order')->orderBy('l.id')
-            ->limit(9)
-            ->get(['l.id as lesson_id', 'l.title as lesson_title',
-                'l.body', 'c.id as course_id', 'c.title as course_title'])
-            ->all();
+            });
+    }
 
-        // Permission can expire or be revoked while the database is read.
-        // Controller ALSO rechecks the actual Portal authority before output.
-        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
-            return null;
-        }
-
+    /** @param list<stdClass> $rows */
+    private function publishedLessonSearchResults(array $rows, string $normalized): array
+    {
         $results = [];
-        foreach (array_slice($rows, 0, 8) as $row) {
+        foreach ($rows as $row) {
             $body = trim(preg_replace('/\s+/u', ' ', (string) $row->body) ?? '');
             $start = mb_stripos($body, $normalized, 0, 'UTF-8');
             $offset = $start === false ? 0 : max(0, $start - 40);
@@ -761,6 +776,110 @@ final class UniversityCatalogRepository
             ];
         }
         return $results;
+    }
+
+    /** @return array<string, int> */
+    private function publishedSearchAnchor(stdClass $row): array
+    {
+        $anchor = [];
+        foreach (['course_sort_order', 'course_id', 'course_version_id', 'course_version',
+            'lesson_sort_order', 'lesson_id'] as $field) {
+            $anchor[$field] = $this->editorialOrderInteger(
+                $row->{$field}, str_ends_with($field, '_sort_order') ? 0 : 1, 9007199254740991,
+            );
+        }
+        return $anchor;
+    }
+
+    /** @param array<string, int> $expected */
+    private function publishedSearchAnchorMatches(Builder $query, array $expected): bool
+    {
+        $row = (clone $query)->where('l.id', $expected['lesson_id'])->first([
+            'c.sort_order as course_sort_order', 'c.id as course_id',
+            'v.id as course_version_id', 'v.version as course_version',
+            'l.sort_order as lesson_sort_order', 'l.id as lesson_id',
+        ]);
+        return $row !== null && $this->publishedSearchAnchor($row) === $expected;
+    }
+
+    /**
+     * Manual continuation of the same live search, never a frozen catalog.
+     * No token grants access: publication, query and actual Portal authority
+     * must still match on every request. Legacy first-page callers stay above.
+     *
+     * @return array<string, mixed>|string A page or a fixed generic error.
+     */
+    public function searchPublishedLessonsPage(PortalGrant $grant, string $query, ?string $cursor = null): array|string
+    {
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)
+            || $grant->companyId === self::EDITORIAL_ORGANIZATION_KEY) {
+            return 'access_denied';
+        }
+        $normalized = $this->normalizedSearchQuery($query);
+        if ($normalized === null) {
+            return 'invalid_query';
+        }
+        $codec = new PublishedLessonSearchCursor();
+        $anchor = $cursor === null ? null : $codec->decode($cursor, $normalized);
+        if ($cursor !== null && $anchor === null) {
+            return 'invalid_cursor';
+        }
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return 'temporarily_unavailable';
+        }
+        $base = $this->publishedLessonSearchQuery($editorialOrg, $normalized);
+        if ($anchor !== null && !$this->publishedSearchAnchorMatches($base, $anchor)) {
+            return 'search_context_changed';
+        }
+        $page = clone $base;
+        if ($anchor !== null) {
+            // Each component is bound. BIGINT casts avoid PostgreSQL int4
+            // overflow even for an authenticated, safe but outlying bound.
+            $page->where(function (Builder $after) use ($anchor): void {
+                $after->whereRaw('c.sort_order > CAST(? AS BIGINT)', [$anchor['course_sort_order']])
+                    ->orWhere(function (Builder $sameOrder) use ($anchor): void {
+                        $sameOrder->whereRaw('c.sort_order = CAST(? AS BIGINT)', [$anchor['course_sort_order']])
+                            ->where('c.id', '>', $anchor['course_id']);
+                    })->orWhere(function (Builder $sameCourse) use ($anchor): void {
+                        $sameCourse->whereRaw('c.sort_order = CAST(? AS BIGINT)', [$anchor['course_sort_order']])
+                            ->where('c.id', $anchor['course_id'])
+                            ->whereRaw('l.sort_order > CAST(? AS BIGINT)', [$anchor['lesson_sort_order']]);
+                    })->orWhere(function (Builder $sameLessonOrder) use ($anchor): void {
+                        $sameLessonOrder->whereRaw('c.sort_order = CAST(? AS BIGINT)', [$anchor['course_sort_order']])
+                            ->where('c.id', $anchor['course_id'])
+                            ->whereRaw('l.sort_order = CAST(? AS BIGINT)', [$anchor['lesson_sort_order']])
+                            ->where('l.id', '>', $anchor['lesson_id']);
+                    });
+            });
+        }
+        $rows = $page->orderBy('c.sort_order')->orderBy('c.id')
+            ->orderBy('l.sort_order')->orderBy('l.id')->limit(9)->get([
+                'l.id as lesson_id', 'l.title as lesson_title', 'l.body',
+                'c.id as course_id', 'c.title as course_title',
+                'c.sort_order as course_sort_order', 'v.id as course_version_id',
+                'v.version as course_version', 'l.sort_order as lesson_sort_order',
+            ])->all();
+        // Detect a withdrawal/reorder that happened while this page was read.
+        // Other catalog changes can still affect live subsequent pages.
+        if ($anchor !== null && !$this->publishedSearchAnchorMatches($base, $anchor)) {
+            return 'search_context_changed';
+        }
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return 'access_denied';
+        }
+        $anchors = [];
+        foreach ($rows as $row) {
+            // Validate the sentinel as well: no rounded identifiers in a cursor.
+            $anchors[] = $this->publishedSearchAnchor($row);
+        }
+        return [
+            'schema_version' => 1,
+            'scope' => 'current_published_editorial_lessons',
+            'results' => $this->publishedLessonSearchResults(array_slice($rows, 0, 8), $normalized),
+            'next_cursor' => count($rows) > 8 ? $codec->encode($normalized, $anchors[7]) : null,
+        ];
     }
 
     public function lesson(PortalGrant $grant, int $lessonId): ?stdClass

@@ -113,9 +113,9 @@ const server=http.createServer((req,res)=>{
     lessonSearchReads++;
     if(denyLessonSearchOnce){denyLessonSearchOnce=false;return send(res,403,{error:"access_denied"});}
     if(failLessonSearchOnce){failLessonSearchOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
-    if(malformedLessonSearchOnce){malformedLessonSearchOnce=false;return send(res,200,{results:[{course_id:999,lesson_id:999,course_title:"Vazamento sintético",lesson_title:"Proibido",snippet:""}]});}
-    if(staleLessonSearchOnce){staleLessonSearchOnce=false;return send(res,200,{results:[{course_id:1,lesson_id:99,course_title:"Exemplo sintético",lesson_title:"Aula retirada",snippet:"A versão atual não contém esta aula."}]});}
-    return send(res,200,{results:[{course_id:1,course_title:"Visitas, Leads e Clientes — Exemplo sintético",
+    if(malformedLessonSearchOnce){malformedLessonSearchOnce=false;return send(res,200,{schema_version:1,scope:"current_published_editorial_lessons",next_cursor:null,results:[{course_id:999,lesson_id:999,course_title:"Vazamento sintético",lesson_title:"Proibido",snippet:""}]});}
+    if(staleLessonSearchOnce){staleLessonSearchOnce=false;return send(res,200,{schema_version:1,scope:"current_published_editorial_lessons",next_cursor:null,results:[{course_id:1,lesson_id:99,course_title:"Exemplo sintético",lesson_title:"Aula retirada",snippet:"A versão atual não contém esta aula."}]});}
+    return send(res,200,{schema_version:1,scope:"current_published_editorial_lessons",next_cursor:null,results:[{course_id:1,course_title:"Visitas, Leads e Clientes — Exemplo sintético",
       lesson_id:12,lesson_title:"Leads fictícios",snippet:"Entenda a jornada do lead."}]});
   }
 
@@ -817,6 +817,7 @@ async function inspect(page,name){
     await require("./qa-browser-contextual-courses.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-progress-history.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-navigation-focus.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-private-search-pages.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-lesson-sections.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-catalog-reconciliation.cjs")({browser,base,ensureLocalPage,check,pageErrors});
     await require("./qa-browser-student-lesson-filter.cjs")({browser,base,ensureLocalPage,check,pageErrors});

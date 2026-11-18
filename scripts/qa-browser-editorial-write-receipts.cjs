@@ -26,7 +26,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
   }finally{clearTimeout(timer);}}
   const close=page=>bounded(page.close(),"page cleanup");
   const frozen=page=>page.waitForFunction(()=>!state.writePending&&state.writeOutcomeUnknown);
-  async function open(test,receipt=test.receipt){
+  async function open(test,receipt=test.receipt,{commitWrites=false}={}){
     const page=await context.newPage();await ensureLocalPage(page);
     page.setDefaultTimeout(8000);page.setDefaultNavigationTimeout(15000);
     page.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
@@ -36,7 +36,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       lessons:[11,12].map((id,index)=>({id,slug:"aula-"+id,title:"Aula salva "+id,
         body:"Conteúdo original da aula "+id+".\n\nSegundo parágrafo literal.",sort_order:index,
         status:published?"published":"draft",is_published:published}))};
-    const control={requests:[],writes:[],accept:true,readFailure:null};
+    const control={requests:[],writes:[],accept:true,readFailure:null,commitWrites};
     page.on("dialog",dialog=>control.accept?dialog.accept():dialog.dismiss());
     await page.route(api+"/**",async route=>{
       const request=route.request(),entry={path:new URL(request.url()).pathname.replace("/universidade/private/admin",""),
@@ -45,12 +45,25 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       let payload,status=200;
       if(entry.method!=="GET"){
         control.writes.push(entry);
-        if(entry.path===test.path&&entry.method===test.method){payload=receipt;status=test.kind.endsWith("create")?201:200;}
+        if(entry.path===test.path&&entry.method===test.method){
+          status=test.kind.endsWith("create")?201:200;
+          if(control.commitWrites){
+            if(test.kind==="course-create"){
+              fixture.courses.push({id:3,...entry.body,is_published:false});payload={id:3,status:"draft"};
+            }else if(test.kind==="course-update"){
+              Object.assign(fixture.courses[0],entry.body);payload={saved:true};
+            }else if(test.kind==="lesson-create"){
+              fixture.lessons.push({id:30,...entry.body,is_published:false,status:"draft"});payload={id:30,status:"draft"};
+            }else if(test.kind==="lesson-update"){
+              Object.assign(fixture.lessons.find(row=>row.id===11),entry.body);payload={saved:true};
+            }else{status=405;payload={error:"unsupported_confirmed_save_fixture"};}
+          }else payload=receipt;
+        }
         else{status=405;payload={error:"unexpected_fixture_write"};}
       }else if(control.readFailure?.path===entry.path){status=control.readFailure.status;payload=control.readFailure.payload;}
       else if(entry.path==="/courses")payload={courses:fixture.courses};
       else if(entry.path==="/courses/1/lessons")payload={lessons:fixture.lessons};
-      else if(entry.path==="/courses/2/lessons")payload={lessons:[]};
+      else if(["/courses/2/lessons","/courses/3/lessons"].includes(entry.path))payload={lessons:[]};
       else if(entry.path==="/courses/1/publication-check")payload={course_id:1,version:1,lesson_count:2,
         ready:true,issues:[],warnings:[],content_hash:hash,advisory_only:true};
       else if(entry.path==="/audit")payload={events:[],next_before_id:null};
@@ -78,13 +91,18 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await page.locator("#lesson-body").fill("  Texto literal da nova aula, com espaços.  ");
       await page.locator("#course-summary").fill("  Rascunho irmão preservado.  ");
     }
+    if(test.kind==="lesson-update"){
+      await page.locator("#lesson-title").fill("  Aula revisada 😀  ");
+      await page.locator("#lesson-body").fill("  Texto revisado da aula selecionada, ainda visível.  ");
+      await page.locator("#course-summary").fill("  Rascunho independente do curso.  ");
+    }
     if(test.kind.endsWith("delete")){
       await page.locator("#course-summary").fill("  Rascunho de curso antes da exclusão.  ");
       await page.locator("#lesson-body").fill("  Rascunho de aula antes da exclusão.  ");
     }
     if(test.kind!=="course-create")await page.locator("#editorial-lesson-search").fill("salva");
     await page.waitForLoadState("networkidle",{timeout:8000});control.requests.length=0;
-    return {page,control};
+    return {page,control,fixture};
   }
   function noRefresh(control){
     const index=control.requests.findIndex(entry=>entry.method!=="GET");
@@ -182,6 +200,64 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
           "C149 "+status+" on "+path+" clears every private draft instead of restoring the failed-recovery snapshot");
         await close(page);
       }
+    }
+    const saveChecks=[
+      {test:cases[0],path:"/courses/3/lessons",status:503},
+      {test:cases[1],path:"/courses",status:503},
+      {test:cases[1],path:"/courses/1/lessons",status:200},
+      {test:cases[2],path:"/courses/1/lessons",status:503},
+      {test:{kind:"lesson-update",button:"lesson-save",method:"PATCH",path:"/lessons/11"},
+        path:"/courses/1/lessons",status:503},
+    ];
+    for(const item of saveChecks){
+      const {test,path,status}=item;stage="C150 confirmed "+test.kind+" failed "+path;
+      const {page,control,fixture}=await open(test,undefined,{commitWrites:true});
+      await page.locator("#course-audience").fill("  Público literal no formulário 😀  ");
+      await page.locator("#course-suggested-knowledge").fill("  Conhecimento opcional ainda visível.  ");
+      const before=await values(page),selected=await page.evaluate(()=>[state.course?.id??null,state.lesson?.id??null]);
+      control.readFailure={path,status,payload:status===200?{untrusted:"incomplete"}:{error:"temporarily_unavailable"}};
+      await page.locator("#"+test.button).click();await frozen(page);
+      const course=test.kind.startsWith("course-"),row=course
+        ?fixture.courses.find(entry=>entry.id===(test.kind==="course-create"?3:1))
+        :fixture.lessons.find(entry=>entry.id===(test.kind==="lesson-create"?30:11));
+      check(control.writes.length===1&&row.title===control.writes[0].body.title&&
+        row[course?"summary":"body"]===control.writes[0].body[course?"summary":"body"]&&
+        same(await values(page),before)&&same(await page.evaluate(()=>[state.course?.id??null,state.lesson?.id??null]),selected),
+        "C150 "+test.kind+" has a confirmed saved fixture row and retains both literal visible forms after "+path+" fails");
+      check(await page.evaluate(ids=>state.confirmedSaveNeedsRead&&state.writeOutcomeUnknown&&!state.writePending&&
+        !state.catalogReady&&!state.lessonsReady&&state.courses.length===0&&state.lessons.length===0&&
+        ids.every(id=>document.getElementById(id).disabled),fields)&&
+        (await page.locator("#status").innerText()).includes("salvamento foi confirmado")&&
+        await page.locator("#course-save").isDisabled()&&await page.locator("#lesson-save").isDisabled()&&
+        await page.locator("#retry-catalog").isEnabled(),
+        "C150 confirmed save is distinguished from the failed screen refresh; retained buffers never restore write authority");
+      if(test.kind==="course-update"&&path==="/courses"){
+        await page.locator("#retry-catalog").click();
+        await page.waitForFunction(()=>!state.catalogLoading&&state.writeOutcomeUnknown);
+        check(control.writes.length===1&&same(await values(page),before)&&
+          (await page.locator("#status").innerText()).includes("salvamento foi confirmado"),
+          "C150 a second failed manual read retains the confirmed-save distinction and both drafts without replay");
+      }
+      control.readFailure=null;await page.locator("#retry-catalog").click();
+      await page.waitForFunction(()=>state.catalogReady&&!state.catalogLoading&&!state.writeOutcomeUnknown);
+      check(control.writes.length===1&&await page.evaluate(()=>!state.confirmedSaveNeedsRead)&&
+        (test.kind!=="lesson-update"||await page.evaluate(()=>state.lesson?.id===11))&&
+        (test.kind!=="lesson-create"||await page.evaluate(()=>state.lesson?.id===30))&&
+        (test.kind!=="course-create"||await page.evaluate(()=>state.course?.id===3)),
+        "C150 explicit complete recovery selects the created or updated target only from fresh validated lists without repeating the save");
+      await close(page);
+    }
+    for(const status of [403,419]){
+      stage="C150 post-save revocation "+status;
+      const {page,control}=await open(cases[1],undefined,{commitWrites:true});
+      control.readFailure={path:"/courses/1/lessons",status,payload:{error:"access_denied"}};
+      await page.locator("#course-save").click();
+      await page.waitForFunction(()=>state.accessDenied&&!state.writePending);
+      check(control.writes.length===1&&await page.evaluate(ids=>!state.confirmedSaveNeedsRead&&
+        state.course===null&&state.lesson===null&&ids.filter(id=>id!=="course-category")
+          .every(id=>document.getElementById(id).value===""),fields)&&await page.locator("#catalog-recovery").isHidden(),
+        "C150 "+status+" after a confirmed save clears all private buffers and suppresses recovery");
+      await close(page);
     }
   }catch(error){failed=true;console.error("C136 editorial-write-receipts stage: "+stage+"; "+String(error.message).slice(0,220));throw error;}
   finally{try{await bounded(context.close(),"context cleanup");}catch(error){if(!failed)throw error;}}

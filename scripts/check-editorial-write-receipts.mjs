@@ -11,7 +11,7 @@ const view=readFileSync(new URL("../resources/views/university/admin.blade.php",
 const start=view.indexOf('"use strict";'),end=view.lastIndexOf("</script>");
 const boot='loadAdminCatalog();\n(async()=>{try{await refreshAudit();}catch(error){say(error.message);}})();';
 assert.ok(start>=0&&end>start&&view.slice(start,end).includes(boot));
-const source=view.slice(start,end).replace(boot,"")+"\nglobalThis.editor={state,refreshCourses,loadAdminCatalog,refreshAudit,lockAccess};";
+const source=view.slice(start,end).replace(boot,"")+"\nglobalThis.editor={state,refreshCourses,refreshLessons,loadAdminCatalog,refreshAudit,lockAccess};";
 const clone=value=>JSON.parse(JSON.stringify(value));
 const courseFields=["course-title","course-slug","course-category","course-summary","course-sort",
   "course-audience","course-suggested-knowledge"];
@@ -89,6 +89,11 @@ async function harness({published=false,nextCourseId=3,nextLessonId=30}={}){
     if(lesson&&entry.method==="DELETE"){
       server.lessons.set(1,server.lessons.get(1).filter(row=>row.id!==Number(lesson[1])));return ok({deleted:true});
     }
+    if(lesson&&entry.method==="PATCH"){
+      const row=[...server.lessons.values()].flat().find(item=>item.id===Number(lesson[1]));
+      assert.ok(row,"The confirmed lesson PATCH has a persisted target");
+      Object.assign(row,entry.body);return ok({saved:true});
+    }
     const create=entry.path.match(/^\/courses\/(\d+)\/lessons$/);
     if(create&&entry.method==="POST"){
       server.lessons.get(Number(create[1])).push({id:nextLessonId,...entry.body,status:"draft",is_published:false});
@@ -165,6 +170,11 @@ async function prepared(test,options={}){
     h.get("lesson-body").value="  Texto literal da nova aula, com espaços.  ";
     h.get("course-summary").value="  Rascunho irmão preservado.  ";
   }
+  if(test.kind==="lesson-update"){
+    h.get("lesson-title").value="  Aula revisada 😀  ";
+    h.get("lesson-body").value="  Texto revisado da aula selecionada, ainda visível.  ";
+    h.get("course-summary").value="  Rascunho independente do curso.  ";
+  }
   if(test.kind.endsWith("delete")){
     h.get("course-summary").value="  Rascunho de curso antes da exclusão.  ";
     h.get("lesson-body").value="  Rascunho de aula antes da exclusão.  ";
@@ -180,6 +190,7 @@ function assertOneWrite(h,test){
 }
 function assertUncertain(h,test,buffers,query,selected){
   assert.equal(h.state.writeOutcomeUnknown,true);assert.equal(h.state.writePending,false);
+  assert.equal(h.state.confirmedSaveNeedsRead,false);assert.equal(h.state.confirmedSaveReadTarget,null);
   assert.equal(h.state.catalogReady,false);assert.equal(h.state.lessonsReady,false);
   assert.deepEqual(h.fields(),buffers);assert.equal(h.state.lessonQuery,query);
   assert.deepEqual([h.state.course?.id??null,h.state.lesson?.id??null],selected);
@@ -432,4 +443,155 @@ await scenario("C149 a recovery JSON arriving after revocation cannot restore ca
   assert.equal(h.state.course,null);assert.equal(h.state.lesson,null);assertOneWrite(h,test);
   assert.equal(h.get("catalog-recovery").hidden,true);
 });
-console.log("PASS editorial write receipts: "+scenarios+" actual-script scenarios; seven handlers, strict receipts, preserved drafts and manual recovery without replay");
+
+const confirmedSaveCases=[
+  {...cases[0],readPaths:["/courses","/courses/3/lessons"]},
+  {...cases[1],readPaths:["/courses","/courses/1/lessons"]},
+  {...cases[2],readPaths:["/courses/1/lessons"]},
+  {kind:"lesson-update",control:"lesson-form",method:"PATCH",path:"/lessons/11",
+    readPaths:["/courses/1/lessons"]},
+];
+function assertConfirmedStored(h,test){
+  const write=h.writes()[0];assert.ok(write);
+  const course=test.kind.startsWith("course-");
+  const row=course?h.server.courses.find(item=>item.id===(test.kind==="course-create"?3:1)):
+    h.server.lessons.get(1).find(item=>item.id===(test.kind==="lesson-create"?30:11));
+  assert.ok(row,"The genuine successful receipt corresponds to a stored fixture row");
+  assert.equal(row.title,write.body.title);assert.equal(row[course?"summary":"body"],write.body[course?"summary":"body"]);
+}
+for(const test of confirmedSaveCases){
+  for(const path of test.readPaths){
+    for(const [label,failure] of [
+      ["503",()=>({status:503,payload:{error:"temporarily_unavailable"}})],
+      ["invalid 200",()=>ok({untrusted:"incomplete"})],
+      ["invalid JSON",()=>({status:200,json:async()=>{throw new SyntaxError("Synthetic invalid refresh JSON");}})],
+      ["network failure",()=>{throw new Error("Synthetic failed post-save read");}],
+    ]){
+      await scenario("C150 "+test.kind+" "+path+" "+label+" keeps saved visible buffers without replay or authority",async()=>{
+        const h=await prepared(test);
+        h.get("course-audience").value="  Público literal 😀\nSegunda linha.  ";
+        h.get("course-suggested-knowledge").value="  Orientação ainda no formulário.  ";
+        const before=snapshot(h);
+        h.control.hook=entry=>entry.method==="GET"&&entry.path===path?failure():undefined;
+        await h.invoke(test.control);
+        assertConfirmedStored(h,test);assertOneWrite(h,test);
+        assert.deepEqual(h.fields(),before.buffers);assert.equal(h.state.lessonQuery,before.query);
+        assert.deepEqual([h.state.course?.id??null,h.state.lesson?.id??null],before.selected);
+        assert.equal(h.state.confirmedSaveNeedsRead,true);assert.equal(h.state.writeOutcomeUnknown,true);
+        assert.equal(h.state.catalogReady,false);assert.equal(h.state.lessonsReady,false);assert.equal(h.state.writePending,false);
+        assert.equal(h.state.courses.length,0);assert.equal(h.state.lessons.length,0);
+        for(const id of [...fields,...courseButtons,...lessonButtons])assert.equal(h.get(id).disabled,true,id);
+        assert.match(h.get("status").textContent,/salvamento foi confirmado/);
+        assert.match(h.get("status").textContent,/Não repita a operação/);
+        const writes=h.writes().length,requests=h.requests.length;
+        await h.invoke("course-form");await h.invoke("lesson-form");
+        assert.equal(h.writes().length,writes);assert.equal(h.requests.length,requests);
+        h.control.accept=false;await h.invoke("retry-catalog");
+        assert.equal(h.requests.length,requests);assert.deepEqual(h.fields(),before.buffers);
+        assert.match(h.dialogs.at(-1),/salvamento foi confirmado/);
+        h.control.accept=true;
+        await h.invoke("retry-catalog");assert.deepEqual(h.fields(),before.buffers);
+        assert.equal(h.state.confirmedSaveNeedsRead,true);assertOneWrite(h,test);
+        assert.match(h.get("status").textContent,/salvamento foi confirmado/);
+        h.control.hook=null;await h.invoke("retry-catalog");
+        assert.equal(h.state.writeOutcomeUnknown,false);assert.equal(h.state.confirmedSaveNeedsRead,false);
+        assert.equal(h.state.confirmedSaveReadTarget,null);
+        assert.equal(h.state.catalogReady,true);assertOneWrite(h,test);assertConfirmedStored(h,test);
+        assert.equal(h.state.lessonsReady,true);
+        if(test.kind==="lesson-update")assert.equal(h.state.lesson.id,11);
+        if(test.kind==="course-create")assert.equal(h.state.course.id,3);
+        if(test.kind==="lesson-create")assert.equal(h.state.lesson.id,30);
+      });
+    }
+  }
+}
+for(const status of [403,419]){
+  await scenario("C150 "+status+" after a confirmed save purges buffers in either read stage",async()=>{
+    for(const test of confirmedSaveCases){
+      for(const path of test.readPaths){
+        const h=await prepared(test);
+        h.control.hook=entry=>entry.method==="GET"&&entry.path===path?{status,payload:{}}:undefined;
+        await h.invoke(test.control);assertConfirmedStored(h,test);assertOneWrite(h,test);
+        assert.equal(h.state.accessDenied,true);assert.equal(h.state.confirmedSaveNeedsRead,false);
+        assert.equal(h.state.confirmedSaveReadTarget,null);
+        assert.equal(h.state.course,null);assert.equal(h.state.lesson,null);
+        for(const id of fields.filter(id=>id!=="course-category"))assert.equal(h.get(id).value,"");
+        assert.equal(h.get("catalog-recovery").hidden,true);
+      }
+    }
+  });
+}
+for(const path of ["/courses","/courses/1/lessons"]){
+  await scenario("C150 late post-save JSON cannot restore captured drafts after revocation: "+path,async()=>{
+    const test=confirmedSaveCases[1],h=await prepared(test),seen=deferred(),gate=deferred();
+    h.control.hook=entry=>{
+      if(entry.path==="/audit")return {status:419,payload:{}};
+      if(entry.method==="GET"&&entry.path===path)return {status:200,json:async()=>{
+        seen.release();await gate.promise;
+        return path==="/courses"?{courses:h.server.courses}:{lessons:h.server.lessons.get(1)};
+      }};
+    };
+    const pending=h.invoke(test.control);
+    try{await bounded(seen.promise);await h.editor.refreshAudit();}finally{gate.release();}
+    await bounded(pending);assertConfirmedStored(h,test);assertOneWrite(h,test);
+    assert.equal(h.state.accessDenied,true);assert.equal(h.state.confirmedSaveNeedsRead,false);
+    assert.equal(h.state.confirmedSaveReadTarget,null);
+    assert.equal(h.state.course,null);assert.equal(h.state.lesson,null);
+    for(const id of fields.filter(id=>id!=="course-category"))assert.equal(h.get(id).value,"");
+  });
+}
+await scenario("C150 a valid catalogue omission or removed lesson never restores the former selection",async()=>{
+  for(const removed of ["course","lesson"]){
+    const test=confirmedSaveCases[removed==="course"?1:3],h=await prepared(test);
+    h.control.hook=entry=>{
+      if(entry.method==="GET"&&entry.path===(removed==="course"?"/courses":"/courses/1/lessons")){
+        if(removed==="course")h.server.courses=h.server.courses.filter(row=>row.id!==1);
+        else h.server.lessons.set(1,h.server.lessons.get(1).filter(row=>row.id!==11));
+      }
+    };
+    await h.invoke(test.control);assertOneWrite(h,test);
+    assert.equal(h.state.writeOutcomeUnknown,false);assert.equal(h.state.confirmedSaveNeedsRead,false);
+    assert.equal(h.state.lesson,null);assert.equal(h.get("lesson-body").value,"");
+    if(removed==="course"){assert.equal(h.state.course,null);assert.equal(h.get("course-title").value,"");}
+  }
+});
+await scenario("C150 a course removed before manual recovery cannot revive its retained lesson",async()=>{
+  const test=confirmedSaveCases[3],h=await prepared(test);
+  h.control.hook=entry=>entry.method==="GET"?{status:503,payload:{}}:undefined;
+  await h.invoke(test.control);assertConfirmedStored(h,test);
+  assert.equal(h.state.lesson.id,11);assert.equal(h.state.confirmedSaveNeedsRead,true);
+  h.server.courses=h.server.courses.filter(row=>row.id!==1);h.control.hook=null;
+  await h.invoke("retry-catalog");assertOneWrite(h,test);
+  assert.equal(h.state.course,null);assert.equal(h.state.lesson,null);
+  assert.equal(h.get("course-title").value,"");assert.equal(h.get("lesson-body").value,"");
+  assert.equal(h.state.writeOutcomeUnknown,false);assert.equal(h.state.confirmedSaveNeedsRead,false);
+});
+await scenario("C150 confirmed creation IDs never fabricate objects absent from the recovered lists",async()=>{
+  for(const test of [confirmedSaveCases[0],confirmedSaveCases[2]]){
+    const h=await prepared(test);
+    h.control.hook=entry=>entry.method==="GET"?{status:503,payload:{}}:undefined;
+    await h.invoke(test.control);assertConfirmedStored(h,test);
+    assert.equal(h.state.confirmedSaveNeedsRead,true);
+    if(test.kind==="course-create")h.server.courses=h.server.courses.filter(row=>row.id!==3);
+    else h.server.lessons.set(1,h.server.lessons.get(1).filter(row=>row.id!==30));
+    h.control.hook=null;await h.invoke("retry-catalog");assertOneWrite(h,test);
+    if(test.kind==="course-create")assert.equal(h.state.course,null);
+    else assert.equal(h.state.course.id,1);
+    assert.equal(h.state.lesson,null);assert.equal(h.get("lesson-body").value,"");
+    assert.equal(h.state.confirmedSaveReadTarget,null);assert.equal(h.state.confirmedSaveNeedsRead,false);
+    assert.equal(h.state.writeOutcomeUnknown,false);
+  }
+});
+await scenario("C150 confirmed deletion and ordinary read failures retain their previous cleanup",async()=>{
+  const deletion=cases[3],h=await prepared(deletion);
+  h.control.hook=entry=>entry.method==="GET"&&entry.path==="/courses/1/lessons"?{status:503,payload:{}}:undefined;
+  await h.invoke(deletion.control);assert.equal(h.state.lesson,null);assert.equal(h.get("lesson-body").value,"");
+  assert.equal(h.state.confirmedSaveNeedsRead,false);assertOneWrite(h,deletion);
+  assert.equal(h.server.lessons.get(1).some(row=>row.id===11),false);
+  const read=await harness();read.get("lesson-body").value="Texto local sem qualquer salvamento.";
+  read.control.hook=entry=>entry.path==="/courses/1/lessons"?{status:503,payload:{}}:undefined;
+  await assert.rejects(read.editor.refreshLessons(11,true));
+  assert.equal(read.state.lesson,null);assert.equal(read.get("lesson-body").value,"");
+  assert.equal(read.state.confirmedSaveNeedsRead,false);assert.equal(read.writes().length,0);
+});
+console.log("PASS editorial write receipts: "+scenarios+" actual-script scenarios; editorial handlers, strict receipts, preserved drafts and manual recovery without replay");

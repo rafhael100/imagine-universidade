@@ -59,9 +59,18 @@ credenciais, nem conexão a outro host.
 
 - Executado: revisão estática do caminho, `git diff --check` e
   `node scripts/check-write-fence.mjs` (os mesmos 15 caminhos HTTP preservados).
-- Pendente: lint PHP, PHPUnit/SQLite e script PostgreSQL nos jobs já existentes.
-- O caso negativo deve falhar no código anterior, que retornava somente o
-  resultado da inserção, e passar com a conferência temporal após SQL.
+- Executado em CI no commit `c9becf7ae97c8591d46370abc3f313fa6e1966ec`:
+  lint PHP, PHPUnit/SQLite e o script PostgreSQL foram aprovados no job
+  `validation` da [execução 44295668854](https://github.com/rafhael100/imagine-universidade/actions/runs/44295668854).
+  Foram 39 testes unitários/169 asserções e 367 testes de integração/5.391
+  asserções. A verificação PostgreSQL confirmou recusa após atraso real,
+  retenção do hash, aceitação ainda válida e rollback completo.
+- Os jobs `docker-lab`, `staging-image-lab`, `portal-contract-parity` e
+  `editorial-review-pack` dessa mesma execução também foram aprovados. O
+  navegador ainda estava em execução no momento deste registro; os números
+  acima não representam resultado do navegador.
+- No código anterior, o caso negativo retornava somente o resultado da
+  inserção. A conferência temporal após SQL agora recusa esse vencimento.
 
 ## Limites
 

@@ -253,7 +253,7 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,confirmedSaveNeedsRead:false,confirmedSaveReadTarget:null,
   auditLoading:false,auditLoaded:false,auditMessage:"Carregando alterações autorizadas...",
   courseQuery:"",courseCategory:"todos",courseStatus:"todos",lessonQuery:"",lessonQueryCourseId:null,
   overviewSnapshot:null,overviewRequest:0,overviewLoading:false,overviewAttempted:false,
@@ -269,6 +269,7 @@ function say(message){
 }
 function beginWrite(){
   if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
+  state.confirmedSaveNeedsRead=false;state.confirmedSaveReadTarget=null;
   state.writePending=true;
   renderEditorialCourseFilters();
   renderLessonReorderControls();
@@ -313,7 +314,9 @@ function freezeUncertainEditorialWrite(){
   invalidateEditorialOverview("Consulte novamente os cursos para confirmar a alteração antes de atualizar a visão do acervo.");
   invalidateEditorialArchive("Confirme a alteração consultando os cursos antes de abrir as versões arquivadas.");
   renderLessonReorderControls();
-  say("O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
+  say(state.confirmedSaveNeedsRead
+    ?"O salvamento foi confirmado, mas não foi possível atualizar a tela. Os campos foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar."
+    :"O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
 }
 function clearPublicationCheck(){
   ++state.preflightRequest;
@@ -322,6 +325,7 @@ function clearPublicationCheck(){
 }
 function lockAccess(message){
   if(state.accessDenied)return;
+  state.confirmedSaveNeedsRead=false;state.confirmedSaveReadTarget=null;
   state.accessDenied=true;state.accessMessage=message;state.catalogReady=false;state.lessonsReady=false;
   document.querySelector(".layout").inert=true;
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
@@ -999,6 +1003,31 @@ function lessonReorderFormSnapshot(){
     course:values(["course-title","course-slug","course-category","course-summary","course-sort","course-audience","course-suggested-knowledge"]),
     lesson:values(["lesson-title","lesson-slug","lesson-body","lesson-sort"])};
 }
+function captureEditorialDraft(){
+  return {forms:lessonReorderFormSnapshot(),course:state.course,lesson:state.lesson,
+    lessonQuery:state.lessonQuery,lessonQueryCourseId:state.lessonQueryCourseId};
+}
+// Local buffers are recoverable text, never authority for another mutation.
+// Only failed manual recovery or an explicitly opted-in post-save read uses
+// this helper. Normal navigation and confirmed deletion keep their cleanup.
+function restoreEditorialDraft(snapshot){
+  if(state.accessDenied||!snapshot)return;
+  state.catalogReady=false;state.lessonsReady=false;
+  state.courses=[];state.lessons=[];state.course=snapshot.course;state.lesson=snapshot.lesson;
+  state.lessonQuery=snapshot.lessonQuery;state.lessonQueryCourseId=snapshot.lessonQueryCourseId;
+  renderCourses();renderLessons();fillCourse();
+  if(state.lesson)fillLesson();else resetLesson();
+  const restore=(ids,values)=>ids.forEach((id,index)=>{
+    $(id).value=values[index];$(id).disabled=true;
+  });
+  restore(["course-title","course-slug","course-category","course-summary","course-sort",
+    "course-audience","course-suggested-knowledge"],snapshot.forms.course);
+  restore(["lesson-title","lesson-slug","lesson-body","lesson-sort"],snapshot.forms.lesson);
+  freezeUncertainEditorialWrite();
+  $("course-items").replaceChildren();
+  $("course-items").append(el("p","Cursos temporariamente indisponíveis.","help"));
+  $("lesson-items").replaceChildren();
+}
 function lessonReorderDirtyForms(snapshot=lessonReorderFormSnapshot()){
   const c=state.course,l=state.lesson;
   const course=[c?.title??"",c?.slug??"",c?.category??"metodologia",c?.summary??"",String(c?.sort_order??0),
@@ -1109,7 +1138,9 @@ function validatedAdminCourses(payload){
   }
   return courses;
 }
-async function refreshCourses(preferredId=state.course?.id??null){
+async function refreshCourses(preferredId=state.course?.id??null,preserveAfterSave=false,preferredLessonId=state.lesson?.id??null){
+  const savedDraft=state.writePending&&preserveAfterSave?captureEditorialDraft():null;
+  const savedTarget=savedDraft?{courseId:preferredId,lessonId:preferredLessonId}:null;
   const request=++state.courseRequest;
   // A failed refresh after an editorial write must never leave the old
   // catalog eligible for another mutation merely because it was once valid.
@@ -1119,16 +1150,24 @@ async function refreshCourses(preferredId=state.course?.id??null){
   invalidateEditorialOverview("Consulte os cursos e atualize a visão para conferir os números do acervo.");
   invalidateEditorialArchive("Consulte as versões arquivadas após carregar os cursos.");
   $("new-course").disabled=true;
-  const result=await api("/courses");
-  if(state.accessDenied||state.courseRequest!==request)return;
-  const verified=validatedAdminCourses(result);
-  if(verified===null)throw new Error("O catálogo editorial recebido é inválido. Tente novamente.");
-  state.courses=verified;
-  state.course=state.courses.find(c=>c.id===preferredId)||null;
-  state.catalogReady=true;
-  $("new-course").disabled=false;
-  renderCourses();fillCourse();
-  await refreshLessons();
+  try{
+    const result=await api("/courses");
+    if(state.accessDenied||state.courseRequest!==request)return;
+    const verified=validatedAdminCourses(result);
+    if(verified===null)throw new Error("O catálogo editorial recebido é inválido. Tente novamente.");
+    state.courses=verified;
+    state.course=state.courses.find(c=>c.id===preferredId)||null;
+    state.catalogReady=true;
+    $("new-course").disabled=false;
+    renderCourses();fillCourse();
+    await refreshLessons(preferredLessonId);
+  }catch(error){
+    if(savedDraft&&!state.accessDenied&&state.courseRequest===request){
+      state.confirmedSaveNeedsRead=true;state.confirmedSaveReadTarget=savedTarget;
+      restoreEditorialDraft(savedDraft);
+    }
+    throw error;
+  }
 }
 // A course is not editable until its current lesson-version list is
 // authenticated and structurally consistent. Invalid 200 responses must
@@ -1154,7 +1193,8 @@ function validatedAdminLessons(payload){
   }
   return lessons;
 }
-async function refreshLessons(preferredLessonId=state.lesson?.id??null){
+async function refreshLessons(preferredLessonId=state.lesson?.id??null,preserveAfterSave=false){
+  const savedDraft=state.writePending&&preserveAfterSave?captureEditorialDraft():null;
   const request=++state.lessonRequest;
   const courseId=state.course?.id??null;
   state.lessonsReady=false;
@@ -1175,6 +1215,12 @@ async function refreshLessons(preferredLessonId=state.lesson?.id??null){
     renderLessons();updateEditorialControls();
   }catch(error){
     if(!state.accessDenied&&state.lessonRequest===request&&state.course?.id===courseId){
+      if(savedDraft){
+        state.confirmedSaveNeedsRead=true;
+        state.confirmedSaveReadTarget={courseId,lessonId:preferredLessonId};
+        restoreEditorialDraft(savedDraft);
+        throw error;
+      }
       // The selected course remains authoritative; no stale lesson data is
       // shown. A human may retry this read without abandoning the course.
       const panel=$("lesson-items");panel.replaceChildren();
@@ -1258,7 +1304,7 @@ $("course-form").addEventListener("submit",async event=>{
       !Number.isSafeInteger(result.id)||result.id<1||result.status!=="draft"){
       throw new Error("invalid_course_create_receipt");
     }
-    if(!state.accessDenied){await refreshCourses(courseId??result.id);say("Rascunho salvo.");}
+    if(!state.accessDenied){await refreshCourses(courseId??result.id,true);say("Rascunho salvo.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
@@ -1329,7 +1375,7 @@ $("lesson-form").addEventListener("submit",async event=>{
       }
       savedLessonId=result.id;
     }
-    if(!state.accessDenied){await refreshLessons(savedLessonId);say("Aula salva em rascunho.");}
+    if(!state.accessDenied){await refreshLessons(savedLessonId,true);say("Aula salva em rascunho.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
@@ -1605,14 +1651,16 @@ $("load-more-audit").addEventListener("click",()=>{
 });
 async function loadAdminCatalog(){
   if(state.accessDenied||state.writePending||state.catalogLoading)return;
-  if(state.writeOutcomeUnknown&&!confirm("O resultado da última alteração editorial não foi confirmado. Consultar novamente o servidor poderá substituir os campos não salvos desta tela. Continuar?"))return;
+  if(state.writeOutcomeUnknown&&!confirm(state.confirmedSaveNeedsRead
+    ?"O salvamento foi confirmado, mas a atualização da tela falhou. Consultar novamente o servidor poderá substituir os campos desta tela. Continuar?"
+    :"O resultado da última alteração editorial não foi confirmado. Consultar novamente o servidor poderá substituir os campos não salvos desta tela. Continuar?"))return;
   // The consent permits replacement by a complete, validated read. Keep
   // both literal drafts if either the catalog or its lesson read fails.
   // These are disabled buffers, never a replacement for current authority.
-  const recoveryDraft=state.writeOutcomeUnknown?{
-    forms:lessonReorderFormSnapshot(),course:state.course,lesson:state.lesson,
-    lessonQuery:state.lessonQuery,lessonQueryCourseId:state.lessonQueryCourseId
-  }:null;
+  const recoveryDraft=state.writeOutcomeUnknown?captureEditorialDraft():null;
+  // A valid creation receipt supplies a navigation target, not a course or
+  // lesson object. Only the fresh validated lists may establish selection.
+  const recoveryTarget=state.confirmedSaveNeedsRead?state.confirmedSaveReadTarget:null;
   state.catalogLoading=true;
   if(!state.catalogReady)$("new-course").disabled=true;
   const retry=$("retry-catalog"),recovery=$("catalog-recovery");
@@ -1620,12 +1668,14 @@ async function loadAdminCatalog(){
   $("course-items").replaceChildren();
   $("course-items").append(el("p","Verificando acesso editorial e cursos...", "help"));
   try{
-    await refreshCourses();
+    if(recoveryTarget)await refreshCourses(recoveryTarget.courseId,false,recoveryTarget.lessonId);
+    else await refreshCourses();
     if(!state.accessDenied){
       // Only a fully successful course + lesson read resolves uncertainty.
       // Re-render after clearing the fence: controls were intentionally
       // disabled while reconciliation was in progress.
       state.writeOutcomeUnknown=false;
+      state.confirmedSaveNeedsRead=false;state.confirmedSaveReadTarget=null;
       renderLessons();
       fillCourse();
       $("new-course").disabled=false;
@@ -1635,32 +1685,23 @@ async function loadAdminCatalog(){
     if(!state.accessDenied){
       // Invalidate navigation and all write authority even when an earlier
       // read in this recovery already replaced part of the catalog.
-      state.catalogReady=false;state.lessonsReady=false;
-      $("new-course").disabled=true;
-      state.courses=[];state.lessons=[];
-      state.course=recoveryDraft?.course??null;state.lesson=recoveryDraft?.lesson??null;
       if(recoveryDraft){
-        state.lessonQuery=recoveryDraft.lessonQuery;
-        state.lessonQueryCourseId=recoveryDraft.lessonQueryCourseId;
+        restoreEditorialDraft(recoveryDraft);
+      }else{
+        state.catalogReady=false;state.lessonsReady=false;
+        $("new-course").disabled=true;
+        state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
+        ++state.lessonRequest;
+        renderCourses();renderLessons();fillCourse();resetLesson();
       }
-      ++state.lessonRequest;
-      renderCourses();renderLessons();fillCourse();
-      if(recoveryDraft){
-        if(state.lesson)fillLesson();else resetLesson();
-        const restore=(ids,values)=>ids.forEach((id,index)=>{
-          $(id).value=values[index];$(id).disabled=true;
-        });
-        restore(["course-title","course-slug","course-category","course-summary","course-sort",
-          "course-audience","course-suggested-knowledge"],recoveryDraft.forms.course);
-        restore(["lesson-title","lesson-slug","lesson-body","lesson-sort"],recoveryDraft.forms.lesson);
-        freezeUncertainEditorialWrite();
-      }else resetLesson();
       $("course-items").replaceChildren();
       $("course-items").append(el("p","Cursos temporariamente indisponíveis.", "help"));
       $("lesson-items").replaceChildren();
       hideLessonPreview();clearPublicationCheck();
       say(recoveryDraft
-        ?"Não foi possível concluir a consulta. Os campos não salvos foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar."
+        ?(state.confirmedSaveNeedsRead
+          ?"Não foi possível concluir a consulta. O salvamento foi confirmado e os campos desta tela foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar."
+          :"Não foi possível concluir a consulta. Os campos não salvos foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.")
         :error.message);
       recovery.hidden=false;
     }

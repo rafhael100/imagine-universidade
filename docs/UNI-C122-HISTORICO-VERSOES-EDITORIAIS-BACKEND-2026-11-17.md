@@ -2,6 +2,24 @@
 
 17/11/2026 · Backend candidato para revisão e CI. **HOLD_NO_GO** operacional.
 
+## Evidência executada
+
+O commit `98e32b357248c8bd40cb68f38edcb47d338942b6` passou nos seis jobs da
+[execução 44209334123](https://github.com/rafhael100/imagine-universidade/actions/runs/44209334123).
+Foram **39 testes Unit/169 asserções e 178 Feature/2.350**, totalizando
+**217 testes e 2.519 asserções**. Os 21 testes deste contrato estão incluídos.
+
+O probe executou o repositório real no PostgreSQL e confirmou as páginas com
+sentinela, empates no cursor composto, Unicode integral, vínculo exato,
+ausência de dados pessoais/corpos nos índices e parâmetros além de int4 sem
+erro de conversão. As fixtures foram revertidas. O navegador concluiu 419
+verificações sintéticas e 98 no fluxo real do Laravel, inclusive preservação
+do arquivo depois da edição e republicação da versão seguinte.
+
+A correção de descarte do HTTP200 tardio e a inspeção visual do leitor estão
+registradas no [documento da interface](UNI-C122-CONSULTA-VERSOES-EDITORIAIS-UI-2026-11-17.md).
+Os resultados permanecem limitados ao SHA e ao laboratório citados.
+
 ## Recorte e fontes
 
 Permitir ao editor consultar versões arquivadas, navegar pelos metadados de

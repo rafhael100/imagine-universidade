@@ -188,6 +188,13 @@ A consulta C-122 acrescenta capturas do painel de versões arquivadas em
 O percurso confere também que a página não transborda horizontalmente em
 390 pixels; as imagens permitem a inspeção visual do resultado real da CI.
 
+O gerenciamento C-123 consulta favoritos próprios pela interface antes e depois
+da retirada do curso, confere a data original e remove a referência da segunda
+empresa pela linha correspondente. A primeira empresa conserva seu favorito;
+a republicação atualiza a disponibilidade sem recriar o item removido.
+Capturas em 1440 e 390 pixels registram a referência indisponível, sem título
+ou link para o conteúdo retirado. A revogação apaga também esse painel.
+
 O setup tem prazo máximo de 60 segundos, a jornada Node de 180 segundos e a
 conferência final de 30 segundos. O início de cada fase é registrado com um nome
 fixo. Um timeout produz falha, nunca aprovação parcial. O percurso passou a

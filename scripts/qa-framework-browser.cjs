@@ -194,6 +194,37 @@ async function favorite(student,courseId,desired){
     document.getElementById("course-favorite-toggle").getAttribute("aria-pressed")===String(value)&&
     !document.getElementById("course-favorite-toggle").disabled,desired);
 }
+async function retainedFavorites(student,courseId,availability){
+  const selection=()=>student.page.evaluate(()=>({
+    course:document.querySelector("#course-list [aria-current='true']")?.getAttribute("data-course-id")??null,
+    lesson:document.querySelector("#lesson-content h3")?.textContent??null,
+    category:document.querySelector("[data-filter][aria-pressed='true']")?.getAttribute("data-filter")??null,
+    query:document.getElementById("course-search").value,
+    favoritesOnly:document.getElementById("favorites-only").checked,
+  }));
+  const before=await selection(),writes=countWrites(student.profile);
+  if(!await student.page.locator("#retained-favorites-panel").evaluate(node=>node.open)){
+    await student.page.locator("#retained-favorites-panel > summary").click();
+  }
+  const response=await clickResponse(student.page,"#reload-retained-favorites","GET","/universidade/private/favorites/retained");
+  const payload=await json(response,"Private retained favorites");
+  await student.page.waitForFunction(()=>!document.getElementById("reload-retained-favorites").disabled);
+  const rows=payload.favorites;
+  check(response.status()===200&&(response.headers()["cache-control"]||"").includes("no-store")&&
+    payload.schema_version===1&&payload.scope==="current_authenticated_student"&&payload.next_after_course_id===null&&
+    JSON.stringify(Object.keys(payload).sort())===JSON.stringify(["favorites","next_after_course_id","schema_version","scope"])&&
+    Array.isArray(rows)&&(availability===null?rows.length===0:rows.length===1&&rows[0].course_id===courseId&&
+      rows[0].course_slug==="curso-framework-sintetico"&&rows[0].availability===availability&&
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(rows[0].saved_at)&&
+      JSON.stringify(Object.keys(rows[0]).sort())===JSON.stringify(["availability","course_id","course_slug","saved_at"])),
+    "The retained favorites page must expose only this student's references, original UTC date and current availability");
+  const list=student.page.locator("#retained-favorites-list");
+  check(await list.locator("[data-retained-course-id]").count()===rows.length&&
+    (availability===null||await list.locator("[data-retained-course-id='"+courseId+"']").getAttribute("data-retained-availability")===availability)&&
+    JSON.stringify(await selection())===JSON.stringify(before)&&countWrites(student.profile)===writes,
+    "Consulting retained favorites through the real UI must preserve the current lesson, course, filters and write count");
+  return rows[0]??null;
+}
 async function exportFavorites(student,expectedSlugs){
   const [download,response]=await Promise.all([
     student.page.waitForEvent("download"),
@@ -463,6 +494,10 @@ async function main(){
     "Removing one company's favorite must preserve the same person's other-company preference");
   await favorite(studentA,courseId,true);
 
+  enterStage("own retained references before withdrawal");
+  const retainedA=await retainedFavorites(studentA,courseId,"available");
+  await retainedFavorites(studentB,courseId,"available");
+
   enterStage("explicit private reading position");
   const emptyA=await readingSnapshot(studentA),emptyB=await readingSnapshot(studentB);
   check(emptyA.status==="none"&&emptyA.position===null&&emptyB.status==="none"&&emptyB.position===null,
@@ -546,11 +581,29 @@ async function main(){
     {headers:{Accept:"application/json"}});
   check(oldSource.status()===404,"The archived lesson must be unavailable through its previous HTTP identity");
   await exportFavorites(studentA,["curso-framework-sintetico"]);
-  const removeWithdrawn=await studentB.context.request.delete(base+"/universidade/private/courses/"+courseId+"/favorite",
-    {headers:await headers(studentB.page)});
+  const retainedAfterWithdrawal=await retainedFavorites(studentA,courseId,"unavailable");
+  check(retainedAfterWithdrawal.saved_at===retainedA.saved_at&&
+    !await studentA.page.locator("#retained-favorites-list a").count()&&
+    !(await studentA.page.locator("#retained-favorites-list").textContent()).includes("Curso sintético revisado"),
+    "Withdrawal must preserve the original favorite date without exposing a withdrawn title or content link");
+  await studentA.page.locator("#retained-favorites-panel").screenshot({path:path.join(evidenceDir,"framework-retained-favorites-desktop.png")});
+  await studentA.page.setViewportSize({width:390,height:844});
+  check(await studentA.page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),
+    "The retained favorites manager must remain within the narrow mobile viewport");
+  await studentA.page.locator("#retained-favorites-panel").screenshot({path:path.join(evidenceDir,"framework-retained-favorites-mobile.png")});
+  await studentA.page.setViewportSize({width:1440,height:1000});
+  await retainedFavorites(studentB,courseId,"unavailable");
+  const beforeRetainedRemoval=countWrites("student-b");
+  const removeWithdrawn=await clickResponse(studentB.page,"[data-remove-retained-favorite='"+courseId+"']","DELETE",
+    "/universidade/private/courses/"+courseId+"/favorite");
   const removal=await json(removeWithdrawn,"Withdrawn favorite removal");
+  await studentB.page.locator("#retained-favorites-list [data-retained-course-id='"+courseId+"']").waitFor({state:"detached"});
   check(removeWithdrawn.status()===200&&removal.course_id===courseId&&removal.favorite===false,
-    "The owner may remove a retained withdrawn favorite through the real CSRF-protected API");
+    "The owner may remove a withdrawn favorite through its own real UI row and CSRF-protected API");
+  check(countWrites("student-b")===beforeRetainedRemoval+1&&
+    await studentB.page.locator("#lesson-content h3").count()===0&&
+    (await retainedFavorites(studentA,courseId,"unavailable")).saved_at===retainedA.saved_at,
+    "One explicit removal must preserve the other company's retained preference and keep withdrawn lessons closed");
   await exportFavorites(studentB,[]);
   const withdrawnPosition=await readingSnapshot(studentA);
   check(withdrawnPosition.status==="unavailable"&&withdrawnPosition.position===null&&
@@ -613,6 +666,9 @@ async function main(){
   check((await studentA.page.locator("#course-favorite-toggle").getAttribute("aria-pressed"))==="true"&&
     (await studentB.page.locator("#course-favorite-toggle").getAttribute("aria-pressed"))==="false",
     "Republication must restore retained favorites and respect an explicit withdrawn favorite removal");
+  check((await retainedFavorites(studentA,courseId,"available")).saved_at===retainedA.saved_at&&
+    await retainedFavorites(studentB,courseId,null)===null,
+    "Republication must update retained availability without recreating the explicitly removed favorite or refreshing its original date");
   check(!(await studentA.page.locator("#lesson-content button.primary").isDisabled())&&
     (await studentA.page.locator("#lesson-content button.primary").innerText()).includes("Marcar como concluída"),
     "The new version starts pending without inheriting an archived lesson completion");
@@ -646,6 +702,10 @@ async function main(){
     await studentA.page.locator("#resume-reading-position").isDisabled()&&
     await studentA.page.locator("#export-reading-position").isDisabled(),
     "Eligibility revocation must also purge reading-position controls and block exports");
+  check(await studentA.page.locator("#retained-favorites-panel").isHidden()&&
+    await studentA.page.locator("#retained-favorites-list [data-retained-course-id]").count()===0&&
+    await studentA.page.locator("#reload-retained-favorites").isDisabled(),
+    "Eligibility revocation must purge retained references and disable the private manager");
   check(businessRequests.filter(request=>request.profile==="student-a"&&request.path==="/universidade/private/favorites").length===readsBefore,
     "Revocation must not trigger an automatic favorite retry or reconciliation GET");
   const otherCompany=await studentB.context.request.get(base+"/universidade/private/courses",{
@@ -667,7 +727,7 @@ async function main(){
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
     synthetic_profiles:3,scenarios:["csrf","editorial CRUD","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","historical progress","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

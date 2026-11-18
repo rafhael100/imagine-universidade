@@ -57,6 +57,14 @@
     .favorite-tools label{display:inline-flex;align-items:center;gap:9px;min-height:44px;font-weight:750;font-size:13px}
     .favorite-tools input{width:20px;height:20px;accent-color:var(--orange)}
     .favorite-tools .secondary{margin-left:0}
+    .retained-favorites{flex-basis:100%;min-width:0;border:1px solid var(--line);border-radius:12px;background:#FAFBFC;padding:12px 15px}
+    .retained-favorites summary{cursor:pointer;font-weight:750;min-height:28px}
+    .retained-favorites>p{font-size:13px;color:#565D56;margin:10px 0}
+    .retained-favorites-list{list-style:none;padding:0;margin:10px 0;display:grid;gap:8px}
+    .retained-favorite{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 16px;padding:12px;border:1px solid var(--line);border-radius:9px;background:#fff}
+    .retained-favorite-info{flex:1 1 240px;min-width:0;overflow-wrap:anywhere}
+    .retained-favorite-info strong,.retained-favorite-info span,.retained-favorite-info time{display:block}
+    .retained-favorite-info span,.retained-favorite-info time{font-size:12px;color:#565D56;margin-top:3px}
     .favorite-status{flex-basis:100%;font-size:13px;color:#565D56;margin:0}
     .course-favorite{padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
     .course-favorite p{font-size:13px;font-weight:750;margin:0 0 8px;overflow-wrap:anywhere}
@@ -180,6 +188,14 @@
     <button id="export-favorites" type="button" class="secondary" disabled>Exportar meus favoritos</button>
     <p id="favorites-status" class="favorite-status" role="status" aria-live="polite">Seus favoritos serão consultados após carregar a biblioteca.</p>
     <p id="favorites-export-status" class="favorite-status" role="status" aria-live="polite" hidden></p>
+    <details id="retained-favorites-panel" class="retained-favorites" hidden>
+      <summary>Gerenciar favoritos</summary>
+      <p>Consulte suas referências guardadas, inclusive de cursos que não estão disponíveis. Remover um favorito não altera suas aulas concluídas.</p>
+      <button id="reload-retained-favorites" type="button" class="secondary" disabled>Consultar favoritos guardados</button>
+      <p id="retained-favorites-status" role="status" aria-live="polite"></p>
+      <ul id="retained-favorites-list" class="retained-favorites-list"></ul>
+      <button id="more-retained-favorites" type="button" class="secondary" hidden disabled>Ver mais favoritos</button>
+    </details>
   </div>
   <section class="lesson-search-panel" aria-labelledby="lesson-search-title">
     <h2 id="lesson-search-title">Encontre um assunto dentro das aulas</h2>
@@ -237,8 +253,10 @@ const list=document.getElementById("course-list"),lessonsBox=document.getElement
 const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
   favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,
-  favoriteWriting:false,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",
+  favoriteWriting:false,favoriteWriteRequest:0,favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",
   favoriteExportLoading:false,favoriteExportRequest:0,
+  retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,
+    unconfirmed:false,removingId:null,message:"Consulte suas referências guardadas quando desejar."},
   readingSnapshot:null,readingLoading:false,readingWriting:false,readingReturning:false,
   readingUncertain:false,readingRequest:0,readingMessage:"",
   readingExportLoading:false,readingExportRequest:0};
@@ -284,6 +302,10 @@ function lockAccess(message){
   state.courses=[];state.courseId=null;state.lessonId=null;
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;
   state.favoriteWriting=false;state.favoriteOutcomeUnknown=false;state.favoritesOnly=false;
+  ++state.favoriteWriteRequest;
+  invalidateRetainedFavorites("");state.retained.needsRefresh=false;state.retained.unconfirmed=false;
+  document.getElementById("retained-favorites-panel").open=false;
+  renderRetainedFavorites();
   state.favoritesMessage="";++state.favoritesRequest;
   document.getElementById("favorites-only").checked=false;
   document.getElementById("favorites-only").disabled=true;
@@ -699,6 +721,135 @@ document.getElementById("reload-reading-position").addEventListener("click",()=>
 document.getElementById("resume-reading-position").addEventListener("click",()=>{void resumeReadingPosition();});
 document.getElementById("remove-reading-position").addEventListener("click",()=>{void writeReadingPosition();});
 document.getElementById("export-reading-position").addEventListener("click",()=>{void exportReadingPosition();});
+function retainedTimestamp(value){
+  if(typeof value!=="string"||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value))return false;
+  const date=new Date(value);
+  return Number.isFinite(date.getTime())&&date.toISOString().replace(".000Z","Z")===value;
+}
+function validatedRetainedFavorites(payload,after=null,previous=[]){
+  if(!studentRecord(payload)||payload.schema_version!==1||payload.scope!=="current_authenticated_student"||
+     !Array.isArray(payload.favorites)||payload.favorites.length>50||
+     !(after===null||(Number.isSafeInteger(after)&&after>0)))return null;
+  const ids=new Set(previous.map(row=>row.course_id)),slugs=new Set(previous.map(row=>row.course_slug));
+  const favorites=[];let last=after??0;
+  for(const row of payload.favorites){
+    if(!studentRecord(row)||!Number.isSafeInteger(row.course_id)||row.course_id<=last||ids.has(row.course_id)||
+       !studentSlug(row.course_slug)||slugs.has(row.course_slug)||!retainedTimestamp(row.saved_at)||
+       !["available","unavailable"].includes(row.availability))return null;
+    favorites.push({course_id:row.course_id,course_slug:row.course_slug,saved_at:row.saved_at,availability:row.availability});
+    ids.add(row.course_id);slugs.add(row.course_slug);last=row.course_id;
+  }
+  const next=payload.next_after_course_id;
+  if(next!==null&&(!Number.isSafeInteger(next)||next<1||favorites.length!==50||next!==last))return null;
+  return {favorites,next_after_course_id:next};
+}
+function invalidateRetainedFavorites(message="Os favoritos podem ter mudado. Consulte as referências novamente."){
+  const retained=state.retained;++retained.request;
+  retained.rows=[];retained.nextAfter=null;retained.ready=false;retained.loading=false;
+  retained.removingId=null;retained.message=message;
+  // The outcome of a lost removal remains unknown independently of any
+  // catalogue-only favorites read, an empty page, or a library refresh.
+}
+function renderRetainedFavorites(){
+  const retained=state.retained,active=state.libraryReady&&!state.accessDenied;
+  const panel=document.getElementById("retained-favorites-panel"),list=document.getElementById("retained-favorites-list");
+  const reload=document.getElementById("reload-retained-favorites"),more=document.getElementById("more-retained-favorites");
+  const message=document.getElementById("retained-favorites-status");
+  panel.hidden=!active;list.replaceChildren();
+  reload.disabled=!active||retained.loading||state.favoriteWriting;
+  more.hidden=!active||!retained.ready||retained.nextAfter===null;
+  more.disabled=!active||retained.loading||state.favoriteWriting;
+  message.textContent=active?(retained.unconfirmed?"O resultado da remoção anterior não foi confirmado. ":"")+retained.message:"";
+  if(!active)return;
+  for(const row of retained.rows){
+    const item=el("li",undefined,"retained-favorite");
+    item.dataset.retainedCourseId=String(row.course_id);item.dataset.retainedAvailability=row.availability;
+    const info=el("div",undefined,"retained-favorite-info");
+    // Availability comes from this response, never from a possibly older
+    // catalogue. A current matching title is context, not retained content.
+    const current=row.availability==="available"
+      ?state.courses.find(course=>course.id===row.course_id&&course.slug===row.course_slug):null;
+    info.append(el("strong",row.course_slug));
+    if(current)info.append(el("span","Título no catálogo atual: "+current.title));
+    info.append(el("span",row.availability==="available"?"Disponível no catálogo":"Curso indisponível"));
+    const time=el("time","Guardado em "+new Intl.DateTimeFormat("pt-BR",{
+      dateStyle:"short",timeStyle:"short",timeZone:"UTC"
+    }).format(new Date(row.saved_at))+" (UTC)");
+    time.setAttribute("datetime",row.saved_at);info.append(time);
+    const remove=el("button",retained.removingId===row.course_id?"Removendo...":"Remover favorito","secondary");
+    remove.type="button";remove.dataset.removeRetainedFavorite=String(row.course_id);
+    remove.setAttribute("aria-label","Remover favorito "+row.course_slug);
+    remove.disabled=!retained.ready||retained.loading||retained.needsRefresh||state.favoriteWriting||state.favoritesLoading;
+    item.append(info,remove);list.append(item);
+  }
+}
+async function loadRetainedFavorites(append=false){
+  const retained=state.retained;
+  if(state.accessDenied||!state.libraryReady||retained.loading||state.favoriteWriting||
+     (append&&(!retained.ready||retained.nextAfter===null||retained.needsRefresh)))return false;
+  const after=append?retained.nextAfter:null,previous=append?retained.rows:[];
+  const request=++retained.request;
+  if(!append){retained.rows=[];retained.nextAfter=null;retained.ready=false;}
+  retained.loading=true;retained.message=append?"Consultando mais referências...":"Consultando seus favoritos guardados...";
+  renderRetainedFavorites();
+  const current=()=>!state.accessDenied&&state.libraryReady&&retained.request===request;
+  try{
+    const payload=await api("/favorites/retained"+(after===null?"":"?after_course_id="+encodeURIComponent(String(after))));
+    if(!current())return false;
+    const page=validatedRetainedFavorites(payload,after,previous);
+    if(page===null)throw new Error("invalid_retained_favorites");
+    retained.rows=[...previous,...page.favorites];retained.nextAfter=page.next_after_course_id;
+    retained.ready=true;retained.needsRefresh=false;
+    retained.message=retained.rows.length
+      ?retained.rows.length+" referência(s) consultada(s)."+(retained.nextAfter!==null?" Há mais favoritos para consultar.":"")
+      :"Nenhuma referência encontrada nesta consulta.";
+    return true;
+  }catch(error){
+    if(current()){
+      retained.rows=[];retained.nextAfter=null;retained.ready=false;
+      retained.message="Não foi possível consultar suas referências. Use Consultar favoritos guardados para tentar novamente.";
+    }
+    return false;
+  }finally{
+    if(retained.request===request){retained.loading=false;renderFavoriteControls();}
+  }
+}
+async function removeRetainedFavorite(id){
+  const retained=state.retained;
+  if(state.accessDenied||!state.libraryReady||!retained.ready||retained.loading||retained.needsRefresh||
+     state.favoriteWriting||state.favoritesLoading||!retained.rows.some(row=>row.course_id===id))return;
+  const write=++state.favoriteWriteRequest,request=++retained.request;
+  // No partial retained page can replace the complete, catalogue-only list.
+  // Invalidate an older read without promoting this page into that cache.
+  ++state.favoritesRequest;state.favoritesLoading=false;
+  state.favoriteWriting=true;retained.removingId=id;retained.message="Removendo esta referência dos favoritos...";
+  renderFavoriteControls();
+  const current=()=>!state.accessDenied&&state.libraryReady&&state.favoriteWriteRequest===write&&retained.request===request;
+  const unknown=()=>{
+    invalidateRetainedFavorites("Consulte suas referências antes de outra alteração. Uma nova consulta não confirma o resultado anterior.");
+    retained.needsRefresh=true;retained.unconfirmed=true;
+    state.favoriteIds=[];state.favoritesReady=false;state.favoriteOutcomeUnknown=true;
+    state.favoritesMessage="Uma remoção não foi confirmada. Consulte Gerenciar favoritos antes de outra alteração.";
+  };
+  try{
+    const payload=await api("/courses/"+encodeURIComponent(String(id))+"/favorite",{method:"DELETE"});
+    if(state.accessDenied||state.favoriteWriteRequest!==write)return;
+    if(!current()){unknown();return;}
+    if(validatedFavoriteReceipt(payload,id,false)===null)throw new Error("invalid_retained_removal");
+    retained.rows=retained.rows.filter(row=>row.course_id!==id);
+    // The server's cursor is a lower bound, not an anchor. Keep it even
+    // after removing the last row of a page, so later rows remain reachable.
+    state.favoriteIds=state.favoriteIds.filter(value=>value!==id);
+    retained.message="Remoção desta referência confirmada."+(retained.nextAfter!==null?" Você pode consultar mais favoritos.":"");
+  }catch{
+    if(!state.accessDenied&&state.favoriteWriteRequest===write)unknown();
+  }finally{
+    if(state.favoriteWriteRequest===write){
+      state.favoriteWriting=false;retained.removingId=null;
+      if(!state.accessDenied&&state.libraryReady)renderCourses();
+    }
+  }
+}
 function renderFavoriteControls(){
   const active=state.libraryReady&&!state.accessDenied;
   const filter=document.getElementById("favorites-only"),retry=document.getElementById("reload-favorites");
@@ -721,14 +872,16 @@ function renderFavoriteControls(){
   panel.hidden=!course;
   document.getElementById("favorite-course-title").textContent=course?"Favoritos · "+course.title:"";
   const saved=!!course&&known&&state.favoriteIds.includes(course.id);
-  button.disabled=!course||!known||state.favoritesLoading||state.favoriteWriting;
+  button.disabled=!course||!known||state.favoritesLoading||state.favoriteWriting||state.retained.needsRefresh;
   button.textContent=known?(saved?"Remover curso dos favoritos":"Salvar curso nos favoritos")
     :"Consulte os favoritos para alterar";
   if(known&&course)button.setAttribute("aria-pressed",String(saved));
   else button.removeAttribute("aria-pressed");
+  renderRetainedFavorites();
 }
 async function loadFavorites(){
   if(state.accessDenied||!state.libraryReady||state.favoritesLoading||state.favoriteWriting)return false;
+  invalidateRetainedFavorites();
   const request=++state.favoritesRequest;
   state.favoritesLoading=true;state.favoritesReady=false;state.favoriteIds=[];
   state.favoritesMessage="Consultando seus favoritos...";
@@ -760,7 +913,7 @@ async function loadFavorites(){
 }
 async function toggleCourseFavorite(){
   if(state.accessDenied||!state.libraryReady||!state.favoritesReady||state.favoritesLoading||
-     state.favoriteWriting||state.favoriteOutcomeUnknown)return;
+     state.favoriteWriting||state.favoriteOutcomeUnknown||state.retained.needsRefresh)return;
   const id=state.courseId,selection=state.courseRequest,generation=state.favoritesRequest;
   if(!Number.isSafeInteger(id)||id<1||!state.courses.some(course=>course.id===id))return;
   const desired=!state.favoriteIds.includes(id);
@@ -770,33 +923,36 @@ async function toggleCourseFavorite(){
     state.favoriteIds=[];state.favoritesReady=false;state.favoriteOutcomeUnknown=true;
     state.favoritesMessage="A seleção mudou durante a alteração. Consulte seus favoritos para confirmar o estado atual.";
   };
-  state.favoriteWriting=true;
+  const write=++state.favoriteWriteRequest;
+  invalidateRetainedFavorites();state.favoriteWriting=true;
   state.favoritesMessage=desired?"Salvando curso nos favoritos...":"Removendo curso dos favoritos...";
   renderFavoriteControls();
   try{
     const payload=await api("/courses/"+encodeURIComponent(String(id))+"/favorite",{method:desired?"PUT":"DELETE"});
-    if(state.accessDenied)return;
+    if(state.accessDenied||state.favoriteWriteRequest!==write)return;
     if(!sameSelection()||state.favoritesRequest!==generation){uncertain();return;}
     const receipt=validatedFavoriteReceipt(payload,id,desired);
     if(receipt===null)throw new Error("invalid_favorite_receipt");
     state.favoriteIds=desired?[...state.favoriteIds,id]:state.favoriteIds.filter(value=>value!==id);
     state.favoritesMessage=desired?"Curso salvo nos favoritos.":"Curso removido dos favoritos.";
   }catch(error){
-    if(state.accessDenied)return;
+    if(state.accessDenied||state.favoriteWriteRequest!==write)return;
     if(!sameSelection()||state.favoritesRequest!==generation){uncertain();return;}
     // A lost PUT/DELETE response may follow a committed preference. Re-read
     // the authoritative list; never replay the uncertain write automatically.
     state.favoriteIds=[];state.favoritesReady=false;state.favoriteOutcomeUnknown=true;
     state.favoriteWriting=false;
     const reconciled=await loadFavorites();
-    if(reconciled&&sameSelection()&&!state.accessDenied){
+    if(reconciled&&sameSelection()&&!state.accessDenied&&state.favoriteWriteRequest===write){
       state.favoritesMessage=state.favoriteIds.includes(id)===desired
         ?(desired?"Favorito confirmado após consulta ao servidor.":"Remoção confirmada após consulta ao servidor.")
         :"A alteração não foi confirmada. Você pode tentar novamente.";
     }
   }finally{
-    state.favoriteWriting=false;
-    if(!state.accessDenied&&state.libraryReady)renderCourses();
+    if(state.favoriteWriteRequest===write){
+      state.favoriteWriting=false;
+      if(!state.accessDenied&&state.libraryReady)renderCourses();
+    }
   }
 }
 function normalizeSearchText(text){
@@ -1444,6 +1600,12 @@ list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]")
 lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId));}});
 document.getElementById("reload-favorites").addEventListener("click",()=>{void loadFavorites();});
 document.getElementById("course-favorite-toggle").addEventListener("click",()=>{void toggleCourseFavorite();});
+document.getElementById("reload-retained-favorites").addEventListener("click",()=>{void loadRetainedFavorites();});
+document.getElementById("more-retained-favorites").addEventListener("click",()=>{void loadRetainedFavorites(true);});
+document.getElementById("retained-favorites-list").addEventListener("click",event=>{
+  const button=event.target.closest("[data-remove-retained-favorite]");
+  if(button)void removeRetainedFavorite(Number(button.dataset.removeRetainedFavorite));
+});
 document.getElementById("favorites-only").addEventListener("change",event=>{
   if(state.accessDenied||!state.libraryReady||(!state.favoritesReady&&event.target.checked)){
     event.target.checked=state.favoritesOnly;return;
@@ -1475,6 +1637,7 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
 // or retain a previous list after a failed initial authorization request.
 async function loadLibrary(){
   if(state.accessDenied||state.libraryLoading)return;
+  invalidateRetainedFavorites();
   state.libraryLoading=true;state.libraryReady=false;
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;++state.favoritesRequest;
   // Keep an outstanding export single-flight, but invalidate its download

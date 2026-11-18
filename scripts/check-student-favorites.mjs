@@ -17,6 +17,7 @@ assert.ok(start>=0&&end>start,"Actual favorites/filter handlers must exist");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentLessons",
   "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","discardErrorBody","api","progressLabel",
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
+  "invalidateRetainedFavorites","renderRetainedFavorites",
   "renderCourses","loadFavorites","toggleCourseFavorite","selectCourse","openCourseWithAllFilters","loadLibrary"]
   .map(actual).join("\n")+"\n"+view.slice(start,end);
 const courses=[
@@ -56,7 +57,8 @@ function harness(initial=[]){
   const state={courses:structuredClone(courses),filter:"todos",query:"",courseId:1,lessonId:11,courseRequest:1,lessonRequest:1,
     accessDenied:false,accessMessage:"",libraryReady:true,libraryLoading:false,exportLoading:false,searchRequest:0,
     favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,favoriteWriting:false,
-    favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:""};
+    favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",favoriteWriteRequest:0,
+    retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};
   const control={authoritative:new Set(initial),read:null,write:null};
   const context=createContext({state,list,content,lessonsBox,status:get("status"),overall:get("overall-progress"),
     root:"/universidade/private",csrf:"synthetic-csrf",labels:{metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas"},

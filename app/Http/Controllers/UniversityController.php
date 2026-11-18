@@ -131,6 +131,37 @@ final class UniversityController
         ]);
     }
 
+    public function retainedFavorites(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        $validator = Validator::make($request->query(), [
+            'after_course_id' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991',
+                'regex:/\A[1-9][0-9]{0,15}\z/D'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $cursor = $request->query('after_course_id');
+        try {
+            $favorites = $this->catalog->retainedFavorites($grant, $cursor === null ? null : (int) $cursor);
+        } catch (\Throwable) {
+            $favorites = 'temporarily_unavailable';
+        }
+        // Recheck after a successful snapshot AND after a repository failure.
+        // The private GET middleware checks the decision once more at output.
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        if (is_array($favorites)) {
+            return response()->json($favorites);
+        }
+        return match ($favorites) {
+            'access_denied' => response()->json(['error' => 'access_denied'], 403),
+            'invalid_cursor' => response()->json(['error' => 'invalid_cursor'], 422),
+            default => response()->json(['error' => 'temporarily_unavailable'], 503),
+        };
+    }
+
     public function readingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
     {
         $grant = $this->grant($request);

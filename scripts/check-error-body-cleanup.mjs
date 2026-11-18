@@ -30,7 +30,8 @@ function harness(name){
   const get=id=>{if(!nodes.has(id))nodes.set(id,element());return nodes.get(id);};
   const control={response:null};
   const extra=name==="admin"?["hideLessonPreview","clearPublicationCheck","invalidateEditorialOverview","renderEditorialOverview",
-    "archivePositive","editorialArchiveAllowed","clearEditorialArchiveSelection","invalidateEditorialArchive","renderEditorialArchive"]:[];
+    "archivePositive","editorialArchiveAllowed","clearEditorialArchiveSelection","invalidateEditorialArchive","renderEditorialArchive"]:
+    ["invalidateRetainedFavorites","renderRetainedFavorites"];
   const source=["discardErrorBody","api","el","say","lockAccess",...extra].map(fn=>actual(view,fn)).join("\n");
   const initial=view.match(/const state=(\{[\s\S]*?\});/)?.[1];assert.ok(initial);
   const context=createContext({

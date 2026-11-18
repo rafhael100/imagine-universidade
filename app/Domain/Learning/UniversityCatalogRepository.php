@@ -241,6 +241,105 @@ final class UniversityCatalogRepository
         ];
     }
 
+    /** The retained-preference API has a canonical UTC date, independent of PDO formatting. */
+    private function retainedFavoriteTimestamp(mixed $value): string
+    {
+        if (!is_string($value)
+            || preg_match('/\A\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}(?::?\d{2})?)?\z/D', $value) !== 1) {
+            throw new \UnexpectedValueException('Invalid retained preference timestamp.');
+        }
+        $utc = new \DateTimeZone('UTC');
+        $date = new \DateTimeImmutable($value, $utc);
+        $errors = \DateTimeImmutable::getLastErrors();
+        if (is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) {
+            throw new \UnexpectedValueException('Invalid retained preference timestamp.');
+        }
+        $canonical = $date->setTimezone($utc)->format('Y-m-d\TH:i:s\Z');
+        if (preg_match('/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/D', $canonical) !== 1) {
+            throw new \UnexpectedValueException('Invalid retained preference timestamp.');
+        }
+        return $canonical;
+    }
+
+    /**
+     * One metadata snapshot of the current student's retained references.
+     * The cursor is only a numeric lower bound: deleting it must not invalidate
+     * the next page, and a foreign cursor never changes the private scope.
+     *
+     * @return array<string, mixed>|string A fixed error code, never a partial page.
+     */
+    public function retainedFavorites(PortalGrant $grant, ?int $afterCourseId = null): array|string
+    {
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)
+            || $grant->companyId === self::EDITORIAL_ORGANIZATION_KEY) {
+            return 'access_denied';
+        }
+        if ($afterCourseId !== null && ($afterCourseId < 1 || $afterCourseId > 9007199254740991)) {
+            return 'invalid_cursor';
+        }
+        $org = $this->orgId($grant);
+        $editorialOrg = $this->contentOrgId();
+        if ($org === null || $editorialOrg === null) {
+            return 'temporarily_unavailable';
+        }
+
+        $query = DB::table('educational_course_favorites as f')
+            ->join('educational_courses as c', 'c.id', '=', 'f.educational_course_id')
+            ->where('f.educational_organization_id', $org)
+            ->where('f.subject_key', $grant->subjectId)
+            ->where('c.educational_organization_id', $editorialOrg)
+            ->where('c.is_shared', true)
+            ->whereExists(static function (\Illuminate\Database\Query\Builder $query): void {
+                $query->selectRaw('1')->from('educational_course_versions as history')
+                    ->whereColumn('history.educational_course_id', 'c.id')
+                    ->whereIn('history.status', ['published', 'archived']);
+            });
+        if ($afterCourseId !== null) {
+            $query->where('f.educational_course_id', '>', $afterCourseId);
+        }
+        $rows = $query->orderBy('f.educational_course_id')->limit(51)
+            ->get(['c.id as course_id', 'c.slug as course_slug', 'f.created_at as saved_at',
+                DB::raw("CASE WHEN c.is_published AND EXISTS (SELECT 1 FROM educational_course_versions AS live WHERE live.educational_course_id = c.id AND live.status = 'published') THEN 'available' ELSE 'unavailable' END AS availability"),
+            ])->all();
+
+        $favorites = [];
+        $previousId = $afterCourseId ?? 0;
+        foreach ($rows as $row) {
+            if ((!is_int($row->course_id) && !is_string($row->course_id))
+                || preg_match('/\A[1-9][0-9]{0,15}\z/D', (string) $row->course_id) !== 1
+                || filter_var($row->course_id, FILTER_VALIDATE_INT, ['options' => [
+                    'min_range' => 1, 'max_range' => 9007199254740991,
+                ]]) === false
+                || !is_string($row->course_slug)
+                || preg_match('/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/D', $row->course_slug) !== 1
+                || strlen($row->course_slug) > 120
+                || !in_array($row->availability, ['available', 'unavailable'], true)) {
+                throw new \UnexpectedValueException('Invalid retained preference metadata.');
+            }
+            $id = (int) $row->course_id;
+            if ($id <= $previousId) {
+                throw new \UnexpectedValueException('Invalid retained preference ordering.');
+            }
+            $favorites[] = ['course_id' => $id, 'course_slug' => $row->course_slug,
+                'saved_at' => $this->retainedFavoriteTimestamp($row->saved_at),
+                'availability' => $row->availability];
+            $previousId = $id;
+        }
+        if (!$this->grantUsable($grant, PortalAccessGate::VIEW)) {
+            return 'access_denied';
+        }
+        // Validate the sentinel too; malformed metadata must not become a
+        // successful first page with an undisclosed broken continuation.
+        $hasNext = count($favorites) > 50;
+        $favorites = array_slice($favorites, 0, 50);
+        return [
+            'schema_version' => 1,
+            'scope' => 'current_authenticated_student',
+            'favorites' => $favorites,
+            'next_after_course_id' => $hasNext ? $favorites[49]['course_id'] : null,
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function readingPositionEnvelope(string $status, string $revision, ?array $position = null): array
     {

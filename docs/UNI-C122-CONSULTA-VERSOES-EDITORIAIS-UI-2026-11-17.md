@@ -2,6 +2,24 @@
 
 17/11/2026 · Implementação candidata para revisão e CI. **HOLD_NO_GO** operacional.
 
+## Evidência validada após a correção
+
+O commit `98e32b357248c8bd40cb68f38edcb47d338942b6`, na
+[execução 44209334123](https://github.com/rafhael100/imagine-universidade/actions/runs/44209334123),
+concluiu **os seis jobs com sucesso**. O mesmo teste de corpo tardio após
+revogação passou, sem retirada da espera de rede nem alteração da asserção.
+
+- **217 testes PHP / 2.519 asserções**, com os 21 testes Feature C-122.
+- **419 verificações Chromium** com falhas controladas, incluindo as 39 C-122.
+- **98 verificações pelo Laravel/SQLite real**, com leitura da versão arquivada,
+  preservação de ambos os rascunhos e do conteúdo antigo após republicação.
+- Capturas do leitor em **1440 e 390 pixels** inspecionadas: identificação de
+  versão, texto, controles e contexto atual legíveis, sem corte horizontal.
+- Persistência, PostgreSQL, papéis, Docker, Portal e pacote editorial aprovados.
+
+Esses resultados validam o SHA citado. Não concedem aprovação humana do acervo,
+SSO operacional, merge, implantação ou mudança dos gates.
+
 ## Primeira execução e correção da resposta tardia
 
 O commit `fe71c926ef8cd70e94f9effe9997802fa652e32d`, na
@@ -26,7 +44,7 @@ O checker local passou a ter 58 cenários de limpeza HTTP, com quatro novos
 casos nas funções reais de aluno e editor: sucesso tardio drenado até EOF sem
 decodificação e sucesso tardio com leitura/cancelamento pendentes, limitado
 pelo prazo existente. O checker principal, incluindo os 79 cenários C-122,
-também passou. A confirmação da correção no navegador depende da próxima CI.
+também passou. A confirmação posterior no navegador está registrada acima.
 
 ## Capacidade entregue
 

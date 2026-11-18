@@ -17,6 +17,7 @@ const handler=view.match(/document\.getElementById\("export-favorites"\)\.addEve
 assert.ok(handler,"Export must be an explicit click action");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentFavorites",
   "el","say","lockAccess","discardErrorBody","api","renderFavoriteControls","loadFavorites","loadLibrary",
+  "invalidateRetainedFavorites","renderRetainedFavorites",
   "sanitizedProgressExport","sanitizedFavoritesExport","exportFavorites"].map(actual).join("\n")+"\n"+handler;
 const row={course_slug:"curso-retirado",saved_at:"2026-11-17 12:34:56"};
 const payload=()=>({schema_version:1,scope:"current_authenticated_student",favorites:[{...row}]});

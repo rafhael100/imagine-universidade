@@ -353,6 +353,93 @@ final class PortalBoundaryFlowTest extends TestCase
     }
 
 
+    public function test_session_company_switch_during_read_hides_the_old_catalog(): void
+    {
+        $this->createPublishedCourse();
+        $this->asClientA();
+        $switched = false;
+
+        DB::listen(static function (\Illuminate\Database\Events\QueryExecuted $query) use (&$switched): void {
+            if (!$switched
+                && str_contains($query->sql, 'educational_courses')
+                && str_contains($query->sql, 'educational_course_versions')) {
+                $switched = true;
+                // This is a synthetic session transition, not an HTTP
+                // company/header claim or a real Portal SSO implementation.
+                request()->session()->put('portal_company_id', 'test-client-b');
+            }
+        });
+
+        $this->getJson('/universidade/private/courses')
+            ->assertForbidden()->assertJsonPath('error', 'access_denied')
+            ->assertDontSee('Metodologia Imagine')
+            ->assertDontSee('teste-revogacao-tenant');
+
+        self::assertTrue($switched, 'The company must switch after the content SELECT.');
+    }
+
+    public function test_session_credential_rotation_during_read_hides_the_old_catalog(): void
+    {
+        $this->createPublishedCourse();
+        $this->asClientA();
+        $rotated = false;
+
+        DB::listen(static function (\Illuminate\Database\Events\QueryExecuted $query) use (&$rotated): void {
+            if (!$rotated
+                && str_contains($query->sql, 'educational_courses')
+                && str_contains($query->sql, 'educational_course_versions')) {
+                $rotated = true;
+                request()->session()->put('portal_server_credential', 'synthetic-client-b-session');
+            }
+        });
+
+        $this->getJson('/universidade/private/courses')
+            ->assertForbidden()->assertJsonPath('error', 'access_denied')
+            ->assertDontSee('Metodologia Imagine');
+
+        self::assertTrue($rotated, 'The credential must change during the catalogue read.');
+    }
+
+    public function test_session_change_during_second_portal_check_still_denies_read(): void
+    {
+        $this->createPublishedCourse();
+        $this->asClientA();
+
+        $authority = new class implements PortalAuthority {
+            public int $checks = 0;
+
+            public function verify(
+                string $serverSessionCredential,
+                string $companyId,
+                string $permission,
+            ): PortalGrant {
+                $this->checks++;
+                if ($serverSessionCredential !== 'synthetic-client-a-session'
+                    || $companyId !== 'test-client-a'
+                    || $permission !== PortalAccessGate::VIEW) {
+                    return PortalGrant::deny('context_changed');
+                }
+
+                if ($this->checks === 2) {
+                    // The original grant is still technically valid, but the
+                    // request session has moved while verification waited.
+                    request()->session()->put('portal_company_id', 'test-client-b');
+                }
+
+                return PortalGrant::allow(
+                    'test-client-a', 'synthetic-person-a', PortalAccessGate::VIEW, 1, time() + 30,
+                );
+            }
+        };
+        $this->app->instance(PortalAuthority::class, $authority);
+
+        $this->getJson('/universidade/private/courses')
+            ->assertForbidden()->assertJsonPath('error', 'access_denied')
+            ->assertDontSee('Metodologia Imagine');
+
+        self::assertSame(2, $authority->checks, 'Both live Portal checks must occur.');
+    }
+
     public function test_portal_outage_during_admin_audit_read_hides_response(): void
     {
         $this->asEditor();

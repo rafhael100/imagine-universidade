@@ -75,8 +75,21 @@ final class RequireUniversityGrant
         // check after a committed POST could misleadingly report failure.
         if ($request->isMethod('GET') || $request->isMethod('HEAD')) {
             try {
+                // Do not authorize the response for an old tenant/session
+                // when the request's server-held session changed during a read.
+                // The live Portal recheck below alone only validates the
+                // original captured credential and organization.
+                if ($request->session()->get('portal_server_credential') !== $credential
+                    || $request->session()->get('portal_company_id') !== $company) {
+                    return $this->deny();
+                }
+
                 $fresh = $this->gate->authorize($credential, $company, $permission, time());
-                if (!$fresh->allowed
+                // The live authority call itself may race with a session
+                // transition; verify the binding again before any release.
+                if ($request->session()->get('portal_server_credential') !== $credential
+                    || $request->session()->get('portal_company_id') !== $company
+                    || !$fresh->allowed
                     || $fresh->companyId !== $grant->companyId
                     || $fresh->subjectId !== $grant->subjectId
                     || $fresh->permission !== $grant->permission

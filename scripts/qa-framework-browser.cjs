@@ -637,9 +637,12 @@ async function concurrentLessonEdits(editor,peer,courseId,firstLessonId,lessonId
   await page.locator("#lesson-sort").fill("3");
   const pending=await fields(page,fieldIds),requests=businessRequests.length;
   const conflict=await clickResponse(page,"#lesson-save","PATCH",route);
-  const failure=await json(conflict,"Stale real order precondition");
+  // The UI owns bounded draining/cancellation of the error stream.
+  // Exact error DTOs are covered by Feature; inspect metadata and persisted effects here.
   await page.waitForFunction(()=>state.writeOutcomeUnknown&&!state.writePending);
-  check(conflict.status()===409&&failure.error==="draft_order_changed"&&
+  check(conflict.status()===409&&
+    (conflict.headers()["content-type"]||"").startsWith("application/json")&&
+    (conflict.headers()["cache-control"]||"").includes("private")&&!conflict.headers().location&&
     (conflict.headers()["cache-control"]||"").includes("no-store")&&
     conflict.request().postDataJSON().expected_sort_order===1&&conflict.request().postDataJSON().sort_order===3&&
     JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&
@@ -755,9 +758,12 @@ async function concurrentCourseEdits(editor,peer,courseId,lessonId){
   await page.locator("#course-sort").fill("9");
   const pending=await fields(page,fieldIds),requests=businessRequests.length;
   const conflict=await clickResponse(page,"#course-save","PATCH",route);
-  const failure=await json(conflict,"Stale real course order precondition");
+  // The UI owns bounded draining/cancellation of the error stream.
+  // Exact error DTOs are covered by Feature; inspect metadata and persisted effects here.
   await page.waitForFunction(()=>state.writeOutcomeUnknown&&!state.writePending);
-  check(conflict.status()===409&&failure.error==="draft_order_changed"&&
+  check(conflict.status()===409&&
+    (conflict.headers()["content-type"]||"").startsWith("application/json")&&
+    (conflict.headers()["cache-control"]||"").includes("private")&&!conflict.headers().location&&
     (conflict.headers()["cache-control"]||"").includes("no-store")&&
     conflict.request().postDataJSON().expected_sort_order===5&&conflict.request().postDataJSON().sort_order===9&&
     JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&
@@ -1285,7 +1291,10 @@ async function main(){
     "/universidade/private/lessons/"+firstLessonId+"/tutor");
   enterStage("disabled tutor static fallback");
   await waitText(studentA.page,"lesson-help-answer","A tutoria está indisponível");
-  check(tutor.status()===503&&(await json(tutor,"Disabled tutor")).error==="tutor_unavailable"&&
+  // The UI also owns cleanup of the disabled Tutor response body.
+  check(tutor.status()===503&&(tutor.headers()["content-type"]||"").startsWith("application/json")&&
+    (tutor.headers()["cache-control"]||"").includes("no-store")&&
+    (tutor.headers()["cache-control"]||"").includes("private")&&!tutor.headers().location&&
     (await studentA.page.locator("#lesson-help-answer").innerText()).includes("Um visitante fictício"),
     "The default disabled tutor must return real 503 while literal authorized material remains useful");
   check(countWrites("student-a")===tutorWrites+1&&await studentA.page.locator("#lesson-content button.primary").isDisabled(),

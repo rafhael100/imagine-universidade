@@ -82,3 +82,13 @@ O `composer.lock` fixa Laravel `v13.42.0`, commit `f5c01f6b63803f16f38ebb31622c4
 Os três arquivos foram integrados após C136/C137, preservando integralmente os novos recibos e a edição de ordem. A correção textual C139 usa o mesmo painel existente. A suíte Node principal completa, a cerca estática dos **15 caminhos de escrita** e a conferência de diff passaram na combinação. Duas leituras independentes de produção, Feature e documentação não encontraram bloqueadores.
 
 Os **oito métodos Feature C138** dependem da CI do próximo SHA. A referência anterior completa é `8368d526` / [run 44230182074](https://github.com/rafhael100/imagine-universidade/actions/runs/44230182074), com seis jobs aprovados, 351 testes PHP/3.959 asserções, 746 verificações sintéticas e 232 pelo Laravel real; esses números não incluem a nova regressão C138.
+
+## Primeiro runtime C138 e correção da observação de erros
+
+O [run 44231820243](https://github.com/rafhael100/imagine-universidade/actions/runs/44231820243), SHA `1e223288cdaad68ae2758d4fbcfa8c0e97d6b6b4`, aprovou **cinco jobs**, incluindo **359 testes PHP / 4.726 asserções** (39 Unit/169 e 320 Feature/4.557), todos os oito métodos C138 e os probes PostgreSQL. O Chromium sintético passou **746 verificações**.
+
+O percurso Laravel real parou após a verificação 29: o runner tentou interpretar o JSON de um PATCH 409 e observou `network=aborted`. A aplicação trata erros pelo status; C120 drena o corpo sem decodificá-lo e pode cancelar o stream ao atingir limites ou erro. O log confirma a indisponibilidade do corpo para o runner, sem provar qual condição específica causou o aborto. Não é correto depender dessa segunda interpretação para observar a recuperação da UI.
+
+A correção do runner abrange somente as três respostas de erro originadas pela UI que ainda eram interpretadas: os conflitos de ordem de aula/curso e o Tutor desativado. Exige o status 409/503, Content-Type JSON, headers privados/no-store e ausência de redirecionamento. Mantém as verificações de dados/auditoria intactos, campos locais, recuperação manual, material literal e ausência de mutações. Não altera o produto, não espera `Response.finished`, não simula resposta nem repete a requisição. Os DTOs exatos seguem testados pelos Feature C133/C137, PortalBoundaryFlowTest e C138.
+
+A sintaxe do runner e o diff passaram. A aprovação completa depende da próxima CI. A fonte primária do [Playwright v1.58.2](https://github.com/microsoft/playwright/blob/v1.58.2/packages/playwright-core/src/server/network.ts) distingue a leitura do corpo, que aguarda o término da resposta, dos metadados de status/headers já recebidos.

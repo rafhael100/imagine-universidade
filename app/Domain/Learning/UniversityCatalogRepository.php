@@ -1582,15 +1582,26 @@ final class UniversityCatalogRepository
         });
     }
 
-    /** @param array{title:string,summary?:string|null,category:string,sort_order?:int} $input */
+    /**
+     * @param array{title:string,summary?:string|null,category:string,sort_order?:int,expected_sort_order?:int} $input
+     * @throws EditorialCourseOrderConflict Only for a well-formed stale order precondition.
+     */
     public function updateCourse(PortalGrant $grant, int $courseId, array $input, ?callable $verifyFreshGrant = null): bool
     {
+        $guardedOrder = array_key_exists('expected_sort_order', $input);
+        if ($guardedOrder && (!is_int($input['expected_sort_order'])
+            || $input['expected_sort_order'] < 0 || $input['expected_sort_order'] > 9999
+            || !array_key_exists('sort_order', $input) || !is_int($input['sort_order'])
+            || $input['sort_order'] < 0 || $input['sort_order'] > 9999)) {
+            // Direct domain callers must not silently drop a malformed guard.
+            return false;
+        }
         $org = $this->adminOrgId($grant);
         if ($org === null || $courseId < 1) {
             return false;
         }
 
-        return DB::transaction(function () use ($grant, $org, $courseId, $input, $verifyFreshGrant): bool {
+        return DB::transaction(function () use ($grant, $org, $courseId, $input, $guardedOrder, $verifyFreshGrant): bool {
             // Lock igual ao utilizado por publish/unpublish e operações de aula:
             // a verificação de rascunho e a edição devem ser atômicas.
             $course = DB::table('educational_courses')
@@ -1599,7 +1610,7 @@ final class UniversityCatalogRepository
                 ->where('is_shared', true)
                 ->where('is_published', false)
                 ->lockForUpdate()
-                ->first(['id']);
+                ->first(['id', 'sort_order']);
 
             if ($course === null) {
                 return false;
@@ -1610,18 +1621,29 @@ final class UniversityCatalogRepository
                 return false;
             }
 
+            // Publish, unpublish and editorial edits serialize on this row.
+            // Compare its current order only after the lock and live grant.
+            if ($guardedOrder && $input['expected_sort_order'] !==
+                $this->editorialOrderInteger($course->sort_order, 0, 9999)) {
+                throw new EditorialCourseOrderConflict('The draft course order changed.');
+            }
+            $changes = [
+                'title' => $input['title'],
+                'summary' => $input['summary'] ?? null,
+                'category' => $input['category'],
+                'updated_at' => now(),
+            ];
+            // An omitted PATCH field does not reset the locked course's order.
+            // Creation keeps its zero default; explicit legacy values apply.
+            if (array_key_exists('sort_order', $input)) {
+                $changes['sort_order'] = $input['sort_order'];
+            }
             $changed = DB::table('educational_courses')
                 ->where('id', $courseId)
                 ->where('educational_organization_id', $org)
                 ->where('is_shared', true)
                 ->where('is_published', false)
-                ->update([
-                    'title' => $input['title'],
-                    'summary' => $input['summary'] ?? null,
-                    'category' => $input['category'],
-                    'sort_order' => $input['sort_order'] ?? 0,
-                    'updated_at' => now(),
-                ]) > 0;
+                ->update($changes) > 0;
 
             if ($changed) {
                 $this->audit($grant, $org, 'course.updated', 'course', $courseId);

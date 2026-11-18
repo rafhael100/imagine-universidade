@@ -687,7 +687,125 @@ async function concurrentLessonEdits(editor,peer,courseId,firstLessonId,lessonId
       !editorialHasUnsavedChanges(),{first:firstLessonId,lesson:lessonId})&&
     await editor.page.locator("#lesson-body").inputValue()===savedBody&&countWrites(editor.profile)===writes+4,
     "Both real sessions must reconcile to the preserved lesson text and restored complete order before the existing draft deletion continues");
+  await concurrentCourseEdits(editor,peer,courseId,lessonId);
   await peer.context.close();contexts.splice(contexts.indexOf(peer.context),1);
+}
+async function concurrentCourseEdits(editor,peer,courseId,lessonId){
+  enterStage("course metadata and guarded order across real editorial sessions");
+  const root="/universidade/private/admin",route=root+"/courses/"+courseId,page=peer.page;
+  const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
+    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+  const original=await editor.page.evaluate(()=>({id:state.course.id,title:state.course.title,
+    category:state.course.category,summary:state.course.summary,sort_order:state.course.sort_order}));
+  const lessons=await editor.page.evaluate(()=>state.lessons),writes=countWrites(editor.profile);
+  const query=await page.locator("#editorial-lesson-search").inputValue();
+  check(original.id===courseId&&original.sort_order===0&&query==="temporaria"&&
+    await editor.page.evaluate(()=>!editorialHasUnsavedChanges())&&
+    await page.evaluate(id=>state.course?.id===id&&state.course.sort_order===0&&!editorialHasUnsavedChanges(),courseId),
+    "The two real course forms must start clean with the same original order and the existing lesson query");
+
+  await editor.page.locator("#course-sort").fill("5");
+  const firstMove=await clickResponse(editor.page,"#course-save","PATCH",route);
+  const firstReceipt=await json(firstMove,"First guarded course order");
+  await editor.page.waitForFunction(()=>!state.writePending&&state.catalogReady&&state.lessonsReady&&state.course?.sort_order===5);
+  check(firstMove.status()===200&&firstReceipt.saved===true&&
+    JSON.stringify(firstMove.request().postDataJSON())===JSON.stringify({title:original.title,category:original.category,
+      summary:original.summary,sort_order:5,expected_sort_order:0}),
+    "An explicit real course order edit must send the displayed baseline and receive a confirmed save before refreshing");
+
+  const summary=original.summary+"\nResumo salvo pela segunda sessão editorial.";
+  await page.locator("#course-summary").fill(summary);
+  const textSaved=await clickResponse(page,"#course-save","PATCH",route);
+  const textReceipt=await json(textSaved,"Concurrent course text-only save");
+  await page.waitForFunction(()=>!state.writePending&&state.catalogReady&&state.lessonsReady&&state.course?.sort_order===5);
+  check(textSaved.status()===200&&textReceipt.saved===true&&
+    (textSaved.headers()["cache-control"]||"").includes("no-store")&&
+    JSON.stringify(textSaved.request().postDataJSON())===JSON.stringify({title:original.title,category:original.category,summary})&&
+    await page.locator("#course-sort").inputValue()==="5"&&await page.locator("#course-summary").inputValue()===summary,
+    "Saving only course text from an older real session must omit both order fields and preserve the current database order");
+  check(await page.locator("#editorial-lesson-search").inputValue()===query&&
+    await page.evaluate(id=>state.lesson?.id===id,lessonId)&&
+    JSON.stringify(await page.evaluate(()=>state.lessons))===JSON.stringify(lessons)&&countWrites(editor.profile)===writes+2,
+    "The confirmed course save must preserve the selected lesson, complete lesson records and same-course search without a lesson mutation");
+
+  // Reopening a selected course uses the cached catalogue. A real page reload
+  // explicitly obtains fresh course metadata before this deliberate edit.
+  async function reloadCurrentEditor(){
+    await editor.page.reload();
+    await editor.page.waitForFunction(()=>state.catalogReady&&!state.catalogLoading);
+    await editor.page.locator("#course-items [data-course='"+courseId+"']").click();
+    await editor.page.waitForFunction(id=>state.course?.id===id&&state.lessonsReady,courseId);
+    await editor.page.locator("#lesson-items [data-lesson='"+lessonId+"']").click();
+    await editor.page.waitForLoadState("networkidle",{timeout:8000});
+  }
+  await reloadCurrentEditor();
+  await editor.page.locator("#course-sort").fill("7");
+  const nextMove=await clickResponse(editor.page,"#course-save","PATCH",route);
+  const nextReceipt=await json(nextMove,"Course order after explicit metadata reload");
+  await editor.page.waitForFunction(()=>!state.writePending&&state.catalogReady&&state.lessonsReady&&state.course?.sort_order===7);
+  check(nextMove.status()===200&&nextReceipt.saved===true&&
+    JSON.stringify(nextMove.request().postDataJSON())===JSON.stringify({title:original.title,category:original.category,
+      summary,sort_order:7,expected_sort_order:5})&&await editor.page.locator("#course-summary").inputValue()===summary,
+    "Reloading the real editor must obtain the other session's course summary before sending the next guarded order change");
+
+  const beforeAuditResponse=await editor.context.request.get(base+root+"/audit",{headers:{Accept:"application/json"}});
+  const beforeAudit=(await json(beforeAuditResponse,"Audit before stale course edit")).events
+    .filter(event=>event.action==="course.updated"&&event.resource_id===courseId);
+  await page.locator("#course-summary").fill(summary+"\nResumo em conflito que deve permanecer local.");
+  await page.locator("#course-sort").fill("9");
+  const pending=await fields(page,fieldIds),requests=businessRequests.length;
+  const conflict=await clickResponse(page,"#course-save","PATCH",route);
+  const failure=await json(conflict,"Stale real course order precondition");
+  await page.waitForFunction(()=>state.writeOutcomeUnknown&&!state.writePending);
+  check(conflict.status()===409&&failure.error==="draft_order_changed"&&
+    (conflict.headers()["cache-control"]||"").includes("no-store")&&
+    conflict.request().postDataJSON().expected_sort_order===5&&conflict.request().postDataJSON().sort_order===9&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&
+    await page.locator("#editorial-lesson-search").inputValue()===query&&
+    businessRequests.slice(requests).filter(request=>request.profile===editor.profile).length===1&&
+    countWrites(editor.profile)===writes+4,
+    "A stale real course order edit must preserve both literal forms and its query without a follow-up read or replay");
+  const currentResponse=await editor.context.request.get(base+root+"/courses",{headers:{Accept:"application/json"}});
+  const current=(await json(currentResponse,"Course after rejected order edit")).courses.find(course=>course.id===courseId);
+  const afterAuditResponse=await editor.context.request.get(base+root+"/audit",{headers:{Accept:"application/json"}});
+  const afterAudit=(await json(afterAuditResponse,"Audit after rejected course edit")).events
+    .filter(event=>event.action==="course.updated"&&event.resource_id===courseId);
+  check(currentResponse.status()===200&&current.sort_order===7&&current.title===original.title&&
+    current.category===original.category&&current.summary===summary&&beforeAuditResponse.status()===200&&
+    afterAuditResponse.status()===200&&beforeAudit.length===3&&JSON.stringify(afterAudit)===JSON.stringify(beforeAudit),
+    "The rejected course edit must leave its stored metadata and the three confirmed audit events unchanged");
+  await page.screenshot({path:path.join(evidenceDir,"framework-course-order-conflict.png"),fullPage:true});
+  const beforeCancel=businessRequests.length;
+  page.once("dialog",dialog=>dialog.dismiss());await page.locator("#retry-catalog").click();
+  check(await page.evaluate(()=>state.writeOutcomeUnknown)&&JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&
+    businessRequests.length===beforeCancel&&countWrites(editor.profile)===writes+4,
+    "Canceling recovery of a real course conflict must preserve the local summary without any request");
+  const dialogue=page.waitForEvent("dialog").then(async dialog=>{
+    const matches=dialog.type()==="confirm"&&dialog.message().startsWith("O resultado da última alteração editorial não foi confirmado.");
+    if(matches)await dialog.accept();else await dialog.dismiss();return matches;
+  });
+  await page.locator("#retry-catalog").click();const confirmed=await dialogue;
+  await page.waitForFunction(()=>state.catalogReady&&state.lessonsReady&&!state.catalogLoading&&!state.writeOutcomeUnknown);
+  check(confirmed&&await page.locator("#course-sort").inputValue()==="7"&&
+    await page.locator("#course-summary").inputValue()===summary&&
+    await page.locator("#editorial-lesson-search").inputValue()===query&&countWrites(editor.profile)===writes+4,
+    "Accepted manual recovery must read the current course baseline and preserve the query without replaying the rejected update");
+  await page.locator("#course-summary").fill(original.summary);
+  await page.locator("#course-sort").fill(String(original.sort_order));
+  const restored=await clickResponse(page,"#course-save","PATCH",route);
+  const restoreReceipt=await json(restored,"Course order after manual recovery");
+  await page.waitForFunction(()=>!state.writePending&&state.catalogReady&&state.lessonsReady&&state.course?.sort_order===0);
+  check(restored.status()===200&&restoreReceipt.saved===true&&
+    JSON.stringify(restored.request().postDataJSON())===JSON.stringify({title:original.title,category:original.category,
+      summary:original.summary,sort_order:0,expected_sort_order:7})&&countWrites(editor.profile)===writes+5,
+    "A new explicit course edit after recovery must use the fresh baseline and restore the original metadata without replay");
+  await reloadCurrentEditor();
+  check(await editor.page.evaluate(expected=>state.course?.id===expected.id&&state.course.title===expected.title&&
+    state.course.category===expected.category&&state.course.summary===expected.summary&&
+    state.course.sort_order===expected.sort_order&&!editorialHasUnsavedChanges(),original)&&
+    JSON.stringify(await editor.page.evaluate(()=>state.lessons))===JSON.stringify(lessons)&&
+    await editor.page.evaluate(id=>state.lesson?.id===id,lessonId)&&countWrites(editor.profile)===writes+5,
+    "The real editors must finish with the original course metadata and identical lesson records before the existing journey continues");
 }
 async function editorialLessonReorder(editor,courseId,firstLessonId,temporaryLessonId){
   enterStage("atomic editorial lesson order");
@@ -1407,8 +1525,8 @@ async function main(){
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
-    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","local editorial lesson search","atomic lesson reorder","concurrent text and order edits","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","local student lesson locator","revocation"],
+    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","local editorial lesson search","atomic lesson reorder","concurrent text and order edits","concurrent course text and order edits","publication hash","audit","editorial overview","private favorites","favorites export download",
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","progress export download","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","local student lesson locator","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

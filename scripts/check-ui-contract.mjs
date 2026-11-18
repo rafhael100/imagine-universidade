@@ -908,4 +908,6 @@ await import("./check-editorial-catalog-filters.mjs");
 await import("./check-lesson-reorder.mjs");
 await import("./check-editorial-lesson-filters.mjs");
 await import("./check-lesson-order-patch.mjs");
+await import("./check-editorial-write-receipts.mjs");
+await import("./check-course-order-patch.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

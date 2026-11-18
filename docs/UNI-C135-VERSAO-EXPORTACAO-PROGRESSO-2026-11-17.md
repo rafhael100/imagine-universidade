@@ -67,3 +67,7 @@ São três arquivos: a view, `scripts/check-progress-export-version.mjs` e este 
 O worktree desta entrega não contém mudanças de backend, workflow ou runner. Não foram feitos stage, commit ou push.
 
 Na integração, o checker de 37 cenários foi importado pela suíte principal, preservando a cobertura C134 de timestamps. A revisão independente de código, testes e documentação foi concluída sem bloqueadores. Não foi acrescentado módulo Chromium: o predicado é exercitado no handler real em Node, enquanto o percurso Laravel existente verifica o download pelo botão e o probe PostgreSQL já possui referência legítima de versão 1000001. Esses ensaios complementares não são descritos como uma jornada única PostgreSQL → navegador.
+
+## CI integrada executada
+
+O [run 44228136328](https://github.com/rafhael100/imagine-universidade/actions/runs/44228136328), SHA `2bec87cbb1ce998a518311575c18457125a7ae89`, aprovou os **seis jobs**. O checker principal executou os **37 cenários C135**; a rodada completou **328 testes PHP / 3.721 asserções**, probes PostgreSQL, **702 verificações Chromium sintéticas** e **221 pelo Laravel/SQLite real**, incluindo o download pelo botão e a preservação da referência/data depois da republicação. Não houve execução local desses runtimes nem alteração de gates de lançamento.

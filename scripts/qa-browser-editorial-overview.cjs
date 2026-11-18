@@ -72,7 +72,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         lesson_count:fixture.lessons.get(1).length,ready:true,issues:[],warnings:[],advisory_only:true,content_hash:"b".repeat(64)}});
       if(path==="/courses"&&method==="POST"){
         const id=fixture.nextId++;fixture.courses.push({id,...request.postDataJSON(),is_published:false});fixture.lessons.set(id,[]);
-        return send({status:201,payload:{id}});
+        return send({status:201,payload:{id,status:"draft"}});
       }
       if(path==="/courses/1"&&method==="PATCH"){
         Object.assign(fixture.courses[0],request.postDataJSON());return send({status:200,payload:{saved:true}});
@@ -82,7 +82,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       }
       if(list&&method==="POST"){
         const id=fixture.nextId++;fixture.lessons.get(Number(list[1])).push({id,...request.postDataJSON(),is_published:false,status:"draft"});
-        return send({status:201,payload:{id}});
+        return send({status:201,payload:{id,status:"draft"}});
       }
       if(path==="/lessons/11"&&method==="PATCH"){
         Object.assign(fixture.lessons.get(1)[0],request.postDataJSON());return send({status:200,payload:{saved:true}});

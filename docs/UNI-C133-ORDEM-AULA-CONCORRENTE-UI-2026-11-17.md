@@ -89,3 +89,9 @@ O runner Laravel/SQLite acrescenta **13 verificações preparadas**: três na se
 O [run 44227212699](https://github.com/rafhael100/imagine-universidade/actions/runs/44227212699), SHA `3894f10715be4d52a9a3d4d946cc9923617e05f5`, aprovou cinco jobs e as **702 verificações Chromium sintéticas**, incluindo as 19 novas. O backend registrou **328 testes PHP / 3.721 asserções**, com os probes PostgreSQL C133/C134 aprovados.
 
 No percurso Laravel, a segunda sessão salvou texto e preservou a ordem concorrente com sucesso. O ensaio seguinte detectou um erro na própria preparação: clicar no curso e na aula já selecionados é uma operação sem efeito na interface; não atualiza o conteúdo salvo pela outra sessão. O runner corrigido usa **Novo curso** apenas para deixar a seleção, sem criar registro, e reabre o curso existente para executar o GET real de aulas. Faz isso antes da alteração explícita e da comparação final. As asserções, o produto e o número de verificações permanecem intactos. A conclusão do percurso real depende da nova execução.
+
+## Percurso completo executado
+
+O [run 44228136328](https://github.com/rafhael100/imagine-universidade/actions/runs/44228136328), SHA `2bec87cbb1ce998a518311575c18457125a7ae89`, aprovou os **seis jobs**, com **328 testes PHP / 3.721 asserções**, **702 verificações Chromium sintéticas** e **221 verificações pelo Laravel/SQLite real**. O percurso de duas sessões confirmou a omissão da ordem ao editar texto, alteração numérica com baseline, conflito 409 sem alteração de registros ou auditoria, preservação dos campos, cancelamento/aceite da consulta manual e nova ação com a ordem restaurada. Persistência e os probes PostgreSQL passaram.
+
+A captura real `framework-lesson-order-conflict.png` foi inspecionada: aviso e campos preservados legíveis, controles de gravação bloqueados e recuperação manual visível. Essa aprovação refere-se ao SHA acima; incrementos posteriores precisam de sua própria execução.

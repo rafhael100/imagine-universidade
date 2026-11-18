@@ -12,6 +12,7 @@ use App\Domain\Learning\UniversityCatalogRepository;
 use App\Domain\Learning\UniversityTenantProvisioner;
 use App\Domain\Learning\ReadingPositionRevision;
 use App\Domain\Learning\EditorialLessonOrderConflict;
+use App\Domain\Learning\EditorialCourseOrderConflict;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -646,18 +647,35 @@ final class UniversityController
     public function updateCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
     {
         $grant = $this->grant($request);
+        $raw = $request->all();
+        if (array_key_exists('expected_sort_order', $raw)
+            && (!is_int($raw['expected_sort_order']) || $raw['expected_sort_order'] < 0 || $raw['expected_sort_order'] > 9999
+                || !array_key_exists('sort_order', $raw) || !is_int($raw['sort_order'])
+                || $raw['sort_order'] < 0 || $raw['sort_order'] > 9999)) {
+            return response()->json(['error' => 'invalid_order'], 422);
+        }
         $input = $request->validate([
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'category' => ['required', 'in:metodologia,negocios,sistemas'],
             'summary' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
+            'expected_sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
 
-        return $this->catalog->updateCourse(
-            $grant,
-            $courseId, $input,
-            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
-        )
+        try {
+            $saved = $this->catalog->updateCourse(
+                $grant,
+                $courseId, $input,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (EditorialCourseOrderConflict) {
+            if ($this->freshGrant($request, $gate, $grant) === null) {
+                return response()->json(['error' => 'access_denied'], 403);
+            }
+            return response()->json(['error' => 'draft_order_changed'], 409);
+        }
+
+        return $saved
             ? response()->json(['saved' => true])
             : response()->json(['error' => 'not_found_or_published'], 404);
     }

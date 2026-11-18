@@ -84,12 +84,12 @@ async function harness({load=true,published=false}={}){
     }
     if(path==="/courses"&&request.method==="GET")return response(200,{courses:server.courses});
     if(path==="/courses"&&request.method==="POST"){
-      const id=server.nextId++;server.courses.push({id,...request.body,is_published:false});return response(201,{id});
+      const id=server.nextId++;server.courses.push({id,...request.body,is_published:false});return response(201,{id,status:"draft"});
     }
     const list=path.match(/^\/courses\/(\d+)\/lessons$/);
     if(list&&request.method==="GET")return response(200,{lessons:Number(list[1])===1?server.lessons:[]});
     if(list&&request.method==="POST"){
-      const id=server.nextId++;server.lessons.push({id,...request.body,is_published:false,status:"draft"});return response(201,{id});
+      const id=server.nextId++;server.lessons.push({id,...request.body,is_published:false,status:"draft"});return response(201,{id,status:"draft"});
     }
     if(path==="/courses/1/publication-check")return response(200,{course_id:1,version:1,lesson_count:server.lessons.length,
       ready:true,issues:[],warnings:[],content_hash:"a".repeat(64),advisory_only:true});

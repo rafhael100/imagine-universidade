@@ -191,3 +191,7 @@ acima.
 O [run 44227212699](https://github.com/rafhael100/imagine-universidade/actions/runs/44227212699), SHA `3894f10715be4d52a9a3d4d946cc9923617e05f5`, passou a validação com **328 testes PHP / 3.721 asserções** (39 Unit/169 e 289 Feature/3.552), incluindo os 21 métodos C133 e os 11 C134. O probe PostgreSQL executou as nove verificações novas: ordem preservada após reordenação real, espera do peer no lock, CAS válido, conflitos sem efeitos, legado, defesa estrita e rollback após auditoria. Os 15 caminhos de escrita, 16 invariantes e 24 verificações de privilégios permaneceram aprovados.
 
 Cinco jobs foram aprovados. O módulo Chromium sintético também passou; o percurso Laravel parou em uma preparação de atualização da seleção, documentada na C133 UI. Esta evidência confirma backend e PostgreSQL nesse SHA, sem atribuir aprovação integral ao percurso real ou a alterações posteriores.
+
+## Validação completa subsequente
+
+O [run 44228136328](https://github.com/rafhael100/imagine-universidade/actions/runs/44228136328), SHA `2bec87cbb1ce998a518311575c18457125a7ae89`, aprovou os **seis jobs**: **328 testes PHP / 3.721 asserções**, probes PostgreSQL e **702 verificações sintéticas / 221 pelo Laravel real**. A jornada de duas sessões completou a edição textual com ordem preservada, o conflito sem escrita ou auditoria e a recuperação manual. O ajuste de preparação descrito na UI não alterou produto, contratos ou asserções.

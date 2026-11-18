@@ -76,7 +76,7 @@ async function harness({load=true,published=false}={}){
       if(control.hook){const result=await control.hook(request);if(result!==undefined)return result;}
       if(path==="/courses"&&request.method==="GET")return response(200,{courses:server.courses});
       if(path==="/courses"&&request.method==="POST"){
-        const id=server.nextId++;server.courses.push({id,...request.body,is_published:false});server.currentLessons.set(id,[]);return response(201,{id});
+        const id=server.nextId++;server.courses.push({id,...request.body,is_published:false});server.currentLessons.set(id,[]);return response(201,{id,status:"draft"});
       }
       const index=path.match(/^\/courses\/(\d+)\/versions$/);
       if(index){
@@ -98,7 +98,7 @@ async function harness({load=true,published=false}={}){
       if(current){
         const id=Number(current[1]);
         if(request.method==="GET")return response(200,{lessons:server.currentLessons.get(id)||[]});
-        const lessonId=server.nextId++;server.currentLessons.get(id).push({id:lessonId,...request.body,status:"draft",is_published:false});return response(201,{id:lessonId});
+        const lessonId=server.nextId++;server.currentLessons.get(id).push({id:lessonId,...request.body,status:"draft",is_published:false});return response(201,{id:lessonId,status:"draft"});
       }
       if(path==="/courses/1/publication-check")return response(200,{course_id:1,version:3,lesson_count:1,ready:true,
         issues:[],warnings:[],content_hash:"a".repeat(64),advisory_only:true});

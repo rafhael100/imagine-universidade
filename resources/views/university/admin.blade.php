@@ -1197,15 +1197,30 @@ $("course-form").addEventListener("submit",async event=>{
     say("Salve a aula em edição antes de salvar o curso. Para descartá-la, use Nova aula. As alterações do curso foram mantidas.");
     return;
   }
+  const baseline=state.course===null?null:{id:state.course.id,sort_order:state.course.sort_order};
   const payload={title:$("course-title").value.trim(),slug:$("course-slug").value.trim(),
     category:$("course-category").value,summary:$("course-summary").value.trim(),sort_order:intField("course-sort")};
   if(!payload.title){say("Informe o título.");return;}
-  const courseId=state.course?.id??null;
+  const courseId=baseline?.id??null;
   if(!beginWrite())return;
   try{
-    const result=courseId!==null
-      ? await api("/courses/"+courseId,"PATCH",(({slug,...withoutSlug})=>withoutSlug)(payload))
-      : await api("/courses","POST",payload);
+    let result;
+    if(courseId!==null){
+      const {slug,sort_order,...data}=payload;
+      // A text edit must not replay an order another editor changed.
+      // Only an explicit numeric change carries the original order baseline.
+      if(sort_order!==baseline.sort_order){
+        data.sort_order=sort_order;data.expected_sort_order=baseline.sort_order;
+      }
+      result=await api("/courses/"+courseId,"PATCH",data);
+    }else result=await api("/courses","POST",payload);
+    // HTTP success alone cannot confirm a write or authorize replacing drafts.
+    if(courseId!==null){
+      if(result?.saved!==true)throw new Error("invalid_course_save_receipt");
+    }else if(!result||typeof result!=="object"||Array.isArray(result)||
+      !Number.isSafeInteger(result.id)||result.id<1||result.status!=="draft"){
+      throw new Error("invalid_course_create_receipt");
+    }
     if(!state.accessDenied){await refreshCourses(courseId??result.id);say("Rascunho salvo.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
@@ -1235,7 +1250,8 @@ $("delete-lesson").addEventListener("click",async()=>{
   if(!beginWrite())return;
   $("delete-lesson").disabled=true;
   try{
-    await api("/lessons/"+encodeURIComponent(String(lesson.id)),"DELETE");
+    const receipt=await api("/lessons/"+encodeURIComponent(String(lesson.id)),"DELETE");
+    if(receipt?.deleted!==true)throw new Error("invalid_lesson_delete_receipt");
     if(!state.accessDenied){await refreshLessons();say("Aula em rascunho excluída. Histórico publicado foi preservado.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
@@ -1262,7 +1278,11 @@ $("lesson-form").addEventListener("submit",async event=>{
       if(receipt?.saved!==true)throw new Error("invalid_lesson_save_receipt");
     }else{
       const result=await api("/courses/"+courseId+"/lessons","POST",payload);
-      savedLessonId=result?.id??null;
+      if(!result||typeof result!=="object"||Array.isArray(result)||
+        !Number.isSafeInteger(result.id)||result.id<1||result.status!=="draft"){
+        throw new Error("invalid_lesson_create_receipt");
+      }
+      savedLessonId=result.id;
     }
     if(!state.accessDenied){await refreshLessons(savedLessonId);say("Aula salva em rascunho.");}
   }catch(error){freezeUncertainEditorialWrite();}
@@ -1275,7 +1295,8 @@ $("delete-course").addEventListener("click",async()=>{
   if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
   $("delete-course").disabled=true;
   try{
-    await api("/courses/"+courseId,"DELETE");
+    const receipt=await api("/courses/"+courseId,"DELETE");
+    if(receipt?.deleted!==true)throw new Error("invalid_course_delete_receipt");
     if(!state.accessDenied){await refreshCourses(null);say("Rascunho nunca publicado excluído com registro de auditoria.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
@@ -1420,7 +1441,8 @@ $("publish").addEventListener("click",async()=>{
   if(!confirm("Publicar esta versão revisada para os clientes elegíveis? Confirme somente após revisão editorial independente. A publicação não libera o SSO ou o Portal por si só."))return;
   if(state.accessDenied||state.course?.id!==courseId||state.course.is_published||!beginWrite())return;
   try{
-    await api("/courses/"+courseId+"/publish","POST",{expected_content_hash:reviewed.content_hash});
+    const receipt=await api("/courses/"+courseId+"/publish","POST",{expected_content_hash:reviewed.content_hash});
+    if(receipt?.published!==true)throw new Error("invalid_publish_receipt");
     if(!state.accessDenied){
       await refreshCourses(courseId);
       say("Versão do curso publicada no catálogo privado; elegibilidade continua decidida pelo Portal.");
@@ -1438,7 +1460,8 @@ $("unpublish").addEventListener("click",async()=>{
   if(!confirm(unpublishWarning(state.course.title)))return;
   if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
   try{
-    await api("/courses/"+courseId+"/unpublish","POST");
+    const receipt=await api("/courses/"+courseId+"/unpublish","POST");
+    if(receipt?.published!==false)throw new Error("invalid_unpublish_receipt");
     if(!state.accessDenied){
       await refreshCourses(courseId);
       say("Versão anterior arquivada; novo rascunho criado. O progresso da versão nova começa separado.");

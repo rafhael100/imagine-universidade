@@ -160,3 +160,9 @@ O runner Laravel/SQLite substitui a consulta direta anterior à exportação por
 No SHA `3894f10715be4d52a9a3d4d946cc9923617e05f5`, o [run 44227212699](https://github.com/rafhael100/imagine-universidade/actions/runs/44227212699) aprovou **328 testes PHP / 3.721 asserções**, incluindo os 11 métodos C134. O probe PostgreSQL confirmou o DTO canônico idêntico sob UTC, Etc/GMT-3 e Asia/Kolkata e a preservação integral dos registros originais, além do escopo/allowlist. Essas seis verificações foram executadas no banco descartável real.
 
 Cinco jobs foram aprovados e o módulo Chromium sintético completou 702 verificações. A jornada Laravel parou antes do download, por uma preparação C133 de atualização de seleção já corrigida no runner. Portanto, o download real C134 continua pendente da execução seguinte; os resultados acima não presumem sua conclusão.
+
+## Download real executado
+
+No SHA `2bec87cbb1ce998a518311575c18457125a7ae89`, o [run 44228136328](https://github.com/rafhael100/imagine-universidade/actions/runs/44228136328) aprovou os **seis jobs**, com **328 testes PHP / 3.721 asserções**, probes PostgreSQL, **702 verificações Chromium sintéticas** e **221 pelo Laravel/SQLite real**.
+
+O clique em **Exportar meu progresso** gerou e baixou o JSON real. Passaram cabeçalhos/nome, envelope/allowlist, UTC canônico, igualdade integral com a resposta e ausência de escrita. Após republicação, a referência conservou curso, aula, versão e a data original já obtida no histórico. O download foi exercitado pelo Laravel/SQLite; os seis checks PostgreSQL confirmam separadamente a normalização e a preservação dos registros naquele banco.

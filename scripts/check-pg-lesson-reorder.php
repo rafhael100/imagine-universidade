@@ -3,13 +3,14 @@
 declare(strict_types=1);
 
 /**
- * C129/C133: actual repository, order edits and two PostgreSQL sessions.
+ * C129/C133/C137: actual repository, order edits and two PostgreSQL sessions.
  * Committed fixtures exist only for real contention and are removed by their
  * captured parent IDs. Run after migrations and before editorial seeding.
  */
 use App\Domain\Access\PortalAccessGate;
 use App\Domain\Access\PortalGrant;
 use App\Domain\Learning\EditorialLessonOrderConflict;
+use App\Domain\Learning\EditorialCourseOrderConflict;
 use App\Domain\Learning\UniversityCatalogRepository;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Events\QueryExecuted;
@@ -467,6 +468,161 @@ try {
                 ->where('educational_organization_id', $organizations['imagine-editorial'])->count()
             && $archiveRows === reorderPgRows($fixture['archive']),
             'a failed guarded PATCH rolls back its content, order, timestamp and inserted audit without changing the archive');
+
+        // C137 reuses the committed course and both existing connections.
+        // No new fixture IDs or cleanup paths are required for metadata edits.
+        $stage = 'course_patch_confirmed_move';
+        $courseState = static function () use ($course, $courses, $version, $fixture, $organizations): array {
+            return [
+                'course' => (array) DB::table('educational_courses')->where('id', $course)->first(),
+                'other_courses' => DB::table('educational_courses')->whereIn('id', [$courses['foreign'], $courses['unshared']])
+                    ->orderBy('id')->get()->map(static fn ($row): array => (array) $row)->all(),
+                'versions' => DB::table('educational_course_versions')->where('educational_course_id', $course)
+                    ->orderBy('id')->get()->map(static fn ($row): array => (array) $row)->all(),
+                'lessons' => reorderPgRows($version),
+                'archive' => reorderPgRows($fixture['archive']),
+                'audit' => DB::table('educational_audit_events')
+                    ->where('educational_organization_id', $organizations['imagine-editorial'])->orderBy('id')
+                    ->get()->map(static fn ($row): array => (array) $row)->all(),
+            ];
+        };
+        $courseStart = $courseState();
+        $olderCourseOrder = reorderPgOnPeer(static fn (): int =>
+            (int) DB::table('educational_courses')->where('id', $course)->value('sort_order'));
+        $courseInput = ['title' => 'Metadados de curso editados explicitamente',
+            'summary' => 'Resumo fictício que não deve alterar a ordem omitida.', 'category' => 'sistemas'];
+        $saved = $repository->updateCourse($grant, $course,
+            [...$courseInput, 'sort_order' => 7, 'expected_sort_order' => $olderCourseOrder], $live);
+        $coursePreflight = $repository->publicationPreflight($grant, $course);
+        reorderPgCheck($olderCourseOrder === 9999 && $saved === true
+            && (int) DB::table('educational_courses')->where('id', $course)->value('sort_order') === 7
+            && is_array($coursePreflight) && $coursePreflight['ready'] === true,
+            'a guarded course edit commits a new position after the peer captured the older catalog order');
+
+        $stage = 'course_patch_omitted_order_and_locks';
+        $beforeCourseText = $courseState();
+        $courseText = [...$courseInput, 'title' => 'Texto de curso salvo sem intenção de mover'];
+        $courseLocked = false;
+        $coursePeerBlocked = false;
+        $coursePublishBlocked = false;
+        $courseDecisions = 0;
+        $saved = $repository->updateCourse($grant, $course, $courseText,
+            static function () use ($grant, $repository, $course, $courseInput, $coursePreflight, $live, $peer,
+                &$courseLocked, &$coursePeerBlocked, &$coursePublishBlocked, &$courseDecisions): PortalGrant {
+                $courseDecisions++;
+                reorderPgCheck(DB::transactionLevel() > 0,
+                    'the course metadata PATCH revalidates authority inside its lock-holding transaction');
+                $courseLocked = reorderPgBlocked($peer, 'course', $course);
+                try {
+                    reorderPgOnPeer(static fn () => $repository->updateCourse($grant, $course,
+                        [...$courseInput, 'sort_order' => 8, 'expected_sort_order' => 7], $live));
+                } catch (QueryException $error) {
+                    $coursePeerBlocked = ($error->errorInfo[0] ?? null) === '55P03';
+                }
+                try {
+                    reorderPgOnPeer(static fn () => $repository->setPublished($grant, $course, true,
+                        $coursePreflight['content_hash'], $live));
+                } catch (QueryException $error) {
+                    $coursePublishBlocked = ($error->errorInfo[0] ?? null) === '55P03';
+                }
+                return $grant;
+            });
+        $afterCourseText = $courseState();
+        reorderPgCheck($saved === true && $courseDecisions === 1 && $courseLocked && $coursePeerBlocked && $coursePublishBlocked
+            && (int) $afterCourseText['course']['sort_order'] === 7
+            && $afterCourseText['course']['title'] === $courseText['title']
+            && $afterCourseText['course']['summary'] === $courseText['summary']
+            && $afterCourseText['course']['category'] === $courseText['category']
+            && count($afterCourseText['audit']) === count($beforeCourseText['audit']) + 1
+            && $afterCourseText['versions'] === $beforeCourseText['versions']
+            && $afterCourseText['lessons'] === $beforeCourseText['lessons']
+            && $afterCourseText['archive'] === $beforeCourseText['archive'],
+            'omitting course order preserves its confirmed position while competing metadata and publication writes wait on the same row');
+
+        $stage = 'course_patch_matching_guard_on_peer';
+        $saved = reorderPgOnPeer(static fn () => $repository->updateCourse($grant, $course,
+            [...$courseInput, 'sort_order' => 6000, 'expected_sort_order' => 7], $live));
+        $afterCourseMove = $courseState();
+        reorderPgCheck($saved === true && (int) $afterCourseMove['course']['sort_order'] === 6000
+            && $afterCourseMove['course']['title'] === $courseInput['title']
+            && count($afterCourseMove['audit']) === count($afterCourseText['audit']) + 1,
+            'the independent session can commit a matching course order guard after the lock is released');
+
+        $stage = 'course_patch_stale_guard';
+        foreach ([8, 6000] as $targetOrder) {
+            $conflict = false;
+            try {
+                $repository->updateCourse($grant, $course, [
+                    'title' => 'Título antigo que não deve entrar', 'summary' => 'Resumo antigo sem confirmação.',
+                    'category' => 'negocios', 'sort_order' => $targetOrder, 'expected_sort_order' => 7,
+                ], $live);
+            } catch (EditorialCourseOrderConflict) {
+                $conflict = true;
+            }
+            reorderPgCheck($conflict && $courseState() === $afterCourseMove && DB::transactionLevel() === 0
+                && DB::connection('c129_reorder_peer')->transactionLevel() === 0,
+                'a stale course guard rejects every metadata change without audit, including an already-matching destination');
+        }
+
+        $stage = 'course_patch_legacy_and_domain_guard';
+        $saved = $repository->updateCourse($grant, $course, [...$courseInput, 'sort_order' => 9], $live);
+        reorderPgCheck($saved === true && (int) DB::table('educational_courses')->where('id', $course)->value('sort_order') === 9,
+            'explicit legacy course order remains supported without the new precondition');
+        $beforeCourseRejections = $courseState();
+        $rejected = true;
+        foreach ([
+            [...$courseInput, 'sort_order' => 1, 'expected_sort_order' => '9'],
+            [...$courseInput, 'expected_sort_order' => 9],
+            [...$courseInput, 'sort_order' => '1', 'expected_sort_order' => 9],
+            [...$courseInput, 'sort_order' => 1.0, 'expected_sort_order' => 9],
+        ] as $input) {
+            $rejected = ($repository->updateCourse($grant, $course, $input, $live) === false) && $rejected;
+        }
+        foreach ([9, 7] as $expectedCourseOrder) {
+            $rejected = ($repository->updateCourse($grant, $course,
+                [...$courseInput, 'sort_order' => 1, 'expected_sort_order' => $expectedCourseOrder],
+                static fn (): PortalGrant => PortalGrant::deny('synthetic_revocation')) === false) && $rejected;
+        }
+        reorderPgCheck($rejected && $courseState() === $beforeCourseRejections,
+            'malformed course order pairs and revoked authority cannot mutate metadata or expose a stale-order conflict');
+        $scoped = true;
+        foreach (['foreign', 'unshared'] as $kind) {
+            $scoped = ($repository->updateCourse($grant, $courses[$kind],
+                [...$courseInput, 'sort_order' => 1, 'expected_sort_order' => 9999], $live) === false) && $scoped;
+        }
+        reorderPgCheck($scoped && $courseState() === $beforeCourseRejections,
+            'the optional course guard does not allow changing foreign or unshared catalog rows');
+
+        $stage = 'course_patch_rollback_after_audit';
+        $courseFault = (object) ['armed' => true];
+        DB::listen(static function (QueryExecuted $query) use ($courseFault): void {
+            if ($courseFault->armed && str_contains($query->sql, 'educational_audit_events')
+                && preg_match('/^\s*insert\b/i', $query->sql)) {
+                $courseFault->armed = false;
+                throw new RuntimeException('Synthetic course patch failure after audit insertion.');
+            }
+        });
+        $courseFailed = false;
+        try {
+            $repository->updateCourse($grant, $course,
+                [...$courseText, 'sort_order' => 0, 'expected_sort_order' => 9], $live);
+        } catch (RuntimeException $error) {
+            $courseFailed = $error->getMessage() === 'Synthetic course patch failure after audit insertion.';
+        }
+        reorderPgCheck($courseFailed && !$courseFault->armed && DB::transactionLevel() === 0
+            && $courseState() === $beforeCourseRejections,
+            'a guarded course PATCH rolls back metadata, order, timestamp and its inserted audit on failure');
+        $courseFinal = $courseState();
+        $courseAudit = array_map(static fn (array $row): array => [
+            'action' => $row['action'], 'resource_kind' => $row['resource_kind'], 'resource_id' => (int) $row['resource_id'],
+        ], array_slice($courseFinal['audit'], count($courseStart['audit'])));
+        reorderPgCheck($courseAudit === array_fill(0, 4, ['action' => 'course.updated', 'resource_kind' => 'course', 'resource_id' => $course])
+            && $courseFinal['other_courses'] === $courseStart['other_courses']
+            && $courseFinal['versions'] === $courseStart['versions']
+            && $courseFinal['lessons'] === $courseStart['lessons']
+            && $courseFinal['archive'] === $courseStart['archive']
+            && $courseFinal['course']['is_published'] === false,
+            'only four successful course edits audit; publication, lesson content, versions and other courses remain intact');
     } finally {
         $operationStage = $stage;
         $stage = 'cleanup';

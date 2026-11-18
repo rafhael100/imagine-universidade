@@ -10,6 +10,7 @@ import {createHash} from "node:crypto";
 import {mkdir,readFile,writeFile} from "node:fs/promises";
 import {resolve} from "node:path";
 import {fileURLToPath} from "node:url";
+import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -116,6 +117,9 @@ const doc=[
   "",
   "## Etapas para a equipe editorial",
   "",
+  "Abra revisao-navegavel.html para navegar pelos 10 cursos e 35 aulas offline.",
+  "Exporte o CSV; o registro nunca confirma identidade ou aprova publicação.",
+  "",
   "1. Ler todos os textos em \`cursos/\` e registrar observações em \`revisao.csv\`.",
   "2. Confirmar qualidade, atualidade das orientações, revisão de exemplos e ausência de dados pessoais.",
   "3. Registrar aprovação humana em issue/PR identificável, incluindo SHA-256 da aula e responsável.",
@@ -132,6 +136,7 @@ const csv=[
   ...reviewRows
 ].map(row=>row.map(csvField).join(",")).join("\n")+"\n";
 await writeFile(resolve(dest,"revisao.csv"),csv,"utf8");
+await writeFile(resolve(dest,"revisao-navegavel.html"),renderOfflineReviewPage(payload,hashes),"utf8");
 const machine={schema_version:1,source_path:"content/mvp-cursos-v1.json",
   source_sha256:sourceHash,status:"PENDING_HUMAN_REVIEW",publishable:false,
   course_count:indexes.length,lesson_count:lessonCount,courses:indexes,lessons:hashes};

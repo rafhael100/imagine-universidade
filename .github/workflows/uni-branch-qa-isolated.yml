@@ -126,6 +126,7 @@ jobs:
           node scripts/check-learning-content.mjs
           node scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-review-validation.mjs
+          node scripts/check-editorial-offline-review.mjs
           node preview/current-check.mjs
           python3 scripts/check-sqlite-contract.py
 
@@ -186,6 +187,7 @@ jobs:
           test -f content/mvp-cursos-v1.json
           node scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-review-validation.mjs
+          node scripts/check-editorial-offline-review.mjs
           node scripts/build-editorial-review-pack.mjs --out "$RUNNER_TEMP/universidade-editorial-review"
           node scripts/validate-editorial-review.mjs \
             --csv "$RUNNER_TEMP/universidade-editorial-review/revisao.csv" \

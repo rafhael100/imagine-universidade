@@ -553,7 +553,7 @@ final class UniversityController
     public function adminAudit(Request $request): JsonResponse
     {
         $input = $request->validate([
-            'before_id' => ['sometimes', 'integer', 'min:1', 'max:2147483647'],
+            'before_id' => ['sometimes', 'integer', 'min:1', 'max:9007199254740991'],
         ]);
         return response()->json($this->catalog->adminAudit(
             $this->grant($request),

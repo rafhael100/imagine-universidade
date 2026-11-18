@@ -93,3 +93,11 @@ O coordenador integrou os quatro arquivos e os pontos de chamada nos runners exi
 O percurso Laravel real acrescenta **13 verificações preparadas**. Usa o segundo curso sintético já criado pela jornada contextual, com nove aulas contendo uma expressão exclusiva do laboratório. Exercita duas páginas (8→1), abre a nona aula exata, retorna ao estudo original e reinicia a consulta. Compara progresso, favoritos e posição antes/depois, confere os três POSTs explícitos de busca sem outra mutação, e verifica a limpeza na revogação e na nova sessão. Capturas desktop/mobile estão previstas nesse percurso, sem afirmar resultado visual antes da CI.
 
 A referência completa anterior é `f458bacef4dbc32ca59b4dfbf0db7b833f65294f`, [run 44233262064](https://github.com/rafhael100/imagine-universidade/actions/runs/44233262064): seis jobs aprovados, 359 testes PHP/4.726 asserções, 746 verificações sintéticas e 232 pelo Laravel real. Esses totais ainda não incluem C140.
+
+## Runtime e inspeção visual confirmados
+
+O [run 44235137343](https://github.com/rafhael100/imagine-universidade/actions/runs/44235137343), SHA `92d8452b5cb3e65308a11044747f75d6c77e9cd5`, aprovou os **seis jobs**. Resultado observado: **384 testes PHP / 5.035 asserções**, as 15 verificações PostgreSQL C140, **773 verificações Chromium sintéticas** e **245 pelo Laravel/SQLite real**, com persistência aprovada. Os 27 checks do módulo C140 e as 13 verificações reais foram executados com sucesso; os 34 cenários Node também passaram na suíte integrada.
+
+As capturas `framework-search-page-desktop.png` e `framework-search-page-mobile.png` foram baixadas do artefato **14396658994** e inspecionadas. A primeira página apresenta oito títulos/trechos e as duas ações de paginação; em 390 pixels, a segunda apresenta a nona aula, continuação desabilitada e reinício disponível. Textos e controles ficam legíveis e contidos, sem transbordamento. A captura real do conflito de ordem do curso também confirma a orientação textual C139 e a preservação dos campos locais.
+
+O arquivo do artefato foi conferido pelo SHA256 `dd35f2fb011cc026319a7079fd8ecaa5a1ee2a9dcb998c8e1e45c8cdcd1b206f`. As capturas usam somente conteúdo e identidades sintéticas. Não houve implantação nem mudança de gate operacional.

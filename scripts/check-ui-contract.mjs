@@ -365,7 +365,7 @@ assert.match(routes,/Route::get\('\/audit', \[UniversityController::class, 'admi
 assert.match(adminUI,/id="audit-panel" class="panel audit-panel"/,"admin: seção de histórico");
 assert.match(adminUI,/state.auditRequest!==request/,"admin: resposta obsoleta ignorada");
 assert.match(adminUI,/\+\+state.auditRequest;state.auditEvents=\[\]/,"admin: zerar histórico após revogação");
-assert.match(adminUI,/el\("strong",String\(item.action\|\|"alteração"\)\)/,"admin: somente texto na tela");
+assert.match(adminUI,/el\("strong",item.action\)/,"admin: somente texto validado na tela");
 console.log("PASS private audit: painel, filtro de acesso, paginação e limpeza por revogação");
 
 
@@ -909,6 +909,7 @@ await import("./check-student-catalog-reconciliation.mjs");
 await import("./check-student-lesson-filter.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
+await import("./check-editorial-audit.mjs");
 await import("./check-editorial-version-history.mjs");
 await import("./check-editorial-catalog-filters.mjs");
 await import("./check-lesson-reorder.mjs");

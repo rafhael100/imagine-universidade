@@ -261,7 +261,7 @@ await scenario("revocation and expiry purge the query and cannot be undone by la
   for(const status of [403,419]){
     const h=await harness();await h.filter("gestao","sistemas","published");
     h.control.hook=req=>req.path==="/audit"?response(status,{}):undefined;
-    await assert.rejects(h.editor.refreshAudit());assert.equal(h.state.accessDenied,true);
+    await assert.doesNotReject(h.editor.refreshAudit());assert.equal(h.state.accessDenied,true);
     assert.deepEqual(h.filterState(),["","todos","todos"]);assert.equal(h.get(filters[0]).value,"");
     assert.equal(h.get("editorial-filter-status").textContent,"");assert.deepEqual(h.ids(),[]);
     const before=h.requests.length;await h.filter("acao");await h.click("clear-editorial-filters");h.editor.renderCourses();h.editor.finishWrite();
@@ -273,7 +273,7 @@ await scenario("a late catalog response after denial cannot restore filters or c
   const h=await harness();await h.filter("gestao");const held=deferred();
   h.control.hook=async req=>req.path==="/courses"?await held.promise:req.path==="/audit"?response(403,{}):undefined;
   const pending=h.editor.refreshCourses().catch(()=>{});await setImmediate();
-  await assert.rejects(h.editor.refreshAudit());held.resolve(response(200,{courses:fixtures()}));await pending;
+  await assert.doesNotReject(h.editor.refreshAudit());held.resolve(response(200,{courses:fixtures()}));await pending;
   assert.deepEqual(h.ids(),[]);assert.deepEqual(h.filterState(),["","todos","todos"]);
   assert.equal(h.state.catalogReady,false);for(const id of controls)assert.equal(h.get(id).disabled,true);
 });

@@ -113,6 +113,7 @@ async function harness(){
   requests.length=0;
   return {editor,node,control,server,requests,dialogs,click,
     submit:id=>handlers.get(id+"-form:submit")({preventDefault(){}}),
+    input:id=>handlers.get(id+":input")?.({target:node(id)}),
     fields:ids=>ids.map(id=>node(id).value),
     writes:()=>requests.filter(request=>request.method!=="GET"),
   };
@@ -191,6 +192,62 @@ await scenario("new lesson creation preserves the course and selects only its re
   assert.equal(h.node("lesson-slug").disabled,true);
   assert.equal(h.editor.lessonHasUnsavedEdits(),false);
   assert.deepEqual(h.writes().map(write=>[write.method,write.path]),[["POST","/courses/1/lessons"]]);
+});
+await scenario("a new course keeps every lesson field unavailable until the course is saved",async()=>{
+  const h=await harness();
+  h.click("new-course");
+  assert.equal(h.editor.state.course,null);
+  for(const id of [...lessonFields,...lessonButtons])assert.equal(h.node(id).disabled,true,id);
+  assert.equal(h.requests.length,0);
+  h.node("course-title").value="Novo curso fictício";
+  h.node("course-slug").value="novo-curso-ficticio";
+  h.node("course-summary").value="Resumo do novo curso.";
+  h.control.fetchHook=request=>{
+    if(request.path==="/courses"&&request.method==="POST"){
+      h.server.courses.push({id:3,...request.body,is_published:false});
+      h.server.lessons.set(3,[]);
+      return response(201,{id:3,status:"draft"});
+    }
+  };
+  await h.submit("course");
+  assert.deepEqual(h.writes().map(write=>[write.method,write.path]),[["POST","/courses"]]);
+  assert.equal(h.editor.state.course.id,3);
+  assert.equal(h.editor.state.lessonsReady,true);
+  assert.equal(h.editor.state.lesson,null);
+  assert.equal(h.node("lesson-slug").value,"");
+  assert.equal(h.node("lesson-slug").disabled,false);
+  assert.equal(h.node("lesson-save").disabled,false);
+  assert.equal(h.node("clear-lesson").disabled,false);
+  assert.equal(h.node("delete-lesson").disabled,true);
+  assert.match(h.node("status").textContent,/Rascunho salvo/);
+});
+await scenario("editing title or body invalidates the local preview without replacing either draft",async()=>{
+  const h=await harness();changeCourse(h);
+  h.click("preview-lesson");
+  assert.equal(h.node("lesson-preview").hidden,false);
+  const originalPreview=h.node("preview-body").children;
+  h.node("lesson-sort").value="7";h.input("lesson-sort");
+  assert.equal(h.node("lesson-preview").hidden,false);
+  assert.equal(h.node("preview-body").children,originalPreview);
+  for(const [id,value] of [["lesson-title","  Título revisado depois da prévia 😀  "],
+    ["lesson-body","  Corpo revisado depois da prévia.\n\nTexto literal <strong>sem HTML</strong>.  "]]){
+    h.node(id).value=value;
+    const course=h.fields(courseFields),lesson=h.fields(lessonFields);
+    const selected=h.editor.state.lesson,requests=[h.editor.state.courseRequest,h.editor.state.lessonRequest];
+    h.input(id);
+    assert.equal(h.node("lesson-preview").hidden,true);
+    assert.equal(h.node("preview-body").children.length,0);
+    assert.deepEqual(h.fields(courseFields),course);
+    assert.deepEqual(h.fields(lessonFields),lesson);
+    assert.equal(h.editor.state.lesson,selected);
+    assert.deepEqual([h.editor.state.courseRequest,h.editor.state.lessonRequest],requests);
+    assert.equal(h.requests.length,0);
+    assert.equal(h.dialogs.length,0);
+    h.click("preview-lesson");
+    assert.equal(h.node("lesson-preview").hidden,false);
+    assert.equal(h.node("preview-title").textContent,h.node("lesson-title").value.trim());
+    assert.equal(h.node("preview-body").children.map(item=>item.textContent).join(""),h.node("lesson-body").value.trim());
+  }
 });
 await scenario("cancelled deletion preserves drafts and sends no request; accepted deletion keeps course edits",async()=>{
   const h=await harness(),course=changeCourse(h),lesson=changeLesson(h);
@@ -299,6 +356,20 @@ await scenario("ambiguous committed write preserves both forms, freezes controls
   await h.submit("lesson");await h.submit("course");
   assert.equal(h.requests.length,1);
   assert.equal(h.writes().length,1);
+  // Explicit local discard remains available. It must not unlock the slug
+  // or relax the uncertain-write fence before a fresh authorized catalogue.
+  h.control.accept=false;h.click("clear-lesson");
+  assert.deepEqual(h.fields(lessonFields),lesson);
+  assert.equal(h.node("lesson-slug").disabled,true);
+  h.control.accept=true;h.click("clear-lesson");
+  assert.equal(h.editor.state.lesson,null);
+  assert.equal(h.node("lesson-body").value,"");
+  assert.deepEqual(h.fields(courseFields),course);
+  assert.equal(h.node("lesson-slug").disabled,true);
+  assert.equal(h.editor.state.writeOutcomeUnknown,true);
+  assert.equal(h.editor.beginWrite(),false);
+  assert.equal(h.requests.length,1);
+  assert.equal(h.dialogs.length,2);
 });
 await scenario("failed post-save lesson refresh keeps the unsaved course and the existing write fence",async()=>{
   const h=await harness(),course=changeCourse(h);changeLesson(h);
@@ -311,4 +382,4 @@ await scenario("failed post-save lesson refresh keeps the unsaved course and the
   assert.equal(h.writes().length,1);
   assert.equal(h.requests.length,2);
 });
-console.log("PASS editor draft preservation: "+scenarios+" actual-handler scenarios; sibling drafts, selection, revocation and ambiguous writes");
+console.log("PASS editor draft preservation: "+scenarios+" actual-handler scenarios; sibling drafts, selection, preview invalidation, revocation and ambiguous writes");

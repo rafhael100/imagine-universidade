@@ -331,7 +331,8 @@ await scenario("library refresh during removal does not accept a stale receipt o
   assert.equal(h.state.retained.needsRefresh,true);assert.equal(h.rows().length,0);assert.match(h.text(),/não foi confirmado/);
 });
 await scenario("toggle reconciliation prevents a retained DELETE until its catalog-only GET completes",async()=>{
-  const h=await harness(),held=deferred();h.control.write={status:503,payload:{}};h.control.favorites=()=>held.promise;
+  const h=await harness(),held=deferred();await h.student.selectCourse(2);
+  h.control.write={status:503,payload:{}};h.control.favorites=()=>held.promise;
   const toggle=h.student.toggleCourseFavorite();await setImmediate();
   assert.equal(h.state.favoritesLoading,true);assert.equal(h.state.favoriteWriting,false);
   await h.student.loadRetainedFavorites();assert.equal(h.removeButton(70).disabled,true);
@@ -340,6 +341,7 @@ await scenario("toggle reconciliation prevents a retained DELETE until its catal
 });
 await scenario("an old toggle finally cannot release a new retained write after library refresh",async()=>{
   const h=await harness(),oldRead=deferred(),newWrite=deferred();
+  await h.student.selectCourse(2);
   h.control.write={status:503,payload:{}};h.control.favorites=()=>oldRead.promise;
   const old=h.student.toggleCourseFavorite();await setImmediate();assert.equal(h.state.favoritesLoading,true);
   h.control.favorites=null;await h.student.loadLibrary();await setImmediate();await h.student.loadRetainedFavorites();
@@ -366,5 +368,86 @@ await scenario("revocation during JSON decoding cannot restore retained referenc
   const pending=h.student.loadRetainedFavorites();await setImmediate();h.student.lockAccess("Sessão encerrada");
   held.release(envelope());await pending;assert.equal(h.rows().length,0);assert.equal(h.text(),"");
   assert.equal(h.get("retained-favorites-panel").hidden,true);assert.equal(h.state.retained.unconfirmed,false);
+});
+await scenario("C141 withdrawal cannot turn an uncommitted course DELETE into confirmed removal",async()=>{
+  const h=await harness(),reader=h.content.children[0],visibleReads=h.visibleReads().length;
+  h.control.write=request=>{
+    assert.equal(request.method,"DELETE");
+    h.server.rows=h.server.rows.map(item=>item.course_id===1?{...item,availability:"unavailable"}:item);
+    h.server.courses=h.server.courses.filter(item=>item.id!==1);
+    return {status:503,payload:{error:"temporarily_unavailable"}};
+  };
+  await h.click("course-favorite-toggle");
+  assert.equal(h.writes().length,1);assert.equal(h.visibleReads().length,visibleReads);assert.equal(h.reads().length,0);
+  assert.equal(h.server.rows.some(item=>item.course_id===1),true);
+  assert.equal(h.state.favoriteOutcomeUnknown,true);assert.equal(h.state.retained.needsRefresh,true);
+  assert.equal(h.state.retained.unconfirmed,true);assert.equal(h.content.children[0],reader);
+  assert.match(h.get("favorites-status").textContent,/remoção não foi confirmada/i);
+  await h.click("reload-favorites");assert.deepEqual(clone(h.state.favoriteIds),[]);
+  assert.equal(h.state.favoritesReady,true);assert.equal(h.state.favoriteOutcomeUnknown,false);
+  assert.equal(h.state.retained.needsRefresh,true);assert.equal(h.get("course-favorite-toggle").disabled,true);
+  assert.doesNotMatch(h.get("favorites-status").textContent,/Remoção confirmada/);
+  await h.click("course-favorite-toggle");assert.equal(h.writes().length,1);
+  await h.click("reload-retained-favorites");assert.ok(h.removeButton(1));assert.equal(h.removeButton(1).disabled,false);
+  assert.equal(h.rows().find(node=>Number(node.dataset.retainedCourseId)===1).dataset.retainedAvailability,"unavailable");
+  assert.match(h.text(),/resultado da remoção anterior não foi confirmado/);
+  h.control.write=null;await h.click(h.removeButton(1));
+  assert.equal(h.writes().length,2);assert.equal(h.writes()[1].path,"/courses/1/favorite");
+  assert.equal(h.server.rows.some(item=>item.course_id===1),false);assert.match(h.text(),/Remoção desta referência confirmada/);
+  assert.equal(h.content.children[0],reader);assert.equal(h.state.courseId,1);assert.equal(h.state.lessonId,11);
+});
+await scenario("C141 an empty manual retained page never confirms a lost DELETE and recovery permits a new explicit action",async()=>{
+  const h=await harness();h.server.rows=[row()];
+  h.control.write=request=>{
+    assert.equal(request.method,"DELETE");h.server.rows=[];
+    return {status:503,payload:{error:"temporarily_unavailable"}};
+  };
+  await h.click("course-favorite-toggle");assert.equal(h.writes().length,1);assert.equal(h.visibleReads().length,1);
+  await h.click("reload-retained-favorites");
+  assert.equal(h.state.retained.ready,true);assert.equal(h.rows().length,0);assert.equal(h.state.retained.needsRefresh,false);
+  assert.equal(h.state.retained.unconfirmed,true);assert.match(h.text(),/não foi confirmado/);
+  assert.match(h.text(),/Nenhuma referência encontrada/);assert.doesNotMatch(h.text(),/Remoção desta referência confirmada/);
+  assert.equal(h.state.favoritesReady,false);assert.equal(h.get("course-favorite-toggle").disabled,true);
+  await h.click("reload-favorites");
+  assert.equal(h.state.favoritesReady,true);assert.equal(h.state.favoriteOutcomeUnknown,false);
+  assert.equal(h.state.retained.needsRefresh,false);assert.equal(h.state.retained.unconfirmed,true);
+  assert.equal(h.get("course-favorite-toggle").disabled,false);assert.equal(h.writes().length,1);
+  h.control.write=null;await h.click("course-favorite-toggle");
+  assert.deepEqual(h.writes().map(request=>request.method),["DELETE","PUT"]);
+  assert.equal(h.server.rows.some(item=>item.course_id===1),true);
+});
+for(const response of [{status:503,payload:{}},ok({})]){
+  await scenario("C141 a failed manual retained query cannot release the course-removal guard",async()=>{
+    const h=await harness();h.control.write={status:503,payload:{}};await h.click("course-favorite-toggle");
+    await h.click("reload-favorites");h.control.retained=response;await h.click("reload-retained-favorites");
+    assert.equal(h.state.retained.needsRefresh,true);assert.equal(h.state.retained.unconfirmed,true);
+    assert.equal(h.state.retained.ready,false);assert.equal(h.get("course-favorite-toggle").disabled,true);
+    assert.equal(h.get("reload-retained-favorites").disabled,false);assert.match(h.text(),/Não foi possível/);
+    await h.click("course-favorite-toggle");assert.equal(h.writes().length,1);
+    h.control.retained=null;await h.click("reload-retained-favorites");
+    assert.equal(h.state.retained.needsRefresh,false);assert.equal(h.state.retained.unconfirmed,true);
+    assert.equal(h.removeButton(1).disabled,false);assert.equal(h.get("course-favorite-toggle").disabled,false);
+  });
+}
+await scenario("C141 an older retained response cannot erase uncertainty from a later course DELETE",async()=>{
+  const h=await harness(),held=deferred();h.control.retained=()=>held.promise;
+  const pending=h.student.loadRetainedFavorites();await setImmediate();
+  h.control.write={status:503,payload:{}};await h.click("course-favorite-toggle");
+  held.release(ok(envelope()));await pending;
+  assert.equal(h.rows().length,0);assert.equal(h.state.retained.ready,false);
+  assert.equal(h.state.retained.needsRefresh,true);assert.equal(h.state.retained.unconfirmed,true);
+  assert.equal(h.writes().length,1);assert.equal(h.visibleReads().length,1);assert.equal(h.reads().length,1);
+});
+await scenario("C141 library refresh during a course DELETE leaves manual recovery instead of accepting an incompatible receipt",async()=>{
+  const h=await harness(),held=deferred();h.control.write=()=>held.promise;
+  const pending=h.student.toggleCourseFavorite();await setImmediate();await h.student.loadLibrary();await setImmediate();
+  assert.equal(h.state.favoriteWriting,true);assert.equal(h.visibleReads().length,1);
+  h.server.rows=h.server.rows.filter(item=>item.course_id!==1);
+  held.release(ok({course_id:1,favorite:false}));await pending;
+  assert.equal(h.state.favoriteWriting,false);assert.equal(h.state.retained.needsRefresh,true);
+  assert.equal(h.state.retained.unconfirmed,true);assert.equal(h.state.favoriteOutcomeUnknown,true);
+  assert.equal(h.visibleReads().length,1);assert.equal(h.writes().length,1);assert.match(h.text(),/não foi confirmado/);
+  await h.click("reload-favorites");assert.equal(h.get("course-favorite-toggle").disabled,true);
+  await h.click("reload-retained-favorites");assert.equal(h.get("course-favorite-toggle").disabled,false);
 });
 console.log("PASS retained favorites: "+scenarios+" actual-script scenarios; private references, explicit pages, exact removal, shared write tokens, no uncertain replay and revocation");

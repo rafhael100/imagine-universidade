@@ -1102,6 +1102,14 @@ async function toggleCourseFavorite(){
     state.courses.some(course=>course.id===id);
   const uncertain=()=>{
     state.favoriteIds=[];state.favoritesReady=false;state.favoriteOutcomeUnknown=true;
+    if(!desired){
+      // The published projection cannot prove that a retained preference
+      // was deleted. Use the same manual recovery as the retained manager.
+      invalidateRetainedFavorites("Consulte suas referências antes de outra alteração. Uma nova consulta não confirma o resultado anterior.");
+      state.retained.needsRefresh=true;state.retained.unconfirmed=true;
+      state.favoritesMessage="Uma remoção não foi confirmada. Consulte Gerenciar favoritos antes de outra alteração.";
+      return;
+    }
     state.favoritesMessage="A seleção mudou durante a alteração. Consulte seus favoritos para confirmar o estado atual.";
   };
   const write=++state.favoriteWriteRequest;
@@ -1118,15 +1126,16 @@ async function toggleCourseFavorite(){
     state.favoritesMessage=desired?"Curso salvo nos favoritos.":"Curso removido dos favoritos.";
   }catch(error){
     if(state.accessDenied||state.favoriteWriteRequest!==write)return;
-    if(!sameSelection()||state.favoritesRequest!==generation){uncertain();return;}
-    // A lost PUT/DELETE response may follow a committed preference. Re-read
-    // the authoritative list; never replay the uncertain write automatically.
+    if(!desired||!sameSelection()||state.favoritesRequest!==generation){uncertain();return;}
+    // A lost PUT response may follow a committed preference. Positive
+    // membership can confirm it; absence cannot confirm a retained DELETE.
+    // Never replay either uncertain write automatically.
     state.favoriteIds=[];state.favoritesReady=false;state.favoriteOutcomeUnknown=true;
     state.favoriteWriting=false;
     const reconciled=await loadFavorites();
     if(reconciled&&sameSelection()&&!state.accessDenied&&state.favoriteWriteRequest===write){
-      state.favoritesMessage=state.favoriteIds.includes(id)===desired
-        ?(desired?"Favorito confirmado após consulta ao servidor.":"Remoção confirmada após consulta ao servidor.")
+      state.favoritesMessage=state.favoriteIds.includes(id)
+        ?"Favorito confirmado após consulta ao servidor."
         :"A alteração não foi confirmada. Você pode tentar novamente.";
     }
   }finally{

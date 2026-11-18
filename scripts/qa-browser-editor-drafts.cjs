@@ -1,4 +1,4 @@
-// C-113: invoked only by the existing synthetic Chromium runner. Every
+// C-113/C-143: invoked only by the existing synthetic Chromium runner. Every
 // administrative request below is intercepted per page on its loopback origin;
 // mutations never reach the runner's shared server or an external service.
 module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
@@ -17,7 +17,7 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         category:"metodologia",summary:"Resumo inicial fictício.",sort_order:0,is_published:false},
       lessons:[{id:11,slug:"aula-rascunhos-ficticia",title:"Aula fictícia inicial",
         body:"Conteúdo inicial fictício para o editor de aulas.",sort_order:0,status:"draft",is_published:false}],
-      nextLessonId:12,denyLessons:false,writes:[],dialogs:[],acceptDialog:false,
+      nextLessonId:12,denyLessons:false,requests:[],writes:[],dialogs:[],acceptDialog:false,
     };
     let dialogCompletion=Promise.resolve();
     page.on("dialog",dialog=>{
@@ -29,10 +29,15 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       const path=new URL(request.url()).pathname.replace("/universidade/private/admin","");
       const body=request.postData()?request.postDataJSON():null;
       const reply=(status,payload)=>route.fulfill({status,contentType:"application/json",body:JSON.stringify(payload)});
+      fixture.requests.push({path,method});
       if(method!=="GET")fixture.writes.push({path,method,body});
       if(method==="GET"&&path==="/courses")return reply(200,{courses:[fixture.course]});
+      if(method==="POST"&&path==="/courses"){
+        fixture.course={id:2,...body,is_published:false};fixture.lessons=[];
+        return reply(201,{id:2,status:"draft"});
+      }
       if(method==="GET"&&path==="/audit")return reply(200,{events:[],next_before_id:null});
-      if(method==="GET"&&path==="/courses/1/lessons"){
+      if(method==="GET"&&path==="/courses/"+fixture.course.id+"/lessons"){
         return fixture.denyLessons?reply(403,{error:"access_denied"}):reply(200,{lessons:fixture.lessons});
       }
       if(method==="PATCH"&&path==="/courses/1"){
@@ -150,6 +155,58 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     check(JSON.stringify(await h.fields(courseFields))===JSON.stringify(pendingCourse),
       "accepted lesson deletion preserves the unsaved course draft");
     await page.close();
+
+    // C-143: native disabled fields cannot create an unsavable sibling draft.
+    const local=await setupPage(),localPage=local.page;
+    localPage.setDefaultTimeout(8000);
+    await localPage.setViewportSize({width:390,height:844});
+    await localPage.waitForFunction(()=>!state.catalogLoading&&!state.overviewLoading,null,{timeout:8000});
+    const beforeNewCourse=local.fixture.requests.length;
+    await localPage.locator("#new-course").click();
+    check(await localPage.locator("#lesson-form").evaluate(form=>
+      [...form.querySelectorAll("input,textarea,button")].every(field=>field.disabled))&&
+      await localPage.locator("#course-save").isEnabled()&&local.fixture.requests.length===beforeNewCourse,
+      "new course keeps all lesson fields unavailable without making an HTTP request");
+    await localPage.locator("#course-title").fill("Novo curso fictício para criar aulas");
+    await localPage.locator("#course-slug").fill("novo-curso-ficticio-para-criar-aulas");
+    await localPage.locator("#course-save").click();
+    await local.waitForStatus("Rascunho salvo.");
+    check(local.fixture.writes.length===1&&local.fixture.writes[0].path==="/courses"&&
+      local.fixture.writes[0].method==="POST"&&
+      await localPage.locator("#course-items [data-course='2'][aria-current='true']").count()===1&&
+      await localPage.locator("#lesson-slug").isEnabled()&&await localPage.locator("#lesson-save").isEnabled(),
+      "saving the course enables a fresh lesson only after the authoritative course and lesson reads");
+
+    await localPage.locator("#course-summary").fill("  Resumo local que a prévia deve preservar.  ");
+    await localPage.locator("#lesson-title").fill("Título fictício antes da prévia");
+    await localPage.locator("#lesson-slug").fill("aula-previa-ficticia");
+    await localPage.locator("#lesson-body").fill("Texto fictício antes da prévia, ainda não salvo.");
+    await localPage.locator("#preview-lesson").click();
+    const beforeLocalInputs=local.fixture.requests.length;
+    const beforeOrderPreview=await localPage.locator("#preview-body").textContent();
+    await localPage.locator("#lesson-sort").fill("3");
+    check(await localPage.locator("#lesson-preview").isVisible()&&
+      await localPage.locator("#preview-body").textContent()===beforeOrderPreview&&
+      local.fixture.requests.length===beforeLocalInputs,
+      "editing order keeps the text preview because none of its represented fields changed");
+    let currentPreview=true;
+    for(const [id,value] of [["lesson-title","  Título fictício revisado 😀  "],
+      ["lesson-body","  Texto fictício revisado.\n\n<strong>Permanece texto simples.</strong>  "]]){
+      await localPage.locator("#"+id).fill(value);
+      const buffers=await local.fields([...courseFields,"course-slug",...lessonFields]);
+      currentPreview=currentPreview&&await localPage.locator("#lesson-preview").isHidden()&&
+        await localPage.locator("#preview-body").textContent()==="";
+      await localPage.locator("#preview-lesson").click();
+      currentPreview=currentPreview&&await localPage.locator("#lesson-preview").isVisible()&&
+        await localPage.locator("#preview-title").textContent()===(await localPage.locator("#lesson-title").inputValue()).trim()&&
+        await localPage.locator("#preview-body").textContent()===(await localPage.locator("#lesson-body").inputValue()).trim()&&
+        JSON.stringify(await local.fields([...courseFields,"course-slug",...lessonFields]))===JSON.stringify(buffers);
+    }
+    check(currentPreview&&local.fixture.requests.length===beforeLocalInputs&&local.fixture.writes.length===1&&
+      local.fixture.dialogs.length===0&&await localPage.locator("#preview-body strong").count()===0&&
+      await localPage.locator("#course-items [data-course='2'][aria-current='true']").count()===1,
+      "title and body input invalidate the old preview; explicit preview uses current text without HTTP or draft replacement");
+    await localPage.close();
 
     const revoked=await setupPage();
     await changeCourse(revoked.page,"Curso fictício que deve desaparecer na revogação",6);

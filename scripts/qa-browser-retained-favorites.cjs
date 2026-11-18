@@ -79,7 +79,8 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     });
     await page.goto(base+"/student");await page.locator("#course-list [data-course-id='1']").click();
     await page.locator("#lesson-content h3").waitFor();
-    await page.waitForFunction(()=>state.libraryReady&&state.favoritesReady&&!state.favoritesLoading);
+    await page.waitForFunction(()=>state.libraryReady&&!state.libraryLoading&&state.favoritesReady&&!state.favoritesLoading&&
+      !state.readingLoading&&state.readingSnapshot!==null);
     return {page,fixture,control};
   }
   try{
@@ -199,6 +200,83 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await close(page);
     }
     {
+      stage="C141 withdrawn favorite after uncommitted course removal";
+      const {page,fixture,control}=await open(),before=await selection(page);
+      control.write=()=>{
+        fixture.rows=fixture.rows.map(item=>item.course_id===1?{...item,availability:"unavailable"}:item);
+        fixture.courses=fixture.courses.filter(item=>item.id!==1);
+        return {status:503,payload:{error:"temporarily_unavailable"}};
+      };
+      await page.locator("#course-favorite-toggle").click();await ready(page);
+      check(control.visibleReads===1&&control.reads.length===0&&control.writes.length===1&&
+        fixture.rows.some(item=>item.course_id===1)&&
+        await page.evaluate(()=>state.favoriteOutcomeUnknown&&state.retained.needsRefresh&&state.retained.unconfirmed)&&
+        (await page.locator("#favorites-status").innerText()).includes("remoção não foi confirmada")&&
+        JSON.stringify(await selection(page))===JSON.stringify(before),
+        "C141 failed course removal preserves the retained reference and study without an automatic read or false confirmation");
+      await page.locator("#reload-favorites").click();await page.waitForFunction(()=>!state.favoritesLoading);
+      await page.locator("#course-favorite-toggle").evaluate(button=>button.dispatchEvent(new Event("click",{bubbles:true})));
+      check(control.visibleReads===2&&control.writes.length===1&&await page.locator("#course-favorite-toggle").isDisabled()&&
+        await page.evaluate(()=>state.favoritesReady&&!state.favoriteOutcomeUnknown&&state.favoriteIds.length===0&&state.retained.needsRefresh)&&
+        !(await page.locator("#favorites-status").innerText()).includes("Remoção confirmada"),
+        "C141 an empty published-only query refreshes its projection but cannot confirm deletion or release the retained guard");
+      await page.locator("#retained-favorites-panel summary").click();await read(page);
+      check(await rowLocator(page,1).getAttribute("data-retained-availability")==="unavailable"&&
+        await page.locator("[data-remove-retained-favorite='1']").isEnabled()&&
+        (await page.locator("#retained-favorites-status").innerText()).includes("resultado da remoção anterior não foi confirmado")&&
+        control.writes.length===1&&JSON.stringify(await selection(page))===JSON.stringify(before),
+        "C141 manual retained consultation exposes the still-saved withdrawn reference and permits a new explicit removal");
+      control.write=null;await remove(page,1);await ready(page);
+      check(control.writes.length===2&&control.writes.every(entry=>entry.method==="DELETE"&&entry.path==="/courses/1/favorite")&&
+        !fixture.rows.some(item=>item.course_id===1)&&await rowLocator(page,1).count()===0&&
+        (await page.locator("#retained-favorites-status").innerText()).includes("Remoção desta referência confirmada")&&
+        await page.evaluate(()=>state.retained.unconfirmed)&&JSON.stringify(await selection(page))===JSON.stringify(before),
+        "C141 only the second explicit action and exact receipt confirm that reference's removal, while preserving prior uncertainty");
+      await close(page);
+    }
+    {
+      stage="C141 lost committed removal and empty manual recovery";
+      const {page,fixture,control}=await open(),before=await selection(page);fixture.rows=[row()];
+      control.write=()=>{fixture.rows=[];return {status:503,payload:{error:"temporarily_unavailable"}};};
+      await page.locator("#course-favorite-toggle").click();await ready(page);
+      await page.locator("#retained-favorites-panel summary").click();await read(page);
+      check(control.visibleReads===1&&control.reads.length===1&&control.writes.length===1&&
+        await page.locator("[data-retained-course-id]").count()===0&&
+        await page.evaluate(()=>state.retained.ready&&!state.retained.needsRefresh&&state.retained.unconfirmed&&!state.favoritesReady)&&
+        (await page.locator("#retained-favorites-status").innerText()).includes("Nenhuma referência encontrada")&&
+        (await page.locator("#retained-favorites-status").innerText()).includes("resultado da remoção anterior não foi confirmado"),
+        "C141 an empty manual retained page remains an empty consultation, never proof that the lost DELETE succeeded");
+      await page.locator("#reload-favorites").click();await page.waitForFunction(()=>!state.favoritesLoading);
+      check(await page.locator("#course-favorite-toggle").isEnabled()&&
+        await page.evaluate(()=>state.favoritesReady&&!state.favoriteOutcomeUnknown&&!state.retained.needsRefresh&&state.retained.unconfirmed)&&
+        control.visibleReads===2&&control.writes.length===1,
+        "C141 both manual consultations can restore an actionable current preference without erasing the prior uncertainty");
+      control.write=null;await page.locator("#course-favorite-toggle").click();await ready(page);
+      check(control.writes.length===2&&control.writes[0].method==="DELETE"&&control.writes[1].method==="PUT"&&
+        fixture.rows.some(item=>item.course_id===1)&&JSON.stringify(await selection(page))===JSON.stringify(before),
+        "C141 recovery permits a new deliberate save and never replays the earlier DELETE");
+      await close(page);
+    }
+    for(const mode of ["invalid receipt","changed course"]){
+      stage="C141 course removal with "+mode;const {page,fixture,control}=await open();
+      const held=mode==="changed course"?heldResponse("C141 pending course DELETE"):null;
+      control.write=held?held.response:{status:200,payload:{course_id:2,favorite:false}};
+      await page.locator("#course-favorite-toggle").click();
+      if(held){
+        await held.wait();await page.locator("#course-list [data-course-id='2']").click();
+        await page.waitForFunction(()=>state.courseId===2&&state.lessonId===21&&document.querySelector("#lesson-content h3")?.textContent==="Aula 21");
+        fixture.rows=fixture.rows.filter(item=>item.course_id!==1);
+        held.release({status:200,payload:{course_id:1,favorite:false}});
+      }
+      await ready(page);
+      check(control.visibleReads===1&&control.reads.length===0&&control.writes.length===1&&
+        await page.evaluate(expected=>state.courseId===expected&&state.lessonId===expected*10+1&&
+          state.favoriteOutcomeUnknown&&state.retained.needsRefresh&&state.retained.unconfirmed,held?2:1)&&
+        await page.locator("#course-favorite-toggle").isDisabled(),
+        "C141 "+mode+" leaves course removal unconfirmed without changing the current lesson or starting a reconciliation");
+      await close(page);
+    }
+    {
       stage="late retained lookup after toggle";const {page,control}=await open(),held=heldResponse("late retained GET");
       await page.locator("#retained-favorites-panel summary").click();control.retained=held.response;
       const response=page.waitForResponse(api+"/favorites/retained");
@@ -213,6 +291,9 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
     }
     {
       stage="shared favorite reconciliation";const {page,control}=await open(),held=heldResponse("visible favorites reconciliation");
+      // Only PUT retains published-list reconciliation; select an unsaved course.
+      await page.locator("#course-list [data-course-id='2']").click();
+      await page.waitForFunction(()=>state.courseId===2&&state.lessonId===21&&document.querySelector("#lesson-content h3")?.textContent==="Aula 21");
       control.write={status:503,payload:{}};control.favorites=held.response;
       await page.locator("#course-favorite-toggle").click();await held.wait();
       await page.locator("#retained-favorites-panel summary").click();await read(page);

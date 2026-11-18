@@ -355,7 +355,7 @@ for(const code of [403,419])await scenario("HTTP denial clears the private query
   h.control.reorder=async()=>{seen.release();await gate.promise;return ok(receipt());};
   await h.click(h.move());await bounded(seen.promise);
   h.control.hook=request=>request.path==="/audit"?{status:code,payload:{error:"access_denied"}}:undefined;
-  await assert.rejects(h.editor.refreshAudit());assert.equal(h.state.accessDenied,true);gate.release();await h.flush();
+  await assert.doesNotReject(h.editor.refreshAudit());assert.equal(h.state.accessDenied,true);gate.release();await h.flush();
   assert.equal(h.state.lessonQuery,"");assert.equal(h.state.lessonQueryCourseId,null);assert.equal(h.get("editorial-lesson-search").value,"");
   assert.equal(h.get("editorial-lesson-search").disabled,true);assert.equal(status(h),"");assert.equal(h.get("editorial-lesson-filter-status").hidden,true);
   assert.deepEqual(h.displayed(),[]);await h.search("forged after denial");assert.equal(h.state.lessonQuery,"");assert.equal(h.get("editorial-lesson-search").value,"");

@@ -188,15 +188,32 @@ for(const receipt of [{course_id:2,favorite:true},{course_id:1,favorite:"true"},
     assert.ok(h.state.favoritesMessage.includes("confirmado após consulta"));
   });
 }
-for(const initial of [[],[1]])await scenario("committed mutation with lost response is reconciled read-only",async()=>{
+for(const initial of [[],[1]])await scenario("lost "+(initial.length?"DELETE stays unconfirmed":"PUT reconciles positive membership")+" without replay",async()=>{
   const h=harness(initial);await h.read();
   h.control.write=({id,favorite})=>{
     if(favorite)h.control.authoritative.add(id);else h.control.authoritative.delete(id);
     return{status:503,payload:{}};
   };
-  await h.toggle();assert.equal(h.writes().length,1);assert.equal(h.state.favoriteOutcomeUnknown,false);
-  assert.equal(h.state.favoriteIds.includes(1),initial.length===0);assert.equal(h.get("course-favorite-toggle").disabled,false);
+  await h.toggle();assert.equal(h.writes().length,1);
+  assert.equal(h.state.favoriteIds.includes(1),initial.length===0);
+  assert.equal(h.state.favoriteOutcomeUnknown,initial.length>0);
+  assert.equal(h.get("course-favorite-toggle").disabled,initial.length>0);
+  assert.equal(h.calls.filter(call=>call.path==="/favorites").length,initial.length?1:2);
+  assert.equal(h.state.retained.needsRefresh,initial.length>0);assert.equal(h.state.retained.unconfirmed,initial.length>0);
+  if(initial.length)assert.match(h.state.favoritesMessage,/remoção não foi confirmada/i);
+  else assert.match(h.state.favoritesMessage,/Favorito confirmado após consulta/);
 });
+for(const receipt of [{course_id:2,favorite:false},{course_id:1,favorite:"false"},{}]){
+  await scenario("invalid DELETE receipt requires retained recovery without consulting the published projection",async()=>{
+    const h=harness([1]);await h.read();h.control.write={status:200,payload:receipt};
+    const reader=h.content.children[0];await h.toggle();
+    assert.equal(h.writes().length,1);assert.equal(h.calls.filter(call=>call.path==="/favorites").length,1);
+    assert.equal(h.state.favoritesReady,false);assert.equal(h.state.favoriteOutcomeUnknown,true);
+    assert.equal(h.state.retained.needsRefresh,true);assert.equal(h.state.retained.unconfirmed,true);
+    assert.equal(h.get("course-favorite-toggle").disabled,true);assert.equal(h.content.children[0],reader);
+    assert.match(h.state.favoritesMessage,/Gerenciar favoritos/);await h.toggle();assert.equal(h.writes().length,1);
+  });
+}
 await scenario("uncommitted preference can be retried only explicitly",async()=>{
   const h=harness();await h.read();h.control.write={status:503,payload:{}};await h.toggle();
   assert.equal(h.writes().length,1);assert.equal(h.state.favoriteIds.length,0);
@@ -211,20 +228,23 @@ await scenario("unknown result blocks all further writes until manual reconcilia
   assert.equal(h.state.favoriteOutcomeUnknown,false);assert.equal(h.get("course-favorite-toggle").disabled,false);
   assert.equal(h.get("course-favorite-toggle").textContent,"Remover curso dos favoritos");
 });
-for(const [name,navigate] of [
+for(const initial of [[],[1]])for(const [name,navigate] of [
   ["course",async h=>{await h.context.selectCourse(2);}],
   ["same course reselected",async h=>{await h.context.selectCourse(1);}],
   ["category",async h=>{h.filters[2].events.get("click")();}],
   ["search",async h=>{h.get("course-search").events.get("input")({target:{value:"Negócios"}});}],
   ["favorites filter",async h=>{h.favoriteFilter(true);}],
-])await scenario("late write receipt cannot apply after "+name+" change",async()=>{
-  const h=harness();await h.read();let release;h.control.write=()=>new Promise(resolve=>{release=resolve;});
-  const pending=h.toggle();await navigate(h);h.control.authoritative.add(1);
-  release({status:200,payload:{course_id:1,favorite:true}});await pending;
+])await scenario("late "+(initial.length?"DELETE":"PUT")+" receipt cannot apply after "+name+" change",async()=>{
+  const h=harness(initial);await h.read();let release;h.control.write=()=>new Promise(resolve=>{release=resolve;});
+  const desired=initial.length===0,pending=h.toggle();await navigate(h);
+  if(desired)h.control.authoritative.add(1);else h.control.authoritative.delete(1);
+  release({status:200,payload:{course_id:1,favorite:desired}});await pending;
   assert.equal(h.state.favoritesReady,false);assert.equal(h.state.favoriteOutcomeUnknown,true);
   assert.equal(h.state.favoriteIds.length,0);assert.equal(h.writes().length,1);
   assert.equal(h.calls.filter(call=>call.path==="/favorites").length,1,"No automatic retry after incompatible navigation");
   await h.read();assert.equal(h.state.favoritesReady,true);assert.equal(h.writes().length,1);
+  assert.equal(h.state.retained.needsRefresh,!desired);assert.equal(h.state.retained.unconfirmed,!desired);
+  if(!desired){assert.equal(h.get("course-favorite-toggle").disabled,true);assert.match(h.get("retained-favorites-status").textContent,/não foi confirmado/);}
   if(name==="course")assert.equal(h.get("course-favorite-toggle").textContent,"Salvar curso nos favoritos");
 });
 await scenario("lesson change within the same course remains compatible",async()=>{
@@ -246,22 +266,24 @@ for(const status of [403,419])await scenario(status+" on list purges all private
   assert.equal(h.get("favorites-only").disabled,true);assert.equal(h.get("course-favorite-panel").hidden,true);
   assert.equal(h.get("favorites-status").textContent,"");await h.toggle();assert.equal(h.writes().length,0);
 });
-for(const status of [403,419])await scenario(status+" on mutation never reconciles through a revoked session",async()=>{
-  const h=harness();await h.read();h.control.write={status,payload:{}};await h.toggle();
+for(const initial of [[],[1]])for(const status of [403,419])await scenario(status+" on "+(initial.length?"DELETE":"PUT")+" never reconciles through a revoked session",async()=>{
+  const h=harness(initial);await h.read();h.control.write={status,payload:{}};await h.toggle();
   assert.equal(h.state.accessDenied,true);assert.equal(h.calls.filter(call=>call.path==="/favorites").length,1);
   assert.equal(h.get("course-favorite-toggle").disabled,true);assert.equal(h.get("reload-favorites").hidden,true);
+  assert.equal(h.state.retained.needsRefresh,false);assert.equal(h.state.retained.unconfirmed,false);
 });
 await scenario("PUT 404 followed by revoked reconciliation GET purges the UI",async()=>{
   const h=harness();await h.read();h.control.write={status:404,payload:{}};h.control.read={status:403,payload:{}};
   await h.toggle();assert.equal(h.state.accessDenied,true);assert.equal(h.writes().length,1);
   assert.equal(h.state.favoriteIds.length,0);assert.equal(h.get("course-favorite-panel").hidden,true);
 });
-await scenario("late mutation cannot restore favorites after revocation",async()=>{
-  const h=harness();await h.read();let release;h.control.write=()=>new Promise(resolve=>{release=resolve;});
+for(const initial of [[],[1]])await scenario("late "+(initial.length?"DELETE":"PUT")+" cannot restore favorites after revocation",async()=>{
+  const h=harness(initial);await h.read();let release;h.control.write=()=>new Promise(resolve=>{release=resolve;});
   const pending=h.toggle();h.context.lockAccess("Revoked");
-  release({status:200,payload:{course_id:1,favorite:true}});await pending;
+  release({status:200,payload:{course_id:1,favorite:initial.length===0}});await pending;
   assert.equal(h.state.favoriteIds.length,0);assert.equal(h.get("course-favorite-panel").hidden,true);
   assert.equal(h.get("reload-favorites").hidden,true);assert.equal(h.get("favorites-status").textContent,"");
+  assert.equal(h.state.retained.needsRefresh,false);assert.equal(h.state.retained.unconfirmed,false);
 });
 await scenario("catalogue withdrawal prunes favorites and empty catalogue stays valid",async()=>{
   const h=harness([1,2]);await h.read();h.state.courses=[];h.context.renderCourses();

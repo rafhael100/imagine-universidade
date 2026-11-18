@@ -141,10 +141,16 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         return{status:503,payload:{}};
       };
       await page.locator("#course-favorite-toggle").click();
-      await waitStatus(page,favoriteIds.length?"Remoção confirmada após consulta":"Favorito confirmado após consulta");
-      check(control.writes.length===1 && control.reads===2 &&
-        (await page.locator("#course-favorite-toggle").innerText())===(favoriteIds.length?"Salvar curso nos favoritos":"Remover curso dos favoritos"),
-        "C116 lost "+(favoriteIds.length?"DELETE":"PUT")+" response reconciles the committed preference without replay");
+      await waitStatus(page,favoriteIds.length?"Uma remoção não foi confirmada":"Favorito confirmado após consulta");
+      if(favoriteIds.length){
+        check(control.writes.length===1&&control.reads===1&&await page.locator("#course-favorite-toggle").isDisabled()&&
+          await page.evaluate(()=>state.favoriteOutcomeUnknown&&state.retained.needsRefresh&&state.retained.unconfirmed),
+          "C141 a lost DELETE receipt requires retained recovery without a published-only GET or replay");
+      }else{
+        check(control.writes.length===1&&control.reads===2&&
+          (await page.locator("#course-favorite-toggle").innerText())==="Remover curso dos favoritos",
+          "C116 a lost PUT response still reconciles positive favorite membership without replay");
+      }
       await page.close();
     }
     {
@@ -202,15 +208,16 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
         "C116 manual read recovers the preference after incompatible "+destination+" navigation");
       await page.close();
     }
-    for(const status of [403,419]){
-      const {page,control}=await open();await waitReady(page);control.write={status,payload:{}};
+    for(const favoriteIds of [[],[1]])for(const status of [403,419]){
+      const {page,control}=await open({favoriteIds});await waitReady(page);control.write={status,payload:{}};
       await page.locator("#course-favorite-toggle").click();
       await page.waitForFunction(()=>document.getElementById("course-list").textContent.includes("Biblioteca indisponível"));
       check((await page.locator("#course-list [data-course-id]").count())===0 &&
         !(await page.locator("#course-favorite-panel").isVisible()) &&
         await page.locator("#favorites-only").isDisabled() &&
-        (await page.locator("#favorites-status").innerText())==="" && control.reads===1 && control.writes.length===1,
-        "C116 "+status+" purges favorite data and locks the entire private interface without reconciliation");
+        (await page.locator("#favorites-status").innerText())==="" && control.reads===1 && control.writes.length===1&&
+        await page.evaluate(()=>!state.retained.needsRefresh&&!state.retained.unconfirmed),
+        "C116/C141 "+status+" during "+(favoriteIds.length?"DELETE":"PUT")+" purges favorite data without reconciliation or a restored uncertainty warning");
       await page.close();
     }
     {

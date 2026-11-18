@@ -71,7 +71,8 @@
     .readiness p{color:#484848;margin:6px 0;font-size:13px}
     .audit-panel{margin-top:20px}
     .audit-list{padding:10px 20px;display:grid;gap:6px}
-    .audit-row{padding:12px 0;border-bottom:1px solid var(--line)}
+    .audit-status{margin:10px 20px 0;font-size:13px}
+    .audit-row{padding:12px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
     .audit-row strong{display:block;font-weight:750}
     .audit-row small{display:block;color:#505650;font-size:12px}
     .archive-panel{margin-top:20px}
@@ -236,7 +237,8 @@
       <h2 id="audit-title">Histórico editorial</h2>
       <button type="button" id="refresh-audit" class="secondary">Atualizar histórico</button>
     </div>
-    <div id="audit-items" class="audit-list" aria-live="polite"><p class="help">Carregando alterações autorizadas...</p></div>
+    <p id="audit-status" class="audit-status" role="status" aria-live="polite">Carregando alterações autorizadas...</p>
+    <div id="audit-items" class="audit-list"></div>
     <div class="panel-body"><button type="button" class="secondary" id="load-more-audit" disabled>Carregar anteriores</button>
       <p class="help">Eventos paginados, sem identificadores pessoais dos operadores. A retenção depende da política Imagine.</p>
     </div>
@@ -249,6 +251,7 @@ const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
 const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,
+  auditLoading:false,auditLoaded:false,auditMessage:"Carregando alterações autorizadas...",
   courseQuery:"",courseCategory:"todos",courseStatus:"todos",lessonQuery:"",lessonQueryCourseId:null,
   overviewSnapshot:null,overviewRequest:0,overviewLoading:false,overviewAttempted:false,
   overviewMessage:"A visão do acervo estará disponível após carregar os cursos.",
@@ -330,6 +333,8 @@ function lockAccess(message){
   hideLessonPreview();
   clearPublicationCheck();
   ++state.auditRequest;state.auditEvents=[];state.auditNextBeforeId=null;
+  state.auditLoading=false;state.auditLoaded=false;state.auditMessage="";
+  $("audit-status").textContent="";$("audit-panel").setAttribute("aria-busy","false");
   $("audit-items").replaceChildren();
   $("course-items").append(el("p","Cursos indisponíveis até novo acesso autorizado.","help"));
   $("lesson-items").append(el("p","Retorne ao Portal para verificar a sessão.","help"));
@@ -769,7 +774,7 @@ function resetLesson(){
   state.lesson=null;
   $("lesson-form").reset();
   $("lesson-title-heading").textContent="Nova aula";
-  $("lesson-slug").disabled=false;
+  $("lesson-slug").disabled=!state.course||!draft()||state.writePending;
   $("lesson-sort").value="0";
   $("delete-lesson").disabled=true;
 }
@@ -1243,6 +1248,8 @@ $("clear-lesson").addEventListener("click",()=>{
   resetLesson();renderLessons();
 });
 $("preview-lesson").addEventListener("click",showLessonPreview);
+$("lesson-title").addEventListener("input",hideLessonPreview);
+$("lesson-body").addEventListener("input",hideLessonPreview);
 $("delete-lesson").addEventListener("click",async()=>{
   const lesson=state.lesson,course=state.course;
   if(state.accessDenied||!course||course.is_published||!lesson||lesson.is_published||lesson.status!=="draft")return;
@@ -1469,36 +1476,82 @@ $("unpublish").addEventListener("click",async()=>{
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
+// Keep native SQL timestamps intact: SQLite may omit an offset, PostgreSQL
+// uses +00 or +00:00, and JSON fixtures may use ISO T/Z. Do not infer a zone.
+function validEditorialAuditDate(value){
+  if(typeof value!=="string")return false;
+  const parts=/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|([+-])(\d{2})(?::?(\d{2}))?)?$/.exec(value);
+  if(!parts)return false;
+  const [,year,month,day,hour,minute,second,,offsetHour,offsetMinute]=parts;
+  const y=Number(year),m=Number(month),d=Number(day);
+  const days=[31,y%4===0&&(y%100!==0||y%400===0)?29:28,31,30,31,30,31,31,30,31,30,31];
+  return y>0&&m>=1&&m<=12&&d>=1&&d<=days[m-1]&&Number(hour)<24&&Number(minute)<60&&
+    Number(second)<60&&(offsetHour===undefined||Number(offsetHour)<24)&&
+    (offsetMinute===undefined||Number(offsetMinute)<60);
+}
+function validatedEditorialAuditPage(payload,beforeId=null,previous=[]){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)||!Array.isArray(payload.events)||
+    payload.events.length>50||!Object.hasOwn(payload,"next_before_id"))return null;
+  const positive=value=>Number.isSafeInteger(value)&&value>0;
+  const text=(value,limit)=>typeof value==="string"&&value.trim()!==""&&Array.from(value).length<=limit;
+  if(beforeId!==null&&!positive(beforeId))return null;
+  const ids=new Set(previous.map(item=>item.id)),events=[];
+  let ceiling=beforeId;
+  for(const item of payload.events){
+    if(!item||typeof item!=="object"||Array.isArray(item)||!positive(item.id)||ids.has(item.id)||
+      (ceiling!==null&&item.id>=ceiling)||!positive(item.resource_id)||!text(item.action,48)||
+      !text(item.resource_kind,24)||!validEditorialAuditDate(item.occurred_at))return null;
+    ids.add(item.id);ceiling=item.id;
+    events.push({id:item.id,action:item.action,resource_kind:item.resource_kind,
+      resource_id:item.resource_id,occurred_at:item.occurred_at});
+  }
+  const next=payload.next_before_id;
+  if(next!==null&&(!positive(next)||events.length!==50||next!==events[events.length-1].id))return null;
+  return {events,next_before_id:next};
+}
 function renderAudit(){
   if(state.accessDenied)return;
   const box=$("audit-items");box.replaceChildren();
-  if(!state.auditEvents.length)box.append(el("p","Nenhuma alteração editorial registrada.","help"));
+  $("audit-status").textContent=state.auditMessage;
+  $("audit-panel").setAttribute("aria-busy",String(state.auditLoading));
+  if(state.auditLoaded&&!state.auditEvents.length)box.append(el("p","Nenhuma alteração editorial registrada.","help"));
   for(const item of state.auditEvents){
     const row=el("div",undefined,"audit-row");
+    row.dataset.auditId=String(item.id);
     row.append(
-      el("strong",String(item.action||"alteração")),
-      el("small",String(item.resource_kind||"recurso")+" #"+
-        String(item.resource_id??"")+" · "+String(item.occurred_at||"").slice(0,19))
+      el("strong",item.action),
+      el("small",item.resource_kind+" #"+String(item.resource_id)+" · "+item.occurred_at)
     );
     box.append(row);
   }
-  $("load-more-audit").disabled=state.auditNextBeforeId===null;
+  $("refresh-audit").disabled=state.auditLoading;
+  $("load-more-audit").disabled=state.auditLoading||!state.auditLoaded||state.auditNextBeforeId===null;
 }
 async function refreshAudit(beforeId=null){
-  if(state.accessDenied)return;
+  if(state.accessDenied||state.auditLoading)return;
+  if(beforeId!==null&&(!state.auditLoaded||beforeId!==state.auditNextBeforeId))return;
   const request=++state.auditRequest;
-  $("refresh-audit").disabled=true;$("load-more-audit").disabled=true;
+  state.auditLoading=true;
+  if(beforeId===null){state.auditEvents=[];state.auditNextBeforeId=null;state.auditLoaded=false;}
+  state.auditMessage=beforeId===null?"Carregando alterações autorizadas...":"Carregando alterações anteriores...";
+  renderAudit();
   try{
     const query=beforeId!==null?"?before_id="+encodeURIComponent(String(beforeId)):"";
     const response=await api("/audit"+query);
     if(state.accessDenied||state.auditRequest!==request)return;
-    const rows=Array.isArray(response.events)?response.events:[];
-    state.auditEvents=beforeId===null?rows:state.auditEvents.concat(rows);
-    state.auditNextBeforeId=Number.isSafeInteger(response.next_before_id)&&response.next_before_id>0
-      ?response.next_before_id:null;
-    renderAudit();
+    const page=validatedEditorialAuditPage(response,beforeId,beforeId===null?[]:state.auditEvents);
+    if(page===null)throw new Error("Invalid editorial audit page");
+    state.auditEvents=beforeId===null?page.events:state.auditEvents.concat(page.events);
+    state.auditNextBeforeId=page.next_before_id;state.auditLoaded=true;
+    state.auditMessage=state.auditEvents.length===0?"Consulta concluída.":
+      String(state.auditEvents.length)+" alteração(ões) carregada(s). "+
+      (state.auditNextBeforeId===null?"Não há alterações anteriores nesta consulta.":"Use Carregar anteriores para continuar.");
+  }catch{
+    if(state.accessDenied||state.auditRequest!==request)return;
+    state.auditEvents=[];state.auditNextBeforeId=null;state.auditLoaded=false;
+    state.auditMessage="Histórico temporariamente indisponível. Atualize o histórico para tentar novamente.";
   }finally{
-    if(!state.accessDenied&&state.auditRequest===request)$("refresh-audit").disabled=false;
+    if(!state.accessDenied&&state.auditRequest===request){state.auditLoading=false;renderAudit();}
   }
 }
 $("refresh-audit").addEventListener("click",()=>{refreshAudit().catch(error=>say(error.message));});

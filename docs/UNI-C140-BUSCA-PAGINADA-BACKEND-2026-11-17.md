@@ -122,3 +122,11 @@ Executados localmente:
 A interface C140, seu checker, módulo Chromium e integração nos runners são entregas separadas. A interface deve substituir a página, manter no máximo oito resultados no DOM, exigir cliques de próxima página/reinício e descartar respostas obsoletas ao mudar a consulta, recarregar a biblioteca ou perder acesso. Um clique de resultado continua usando a leitura autorizada da aula exata pelo fluxo existente.
 
 Não houve alteração de schema, grants, endpoints, provider Portal, retenção, exportações, conteúdo editorial ou gates de lançamento. Não foram realizados stage, commit, push, merge, deploy ou operação na VPS por esta entrega de backend.
+
+## Runtime integrado confirmado
+
+O SHA `92d8452b5cb3e65308a11044747f75d6c77e9cd5`, [run 44235137343](https://github.com/rafhael100/imagine-universidade/actions/runs/44235137343), encerrou os **seis jobs com sucesso**. Os logs de validação confirmam **384 testes PHP / 5.035 asserções** (39 Unit/169 e 345 Feature/4.866), incluindo os 25 testes C140, e as **15 verificações PostgreSQL C140** com restauração do savepoint antes dos cenários anteriores.
+
+O navegador sintético passou **773 verificações**, incluindo as 27 C140. A jornada pelo Laravel/SQLite real passou **245 verificações**, incluindo as 13 novas, e a conferência de persistência. A leitura real percorreu nove aulas em duas páginas, abriu a referência exata e reiniciou sem gravar progresso, favoritos ou posição. Os contratos e efeitos são verificados contra respostas reais do framework, sem interceptação de respostas de negócio nesse percurso.
+
+Paridade Portal, Docker, imagens e pacote editorial também foram aprovados. Os providers padrão e os 13 gates operacionais permanecem inalterados; a aprovação do laboratório não autoriza acesso real nem publicação.

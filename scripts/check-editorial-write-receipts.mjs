@@ -311,7 +311,7 @@ await scenario("late valid JSON after another real API response revoked access c
     };
     const pending=h.invoke(test.control);let requests;
     try{
-      await bounded(seen.promise);await assert.rejects(h.editor.refreshAudit());assert.equal(h.state.accessDenied,true);
+      await bounded(seen.promise);await assert.doesNotReject(h.editor.refreshAudit());assert.equal(h.state.accessDenied,true);
       requests=h.requests.length;
     }finally{gate.release();}
     await bounded(pending);assert.equal(h.requests.length,requests);assertOneWrite(h,test);

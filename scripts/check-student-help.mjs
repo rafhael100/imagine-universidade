@@ -14,7 +14,7 @@ function actualFunction(name){
   return source;
 }
 const source=["studentRecord","studentText","studentSlug","normalizeSearchText","splitLessonSections",
-  "lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
   "invalidateLessonSearch","renderLessonSearchControls",
   "el","say","lockAccess","discardErrorBody","api","invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus","beginNavigationFocus",

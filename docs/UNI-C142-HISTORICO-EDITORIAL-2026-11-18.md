@@ -98,3 +98,9 @@ Não houve execução local de PHP, PostgreSQL, Docker ou Chromium. Não foram a
 O coordenador integrou o checker e o módulo nos runners existentes e ajustou o assert estático para o renderer textual validado. A primeira execução integrada encontrou quatro expectativas antigas de que `refreshAudit()` rejeitasse a promise em uma revogação; a C142 agora trata o erro localmente. Nos checkers de filtros de cursos, filtros de aulas e recibos editoriais, somente essas quatro expectativas passaram para `assert.doesNotReject`. Permaneceram intactos os asserts de `accessDenied`, limpeza, controles desabilitados, respostas tardias e quantidade de requisições/escritas. Uma revisão independente confirmou a adaptação.
 
 A suíte Node principal completa passou na combinação C141/C142/C143, incluindo os 27 cenários focais de auditoria, os 61/79 de favoritos e os 13 de preservação de rascunhos. Sintaxe dos módulos, diff e cerca dos 15 caminhos de escrita também passaram. Os sete Feature e os cenários de navegador novos aguardam a CI do SHA integrado; o percurso Laravel real existente permanece com respostas de negócio reais.
+
+## Evidência do SHA integrado
+
+A execução [Actions 44237563589](https://github.com/rafhael100/imagine-universidade/actions/runs/44237563589), no SHA `b29f06e8a71f68d8d10129e88a8b66f8ce7fe6ad`, concluiu os seis jobs com sucesso. O log registra **391 testes PHP / 5.128 asserções** (39 Unit/169 e 352 Feature/4.959), **804 verificações Chromium sintéticas** e **245 verificações no Laravel real**, seguidas da conferência de persistência aprovada. Os sete Feature da C142 e os cenários de navegador preparados nos três recortes foram executados nessa revisão integrada.
+
+Este resultado substitui o estado pendente descrito na preparação acima. Não houve execução de PHP ou navegador local; a CI usou identidades e bancos descartáveis. A PR permanece em rascunho, sem merge ou implantação, e os 13 release gates continuam `HOLD_NO_GO`/`NOT_VERIFIED`.

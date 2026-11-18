@@ -78,6 +78,12 @@
     .course-favorite p{font-size:13px;font-weight:750;margin:0 0 8px;overflow-wrap:anywhere}
     .course-favorite .secondary{margin-left:0}
     .course-favorite[hidden]{display:none}
+    .course-guidance{padding:16px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
+    .course-guidance[hidden],.course-guidance [hidden]{display:none}
+    .course-guidance h3{font-size:15px;margin:0 0 5px}
+    .course-guidance>p{font-size:12px;color:#565D56;margin:0 0 12px}
+    .course-guidance h4{font-size:13px;margin:12px 0 4px}
+    .course-guidance-text{font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
     .reading-position{padding:14px 20px;border-bottom:1px solid var(--line);background:#FAFBFC}
     .reading-position[hidden]{display:none}
     .reading-position h3{font-size:15px;margin:0 0 6px}
@@ -281,6 +287,18 @@
         <p id="favorite-course-title"></p>
         <button id="course-favorite-toggle" type="button" class="secondary" disabled>Salvar curso nos favoritos</button>
       </div>
+      <section id="course-guidance" class="course-guidance" aria-labelledby="course-guidance-title" hidden>
+        <h3 id="course-guidance-title">Orientações do curso</h3>
+        <p>Orientações opcionais para o estudo.</p>
+        <div id="course-guidance-audience-group" hidden>
+          <h4>Para quem</h4>
+          <p id="course-guidance-audience" class="course-guidance-text"></p>
+        </div>
+        <div id="course-guidance-knowledge-group" hidden>
+          <h4>Conhecimentos úteis</h4>
+          <p id="course-guidance-knowledge" class="course-guidance-text"></p>
+        </div>
+      </section>
       <div id="course-lesson-filter" class="course-lesson-filter" hidden>
         <label for="course-lesson-query">Localizar aula neste curso</label>
         <div class="course-lesson-filter-fields">
@@ -387,6 +405,7 @@ function lockAccess(message){
   invalidateNavigationFocus();
   state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
+  renderCourseGuidance();
   resetLessonFilter();
   renderContextualCourses();
   invalidateProgressHistory("");
@@ -532,6 +551,8 @@ function validatedStudentCourses(payload){
        !studentSlug(item.slug)||slugs.has(item.slug)||!studentText(item.title,3,200)||
        !["metodologia","negocios","sistemas"].includes(item.category)||
        !(item.summary===null||studentText(item.summary,0,500))||
+       !(item.audience==null||studentText(item.audience,0,500))||
+       !(item.suggested_knowledge==null||studentText(item.suggested_knowledge,0,500))||
        !Number.isSafeInteger(item.lessons_total)||item.lessons_total<0||
        !Number.isSafeInteger(item.lessons_completed)||item.lessons_completed<0||
        item.lessons_completed>item.lessons_total||
@@ -539,7 +560,8 @@ function validatedStudentCourses(payload){
     totalLessons+=item.lessons_total;
     ids.add(item.id);slugs.add(item.slug);
     courses.push({id:item.id,slug:item.slug,title:item.title,category:item.category,
-      summary:item.summary??"",lessons_total:item.lessons_total,lessons_completed:item.lessons_completed});
+      summary:item.summary??"",audience:item.audience??"",suggested_knowledge:item.suggested_knowledge??"",
+      lessons_total:item.lessons_total,lessons_completed:item.lessons_completed});
   }
   return courses;
 }
@@ -1302,7 +1324,22 @@ function reconcileCatalogSelection(){
   message.dataset.courseUnavailable="";content.append(message);
   return true;
 }
+function renderCourseGuidance(){
+  // Guidance belongs to the current course registration, never to a lesson
+  // version. Reuse the validated list's owner; no second cache or request.
+  const course=!state.libraryLoading&&lessonFilterCurrent()
+    ?state.courses.find(item=>item.id===state.courseId):null;
+  let populated=false;
+  for(const [field,name] of [["audience","audience"],["suggested_knowledge","knowledge"]]){
+    const text=course?.[field]??"",shown=text.trim().length>0;
+    document.getElementById("course-guidance-"+name).textContent=shown?text:"";
+    document.getElementById("course-guidance-"+name+"-group").hidden=!shown;
+    populated=populated||shown;
+  }
+  document.getElementById("course-guidance").hidden=!populated;
+}
 function renderCourses(){
+  renderCourseGuidance();
   renderContextualCourses();
   renderProgressHistory();
   if(state.accessDenied||!state.libraryReady)return;
@@ -1359,6 +1396,7 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focu
     if(lessons===null)throw new Error("A lista de aulas recebida é inválida. Tente novamente.");
     lessonsBox.replaceChildren();content.replaceChildren();
     state.lessonFilter.courseId=id;state.lessonFilter.request=request;state.lessonFilter.ready=true;
+    renderCourseGuidance();
     if(!lessons.length){
       renderLessonFilter();
       const target=lessonNavigationTarget("p","Ainda não existem aulas publicadas neste curso.","empty");
@@ -2063,6 +2101,7 @@ async function loadLibrary(){
   invalidateRetainedFavorites();
   invalidateProgressHistory();
   state.libraryLoading=true;state.libraryReady=false;
+  renderCourseGuidance();
   invalidateLessonSearch();
   renderLessonFilter();
   renderContextualCourses();
@@ -2141,6 +2180,7 @@ async function loadLibrary(){
   }finally{
     state.libraryLoading=false;
     if(!state.accessDenied)retry.disabled=false;
+    renderCourseGuidance();
     renderLessonSearchControls();
   }
 }

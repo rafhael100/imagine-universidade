@@ -62,3 +62,9 @@ Dois cenários Node e um cenário Chromium que testam exclusão mútua durante G
 O módulo C123 espera também a leitura inicial da posição antes de comparar o texto completo do leitor. Mantém o contexto e as rotas por página, limites de espera/limpeza de oito segundos e navegação de quinze segundos. As respostas retidas são liberadas pelo cenário e pelo `finally`. O módulo C116 conserva seus prazos e fixtures anteriores; as novas negativas de DELETE usam respostas imediatas.
 
 Não há auxiliar/extrator novo nem mudança necessária no checker principal, imports ou seletores dos runners. Nenhum PHP, PostgreSQL ou navegador foi executado localmente; não houve consulta operacional, implantação, stage, commit ou push nesta entrega.
+
+## Evidência do SHA integrado
+
+A execução [Actions 44237563589](https://github.com/rafhael100/imagine-universidade/actions/runs/44237563589), no SHA `b29f06e8a71f68d8d10129e88a8b66f8ce7fe6ad`, concluiu os seis jobs com sucesso. O log registra **391 testes PHP / 5.128 asserções** (39 Unit/169 e 352 Feature/4.959), **804 verificações Chromium sintéticas** e **245 verificações no Laravel real**, seguidas da conferência de persistência aprovada. Os sete Feature da C142 e os cenários de navegador preparados nos três recortes foram executados nessa revisão integrada.
+
+Este resultado substitui o estado pendente descrito na preparação acima. Não houve execução de PHP ou navegador local; a CI usou identidades e bancos descartáveis. A PR permanece em rascunho, sem merge ou implantação, e os 13 release gates continuam `HOLD_NO_GO`/`NOT_VERIFIED`.

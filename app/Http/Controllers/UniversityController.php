@@ -705,6 +705,8 @@ final class UniversityController
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'category' => ['required', 'in:metodologia,negocios,sistemas'],
             'summary' => ['nullable', 'string', 'max:500'],
+            'audience' => ['nullable', 'string', 'max:500'],
+            'suggested_knowledge' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
         try {
@@ -740,6 +742,8 @@ final class UniversityController
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'category' => ['required', 'in:metodologia,negocios,sistemas'],
             'summary' => ['nullable', 'string', 'max:500'],
+            'audience' => ['nullable', 'string', 'max:500'],
+            'suggested_knowledge' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
             'expected_sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);

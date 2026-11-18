@@ -17,7 +17,7 @@ assert.ok(start>=0&&end>start,"Actual favorites/filter handlers must exist");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentLessons",
   "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","discardErrorBody","api","progressLabel",
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
-  "lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
   "invalidateLessonSearch","renderLessonSearchControls",
   "invalidateRetainedFavorites","renderRetainedFavorites",
   "contextualCourses","renderContextualCourses",

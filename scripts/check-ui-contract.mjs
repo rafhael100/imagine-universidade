@@ -534,7 +534,7 @@ const item={id:1,slug:"curso-um",title:"Curso privado de teste",category:"metodo
 const accepted=parseAdmin({courses:[item]});
 assert.equal(JSON.stringify(accepted),JSON.stringify([{id:1,slug:"curso-um",
   title:"Curso privado de teste",category:"metodologia",summary:"",
-  sort_order:0,is_published:false}]),"admin: drop unexpected internal fields");
+  sort_order:0,audience:"",suggested_knowledge:"",is_published:false}]),"admin: drop unexpected internal fields");
 assert.equal(JSON.stringify(parseAdmin({courses:[]})),JSON.stringify([]),"admin: valid empty list is permitted");
 assert.equal(parseAdmin({}),null,"admin: missing courses is not an empty list");
 assert.equal(parseAdmin({courses:null}),null,"admin: null courses fail closed");
@@ -627,7 +627,7 @@ const studentFunction=name=>{
   assert.ok(source,"student function missing: "+name);return source;
 };
 const studentNormalizers=["studentRecord","studentText","studentSlug","validatedStudentCourses",
-  "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
   "invalidateLessonSearch","renderLessonSearchControls",
   "validatedStudentLessons","validatedStudentLesson","validatedStudentProgress"].map(studentFunction).join("\n");
 const studentParsers=new Script(studentNormalizers+"\n({validatedStudentCourses,validatedStudentLessons,validatedStudentLesson,validatedStudentProgress,studentText})")
@@ -639,8 +639,8 @@ const studentDetail={id:11,slug:"aula-ficticia",title:"Aula fictícia",body:"Cor
   sort_order:0,course_id:1,course_version:1};
 const {validatedStudentCourses:parseStudentCourses,validatedStudentLessons:parseStudentRows,
   validatedStudentLesson:parseStudentDetail,validatedStudentProgress:parseStudentProgress}=studentParsers;
-assert.equal(JSON.stringify(parseStudentCourses({courses:[{...studentCourse,private_identity:"excluded",version_id:4}]})),
-  JSON.stringify([studentCourse]),"student catalogue retains only allowed fields");
+assert.deepEqual(JSON.parse(JSON.stringify(parseStudentCourses({courses:[{...studentCourse,private_identity:"excluded",version_id:4}]}))),
+  [{...studentCourse,audience:"",suggested_knowledge:""}],"student catalogue retains only allowed fields");
 assert.equal(JSON.stringify(parseStudentRows({lessons:[{...studentRow,subject_key:"excluded"}]})),
   JSON.stringify([studentRow]),"student lesson list retains only allowed fields");
 assert.equal(JSON.stringify(parseStudentDetail({lesson:{...studentDetail,subject_key:"excluded"}},11,1)),
@@ -907,9 +907,11 @@ await import("./check-private-search-pages.mjs");
 await import("./check-lesson-sections.mjs");
 await import("./check-student-catalog-reconciliation.mjs");
 await import("./check-student-lesson-filter.mjs");
+await import("./check-student-course-guidance.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 await import("./check-editorial-audit.mjs");
+await import("./check-editorial-course-context.mjs");
 await import("./check-editorial-version-history.mjs");
 await import("./check-editorial-catalog-filters.mjs");
 await import("./check-lesson-reorder.mjs");

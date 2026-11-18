@@ -16,7 +16,7 @@ assert.ok(stateSource,"The real student state must exist");
 const handler=view.match(/document\.getElementById\("export-favorites"\)\.addEventListener\("click",exportFavorites\);/)?.[0];
 assert.ok(handler,"Export must be an explicit click action");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentFavorites",
-  "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+  "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
   "invalidateLessonSearch","renderLessonSearchControls",
   "el","say","lockAccess","discardErrorBody","api","renderFavoriteControls","loadFavorites","loadLibrary",
   "invalidateRetainedFavorites","renderRetainedFavorites",

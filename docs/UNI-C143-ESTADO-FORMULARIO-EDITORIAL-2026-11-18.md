@@ -95,3 +95,9 @@ O runner e o checker principal já chamam os dois arquivos estendidos; não é
 necessário registrar um módulo novo. Nenhum extrator ou fixture legado precisou
 ser adaptado. A view muda somente no reset e nos dois listeners de prévia;
 os trechos de auditoria ficam fora deste recorte.
+
+## Evidência do SHA integrado
+
+A execução [Actions 44237563589](https://github.com/rafhael100/imagine-universidade/actions/runs/44237563589), no SHA `b29f06e8a71f68d8d10129e88a8b66f8ce7fe6ad`, concluiu os seis jobs com sucesso. O log registra **391 testes PHP / 5.128 asserções** (39 Unit/169 e 352 Feature/4.959), **804 verificações Chromium sintéticas** e **245 verificações no Laravel real**, seguidas da conferência de persistência aprovada. Os sete Feature da C142 e os cenários de navegador preparados nos três recortes foram executados nessa revisão integrada.
+
+Este resultado substitui o estado pendente descrito na preparação acima. Não houve execução de PHP ou navegador local; a CI usou identidades e bancos descartáveis. A PR permanece em rascunho, sem merge ou implantação, e os 13 release gates continuam `HOLD_NO_GO`/`NOT_VERIFIED`.

@@ -34,7 +34,7 @@ function harness(name){
     "editorialCourseFiltersAllowed","renderEditorialCourseFilters","editorialLessonListReady",
     "editorialLessonFiltersAllowed","renderEditorialLessonFilters","filteredEditorialLessons","normalizeEditorialSearch"]:
     ["invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
-      "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
+      "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
       "invalidateLessonSearch","renderLessonSearchControls",
       "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus"];
   const source=["discardErrorBody","api","el","say","lockAccess",...extra].map(fn=>actual(view,fn)).join("\n");

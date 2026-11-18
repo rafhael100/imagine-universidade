@@ -139,6 +139,12 @@ const csrf=page=>page.locator('meta[name="csrf-token"]').getAttribute("content")
 const headers=async page=>({Accept:"application/json","X-CSRF-TOKEN":await csrf(page)});
 const countWrites=profile=>businessRequests.filter(request=>request.profile===profile&&
   ["POST","PUT","PATCH","DELETE"].includes(request.method)).length;
+const courseGuidanceFixture={
+  initialAudience:"Equipes fictícias de atendimento 🧭.",
+  initialKnowledge:"Conhecer a rotina fictícia pode ajudar; não é obrigatório.",
+  audience:"Pessoas que organizam uma jornada fictícia <b>sem bloqueio</b>.",
+  knowledge:"Conhecimento opcional: <img src=x onerror=alert(1)>.\nA leitura permanece livre.",
+};
 async function session(profile){
   const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:"reduce"});
   contexts.push(context);context.setDefaultTimeout(15000);context.setDefaultNavigationTimeout(20000);
@@ -185,6 +191,40 @@ async function openStudent(student,courseId,lessonTitle){
   await student.page.locator("#course-list [data-course-id='"+courseId+"']").click();
   await student.page.getByRole("heading",{name:lessonTitle,exact:true}).waitFor({state:"visible"});
   await student.page.waitForFunction(()=>!document.getElementById("course-favorite-toggle").disabled);
+}
+async function courseGuidanceMatches(page,audience="",knowledge=""){
+  return await page.evaluate(expected=>{
+    const audience=document.getElementById("course-guidance-audience"),knowledge=document.getElementById("course-guidance-knowledge");
+    return audience.textContent===expected.audience&&knowledge.textContent===expected.knowledge&&
+      audience.childElementCount===0&&knowledge.childElementCount===0;
+  },{audience,knowledge})&&
+    await page.locator("#course-guidance").isVisible()===Boolean(audience||knowledge)&&
+    await page.locator("#course-guidance-audience").isVisible()===Boolean(audience)&&
+    await page.locator("#course-guidance-knowledge").isVisible()===Boolean(knowledge);
+}
+async function studentCourseGuidance(student,courseId,lessonId){
+  enterStage("literal authorized course guidance");
+  const page=student.page;
+  await page.waitForFunction(()=>state.libraryReady&&!state.libraryLoading&&state.favoritesReady&&
+    !state.favoritesLoading&&!state.readingLoading);
+  const snapshot=()=>page.evaluate(()=>JSON.stringify({courseId:state.courseId,lessonId:state.lessonId,
+    courses:state.courses,favoriteIds:state.favoriteIds,readingSnapshot:state.readingSnapshot,
+    body:document.getElementById("lesson-content").textContent}));
+  const before=await snapshot(),requests=businessRequests.filter(request=>request.profile===student.profile).length;
+  const writes=countWrites(student.profile);
+  check(await courseGuidanceMatches(page,courseGuidanceFixture.audience,courseGuidanceFixture.knowledge)&&
+    await page.evaluate(expected=>state.courseId===expected.courseId&&state.lessonId===expected.lessonId,{courseId,lessonId})&&
+    await page.locator("#lesson-content button.primary").isEnabled(),
+    "Published course guidance must appear as literal authorized text beside an immediately readable pending lesson without an academic gate");
+  await page.locator("#course-guidance").screenshot({path:path.join(evidenceDir,"framework-course-guidance-student-desktop.png")});
+  await page.setViewportSize({width:390,height:844});
+  check(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)&&
+    await courseGuidanceMatches(page,courseGuidanceFixture.audience,courseGuidanceFixture.knowledge)&&
+    await snapshot()===before&&countWrites(student.profile)===writes&&
+    businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "The real 390px course guidance must preserve exact text and study state without another private request or learning write");
+  await page.locator("#course-guidance").screenshot({path:path.join(evidenceDir,"framework-course-guidance-student-mobile.png")});
+  await page.setViewportSize({width:1440,height:1000});
 }
 async function lessonSectionNavigation(student){
   enterStage("explicit local lesson sections");
@@ -316,6 +356,8 @@ async function reconcileWithdrawnReader(student,courseId,lessonId,readingRevisio
     document.activeElement?.classList.contains("skip-link"))&&await page.locator("#course-search").isEnabled()&&
     await page.evaluate(revision=>state.readingSnapshot?.status==="unavailable"&&state.readingSnapshot.revision===revision,readingRevision),
     "Course withdrawal must preserve global eligibility, the current focus and the exact retained reading revision");
+  check(await courseGuidanceMatches(page),
+    "Withdrawing the selected real course must clear both old guidance texts in the existing reader after catalogue reconciliation");
   const requests=businessRequests.slice(start).filter(request=>request.profile===student.profile);
   const expected=["POST /universidade/private/initialize","GET /universidade/private/courses",
     "GET /universidade/private/favorites","GET /universidade/private/reading-position"];
@@ -518,7 +560,7 @@ async function editorialLessonFilter(editor,courseId,firstLessonId,temporaryLess
   const page=editor.page,query=page.locator("#editorial-lesson-search");
   const clear=page.locator("#clear-editorial-lesson-filter"),message=page.locator("#editorial-lesson-filter-status");
   const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
-    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+    "lesson-title","lesson-slug","lesson-body","lesson-sort","course-audience","course-suggested-knowledge"];
   const original=await fields(page,fieldIds);
   const snapshot=()=>page.evaluate(()=>JSON.stringify({courseId:state.course?.id,lessonId:state.lesson?.id,
     courseRequest:state.courseRequest,lessonRequest:state.lessonRequest,lessons:state.lessons,
@@ -598,7 +640,7 @@ async function concurrentLessonEdits(editor,peer,courseId,firstLessonId,lessonId
   enterStage("content edits and guarded order across real editorial sessions");
   const root="/universidade/private/admin",route=root+"/lessons/"+lessonId;
   const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
-    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+    "lesson-title","lesson-slug","lesson-body","lesson-sort","course-audience","course-suggested-knowledge"];
   const page=peer.page,writes=countWrites(editor.profile);
   const savedTitle=await page.locator("#lesson-title").inputValue();
   const savedBody=(await page.locator("#lesson-body").inputValue())+"\nTexto salvo pela segunda sessão editorial.";
@@ -697,7 +739,7 @@ async function concurrentCourseEdits(editor,peer,courseId,lessonId){
   enterStage("course metadata and guarded order across real editorial sessions");
   const root="/universidade/private/admin",route=root+"/courses/"+courseId,page=peer.page;
   const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
-    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+    "lesson-title","lesson-slug","lesson-body","lesson-sort","course-audience","course-suggested-knowledge"];
   const original=await editor.page.evaluate(()=>({id:state.course.id,title:state.course.title,
     category:state.course.category,summary:state.course.summary,sort_order:state.course.sort_order}));
   const lessons=await editor.page.evaluate(()=>state.lessons),writes=countWrites(editor.profile);
@@ -726,6 +768,13 @@ async function concurrentCourseEdits(editor,peer,courseId,lessonId){
     JSON.stringify(textSaved.request().postDataJSON())===JSON.stringify({title:original.title,category:original.category,summary})&&
     await page.locator("#course-sort").inputValue()==="5"&&await page.locator("#course-summary").inputValue()===summary,
     "Saving only course text from an older real session must omit both order fields and preserve the current database order");
+  const textPayload=textSaved.request().postDataJSON();
+  check(!Object.hasOwn(textPayload,"audience")&&!Object.hasOwn(textPayload,"suggested_knowledge")&&
+    await page.evaluate(expected=>state.course.audience===expected.initialAudience&&
+      state.course.suggested_knowledge===expected.initialKnowledge,courseGuidanceFixture)&&
+    await page.locator("#course-audience").inputValue()===courseGuidanceFixture.initialAudience&&
+    await page.locator("#course-suggested-knowledge").inputValue()===courseGuidanceFixture.initialKnowledge,
+    "The real legacy-shaped course PATCH must omit unchanged guidance and preserve both values through its authorized database reread");
   check(await page.locator("#editorial-lesson-search").inputValue()===query&&
     await page.evaluate(id=>state.lesson?.id===id,lessonId)&&
     JSON.stringify(await page.evaluate(()=>state.lessons))===JSON.stringify(lessons)&&countWrites(editor.profile)===writes+2,
@@ -818,7 +867,7 @@ async function editorialLessonReorder(editor,courseId,firstLessonId,temporaryLes
   const page=editor.page,route="/universidade/private/admin/courses/"+courseId+"/lessons/reorder";
   const move=(id,direction)=>"#lesson-items [data-move-lesson='"+id+"'][data-direction='"+direction+"']";
   const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
-    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+    "lesson-title","lesson-slug","lesson-body","lesson-sort","course-audience","course-suggested-knowledge"];
   const original=await fields(page,fieldIds),writes=countWrites(editor.profile);
   const originalLessons=await page.evaluate(()=>state.lessons.map(lesson=>({id:lesson.id,slug:lesson.slug,
     title:lesson.title,body:lesson.body,status:lesson.status,is_published:lesson.is_published})).sort((a,b)=>a.id-b.id));
@@ -1103,6 +1152,10 @@ async function contextualCoursesJourney(editor,student,source){
     JSON.stringify(catalogue.courses.map(course=>course.id))===JSON.stringify([source.courseId,peerId])&&
     catalogue.courses.every(course=>course.category==="negocios"),
     "The real published catalogue must contain exactly the two expected courses in editorial order and the same category");
+  const peerCourse=catalogue.courses.find(course=>course.id===peerId),peerPayload=created.request().postDataJSON();
+  check(!Object.hasOwn(peerPayload,"audience")&&!Object.hasOwn(peerPayload,"suggested_knowledge")&&
+    peerCourse.audience===null&&peerCourse.suggested_knowledge===null,
+    "The existing contextual peer must retain absent optional guidance as null after real creation and publication instead of copying the previous course's text");
   await openStudent(student,source.courseId,source.title);
   await student.page.waitForFunction(()=>!state.libraryLoading&&!state.favoritesLoading&&state.favoritesReady&&
     !state.readingLoading&&state.readingSnapshot?.status==="available");
@@ -1159,6 +1212,8 @@ async function contextualCoursesJourney(editor,student,source){
     peerLesson.lesson.course_version===1&&await student.page.locator("#lesson-content button.primary").isEnabled()&&
     await student.page.locator("#course-favorite-toggle").getAttribute("aria-pressed")==="false",
     "The explicit contextual click must read the real peer lesson without completing or favoriting it");
+  check(await courseGuidanceMatches(student.page),
+    "An explicit real course switch to a course with no guidance must hide its panel and erase the previous course's two texts");
   const returned=await clickResponse(student.page,"[data-contextual-course-id='"+source.courseId+"']","GET",
     "/universidade/private/lessons/"+source.lessonId);
   const sourceLesson=await json(returned,"Contextual return lesson");
@@ -1168,6 +1223,8 @@ async function contextualCoursesJourney(editor,student,source){
   check(returned.status()===200&&sourceLesson.lesson?.id===source.lessonId&&
     sourceLesson.lesson.course_id===source.courseId&&sourceLesson.lesson.course_version===source.version,
     "The return suggestion must reauthorize the exact currently published source lesson");
+  check(await courseGuidanceMatches(student.page,courseGuidanceFixture.audience),
+    "Returning to the real source course must restore only its current audience and keep explicitly cleared knowledge hidden");
   const requests=businessRequests.slice(navigationStart).filter(request=>request.profile===student.profile);
   const expectedRoutes=[
     "/universidade/private/courses/"+peerId+"/lessons","/universidade/private/lessons/"+peerLessonId,
@@ -1222,11 +1279,19 @@ async function main(){
   await editor.page.locator("#course-title").fill("Curso sintético do laboratório HTTP");
   await editor.page.locator("#course-slug").fill("curso-framework-sintetico");
   await editor.page.locator("#course-summary").fill("Material fictício, sem clientes reais.");
+  await editor.page.locator("#course-audience").fill(courseGuidanceFixture.initialAudience);
+  await editor.page.locator("#course-suggested-knowledge").fill(courseGuidanceFixture.initialKnowledge);
   const created=await clickResponse(editor.page,"#course-save","POST",adminRoot+"/courses");
   const createdBody=await json(created,"Course creation"),courseId=createdBody.id;
   await waitText(editor.page,"status","Rascunho salvo.");
   check(created.status()===201&&Number.isSafeInteger(courseId)&&courseId>0,
     "The editor UI must create a real draft course");
+  const createdPayload=created.request().postDataJSON();
+  check(createdPayload.audience===courseGuidanceFixture.initialAudience&&
+    createdPayload.suggested_knowledge===courseGuidanceFixture.initialKnowledge&&
+    await editor.page.evaluate(expected=>state.course.audience===expected.initialAudience&&
+      state.course.suggested_knowledge===expected.initialKnowledge,courseGuidanceFixture),
+    "Real course creation must persist both optional Unicode guidance fields and return them through the existing catalogue refresh");
   const firstTitle="Primeira aula sintética";
   const firstBody="Contexto sintético para a leitura.\n\nEXEMPLO FICTÍCIO\nUm visitante fictício consulta uma página.\n\nAPLICAÇÃO OPCIONAL\nDesenhe uma jornada fictícia.";
   await editor.page.locator("#lesson-title").fill(firstTitle);
@@ -1261,9 +1326,11 @@ async function main(){
   await editor.page.locator("#course-summary").fill("  Resumo fictício que deve sobreviver ao salvamento da aula.  ");
   await editor.page.locator("#course-category").selectOption("negocios");
   await editor.page.locator("#course-sort").fill("5");
+  await editor.page.locator("#course-audience").fill("  "+courseGuidanceFixture.audience+"  ");
+  await editor.page.locator("#course-suggested-knowledge").fill("  "+courseGuidanceFixture.knowledge+"  ");
   const revisedBody=firstBody+"\n\nCUIDADO IMPORTANTE\nEste material usa somente exemplos fictícios.";
   await editor.page.locator("#lesson-body").fill(revisedBody);
-  const courseFields=["course-title","course-summary","course-category","course-sort"];
+  const courseFields=["course-title","course-summary","course-category","course-sort","course-audience","course-suggested-knowledge"];
   const pendingCourse=await fields(editor.page,courseFields),writesBefore=countWrites("editor");
   await editor.page.locator("#course-save").click();
   await waitText(editor.page,"status","Salve a aula em edição antes de salvar o curso");
@@ -1277,6 +1344,20 @@ async function main(){
   check(courseSaved.status()===200&&(await editor.page.locator("#lesson-body").inputValue())===revisedBody&&
     await editor.page.locator("#lesson-items [data-lesson='"+firstLessonId+"'][aria-current='true']").count()===1,
     "Saving the real course preserves the saved lesson and its selection");
+  const guidancePayload=courseSaved.request().postDataJSON();
+  check(guidancePayload.audience===courseGuidanceFixture.audience&&guidancePayload.suggested_knowledge===courseGuidanceFixture.knowledge&&
+    await editor.page.evaluate(expected=>state.course.audience===expected.audience&&
+      state.course.suggested_knowledge===expected.knowledge,courseGuidanceFixture)&&
+    await editor.page.locator("#course-audience").inputValue()===courseGuidanceFixture.audience&&
+    await editor.page.locator("#course-suggested-knowledge").inputValue()===courseGuidanceFixture.knowledge,
+    "Saving the edited real course must round-trip both literal guidance fields after its sibling lesson preserved the unsaved values");
+  await editor.page.locator("#course-form").screenshot({path:path.join(evidenceDir,"framework-course-guidance-editor-desktop.png")});
+  await editor.page.setViewportSize({width:390,height:844});
+  check(await editor.page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)&&
+    await editor.page.locator("#course-audience").isVisible()&&await editor.page.locator("#course-suggested-knowledge").isVisible(),
+    "Both optional course guidance fields must remain legible inside the real 390px editorial form");
+  await editor.page.locator("#course-form").screenshot({path:path.join(evidenceDir,"framework-course-guidance-editor-mobile.png")});
+  await editor.page.setViewportSize({width:1440,height:1000});
 
   await editor.page.locator("#new-course").click();
   await editor.page.locator("#course-title").fill("Curso temporário sintético");
@@ -1317,6 +1398,7 @@ async function main(){
   }),"Keyboard navigation after the real lesson heading must continue into an enabled lesson action without a focus trap");
   await lessonSectionNavigation(studentA);
   await studentLessonFilter(studentA,courseId,firstLessonId);
+  await studentCourseGuidance(studentA,courseId,firstLessonId);
   await openStudent(studentB,courseId,firstTitle);
   const forbiddenAdmin=await studentA.context.request.get(base+adminRoot+"/courses",{headers:{Accept:"application/json"}});
   check(forbiddenAdmin.status()===403,"A learner's real session must not authorize editorial endpoints");
@@ -1433,7 +1515,7 @@ async function main(){
     await student.page.goto(base+"/universidade/private/app");
     await waitText(student.page,"favorites-status","Nenhum favorito disponível");
     check(await student.page.locator("#course-list [data-course-id]").count()===0&&
-      await student.page.locator("#lesson-content h3").count()===0,
+      await student.page.locator("#lesson-content h3").count()===0&&await courseGuidanceMatches(student.page),
       "Withdrawn material and its favorite must disappear from each real student catalogue");
     await waitText(student.page,"reading-position-status","A aula guardada não está disponível");
     check(await student.page.locator("#resume-reading-position").isHidden(),
@@ -1497,10 +1579,12 @@ async function main(){
 
   enterStage("read-only editorial archive with independent drafts");
   await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"']").click();
-  const archiveFields=["course-summary","lesson-title","lesson-body"];
+  const archiveFields=["course-summary","lesson-title","lesson-body","course-audience","course-suggested-knowledge"];
   const cleanArchiveFields=await fields(editor.page,archiveFields);
   await editor.page.locator("#course-summary").fill("Resumo local sintético preservado durante a consulta histórica.");
   await editor.page.locator("#lesson-body").fill(revisedBody+"\n\nRascunho local ainda não salvo.");
+  await editor.page.locator("#course-audience").fill(courseGuidanceFixture.audience+" Rascunho local de público.");
+  await editor.page.locator("#course-suggested-knowledge").fill(courseGuidanceFixture.knowledge+" Rascunho local de orientação.");
   const pendingArchiveFields=await fields(editor.page,archiveFields),archiveWrites=countWrites("editor");
   await archivedLessonPreview(editor,courseId,1,firstLessonId,revisedBody);
   check(JSON.stringify(await fields(editor.page,archiveFields))===JSON.stringify(pendingArchiveFields)&&
@@ -1549,6 +1633,27 @@ async function main(){
   check(savedRevision.status()===200,"The cloned draft lesson must remain editable through the UI");
   check(!(await editor.page.locator("#editorial-version-content").textContent()).includes("Um visitante fictício"),
     "A new editorial mutation must invalidate the previously loaded archive view");
+
+  // Keep the existing lesson-mutation/archive assertion above meaningful:
+  // clear optional guidance only after that original mutation is verified.
+  enterStage("explicit optional guidance clearing");
+  const guidanceLessonBody=await editor.page.locator("#lesson-body").inputValue();
+  await editor.page.locator("#course-suggested-knowledge").fill("");
+  const clearedGuidance=await clickResponse(editor.page,"#course-save","PATCH",adminRoot+"/courses/"+courseId);
+  const clearedReceipt=await json(clearedGuidance,"Explicit guidance removal");
+  await waitText(editor.page,"status","Rascunho salvo.");
+  const clearedPayload=clearedGuidance.request().postDataJSON();
+  const currentGuidanceResponse=await editor.context.request.get(base+adminRoot+"/courses",{headers:{Accept:"application/json"}});
+  const currentGuidance=(await json(currentGuidanceResponse,"Persisted guidance after explicit removal")).courses.find(course=>course.id===courseId);
+  check(clearedGuidance.status()===200&&clearedReceipt.saved===true&&
+    Object.hasOwn(clearedPayload,"suggested_knowledge")&&clearedPayload.suggested_knowledge===null&&
+    !Object.hasOwn(clearedPayload,"audience")&&currentGuidanceResponse.status()===200&&
+    currentGuidance.audience===courseGuidanceFixture.audience&&currentGuidance.suggested_knowledge===null&&
+    await editor.page.locator("#course-suggested-knowledge").inputValue()===""&&
+    await editor.page.locator("#lesson-body").inputValue()===guidanceLessonBody&&
+    await editor.page.locator("#lesson-items [data-lesson='"+newLessonId+"'][aria-current='true']").count()===1,
+    "An explicit real guidance removal must send null only for the cleared field, persist it, and preserve the other guidance and selected draft lesson");
+  enterStage("republication with current course guidance");
   await publish(editor,courseId,2);
   const preservedArchiveResponse=await editor.context.request.get(base+adminRoot+"/courses/"+courseId+
     "/versions/1/lessons/"+firstLessonId,{headers:{Accept:"application/json"}});
@@ -1558,6 +1663,9 @@ async function main(){
     "Editing and publishing the new version must preserve the earlier archived lesson content");
   await openStudent(studentA,courseId,revisedTitle);
   await openStudent(studentB,courseId,revisedTitle);
+  check(await courseGuidanceMatches(studentA.page,courseGuidanceFixture.audience)&&
+    await courseGuidanceMatches(studentB.page,courseGuidanceFixture.audience),
+    "After a real preflight and republication both authorized companies must see current audience text with the explicitly cleared knowledge field hidden");
   check((await studentA.page.locator("#course-favorite-toggle").getAttribute("aria-pressed"))==="true"&&
     (await studentB.page.locator("#course-favorite-toggle").getAttribute("aria-pressed"))==="false",
     "Republication must restore retained favorites and respect an explicit withdrawn favorite removal");
@@ -1604,6 +1712,8 @@ async function main(){
     await studentA.page.locator("#course-favorite-panel").isHidden()&&
     await studentA.page.locator("#course-favorite-toggle").isDisabled(),
     "Real eligibility revocation must purge private content and disable favorite writes");
+  check(await courseGuidanceMatches(studentA.page),
+    "Real eligibility revocation must also erase both guidance texts and hide the previously populated course panel");
   check(await studentA.page.locator("#reading-position-panel").isHidden()&&
     await studentA.page.locator("#resume-reading-position").isDisabled()&&
     await studentA.page.locator("#export-reading-position").isDisabled(),
@@ -1637,6 +1747,8 @@ async function main(){
     "Revoking one company must leave the other company independently authorized");
   setAuthority("student-a",true);
   await openStudent(studentA,courseId,revisedTitle);
+  check(await courseGuidanceMatches(studentA.page,courseGuidanceFixture.audience),
+    "A newly authorized real page must obtain current course guidance again while keeping the cleared optional field hidden");
   check(await studentA.page.locator("#lesson-search-results [data-search-lesson]").count()===0&&
     await studentA.page.locator("#lesson-search-query").inputValue()===""&&
     await studentA.page.locator("#lesson-search-next").isDisabled(),
@@ -1657,7 +1769,7 @@ async function main(){
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
-    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","local editorial lesson search","atomic lesson reorder","concurrent text and order edits","concurrent course text and order edits","publication hash","audit","editorial overview","private favorites","favorites export download",
+    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","optional course guidance","local editorial lesson search","atomic lesson reorder","concurrent text and order edits","concurrent course text and order edits","publication hash","audit","editorial overview","private favorites","favorites export download",
       "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","progress export download","contextual courses without personal ranking","private search pagination","manual completion history","explicit navigation focus","local lesson section index","local student lesson locator","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");

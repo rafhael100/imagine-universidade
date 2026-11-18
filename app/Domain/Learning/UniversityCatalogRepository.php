@@ -124,7 +124,8 @@ final class UniversityCatalogRepository
             ->where('v.status', 'published')
             ->orderBy('c.sort_order')
             ->orderBy('c.id')
-            ->select('c.id', 'c.slug', 'c.title', 'c.summary', 'c.category', 'v.id as version_id')
+            ->select('c.id', 'c.slug', 'c.title', 'c.summary', 'c.category',
+                'c.audience', 'c.suggested_knowledge', 'v.id as version_id')
             ->get()->all();
 
         if ($courses === []) {
@@ -1279,6 +1280,7 @@ final class UniversityCatalogRepository
             (int) $course->id, (string) $course->slug,
             (string) $course->title, (string) $course->category,
             (string) ($course->summary ?? ''), (int) $course->sort_order,
+            (string) ($course->audience ?? ''), (string) ($course->suggested_knowledge ?? ''),
             (int) $version->id, (int) $version->version, $rows,
         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
@@ -1294,7 +1296,8 @@ final class UniversityCatalogRepository
             ->where('id', $courseId)
             ->where('educational_organization_id', $org)
             ->where('is_shared', true)
-            ->first(['id', 'slug', 'title', 'category', 'summary', 'sort_order', 'is_published']);
+            ->first(['id', 'slug', 'title', 'category', 'summary', 'sort_order',
+                'audience', 'suggested_knowledge', 'is_published']);
         if ($course === null) {
             return null;
         }
@@ -1353,7 +1356,8 @@ final class UniversityCatalogRepository
             ->where('educational_organization_id', $org)
             ->where('is_shared', true)
             ->orderBy('sort_order')->orderBy('id')
-            ->select('id', 'slug', 'title', 'summary', 'category', 'sort_order', 'is_published')
+            ->select('id', 'slug', 'title', 'summary', 'category', 'sort_order',
+                'audience', 'suggested_knowledge', 'is_published')
             ->get()->all();
 
         return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? $courses : [];
@@ -1662,7 +1666,7 @@ final class UniversityCatalogRepository
         return $this->grantUsable($grant, PortalAccessGate::MANAGE) ? $lessons : [];
     }
 
-    /** @param array{slug:string,title:string,category:string,summary?:string|null,sort_order?:int} $input */
+    /** @param array{slug:string,title:string,category:string,summary?:string|null,audience?:string|null,suggested_knowledge?:string|null,sort_order?:int} $input */
     public function createCourse(PortalGrant $grant, array $input, ?callable $verifyFreshGrant = null): ?int
     {
         $org = $this->adminOrgId($grant);
@@ -1684,6 +1688,8 @@ final class UniversityCatalogRepository
                 'title' => $input['title'],
                 'category' => $input['category'],
                 'summary' => $input['summary'] ?? null,
+                'audience' => $input['audience'] ?? null,
+                'suggested_knowledge' => $input['suggested_knowledge'] ?? null,
                 'sort_order' => $input['sort_order'] ?? 0,
                 'is_published' => false,
                 'created_at' => $now,
@@ -1702,7 +1708,7 @@ final class UniversityCatalogRepository
     }
 
     /**
-     * @param array{title:string,summary?:string|null,category:string,sort_order?:int,expected_sort_order?:int} $input
+     * @param array{title:string,summary?:string|null,category:string,audience?:string|null,suggested_knowledge?:string|null,sort_order?:int,expected_sort_order?:int} $input
      * @throws EditorialCourseOrderConflict Only for a well-formed stale order precondition.
      */
     public function updateCourse(PortalGrant $grant, int $courseId, array $input, ?callable $verifyFreshGrant = null): bool
@@ -1752,6 +1758,13 @@ final class UniversityCatalogRepository
                 'category' => $input['category'],
                 'updated_at' => now(),
             ];
+            // Older clients omit these optional fields. Preserve the stored
+            // guidance unless an editor explicitly replaces or clears it.
+            foreach (['audience', 'suggested_knowledge'] as $field) {
+                if (array_key_exists($field, $input)) {
+                    $changes[$field] = $input[$field];
+                }
+            }
             // An omitted PATCH field does not reset the locked course's order.
             // Creation keeps its zero default; explicit legacy values apply.
             if (array_key_exists('sort_order', $input)) {
@@ -2267,7 +2280,8 @@ final class UniversityCatalogRepository
                 ->where('educational_organization_id', $org)
             ->where('is_shared', true)
                 ->where('is_published', !$publish)
-                ->lockForUpdate()->first(['id', 'slug', 'title', 'category', 'summary', 'sort_order']);
+                ->lockForUpdate()->first(['id', 'slug', 'title', 'category', 'summary', 'sort_order',
+                    'audience', 'suggested_knowledge']);
             if ($course === null) {
                 return false;
             }

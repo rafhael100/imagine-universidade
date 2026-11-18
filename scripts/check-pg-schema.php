@@ -146,7 +146,21 @@ try {
     }
     echo "PASS private reading position minimal columns and erasable reference\n";
 
-    echo "\n16 PostgreSQL schema invariants verified. No records were mutated.\n";
+    $courseContextColumns = $pdo->query(
+        "SELECT column_name, data_type, character_maximum_length, is_nullable
+         FROM information_schema.columns WHERE table_schema = 'public'
+         AND table_name = 'educational_courses'
+         AND column_name IN ('audience', 'suggested_knowledge') ORDER BY column_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if (array_column($courseContextColumns, 'column_name') !== ['audience', 'suggested_knowledge']
+        || array_column($courseContextColumns, 'data_type') !== ['character varying', 'character varying']
+        || array_map('intval', array_column($courseContextColumns, 'character_maximum_length')) !== [500, 500]
+        || array_column($courseContextColumns, 'is_nullable') !== ['YES', 'YES']) {
+        abortCheck('Course guidance must remain two optional editorial strings of at most 500 characters.');
+    }
+    echo "PASS optional course audience and suggested knowledge columns\n";
+
+    echo "\n17 PostgreSQL schema invariants verified. No records were mutated.\n";
 } catch (Throwable $e) {
     // The schema checker must never log connection secrets or exception trace.
     abortCheck('PostgreSQL connection/schema inspection failed.');

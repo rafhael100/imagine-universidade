@@ -165,6 +165,9 @@
             <div class="field"><label for="course-slug">Identificador do curso</label><input id="course-slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
             <div class="field"><label for="course-category">Categoria</label><select id="course-category"><option value="metodologia">Metodologia</option><option value="negocios">Negócios</option><option value="sistemas">Sistemas Imagine</option></select></div>
             <div class="field span"><label for="course-summary">Descrição curta</label><textarea id="course-summary" maxlength="500"></textarea></div>
+            <div class="field span"><label for="course-audience">Para quem</label><textarea id="course-audience" aria-describedby="course-context-help"></textarea></div>
+            <div class="field span"><label for="course-suggested-knowledge">Conhecimentos úteis</label><textarea id="course-suggested-knowledge" aria-describedby="course-context-help"></textarea></div>
+            <p id="course-context-help" class="help span">Orientações opcionais para escolher o curso. Até 500 caracteres em cada campo. Conhecimentos úteis são sugestões, sem pré-requisito obrigatório.</p>
             <div class="field"><label for="course-sort">Ordem</label><input id="course-sort" type="number" min="0" max="9999" step="1" value="0"></div>
           </div>
           <div class="actions">
@@ -300,7 +303,7 @@ function freezeUncertainEditorialWrite(){
   ++state.courseRequest;++state.lessonRequest;
   for(const id of ["new-course","course-save","lesson-save","delete-course",
       "delete-lesson","publish","unpublish","check-publication",
-      "course-title","course-category","course-summary","course-sort",
+      "course-title","course-category","course-summary","course-sort","course-audience","course-suggested-knowledge",
       "lesson-title","lesson-slug","lesson-body","lesson-sort"]){
     const element=$(id);if(element)element.disabled=true;
   }
@@ -713,6 +716,8 @@ function fillCourse(){
   $("course-slug").disabled=!!c;
   $("course-category").value=c?.category||"metodologia";
   $("course-summary").value=c?.summary||"";
+  $("course-audience").value=c?.audience??"";
+  $("course-suggested-knowledge").value=c?.suggested_knowledge??"";
   $("course-sort").value=String(c?.sort_order??0);
   $("publication-status").textContent=c?.is_published?"Publicado":"Rascunho";
   $("publication-status").className="chip"+(c?.is_published?" published":"");
@@ -725,7 +730,7 @@ function updateEditorialControls(){
   if(state.accessDenied)return;
   const c=state.course;
   const editable=draft();
-  for(const id of ["course-title","course-category","course-summary","course-sort"]){$(id).disabled=!editable;}
+  for(const id of ["course-title","course-category","course-summary","course-sort","course-audience","course-suggested-knowledge"]){$(id).disabled=!editable;}
   $("course-save").disabled=!editable;
   $("publish").disabled=!c||!!c.is_published||!state.lessonsReady;
   $("check-publication").disabled=!c||!!c.is_published||!state.lessonsReady;
@@ -985,12 +990,13 @@ function validatedLessonReorderReceipt(payload,courseId,lessonId,direction,expec
 function lessonReorderFormSnapshot(){
   const values=ids=>ids.map(id=>String($(id).value));
   return {courseId:state.course?.id??null,lessonId:state.lesson?.id??null,
-    course:values(["course-title","course-slug","course-category","course-summary","course-sort"]),
+    course:values(["course-title","course-slug","course-category","course-summary","course-sort","course-audience","course-suggested-knowledge"]),
     lesson:values(["lesson-title","lesson-slug","lesson-body","lesson-sort"])};
 }
 function lessonReorderDirtyForms(snapshot=lessonReorderFormSnapshot()){
   const c=state.course,l=state.lesson;
-  const course=[c?.title??"",c?.slug??"",c?.category??"metodologia",c?.summary??"",String(c?.sort_order??0)];
+  const course=[c?.title??"",c?.slug??"",c?.category??"metodologia",c?.summary??"",String(c?.sort_order??0),
+    c?.audience??"",c?.suggested_knowledge??""];
   const lesson=[l?.title??"",l?.slug??"",l?.body??"",String(l?.sort_order??0)];
   return {course:snapshot.course.some((value,index)=>value!==course[index]),
     lesson:snapshot.lesson.some((value,index)=>value!==lesson[index])};
@@ -1085,11 +1091,14 @@ function validatedAdminCourses(payload){
        !["metodologia","negocios","sistemas"].includes(item.category)||
        !(item.summary===null||typeof item.summary==="string")||
        (typeof item.summary==="string"&&item.summary.length>500)||
+       ["audience","suggested_knowledge"].some(field=>item[field]!==undefined&&item[field]!==null&&
+         (typeof item[field]!=="string"||item[field].length>1000||Array.from(item[field]).length>500))||
        !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
        ![true,false,0,1].includes(item.is_published))return null;
     ids.add(item.id);
     courses.push({id:item.id,slug:item.slug,title:item.title,
       category:item.category,summary:item.summary??"",sort_order:item.sort_order,
+      audience:item.audience??"",suggested_knowledge:item.suggested_knowledge??"",
       is_published:Boolean(item.is_published)});
   }
   return courses;
@@ -1202,10 +1211,21 @@ $("course-form").addEventListener("submit",async event=>{
     say("Salve a aula em edição antes de salvar o curso. Para descartá-la, use Nova aula. As alterações do curso foram mantidas.");
     return;
   }
-  const baseline=state.course===null?null:{id:state.course.id,sort_order:state.course.sort_order};
+  const baseline=state.course===null?null:{id:state.course.id,sort_order:state.course.sort_order,
+    audience:state.course.audience??"",suggested_knowledge:state.course.suggested_knowledge??""};
   const payload={title:$("course-title").value.trim(),slug:$("course-slug").value.trim(),
     category:$("course-category").value,summary:$("course-summary").value.trim(),sort_order:intField("course-sort")};
   if(!payload.title){say("Informe o título.");return;}
+  for(const [field,id,label] of [["audience","course-audience","Para quem"],
+    ["suggested_knowledge","course-suggested-knowledge","Conhecimentos úteis"]]){
+    const value=$(id).value.trim();
+    // Count Unicode characters, never truncate a valid surrogate pair.
+    // No HTML maxlength: it would count UTF-16 units rather than characters.
+    if(value.length>1000||Array.from(value).length>500){
+      say(label+" deve ter no máximo 500 caracteres. Os campos foram mantidos.");$(id).focus();return;
+    }
+    if(baseline?value!==baseline[field].trim():value!=="")payload[field]=value||null;
+  }
   const courseId=baseline?.id??null;
   if(!beginWrite())return;
   try{
@@ -1314,6 +1334,8 @@ function editorialHasUnsavedChanges(){
   if($("course-title").value.trim()!==String(c.title||"")||
      $("course-category").value!==String(c.category||"")||
      $("course-summary").value.trim()!==String(c.summary||"")||
+     $("course-audience").value.trim()!==String(c.audience??"").trim()||
+     $("course-suggested-knowledge").value.trim()!==String(c.suggested_knowledge??"").trim()||
      intField("course-sort")!==Number(c.sort_order||0))return true;
   const lesson=state.lesson;
   if(lesson){
@@ -1329,11 +1351,14 @@ function editorialHasUnsavedChanges(){
 function courseHasUnsavedEdits(){
   const c=state.course;
   if(!c)return Boolean($("course-title").value.trim()||$("course-slug").value.trim()||
-    $("course-summary").value.trim()||Number($("course-sort").value)!==0||
+    $("course-summary").value.trim()||$("course-audience").value.trim()||
+    $("course-suggested-knowledge").value.trim()||Number($("course-sort").value)!==0||
     $("course-category").value!=="metodologia");
   return $("course-title").value.trim()!==String(c.title||"")||
     $("course-category").value!==String(c.category||"")||
     $("course-summary").value.trim()!==String(c.summary||"")||
+    $("course-audience").value.trim()!==String(c.audience??"").trim()||
+    $("course-suggested-knowledge").value.trim()!==String(c.suggested_knowledge??"").trim()||
     intField("course-sort")!==Number(c.sort_order||0);
 }
 function lessonHasUnsavedEdits(){

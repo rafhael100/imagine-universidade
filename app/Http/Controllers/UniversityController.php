@@ -703,8 +703,12 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
-    public function reorderDraftLessons(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function reorderDraftLessons(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $parsedCourseId = $this->archivedRouteNumber($courseId);
+        if ($parsedCourseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $lessonId = $request->input('lesson_id');
         $direction = $request->input('direction');
@@ -716,7 +720,7 @@ final class UniversityController
         }
         try {
             $result = $this->catalog->reorderDraftLessons(
-                $grant, $courseId, $lessonId, $direction, $expectedOrder,
+                $grant, $parsedCourseId, $lessonId, $direction, $expectedOrder,
                 fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
             );
         } catch (\Throwable) {

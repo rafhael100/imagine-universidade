@@ -51,8 +51,11 @@ ordem crescente de `sort_order` e, nos empates, de ID. A aula alvo precisa estar
 nessa lista. Cada ordem é um inteiro JSON entre 0 e 9999. A validação é linear,
 com um conjunto de IDs, sem regras wildcard/distinct de custo quadrático.
 
-O ID da rota é limitado a 16 dígitos antes da conversão do parâmetro PHP e
-validado pelo domínio como inteiro positivo seguro.
+O ID da rota aceita somente uma sequência decimal e chega ao controlador como
+string. O parser exige a forma canônica positiva, no máximo 16 dígitos e valor
+até `9007199254740991` antes de convertê-lo para inteiro. IDs numéricos fora
+desse domínio recebem `404 not_found`, sem overflow nem passagem pelo fallback
+de método da aplicação. O domínio também valida o inteiro positivo seguro.
 
 O destino do exemplo é `[12, 11, 13]`, com ordens `[0, 1, 2]`. Ele é sempre
 calculado a partir de `expected_order`; o servidor não reinterpreta “subir”

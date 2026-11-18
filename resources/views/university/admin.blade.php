@@ -151,7 +151,7 @@
       <p id="editorial-filter-status" class="catalog-filter-count" role="status" aria-live="polite"></p>
       <div id="course-items" class="items"><p>Carregando cursos...</p></div>
       <div id="catalog-recovery" class="catalog-recovery" hidden>
-        <p role="alert">Não foi possível consultar os cursos. Verifique a conexão e tente novamente. Uma sessão expirada exige novo acesso pelo Portal.</p>
+        <p role="alert">Consulte novamente os cursos e aulas para continuar. Se uma alteração não foi confirmada, não repita a operação: confira primeiro os dados do servidor.</p>
         <button type="button" id="retry-catalog" class="secondary">Tentar carregar cursos</button>
       </div>
     </section>

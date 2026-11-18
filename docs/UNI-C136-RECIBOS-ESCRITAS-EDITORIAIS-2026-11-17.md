@@ -161,3 +161,11 @@ em CI. Não houve navegador, PHP ou PG local, stage, commit ou push.
 Os sete blocos de validação foram integrados, conservando a montagem condicional da ordem no formulário de curso C137 e a proteção de aula C133. A suíte Node principal completa passou após essa combinação, incluindo **29 cenários C136 e 30 C137**. Passaram também a cerca estática dos **15 caminhos de escrita**, a sintaxe dos runners/módulos e a conferência de diff. A revisão independente não encontrou bloqueadores.
 
 As **23 verificações Chromium C136** estão chamadas pelo runner protegido existente. Sua execução depende da CI do próximo SHA integrado; os resultados completos do SHA `2bec87c` são a referência anterior, sem essas alterações.
+
+## Clareza da recuperação — C139
+
+Em 2026-11-18, o parágrafo do painel de recuperação passou a orientar a consulta manual sem atribuir o problema a uma falha de conexão ou de GET. O mesmo painel aparece após leitura indisponível e escrita não confirmada. A orientação mantém o aviso de não repetir a operação; CTA, estado, handlers, confirmação, preservação dos campos e revogação permanecem intactos. Não foram adicionados testes ou fluxos.
+
+## CI integrada executada em 8368d526
+
+O [run 44230182074](https://github.com/rafhael100/imagine-universidade/actions/runs/44230182074), SHA `8368d5261915412233726eafacd5e057bd04e303`, aprovou os **seis jobs**: **351 testes PHP / 3.959 asserções** (39 Unit/169 e 312 Feature/3.790), probes PostgreSQL, **746 verificações Chromium sintéticas** e **232 pelo Laravel/SQLite real**. As 23 verificações Chromium C136 executaram recibos inválidos, preservação e recuperação manual; os fluxos de gravação real mantiveram seus recibos confirmados. Persistência passou. Essa rodada é anterior à alteração textual C139 acima.

@@ -21,7 +21,7 @@ Esta branch contém a aplicação candidata Laravel 13 / PHP 8.3+, com dependên
 | Confirmação editorial | Criação, edição, exclusão, publicação e retirada conferem os indicadores exatos da resposta antes de atualizar os formulários. Uma resposta incompleta ou contraditória mantém os campos e a seleção, bloqueia novas gravações e exige consulta manual, sem repetir a operação. |
 | Visão do acervo | Totais e categorias dos cursos editoriais, aulas da versão mais recente e avisos de ausência de aula/resumo. O painel não consulta dados individuais de aprendizagem nem aprova publicações. |
 | Versões arquivadas | Consulta editorial paginada de versões anteriores, lista de aulas e leitura de um conteúdo histórico por vez. O painel preserva os formulários atuais e não restaura, edita ou publica versões. |
-| Integridade | Escritas conferem autorização atual dentro da transação; dados pessoais de aprendizagem são isolados por pessoa/empresa; versões publicadas e histórico são protegidos. |
+| Integridade | Escritas conferem autorização atual dentro da transação; dados pessoais de aprendizagem são isolados por pessoa/empresa; versões publicadas e histórico são protegidos. IDs de rota são conferidos antes da conversão numérica; valores acima da faixa do runtime recebem resposta privada de não encontrado, mantendo os formatos e retornos legados de IDs representáveis. |
 | Ambiente candidato | PHP/Nginx/PostgreSQL, sessão persistente, porta de loopback explícita, papéis de banco separados e inventário somente de leitura. Nenhuma inicialização automática. |
 
 O acervo de desenvolvimento tem 10 cursos e 35 aulas em rascunho. Os textos exigem revisão humana antes da publicação; o pacote editorial da CI não concede aprovação.

@@ -128,3 +128,9 @@ Arquivos desta entrega:
 6. Este documento.
 
 Não foram alterados a view, rotas, schema, grants, workflows, runners ou a política de retenção. Não foram feitos stage, commit ou push nesta worktree.
+
+## Backend e PostgreSQL executados
+
+No SHA `8368d5261915412233726eafacd5e057bd04e303`, o [run 44230182074](https://github.com/rafhael100/imagine-universidade/actions/runs/44230182074) aprovou os **seis jobs**. A validação completou **351 testes PHP / 3.959 asserções** (39 Unit/169 e 312 Feature/3.790), incluindo os 23 métodos C137.
+
+As **11 verificações PostgreSQL C137** passaram: edição explícita, texto sem ordem com autorização sob lock, contenção real de PATCH/publicação, commit do peer após liberação, dois conflitos sem efeitos, legado, defesa de payload/autoridade, isolamento, rollback após auditoria e exatamente quatro eventos de edições confirmadas. Publicação, aulas, versões e demais cursos ficaram preservados. A rodada também aprovou **746 verificações sintéticas e 232 pelo Laravel real**, incluindo as duas sessões de edição do curso. Não houve mudança de schema, privilégios ou gates.

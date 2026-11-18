@@ -40,6 +40,29 @@ final class UniversityController
     }
 
     /**
+     * Preserve legacy decimal route aliases, including zero and leading zeros.
+     * Check the PHP integer boundary as text before casting; the newer archived
+     * routes deliberately have a separate positive/safe-integer contract.
+     */
+    private function legacyRouteIdentifier(string $value): ?int
+    {
+        if (preg_match('/\A[0-9]+\z/D', $value) !== 1) {
+            return null;
+        }
+        $normalized = ltrim($value, '0');
+        if ($normalized === '') {
+            return 0;
+        }
+        $maximum = (string) PHP_INT_MAX;
+        if (strlen($normalized) > strlen($maximum)
+            || (strlen($normalized) === strlen($maximum) && strcmp($normalized, $maximum) > 0)) {
+            return null;
+        }
+
+        return (int) $normalized;
+    }
+
+    /**
      * Never release protected data after a slow DB/model operation unless
      * the live Portal decision still matches the original subject, tenant,
      * permission and revision. Neither signatures nor cached sessions replace
@@ -253,8 +276,12 @@ final class UniversityController
         return $this->readingPositionWriteResponse($result);
     }
 
-    public function favoriteCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function favoriteCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         try {
             $saved = $this->catalog->favoriteCourse(
@@ -271,8 +298,12 @@ final class UniversityController
             : response()->json(['error' => 'not_found'], 404);
     }
 
-    public function unfavoriteCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function unfavoriteCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         if ($courseId < 1) {
             return response()->json(['error' => 'not_found'], 404);
         }
@@ -377,13 +408,21 @@ final class UniversityController
         };
     }
 
-    public function lessons(Request $request, int $courseId): JsonResponse
+    public function lessons(Request $request, string $courseId): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         return response()->json(['lessons' => $this->catalog->lessons($this->grant($request), $courseId)]);
     }
 
-    public function lesson(Request $request, int $lessonId): JsonResponse
+    public function lesson(Request $request, string $lessonId): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $lesson = $this->catalog->lesson($this->grant($request), $lessonId);
         return $lesson === null
             ? response()->json(['error' => 'not_found'], 404)
@@ -396,10 +435,14 @@ final class UniversityController
      */
     public function askTutor(
         Request $request,
-        int $lessonId,
+        string $lessonId,
         TutorGateway $gateway,
         PortalAccessGate $gate,
     ): JsonResponse {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $data = $request->validate([
             'question' => ['required', 'string', 'min:3', 'max:500'],
@@ -458,16 +501,24 @@ final class UniversityController
         ]);
     }
 
-    public function progress(Request $request, int $lessonId): JsonResponse
+    public function progress(Request $request, string $lessonId): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $completed = $this->catalog->isComplete($this->grant($request), $lessonId);
         return $completed === null
             ? response()->json(['error' => 'not_found'], 404)
             : response()->json(['completed' => $completed]);
     }
 
-    public function complete(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
+    public function complete(Request $request, string $lessonId, PortalAccessGate $gate): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $ok = $this->catalog->complete(
             $grant,
@@ -491,8 +542,12 @@ final class UniversityController
         ));
     }
 
-    public function publicationPreflight(Request $request, int $courseId): JsonResponse
+    public function publicationPreflight(Request $request, string $courseId): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $result = $this->catalog->publicationPreflight($this->grant($request), $courseId);
         return $result === null
             ? response()->json(['error' => 'not_found'], 404)
@@ -614,8 +669,12 @@ final class UniversityController
         return response()->json($overview);
     }
 
-    public function adminLessons(Request $request, int $courseId): JsonResponse
+    public function adminLessons(Request $request, string $courseId): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         return response()->json(['lessons' => $this->catalog->adminLessons($this->grant($request), $courseId)]);
     }
 
@@ -644,8 +703,12 @@ final class UniversityController
             : response()->json(['id' => $id, 'status' => 'draft'], 201);
     }
 
-    public function updateCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function updateCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $raw = $request->all();
         if (array_key_exists('expected_sort_order', $raw)
@@ -680,8 +743,12 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
-    public function createLesson(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function createLesson(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $input = $request->validate([
             'slug' => ['required', 'string', 'max:120', 'regex:/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/'],
@@ -704,8 +771,12 @@ final class UniversityController
             : response()->json(['id' => $id, 'status' => 'draft'], 201);
     }
 
-    public function updateLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
+    public function updateLesson(Request $request, string $lessonId, PortalAccessGate $gate): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $raw = $request->all();
         if (array_key_exists('expected_sort_order', $raw)
@@ -781,8 +852,12 @@ final class UniversityController
         return response()->json(['error' => $status === 503 ? 'temporarily_unavailable' : $result], $status);
     }
 
-    public function deleteDraftLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
+    public function deleteDraftLesson(Request $request, string $lessonId, PortalAccessGate $gate): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         return $this->catalog->deleteDraftLesson(
             $grant,
@@ -793,8 +868,12 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_protected'], 404);
     }
 
-    public function deleteNeverPublishedCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function deleteNeverPublishedCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         try {
             $deleted = $this->catalog->deleteNeverPublishedCourse(
@@ -810,8 +889,12 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_protected'], 404);
     }
 
-    public function publish(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function publish(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $input = $request->validate([
             'expected_content_hash' => ['sometimes', 'string', 'size:64', 'regex:/\A[a-f0-9]{64}\z/'],
         ]);
@@ -827,8 +910,12 @@ final class UniversityController
             : response()->json(['error' => 'missing_lesson_or_changed_draft'], 409);
     }
 
-    public function unpublish(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function unpublish(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         return $this->catalog->setPublished(
             $grant,

@@ -40,14 +40,24 @@ async function harness({load=true,published=false}={}){
   const server={courses:[fixtureCourse()],lessons:[fixtureLesson()],nextId:20};
   if(published){server.courses[0].is_published=true;server.lessons[0].is_published=true;server.lessons[0].status="published";}
   function element(tagName="DIV",id=null){
-    return {tagName,id,value:"",ownText:"",disabled:false,hidden:false,inert:false,dataset:{},children:[],attributes:{},events:new Map(),
+    return {tagName,id,value:"",ownText:"",disabled:false,hidden:false,inert:false,dataset:{},children:[],attributes:{},events:new Map(),parent:null,
+      get isConnected(){return this.parent?this.parent.isConnected:Boolean(this.id);},
+      all(){return this.children.flatMap(item=>[item,...item.all()]);},
+      contains(item){return item===this||this.all().includes(item);},
       get textContent(){return this.ownText+this.children.map(child=>child.textContent).join("");},
       set textContent(value){this.ownText=String(value);this.children=[];},
-      append(...items){this.children.push(...items);},
-      replaceChildren(...items){this.ownText="";this.children=items;},
+      append(...items){for(const item of items){item.parent=this;this.children.push(item);}},
+      replaceChildren(...items){for(const item of this.children)item.parent=null;this.ownText="";this.children=[];this.append(...items);},
       setAttribute(name,value){this.attributes[name]=String(value);},
       addEventListener(event,fn){const listeners=this.events.get(event)||[];listeners.push(fn);this.events.set(event,listeners);},
-      querySelectorAll(){return id==="lesson-form"?[...lessonFields,"lesson-save","clear-lesson","preview-lesson","delete-lesson"].map(node):[];},
+      querySelectorAll(selector){
+        if(id==="lesson-form")return [...lessonFields,"lesson-save","clear-lesson","preview-lesson","delete-lesson"].map(node);
+        if(selector.startsWith("[data-")){
+          const key=selector.slice(6,-1).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());
+          return this.all().filter(item=>Object.hasOwn(item.dataset,key));
+        }
+        return [];
+      },
       reset(){for(const field of lessonFields)node(field).value=field==="lesson-sort"?"0":"";},
       focus(){},scrollIntoView(){},
     };
@@ -109,8 +119,8 @@ async function harness({load=true,published=false}={}){
   async function emit(id,event,extra={}){
     for(const handler of node(id).events.get(event)||[])await handler({preventDefault(){},...extra});
   }
-  const click=(id,selected=null)=>emit(id,"click",selected===null?{}:{target:{closest:()=>({dataset:
-    id==="course-items"?{course:String(selected)}:{lesson:String(selected)}})}});
+  const click=(id,selected=null)=>emit(id,"click",selected===null?{}:{target:{closest:()=>id==="lesson-items"
+    ?node(id).querySelectorAll("[data-lesson]").find(item=>Number(item.dataset.lesson)===selected):{dataset:{course:String(selected)}}}});
   editor.renderEditorialOverview();
   if(load){await editor.refreshCourses(1);await click("lesson-items",11);}
   requests.length=0;

@@ -35,12 +35,14 @@ const deferred=()=>{let resolve;const promise=new Promise(ready=>{resolve=ready;
 class Node{
   constructor(tagName="DIV",id=""){
     this.tagName=tagName;this.id=id;this.value="";this.ownText="";this.children=[];this.dataset={};this.attributes={};
-    this.events=new Map();this.disabled=false;this.hidden=false;this.inert=false;this.className="";this.focused=false;
+    this.events=new Map();this.disabled=false;this.hidden=false;this.inert=false;this.className="";this.focused=false;this.parent=null;
   }
+  get isConnected(){return this.parent?this.parent.isConnected:Boolean(this.id);}
+  contains(node){return node===this||this.all().includes(node);}
   get textContent(){return this.ownText+this.children.map(child=>child.textContent).join("");}
   set textContent(value){this.ownText=String(value);this.children=[];}
-  append(...nodes){this.children.push(...nodes);}
-  replaceChildren(...nodes){this.ownText="";this.children=nodes;}
+  append(...nodes){for(const node of nodes){node.parent=this;this.children.push(node);}}
+  replaceChildren(...nodes){for(const node of this.children)node.parent=null;this.ownText="";this.children=[];this.append(...nodes);}
   setAttribute(name,value){this.attributes[name]=String(value);}
   addEventListener(type,handler){const list=this.events.get(type)||[];list.push(handler);this.events.set(type,list);}
   all(){return this.children.flatMap(node=>[node,...node.all()]);}
@@ -112,7 +114,8 @@ async function harness({load=true,selected=1,courses=fixtures()}={}){
     for(const handler of get(id).events.get(type)||[])await handler({preventDefault(){},...extra});await setImmediate();
   }
   const chooseCourse=id=>emit("course-items","click",{target:{closest:()=>({dataset:{course:String(id)}})}});
-  const chooseLesson=id=>emit("lesson-items","click",{target:{closest:()=>({dataset:{lesson:String(id)}})}});
+  const chooseLesson=id=>emit("lesson-items","click",{target:{closest:()=>get("lesson-items")
+    .querySelectorAll("[data-lesson]").find(node=>Number(node.dataset.lesson)===id)}});
   if(load){await editor.refreshCourses(selected);if(selected!==null)await chooseLesson(selected*100+1);}
   const filter=async(query="",category="todos",status="todos")=>{
     get(filters[0]).value=query;get(filters[1]).value=category;get(filters[2]).value=status;

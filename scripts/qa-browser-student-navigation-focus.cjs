@@ -155,15 +155,20 @@ module.exports=async function({browser,base,ensureLocalPage,check,pageErrors}){
       await close(page);
     }
     {
-      stage="tab changed while waiting";const {page,hold}=await open(),held=hold("/lessons/11");
+      stage="window blur while waiting";const {page,hold}=await open(),held=hold("/lessons/11");
       await page.locator("#course-list [data-course-id='1']").click();await held.seen();
-      const other=await context.newPage();await ensureLocalPage(other);await other.bringToFront();
-      await page.waitForFunction(()=>document.visibilityState!=="visible"||!document.hasFocus(),null,{polling:100});
-      held.release();await held.terminal();await target(page,"Aula 11");await page.bringToFront();
-      await page.waitForFunction(()=>document.hasFocus()&&document.visibilityState==="visible");
-      check(await focusCount(page)===0&&await focused(page)!=="lesson-navigation-target",
-        "C127 leaving the tab and returning does not revive the old pending focus intent");
-      await close(other);await close(page);
+      // Playwright treats every page as focused/active, so bringToFront on a
+      // second page cannot prove native tab visibility loss. Exercise the
+      // actual window listener with an explicit lifecycle event instead.
+      // https://playwright.dev/docs/pages#multiple-pages
+      const sequence=await page.evaluate(()=>navigationFocus.sequence);
+      await page.evaluate(()=>window.dispatchEvent(new FocusEvent("blur")));
+      const invalidated=await page.evaluate(previous=>navigationFocus.sequence>previous,sequence);
+      held.release();await held.terminal();await target(page,"Aula 11");
+      await page.evaluate(()=>window.dispatchEvent(new FocusEvent("focus")));
+      check(invalidated&&await focusCount(page)===0&&await focused(page)!=="lesson-navigation-target",
+        "C127 an observed window blur invalidates the pending focus intent and a later focus event does not revive it");
+      await close(page);
     }
     {
       stage="saved position intent";const {page,control}=await open({position:saved()});

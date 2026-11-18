@@ -627,6 +627,7 @@ const studentFunction=name=>{
   assert.ok(source,"student function missing: "+name);return source;
 };
 const studentNormalizers=["studentRecord","studentText","studentSlug","validatedStudentCourses",
+  "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
   "validatedStudentLessons","validatedStudentLesson","validatedStudentProgress"].map(studentFunction).join("\n");
 const studentParsers=new Script(studentNormalizers+"\n({validatedStudentCourses,validatedStudentLessons,validatedStudentLesson,validatedStudentProgress,studentText})")
   .runInNewContext({});
@@ -694,6 +695,7 @@ function studentFlowFixture(){
   const nodes=new Map();
   const get=id=>{if(!nodes.has(id)){const node=studentTestNode("div");node.disabled=true;nodes.set(id,node);}return nodes.get(id);};
   const state={courses:[{...studentCourse}],filter:"todos",query:"",courseId:1,lessonId:null,courseRequest:0,lessonRequest:0,
+    lessonFilter:{query:"",courseId:null,request:0,ready:false},
     searchRequest:0,accessDenied:false,libraryLoading:false,libraryReady:true,exportLoading:false,
     favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,favoriteWriting:false,
     favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:""};
@@ -896,9 +898,11 @@ await import("./check-progress-history.mjs");
 await import("./check-student-navigation-focus.mjs");
 await import("./check-lesson-sections.mjs");
 await import("./check-student-catalog-reconciliation.mjs");
+await import("./check-student-lesson-filter.mjs");
 await import("./check-editor-draft-preservation.mjs");
 await import("./check-editorial-overview.mjs");
 await import("./check-editorial-version-history.mjs");
 await import("./check-editorial-catalog-filters.mjs");
 await import("./check-lesson-reorder.mjs");
+await import("./check-editorial-lesson-filters.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

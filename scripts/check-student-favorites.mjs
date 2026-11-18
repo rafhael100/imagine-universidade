@@ -17,6 +17,7 @@ assert.ok(start>=0&&end>start,"Actual favorites/filter handlers must exist");
 const source=["studentRecord","studentText","studentSlug","validatedStudentCourses","validatedStudentLessons",
   "validatedStudentFavorites","validatedFavoriteReceipt","el","say","lockAccess","discardErrorBody","api","progressLabel",
   "normalizeSearchText","filterCourses","coursesFiltered","nextPendingCourseId","renderFavoriteControls",
+  "lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
   "invalidateRetainedFavorites","renderRetainedFavorites",
   "contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory",
@@ -59,6 +60,7 @@ function harness(initial=[]){
   const list=get("course-list"),content=get("lesson-content"),lessonsBox=get("lesson-items");
   content.append(new Node("p","Current authorized lesson"));
   const state={courses:structuredClone(courses),filter:"todos",query:"",courseId:1,lessonId:11,courseRequest:1,lessonRequest:1,
+    lessonFilter:{query:"",courseId:null,request:0,ready:false},
     accessDenied:false,accessMessage:"",libraryReady:true,libraryLoading:false,exportLoading:false,searchRequest:0,
     favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,favoriteWriting:false,
     favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:"",favoriteWriteRequest:0,

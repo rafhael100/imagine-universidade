@@ -289,8 +289,29 @@ Na integração, os dois workflows passaram a chamar o probe antes do seeder.
 O checker foi ampliado para reconhecer a mutação parametrizada e verificar
 as regressões de revogação antes e depois dos lotes/auditoria. Os **15 caminhos
 de escrita HTTP** passaram nessa verificação estática, preservando as demais
-asserções. A execução real dos 26 Feature tests e do novo probe permanece
-pendente da CI integrada.
+asserções.
+
+## Evidência de runtime observada
+
+No SHA `1d439bd81980107a784fafdcaea01ee3b534b8f2`, a
+[execução 44222871749](https://github.com/rafhael100/imagine-universidade/actions/runs/44222871749)
+aprovou o job de validação: **39 Unit / 169 asserções** e **257 Feature /
+3.229 asserções**, totalizando **296 testes / 3.398 asserções**. Os 26 Feature
+C129 estão incluídos. O primeiro run havia detectado `405` para IDs numéricos
+inválidos; o parser de string antes da conversão passou preservando `404` como
+resultado esperado.
+
+O probe PostgreSQL também passou com duas sessões independentes: disputa de
+reordenação/publicação sob o lock comum, 600 aulas em três lotes, uma auditoria,
+no-op da intenção idêntica após liberação, conflito do snapshot/hash anterior,
+conteúdo histórico intacto e rollback após falha de lote ou negação posterior
+à auditoria. Foram observadas as **16 invariantes de schema, 24 verificações
+de privilégios e 15 caminhos de escrita HTTP**.
+
+Esse run aprovou cinco jobs e parou no navegador por uma premissa de foco do
+harness C127, descrita no documento correspondente. Portanto, esta evidência
+confirma o backend e os probes citados, sem atribuir aprovação à jornada de
+interface C129 ou a alterações posteriores.
 
 Verificação local realizada nesta entrega: `git diff --check`. PHP,
 PostgreSQL, Chromium e laboratórios não foram executados localmente. A evidência

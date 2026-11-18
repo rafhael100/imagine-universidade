@@ -28,13 +28,23 @@ async function harness(){
   const server={courses:[fixtureCourse(),fixtureCourse(2)],
     lessons:new Map([[1,[fixtureLesson(),fixtureLesson(12)]],[2,[fixtureLesson(21)]]]),nextLessonId:30};
   function element(tagName="DIV",id=null){
-    return {tagName,id,value:"",textContent:"",disabled:false,hidden:true,inert:false,
-      dataset:{},children:[],attributes:{},className:"",
-      append(...items){this.children.push(...items);},
-      replaceChildren(...items){this.children=items;},
+    return {tagName,id,value:"",textContent:"",disabled:false,hidden:false,inert:false,
+      dataset:{},children:[],attributes:{},className:"",parent:null,
+      get isConnected(){return this.parent?this.parent.isConnected:Boolean(this.id);},
+      all(){return this.children.flatMap(item=>[item,...item.all()]);},
+      contains(item){return item===this||this.all().includes(item);},
+      append(...items){for(const item of items){item.parent=this;this.children.push(item);}},
+      replaceChildren(...items){for(const item of this.children)item.parent=null;this.children=[];this.append(...items);},
       setAttribute(name,value){this.attributes[name]=String(value);},
       addEventListener(event,fn){handlers.set(id+":"+event,fn);},
-      querySelectorAll(){return id==="lesson-form"?[...lessonFields,...lessonButtons].map(node):[];},
+      querySelectorAll(selector){
+        if(id==="lesson-form")return [...lessonFields,...lessonButtons].map(node);
+        if(selector.startsWith("[data-")){
+          const key=selector.slice(6,-1).replace(/-([a-z])/g,(_,letter)=>letter.toUpperCase());
+          return this.all().filter(item=>Object.hasOwn(item.dataset,key));
+        }
+        return [];
+      },
       reset(){for(const field of lessonFields)node(field).value=field==="lesson-sort"?"0":"";},
       focus(){},scrollIntoView(){},
     };
@@ -96,7 +106,8 @@ async function harness(){
   await editor.refreshCourses(1);
   const click=(id,targetId=null)=>{
     const dataset=id==="course-items"?{course:String(targetId)}:{lesson:String(targetId)};
-    return handlers.get(id+":click")({target:{closest:()=>({dataset})}});
+    return handlers.get(id+":click")({target:{closest:()=>id==="lesson-items"
+      ?node(id).querySelectorAll("[data-lesson]").find(item=>Number(item.dataset.lesson)===targetId):{dataset}}});
   };
   click("lesson-items",11);
   requests.length=0;

@@ -48,6 +48,9 @@
     .lesson-row>.item{flex:1 1 230px;width:auto}.lesson-order-actions{display:flex;gap:6px;padding:4px;flex-wrap:wrap}
     .lesson-order-actions .secondary{padding:7px 10px;font-size:12px}
     .lesson-order-status{font-size:12px;margin:0 0 9px;overflow-wrap:anywhere}
+    .lesson-filters{display:flex;flex-wrap:wrap;gap:9px;align-items:end;margin-bottom:9px;min-width:0}
+    .lesson-filters .field{flex:1 1 240px;min-width:0;margin:0}
+    .lesson-filter-status{font-size:12px;margin:0 0 9px;overflow-wrap:anywhere}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:5px;margin-bottom:14px}
     .field label{font-size:12px;font-weight:750;color:#465369}.span{grid-column:1/-1}
     input,select,textarea{padding:11px;border:1px solid #D7DDE5;border-radius:10px;min-width:0;width:100%;color:var(--ink);background:white}
@@ -176,6 +179,11 @@
         </form>
         <hr>
         <h3>Aulas do curso</h3>
+        <div class="lesson-filters" role="search" aria-label="Buscar aulas do curso">
+          <div class="field"><label for="editorial-lesson-search">Buscar aula neste curso</label><input id="editorial-lesson-search" type="search" maxlength="120" placeholder="Título ou identificador" autocomplete="off" disabled></div>
+          <button type="button" id="clear-editorial-lesson-filter" class="secondary" disabled>Limpar busca</button>
+        </div>
+        <p id="editorial-lesson-filter-status" class="lesson-filter-status" role="status" aria-live="polite">Selecione um curso para buscar aulas.</p>
         <p id="lesson-order-status" class="lesson-order-status" role="status" aria-live="polite">Selecione um curso para consultar a ordem das aulas.</p>
         <div id="lesson-items" class="items"><p class="help">Selecione um curso.</p></div>
         <form id="lesson-form">
@@ -241,7 +249,7 @@ const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
 const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,
-  courseQuery:"",courseCategory:"todos",courseStatus:"todos",
+  courseQuery:"",courseCategory:"todos",courseStatus:"todos",lessonQuery:"",lessonQueryCourseId:null,
   overviewSnapshot:null,overviewRequest:0,overviewLoading:false,overviewAttempted:false,
   overviewMessage:"A visão do acervo estará disponível após carregar os cursos.",
   archive:{courseId:null,versions:[],nextBefore:null,selectedVersion:null,lessons:[],nextAfter:null,lesson:null,bodyLessonId:null,
@@ -312,7 +320,9 @@ function lockAccess(message){
   document.querySelector(".layout").inert=true;
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
   state.courseQuery="";state.courseCategory="todos";state.courseStatus="todos";
+  state.lessonQuery="";state.lessonQueryCourseId=null;
   renderEditorialCourseFilters();
+  renderEditorialLessonFilters();
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
   $("catalog-recovery").hidden=true;
@@ -838,20 +848,73 @@ function renderCourses(){
     $("course-items").append(b);
   }
 }
+function editorialLessonListReady(){
+  return !state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&state.lessonsReady&&
+    state.course!==null&&Array.isArray(state.lessons)&&state.lessons.length<=5000;
+}
+function editorialLessonFiltersAllowed(){
+  return editorialLessonListReady()&&!state.writePending&&!state.catalogLoading;
+}
+function filteredEditorialLessons(){
+  if(!editorialLessonListReady())return {ordered:[],matches:[],pinned:null};
+  const ordered=state.lessons.slice().sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id);
+  const term=normalizeEditorialSearch((state.lessonQuery||"").trim());
+  const matches=ordered.filter(lesson=>!term||[lesson.title,lesson.slug]
+    .some(value=>normalizeEditorialSearch(value).includes(term)));
+  const selected=ordered.find(lesson=>lesson.id===state.lesson?.id)??null;
+  const pinned=selected&&!matches.some(lesson=>lesson.id===selected.id)?selected:null;
+  return {ordered,matches,pinned};
+}
+function renderEditorialLessonFilters(){
+  const courseId=state.course?.id??null;
+  // The query belongs only to this selected course. A refresh of the same
+  // course, including a confirmed reorder, keeps it; a course change clears it.
+  if(state.lessonQueryCourseId!==courseId){state.lessonQueryCourseId=courseId;state.lessonQuery="";}
+  const active=editorialLessonFiltersAllowed(),input=$("editorial-lesson-search");
+  input.value=state.lessonQuery||"";input.disabled=!active;
+  $("clear-editorial-lesson-filter").disabled=!active||!state.lessonQuery;
+  const message=$("editorial-lesson-filter-status");
+  message.hidden=state.accessDenied;
+  if(state.accessDenied){message.textContent="";return;}
+  if(courseId===null){message.textContent="Selecione um curso para buscar aulas.";return;}
+  if(!editorialLessonListReady()){message.textContent="Consulte as aulas deste curso para usar a busca.";return;}
+  if(state.writePending||state.catalogLoading){message.textContent="Aguarde a atualização editorial para buscar aulas.";return;}
+  const {ordered,matches,pinned}=filteredEditorialLessons();
+  message.textContent="Resultados: "+matches.length+" de "+ordered.length+" aula"+(ordered.length===1?"":"s")+"."+
+    (pinned?" A aula em edição também permanece visível.":"")+
+    ((state.lessonQuery||"").trim()?" Subir e Descer consideram todas as aulas do curso.":"");
+}
+function updateEditorialLessonFilter(){
+  if(!editorialLessonFiltersAllowed()){renderEditorialLessonFilters();return;}
+  state.lessonQuery=String($("editorial-lesson-search").value).slice(0,120);
+  // Only navigation is projected. Keep the complete state.lessons snapshot,
+  // form buffers, previews, preflight, archive and request generations intact.
+  renderLessons();
+}
+$("editorial-lesson-search").addEventListener("input",updateEditorialLessonFilter);
+$("clear-editorial-lesson-filter").addEventListener("click",()=>{
+  if(!editorialLessonFiltersAllowed()){renderEditorialLessonFilters();return;}
+  state.lessonQuery="";renderLessons();$("editorial-lesson-search").focus();
+});
 function renderLessons(){
+  renderEditorialLessonFilters();
   if(state.accessDenied)return;
   $("lesson-items").replaceChildren();
-  if(!state.lessons.length){
-    $("lesson-items").append(el("p",state.course&&!state.lessonsReady?"Verificando aulas autorizadas...":"Nenhuma aula cadastrada.","help"));
+  if(!editorialLessonListReady()){
+    $("lesson-items").append(el("p",state.course?"Consulte as aulas autorizadas deste curso.":"Selecione um curso.","help"));
     renderLessonReorderControls();return;
   }
+  const {ordered,matches,pinned}=filteredEditorialLessons();
+  if(!ordered.length)$("lesson-items").append(el("p","Nenhuma aula cadastrada.","help"));
+  else if(!matches.length)$("lesson-items").append(el("p","Nenhuma aula corresponde à busca.","help"));
   const courseId=state.course?.id??null,request=state.lessonRequest;
-  const ordered=state.lessons.slice().sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id);
-  for(const [index,l] of ordered.entries()){
+  const positions=new Map(ordered.map((lesson,index)=>[lesson.id,index]));
+  for(const l of pinned?[pinned,...matches]:matches){
     const row=el("div",undefined,"lesson-row");row.dataset.lessonRow=String(l.id);
     const btn=el("button",undefined,"item");btn.type="button";btn.dataset.lesson=String(l.id);
     btn.setAttribute("aria-current",String(l.id===state.lesson?.id));
-    btn.append(el("strong",l.title),el("small","Posição "+(index+1)+" · "+l.status+" · "+(l.is_published?"Publicada":"Rascunho")));
+    if(pinned?.id===l.id){row.dataset.outsideFilter="true";btn.append(el("small","Em edição · fora da busca","catalog-pinned"));}
+    btn.append(el("strong",l.title),el("small","Posição "+(positions.get(l.id)+1)+" · "+l.status+" · "+(l.is_published?"Publicada":"Rascunho")));
     const actions=el("div",undefined,"lesson-order-actions");
     for(const direction of ["up","down"]){
       const move=el("button",direction==="up"?"↑ Subir":"↓ Descer","secondary");move.type="button";
@@ -928,6 +991,7 @@ function lessonReorderDirtyForms(snapshot=lessonReorderFormSnapshot()){
     lesson:snapshot.lesson.some((value,index)=>value!==lesson[index])};
 }
 function renderLessonReorderControls(){
+  renderEditorialLessonFilters();
   const message=$("lesson-order-status"),course=state.course;
   const order=draftLessonOrder();
   const valid=!state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&state.lessonsReady&&
@@ -1147,10 +1211,13 @@ $("course-form").addEventListener("submit",async event=>{
   finally{finishWrite();}
 });
 $("lesson-items").addEventListener("click",event=>{
-  const b=event.target.closest("[data-lesson]");if(!b||state.accessDenied||state.writePending)return;
+  const b=event.target.closest("[data-lesson]");
+  if(!b||!editorialLessonFiltersAllowed()||!b.isConnected||b.hidden||!$("lesson-items").contains(b))return;
+  const selected=state.lessons.find(lesson=>lesson.id===Number(b.dataset.lesson));
+  if(!selected)return;
   if(state.lesson?.id===Number(b.dataset.lesson))return;
   if(!confirmDiscardLesson())return;
-  state.lesson=state.lessons.find(l=>l.id===Number(b.dataset.lesson))||null;
+  state.lesson=selected;
   hideLessonPreview();
   if(!state.lesson)return;
   fillLesson();
@@ -1425,6 +1492,7 @@ async function loadAdminCatalog(){
       // Re-render after clearing the fence: controls were intentionally
       // disabled while reconciliation was in progress.
       state.writeOutcomeUnknown=false;
+      renderLessons();
       fillCourse();
       $("new-course").disabled=false;
       say("");

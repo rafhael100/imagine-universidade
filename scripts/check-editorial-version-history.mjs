@@ -29,12 +29,14 @@ const response=(status,payload)=>({status,ok:status>=200&&status<300,json:async(
 class Node {
   constructor(tagName="DIV",id=""){
     this.tagName=tagName;this.id=id;this.value="";this.ownText="";this.children=[];this.dataset={};this.attributes={};
-    this.events=new Map();this.disabled=false;this.hidden=false;this.inert=false;this.className="";
+    this.events=new Map();this.disabled=false;this.hidden=false;this.inert=false;this.className="";this.parent=null;
   }
+  get isConnected(){return this.parent?this.parent.isConnected:Boolean(this.id);}
+  contains(node){return node===this||this.all().includes(node);}
   get textContent(){return this.ownText+this.children.map(node=>node.textContent).join("");}
   set textContent(value){this.ownText=String(value);this.children=[];}
-  append(...nodes){this.children.push(...nodes);}
-  replaceChildren(...nodes){this.ownText="";this.children=nodes;}
+  append(...nodes){for(const node of nodes){node.parent=this;this.children.push(node);}}
+  replaceChildren(...nodes){for(const node of this.children)node.parent=null;this.ownText="";this.children=[];this.append(...nodes);}
   setAttribute(name,value){this.attributes[name]=String(value);}
   addEventListener(type,handler){const items=this.events.get(type)||[];items.push(handler);this.events.set(type,items);}
   all(){return this.children.flatMap(node=>[node,...node.all()]);}
@@ -117,7 +119,8 @@ async function harness({load=true,published=false}={}){
     for(const handler of node.events.get(type)||[])await handler({preventDefault(){},...extra});await setImmediate();
   }
   const chooseCourse=id=>emit(get("course-items"),"click",{target:{closest:()=>({dataset:{course:String(id)}})}});
-  const chooseCurrent=id=>emit(get("lesson-items"),"click",{target:{closest:()=>({dataset:{lesson:String(id)}})}});
+  const chooseCurrent=id=>emit(get("lesson-items"),"click",{target:{closest:()=>get("lesson-items")
+    .querySelectorAll("[data-lesson]").find(node=>Number(node.dataset.lesson)===id)}});
   if(load){await editor.refreshCourses(1);await chooseCurrent(101);}
   const click=id=>emit(typeof id==="string"?get(id):id,"click");
   const selectVersion=number=>click(get("editorial-version-list").children.find(node=>Number(node.dataset.archiveVersion)===number));

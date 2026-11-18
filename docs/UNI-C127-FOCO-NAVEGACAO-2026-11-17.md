@@ -96,7 +96,7 @@ Executado localmente sem navegador, servidor PHP ou banco:
 
 Os 64 cenários executam as funções e os handlers da view completa. Cobrem todos os pontos de entrada, conservação do alvo e da versão, ausência/erro/malformação, retry manual, respostas fora de ordem, interação em cada etapa assíncrona, perda de foco da janela, mudança de aba, destinos desconectados, entrega única, chamadas passivas, estado pessoal preservado e revogação durante corpo tardio. Nenhuma lógica de decisão de foco foi copiada para o harness.
 
-O módulo Chromium prepara **37 verificações**. Usa contexto e fixtures privados por página, `bringToFront` para os gestos que devem receber foco e uma segunda página para a troca efetiva de aba. As esperas pelo início e pelo término das requisições suspensas têm prazo de oito segundos; a espera de término observa `requestfinished` ou `requestfailed`, seguida de rede ociosa, sem depender de `Response.finished()`. Cada suspensão é liberada explicitamente no cenário ou pelo `finally`. O estágio é registrado antes da limpeza em falha.
+O módulo Chromium prepara **37 verificações**. Usa contexto e fixtures privados por página e `bringToFront` para os gestos que devem receber foco. A perda de foco da janela é um evento `blur` controlado pelo harness, entregue ao listener real; não é apresentada como troca nativa de aba. As esperas pelo início e pelo término das requisições suspensas têm prazo de oito segundos; a espera de término observa `requestfinished` ou `requestfailed`, seguida de rede ociosa, sem depender de `Response.finished()`. Cada suspensão é liberada explicitamente no cenário ou pelo `finally`. O estágio é registrado antes da limpeza em falha.
 
 O módulo cobre desktop e largura móvel, teclado, navegação comum e por posição, cancelamento por interação, mensagens úteis, alvos retirados, versão exata, handlers antigos, atualizações passivas e 403/419 com resposta tardia. Ele está preparado para a CI; Chromium não foi executado localmente. Este documento não atribui aprovação de CI, homologação de tecnologia assistiva ou aceite humano a testes ainda não executados.
 
@@ -130,6 +130,29 @@ Os seis seletores de aula restantes no módulo C127 foram limitados a
 produto foi removida para acomodar o resultado. A sintaxe passou; o efeito da
 correção e os percursos ainda não executados dependem da próxima CI integrada.
 O último conjunto completo aprovado continua sendo C126 no SHA `b67b9a4`.
+
+### Segunda execução e foco em múltiplas páginas
+
+No SHA `1d439bd81980107a784fafdcaea01ee3b534b8f2`, a
+[execução 44222871749](https://github.com/rafhael100/imagine-universidade/actions/runs/44222871749)
+voltou a aprovar os cinco jobs fora do navegador. O Chromium passou pelo
+seletor corrigido e pelos três cancelamentos por interação durante respostas
+pendentes. Em seguida, o teste de troca de aba excedeu oito segundos ao
+esperar perda de foco após trazer outra página à frente.
+
+Essa expectativa não corresponde ao ambiente do teste: a
+[documentação oficial de múltiplas páginas do Playwright](https://playwright.dev/docs/pages#multiple-pages)
+explica que cada página se comporta como ativa e focada. A correção remove a
+suposição sobre a janela do sistema e emite `blur` controlado no Chromium.
+Exige que o listener real invalide a intenção pendente, que o corpo autorizado
+termine de carregar e que nenhuma entrega tardia ocorra, mesmo após um evento
+posterior de `focus`. A contagem permanece em 37; o produto não foi alterado.
+Os 64 cenários Node continuam cobrindo separadamente visibilidade, foco do
+documento e mudança de atividade. Essa combinação não comprova comportamento
+de um gerenciador de janelas ou tecnologia assistiva específicos.
+
+A sintaxe e os 64 cenários passaram após o ajuste; a execução integral do
+módulo e dos percursos seguintes permanece pendente no próximo SHA.
 
 ## Recortes identificados durante a preparação
 

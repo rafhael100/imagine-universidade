@@ -14,6 +14,7 @@ function actualFunction(name){
   return source;
 }
 const source=["studentRecord","studentText","studentSlug","normalizeSearchText","splitLessonSections",
+  "lessonFilterCurrent","resetLessonFilter","renderLessonFilter",
   "el","say","lockAccess","discardErrorBody","api","invalidateRetainedFavorites","renderRetainedFavorites","contextualCourses","renderContextualCourses",
   "invalidateProgressHistory","renderProgressHistory","invalidateNavigationFocus","beginNavigationFocus",
   "lessonTextFragment","validatedStudentHelp","lessonHelpExcerpts","lessonHelpPanel"]
@@ -57,6 +58,7 @@ function harness(response={status:503,payload:{error:"tutor_unavailable"}}){
     return nodes.get(id);
   };
   const state={courses:[{id:1}],courseId:1,lessonId:11,lessonRequest:7,courseRequest:1,searchRequest:0,
+    lessonFilter:{query:"",courseId:null,request:0,ready:false},
     accessDenied:false,accessMessage:"",libraryReady:true,favoriteWriteRequest:0,contextualCoursesVisible:true,contextualRequest:0,
     progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,message:""},
     retained:{rows:[],nextAfter:null,ready:false,loading:false,request:0,needsRefresh:false,unconfirmed:false,removingId:null,message:""}};

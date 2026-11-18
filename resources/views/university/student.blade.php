@@ -105,6 +105,7 @@
     .panel-head p{margin:0;color:var(--muted);font-size:13px}
     .courses{display:grid;gap:7px;padding:12px}
     .course-btn,.lesson-btn{display:block;text-align:left;border:1px solid transparent;background:white;width:100%;padding:13px 14px;border-radius:10px}
+    .lesson-btn[hidden]{display:none}
     .course-btn:hover,.lesson-btn:hover{background:#F7F8FA}
     .course-btn[aria-current="true"],.lesson-btn[aria-current="true"]{border-color:#F4D4A9;background:#FFF5E8}
     .course-btn strong,.lesson-btn strong{display:block}.course-btn span,.lesson-btn span{display:block;font-size:12px;color:#505650;margin-top:4px}
@@ -115,6 +116,12 @@
     .course-progress::-webkit-progress-value{background:#F9941D;border-radius:8px}
     .course-progress::-moz-progress-bar{background:#F9941D;border-radius:8px}
     .lesson-items{border-bottom:1px solid var(--line);padding:10px}
+    .course-lesson-filter{padding:16px 20px;border-bottom:1px solid var(--line)}
+    .course-lesson-filter label{display:block;font-weight:750;font-size:13px;margin-bottom:7px}
+    .course-lesson-filter-fields{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .course-lesson-filter-fields input{font:inherit;flex:1 1 200px;min-width:0;padding:10px 12px;border:1px solid #C9D1DC;border-radius:10px}
+    .course-lesson-filter-fields .secondary{margin-left:0}
+    .course-lesson-filter p{font-size:13px;color:#565D56;margin:9px 0 0}
     .lesson-content{padding:25px}
     .lesson-content h3{font-size:22px;letter-spacing:-.5px;margin:0 0 12px}
     .contextual-courses{padding:20px 25px;border-top:1px solid var(--line);background:#FAFBFC}
@@ -268,6 +275,14 @@
         <p id="favorite-course-title"></p>
         <button id="course-favorite-toggle" type="button" class="secondary" disabled>Salvar curso nos favoritos</button>
       </div>
+      <div id="course-lesson-filter" class="course-lesson-filter" hidden>
+        <label for="course-lesson-query">Localizar aula neste curso</label>
+        <div class="course-lesson-filter-fields">
+          <input id="course-lesson-query" type="search" autocomplete="off" aria-controls="lesson-items" aria-describedby="course-lesson-filter-status" disabled>
+          <button id="clear-course-lesson-query" type="button" class="secondary" disabled>Limpar</button>
+        </div>
+        <p id="course-lesson-filter-status" role="status" aria-live="polite"></p>
+      </div>
       <div id="lesson-items" class="lesson-items"></div>
       <article id="lesson-content" class="lesson-content"><p class="empty">Selecione um curso para visualizar as aulas.</p></article>
       <section id="contextual-courses-panel" class="contextual-courses" aria-labelledby="contextual-courses-title" hidden>
@@ -288,6 +303,7 @@ const status=document.getElementById("status");
 const list=document.getElementById("course-list"),lessonsBox=document.getElementById("lesson-items");
 const content=document.getElementById("lesson-content");
 const state={courses:[],filter:"todos",query:"",courseId:null,lessonId:null,courseRequest:0,lessonRequest:0,accessDenied:false,accessMessage:"",libraryLoading:false,libraryReady:false,exportLoading:false,searchRequest:0,searchBusy:false,
+  lessonFilter:{query:"",courseId:null,request:0,ready:false},
   contextualCoursesVisible:true,contextualRequest:0,
   progressHistory:{rows:[],nextBefore:null,ready:false,loading:false,request:0,
     message:"Consulte seu histórico quando desejar."},
@@ -365,6 +381,7 @@ function lockAccess(message){
   invalidateNavigationFocus();
   state.accessDenied=true;state.accessMessage=message;state.libraryReady=false;
   state.courses=[];state.courseId=null;state.lessonId=null;
+  resetLessonFilter();
   renderContextualCourses();
   invalidateProgressHistory("");
   document.getElementById("progress-history-panel").open=false;
@@ -1119,6 +1136,39 @@ async function toggleCourseFavorite(){
 function normalizeSearchText(text){
   return String(text||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
 }
+function lessonFilterCurrent(){
+  const filter=state.lessonFilter;
+  return !state.accessDenied&&state.libraryReady&&filter.ready&&
+    filter.courseId===state.courseId&&filter.request===state.courseRequest;
+}
+function resetLessonFilter(preserveQuery=false){
+  const filter=state.lessonFilter;
+  if(!preserveQuery)filter.query="";
+  filter.ready=false;filter.courseId=null;filter.request=0;
+  renderLessonFilter();
+}
+function renderLessonFilter(){
+  const filter=state.lessonFilter,panel=document.getElementById("course-lesson-filter");
+  const field=document.getElementById("course-lesson-query"),clear=document.getElementById("clear-course-lesson-query");
+  const message=document.getElementById("course-lesson-filter-status");
+  const owned=filter.ready&&filter.courseId===state.courseId&&filter.request===state.courseRequest;
+  panel.hidden=state.accessDenied||!owned;
+  if(field.value!==filter.query)field.value=filter.query;
+  field.disabled=!lessonFilterCurrent();clear.disabled=field.disabled||filter.query==="";
+  if(panel.hidden){message.textContent="";return;}
+  if(!state.libraryReady){message.textContent="Verificando a biblioteca...";return;}
+  const term=normalizeSearchText(filter.query.trim());
+  const buttons=Array.from(lessonsBox.querySelectorAll("[data-lesson-id]"));
+  let matches=0,pinned=false;
+  for(const button of buttons){
+    const matched=!term||button.dataset.lessonTitle.includes(term)||button.dataset.lessonSlug.includes(term);
+    const selected=Number(button.dataset.lessonId)===state.lessonId;
+    button.hidden=!matched&&!selected;
+    if(matched)matches++;else if(selected)pinned=true;
+  }
+  message.textContent="Resultados: "+matches+" de "+buttons.length+" aulas."+
+    (pinned?" A aula aberta continua visível fora dos resultados.":"");
+}
 function filterCourses(courses,category,query){
   const term=normalizeSearchText(String(query||"").trim());
   return courses.filter(c=>(category==="todos"||c.category===category)&&
@@ -1234,6 +1284,7 @@ function reconcileCatalogSelection(){
   invalidateNavigationFocus();
   ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  resetLessonFilter();
   lessonsBox.replaceChildren();content.replaceChildren();
   const message=el("p","A leitura foi encerrada porque o curso deixou de constar no catálogo. Consulte a biblioteca para verificar os cursos disponíveis.","empty");
   message.dataset.courseUnavailable="";content.append(message);
@@ -1282,6 +1333,7 @@ function renderCourses(){
 async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focusIntent=null){
   if(state.accessDenied||!state.libraryReady||!Number.isSafeInteger(id)||id<1||!state.courses.some(course=>course.id===id))return;
   if(preferredVersion!==null&&(!Number.isSafeInteger(preferredVersion)||preferredVersion<1))return;
+  resetLessonFilter(state.courseId===id);
   // Invalidate prior course requests and lesson reads, including same-course clicks.
   const request=++state.courseRequest;
   ++state.lessonRequest;
@@ -1294,17 +1346,23 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focu
     const lessons=validatedStudentLessons(payload);
     if(lessons===null)throw new Error("A lista de aulas recebida é inválida. Tente novamente.");
     lessonsBox.replaceChildren();content.replaceChildren();
+    state.lessonFilter.courseId=id;state.lessonFilter.request=request;state.lessonFilter.ready=true;
     if(!lessons.length){
+      renderLessonFilter();
       const target=lessonNavigationTarget("p","Ainda não existem aulas publicadas neste curso.","empty");
       content.append(target);finishNavigationFocus(target,focusIntent);return;
     }
     for(const item of lessons){
       const btn=el("button",undefined,"lesson-btn");btn.type="button";btn.dataset.lessonId=String(item.id);btn.dataset.completed=item.completed?"1":"0";
+      // Local matching uses only this complete, validated list. Hidden rows
+      // remain the source for sequence and progress, never a filtered cache.
+      btn.dataset.lessonTitle=normalizeSearchText(item.title);btn.dataset.lessonSlug=normalizeSearchText(item.slug);
       const statusLabel=el("span",item.completed?"✓ Concluída":"Pendente");
       statusLabel.dataset.lessonStatus="";
       btn.append(el("strong",item.title),statusLabel);
       lessonsBox.append(btn);
     }
+    renderLessonFilter();
     // A search result can become stale after a course is republished.
     // Never silently open another lesson in place of the requested result.
     const selected=preferredLessonId===null?null:lessons.find(item=>item.id===preferredLessonId);
@@ -1320,7 +1378,7 @@ async function selectCourse(id,preferredLessonId=null,preferredVersion=null,focu
     if(state.courseRequest===request&&!state.accessDenied){
       // A transient lesson read may be retried by a deliberate click; never
       // automatically re-use old course content or bypass a revoked session.
-      say(error.message);lessonsBox.replaceChildren();content.replaceChildren();
+      say(error.message);resetLessonFilter(true);lessonsBox.replaceChildren();content.replaceChildren();
       const target=lessonNavigationTarget("p","As aulas não puderam ser carregadas.","empty");
       content.append(target);
       const retry=el("button","Tentar carregar aulas","secondary lesson-retry");
@@ -1576,6 +1634,7 @@ async function selectLesson(id,preferredVersion=null,focusIntent=null){
   const request=++state.lessonRequest;
   state.lessonId=id;
   lessonsBox.querySelectorAll("[data-lesson-id]").forEach(btn=>btn.setAttribute("aria-current",String(Number(btn.dataset.lessonId)===id)));
+  renderLessonFilter();
   content.replaceChildren();content.append(el("p","Carregando aula...","empty"));
   try{
     const [lessonPayload,progressPayload]=await Promise.all([
@@ -1875,7 +1934,20 @@ document.getElementById("pillar-cards").addEventListener("click",e=>{
   }
 });
 list.addEventListener("click",e=>{const btn=e.target.closest("[data-course-id]");if(btn){say("");selectCourse(Number(btn.dataset.courseId),null,null,beginNavigationFocus());}});
-lessonsBox.addEventListener("click",e=>{const btn=e.target.closest("[data-lesson-id]");if(btn){say("");selectLesson(Number(btn.dataset.lessonId),null,beginNavigationFocus());}});
+lessonsBox.addEventListener("click",e=>{
+  const btn=e.target.closest("[data-lesson-id]");
+  if(!btn||!lessonFilterCurrent()||!btn.isConnected||!lessonsBox.contains(btn)||btn.hidden)return;
+  say("");selectLesson(Number(btn.dataset.lessonId),null,beginNavigationFocus());
+});
+document.getElementById("course-lesson-query").addEventListener("input",event=>{
+  if(!lessonFilterCurrent())return;
+  state.lessonFilter.query=event.target.value;renderLessonFilter();
+});
+document.getElementById("clear-course-lesson-query").addEventListener("click",()=>{
+  if(!lessonFilterCurrent())return;
+  state.lessonFilter.query="";renderLessonFilter();
+  document.getElementById("course-lesson-query").focus();
+});
 document.getElementById("reload-favorites").addEventListener("click",()=>{void loadFavorites();});
 document.getElementById("course-favorite-toggle").addEventListener("click",()=>{void toggleCourseFavorite();});
 document.getElementById("reload-retained-favorites").addEventListener("click",()=>{void loadRetainedFavorites();});
@@ -1891,6 +1963,7 @@ document.getElementById("favorites-only").addEventListener("change",event=>{
   state.favoritesOnly=event.target.checked===true;
   ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  resetLessonFilter();
   lessonsBox.replaceChildren();content.replaceChildren();
   content.append(el("p","Escolha um curso para ver as aulas.","empty"));
   renderCourses();
@@ -1900,6 +1973,7 @@ document.getElementById("course-search").addEventListener("input",event=>{
   state.query=event.target.value.slice(0,80);
   ++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  resetLessonFilter();
   lessonsBox.replaceChildren();content.replaceChildren();
   content.append(el("p","Escolha um curso para ver as aulas.","empty"));
   renderCourses();
@@ -1908,6 +1982,7 @@ document.querySelectorAll("[data-filter]").forEach(btn=>btn.addEventListener("cl
   if(state.accessDenied||!state.libraryReady)return;
   state.filter=btn.dataset.filter;++state.courseRequest;++state.lessonRequest;
   state.courseId=null;state.lessonId=null;
+  resetLessonFilter();
   document.querySelectorAll("[data-filter]").forEach(b=>b.setAttribute("aria-pressed",String(b===btn)));
   lessonsBox.replaceChildren();content.replaceChildren();content.append(el("p","Escolha um curso para ver as aulas.","empty"));renderCourses();
 }));
@@ -1919,6 +1994,7 @@ async function loadLibrary(){
   invalidateRetainedFavorites();
   invalidateProgressHistory();
   state.libraryLoading=true;state.libraryReady=false;
+  renderLessonFilter();
   renderContextualCourses();
   renderProgressHistory();
   state.favoriteIds=[];state.favoritesReady=false;state.favoritesLoading=false;++state.favoritesRequest;
@@ -1957,6 +2033,7 @@ async function loadLibrary(){
     if(courses===null)throw new Error("O catálogo recebido é inválido. Tente novamente.");
     state.courses=courses;state.libraryReady=true;
     reconcileCatalogSelection();
+    renderLessonFilter();
     document.getElementById("course-search").disabled=false;
     document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=false;});
     document.querySelectorAll(".sim-inputs input").forEach(field=>{field.disabled=false;});
@@ -1970,6 +2047,7 @@ async function loadLibrary(){
   }catch(error){
     if(!state.accessDenied){
       state.libraryReady=false;state.courses=[];state.courseId=null;state.lessonId=null;
+      resetLessonFilter();
       document.getElementById("course-search").disabled=true;
       document.querySelectorAll("[data-filter]").forEach(btn=>{btn.disabled=true;});
       ++state.courseRequest;++state.lessonRequest;++state.searchRequest;

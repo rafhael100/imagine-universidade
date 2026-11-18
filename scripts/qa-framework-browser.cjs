@@ -232,9 +232,66 @@ async function lessonSectionNavigation(student){
   await page.locator(".lesson-text").screenshot({path:path.join(evidenceDir,"framework-lesson-sections-mobile.png")});
   await page.setViewportSize({width:1440,height:1000});
 }
+async function studentLessonFilter(student,courseId,lessonId){
+  enterStage("local lesson locator in a real authorized course");
+  const page=student.page;
+  await page.waitForFunction(()=>state.libraryReady&&!state.libraryLoading&&state.favoritesReady&&
+    !state.favoritesLoading&&!state.readingLoading);
+  const query=page.locator("#course-lesson-query"),clear=page.locator("#clear-course-lesson-query");
+  const message=page.locator("#course-lesson-filter-status");
+  const rows=()=>page.locator("#lesson-items [data-lesson-id]").evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.lessonId)));
+  const visible=()=>page.locator("#lesson-items [data-lesson-id]:not([hidden])").evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.lessonId)));
+  const snapshot=()=>page.evaluate(()=>JSON.stringify({courseId:state.courseId,lessonId:state.lessonId,
+    courseRequest:state.courseRequest,lessonRequest:state.lessonRequest,courses:state.courses,
+    filter:state.filter,query:state.query,favoriteIds:state.favoriteIds,favoritesOnly:state.favoritesOnly,
+    readingSnapshot:state.readingSnapshot,progressHistory:state.progressHistory,
+    content:document.getElementById("lesson-content").textContent}));
+  const before=await snapshot(),url=page.url(),writes=countWrites(student.profile);
+  const requests=businessRequests.filter(request=>request.profile===student.profile).length;
+  check(await page.locator("#course-lesson-filter").isVisible()&&await query.isEnabled()&&await clear.isDisabled()&&
+    (await message.textContent())==="Resultados: 1 de 1 aulas."&&
+    JSON.stringify(await rows())===JSON.stringify([lessonId])&&
+    await page.evaluate(id=>state.lessonFilter.ready&&state.lessonFilter.courseId===id&&
+      state.lessonFilter.request===state.courseRequest,courseId),
+    "The local locator must belong to the complete real authorized lesson list and its current course generation");
+  await query.fill("PRIMEIRA AULA SINTETICA");
+  check((await message.textContent())==="Resultados: 1 de 1 aulas."&&
+    JSON.stringify(await visible())===JSON.stringify([lessonId])&&await query.evaluate(node=>document.activeElement===node),
+    "The real lesson title must match without accents or case sensitivity while typing keeps its focus");
+  await query.fill("aula-principal-sintetica");
+  check((await message.textContent())==="Resultados: 1 de 1 aulas."&&
+    JSON.stringify(await visible())===JSON.stringify([lessonId]),
+    "The local locator must also match the exact authorized slug without opening another lesson");
+  await query.fill("Desenhe uma jornada");
+  const pinned="Resultados: 0 de 1 aulas. A aula aberta continua visível fora dos resultados.";
+  check((await message.textContent())===pinned&&JSON.stringify(await rows())===JSON.stringify([lessonId])&&
+    JSON.stringify(await visible())===JSON.stringify([lessonId])&&
+    await page.locator("#lesson-items [data-lesson-id='"+lessonId+"']").getAttribute("aria-current")==="true",
+    "Lesson body text must not be searched locally or counted as a match; the open lesson stays visible outside the results");
+  await page.locator("#course-lesson-filter").screenshot({path:path.join(evidenceDir,"framework-student-lesson-filter-desktop.png")});
+  await clear.focus();await page.keyboard.press("Enter");
+  check(await query.inputValue()===""&&await clear.isDisabled()&&
+    await query.evaluate(node=>document.activeElement===node)&&
+    (await message.textContent())==="Resultados: 1 de 1 aulas."&&await snapshot()===before&&page.url()===url&&
+    countWrites(student.profile)===writes&&businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "Clearing through the native Enter action must return focus to the field and preserve all real study state with zero private requests");
+  await page.setViewportSize({width:390,height:844});await query.fill("sem correspondencia");
+  check((await message.textContent())===pinned&&await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&
+    JSON.stringify(await visible())===JSON.stringify([lessonId])&&await snapshot()===before&&page.url()===url&&
+    countWrites(student.profile)===writes&&businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "The mobile locator must retain the selected lesson and honest zero-result count within 390 pixels without requests or state changes");
+  await page.locator("#course-lesson-filter").screenshot({path:path.join(evidenceDir,"framework-student-lesson-filter-mobile.png")});
+  await clear.focus();await page.keyboard.press("Space");
+  check(await query.inputValue()===""&&await query.evaluate(node=>document.activeElement===node)&&
+    await snapshot()===before&&countWrites(student.profile)===writes&&
+    businessRequests.filter(request=>request.profile===student.profile).length===requests,
+    "The native Space action must restore the unfiltered real list without altering the lesson or private preferences");
+  await page.setViewportSize({width:1440,height:1000});
+}
 async function reconcileWithdrawnReader(student,courseId,lessonId,readingRevision){
   enterStage("withdrawn course in an already open reader");
   const page=student.page;
+  await page.locator("#course-lesson-query").fill("curso retirado");
   const before=await page.evaluate(()=>({courseId:state.courseId,lessonId:state.lessonId,
     courseRequest:state.courseRequest,lessonRequest:state.lessonRequest}));
   check(before.courseId===courseId&&before.lessonId===lessonId&&await page.locator("#lesson-content h3").count()===1,
@@ -250,8 +307,11 @@ async function reconcileWithdrawnReader(student,courseId,lessonId,readingRevisio
     state.courseRequest>previous.courseRequest&&state.lessonRequest>previous.lessonRequest,before)&&
     await page.locator("#lesson-items [data-lesson-id]").count()===0&&await page.locator("#lesson-content h3").count()===0&&
     await page.locator(".lesson-text,.lesson-help").count()===0&&
+    await page.locator("#course-lesson-filter").isHidden()&&await page.locator("#course-lesson-query").inputValue()===""&&
+    await page.locator("#course-lesson-query").isDisabled()&&await page.locator("#clear-course-lesson-query").isDisabled()&&
+    await page.locator("#course-lesson-filter-status").textContent()===""&&
     (await page.locator("[data-course-unavailable]").textContent()).includes("curso deixou de constar no catálogo"),
-    "A fresh real catalogue that omits the selected course must clear its old body, help, section actions and lesson selection");
+    "A fresh real catalogue that omits the selected course must clear its old body, help, section actions, local lesson query and selection");
   check(await page.evaluate(()=>state.libraryReady&&!state.accessDenied&&
     document.activeElement?.classList.contains("skip-link"))&&await page.locator("#course-search").isEnabled()&&
     await page.evaluate(revision=>state.readingSnapshot?.status==="unavailable"&&state.readingSnapshot.revision===revision,readingRevision),
@@ -425,6 +485,72 @@ async function exportReadingPosition(student,expectedVersion){
       position.lesson_slug==="aula-principal-sintetica"&&typeof position.saved_at==="string"&&
       JSON.stringify(Object.keys(position).sort())===JSON.stringify(["course_slug","course_version","lesson_slug","saved_at"])),
     "A downloaded reading reference must contain only this student's exact saved version, slugs and date, or null after removal");
+}
+async function editorialLessonFilter(editor,courseId,firstLessonId,temporaryLessonId){
+  enterStage("local editorial lesson search preserves both drafts");
+  const page=editor.page,query=page.locator("#editorial-lesson-search");
+  const clear=page.locator("#clear-editorial-lesson-filter"),message=page.locator("#editorial-lesson-filter-status");
+  const fieldIds=["course-title","course-slug","course-category","course-summary","course-sort",
+    "lesson-title","lesson-slug","lesson-body","lesson-sort"];
+  const original=await fields(page,fieldIds);
+  const snapshot=()=>page.evaluate(()=>JSON.stringify({courseId:state.course?.id,lessonId:state.lesson?.id,
+    courseRequest:state.courseRequest,lessonRequest:state.lessonRequest,lessons:state.lessons,
+    archive:state.archive}));
+  const before=await snapshot(),writes=countWrites(editor.profile);
+  const requests=businessRequests.filter(request=>request.profile===editor.profile).length;
+  const rows=()=>page.locator("#lesson-items [data-lesson-row]").evaluateAll(nodes=>nodes.map(node=>Number(node.dataset.lessonRow)));
+  check(await query.isEnabled()&&await clear.isDisabled()&&
+    (await message.textContent())==="Resultados: 2 de 2 aulas."&&
+    JSON.stringify(await rows())===JSON.stringify([firstLessonId,temporaryLessonId])&&
+    await page.evaluate(id=>state.course?.id===id&&state.lessonQueryCourseId===id,courseId),
+    "The editorial lesson search must begin with the complete real draft order and current course ownership");
+  await page.locator("#course-summary").fill(original[3]+"  Resumo local pendente.  ");
+  await page.locator("#lesson-body").fill(original[7]+"\nTexto local ainda não salvo.");
+  const pending=await fields(page,fieldIds),preflightBefore=await page.evaluate(()=>state.preflightRequest);
+  await query.fill("AULA TEMPORARIA SINTETICA");
+  check((await message.textContent())==="Resultados: 1 de 2 aulas. Subir e Descer consideram todas as aulas do curso."&&
+    JSON.stringify(await rows())===JSON.stringify([temporaryLessonId])&&
+    (await page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"']").textContent()).includes("Posição 2")&&
+    await query.evaluate(node=>document.activeElement===node),
+    "An accent-insensitive title search must retain the full-list position and typing focus in the real editor");
+  await query.fill("aula-principal-sintetica");
+  const pinned="Resultados: 1 de 2 aulas. A aula em edição também permanece visível. Subir e Descer consideram todas as aulas do curso.";
+  check((await message.textContent())===pinned&&
+    JSON.stringify((await rows()).sort((a,b)=>a-b))===JSON.stringify([firstLessonId,temporaryLessonId].sort((a,b)=>a-b))&&
+    await page.locator("#lesson-items [data-lesson-row='"+temporaryLessonId+"']").getAttribute("data-outside-filter")==="true"&&
+    await page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"']").getAttribute("aria-current")==="true",
+    "A slug match must keep the other edited lesson pinned without counting it among the real results");
+  await query.fill("Texto local ainda não salvo");
+  const emptyPinned="Resultados: 0 de 2 aulas. A aula em edição também permanece visível. Subir e Descer consideram todas as aulas do curso.";
+  check((await message.textContent())===emptyPinned&&JSON.stringify(await rows())===JSON.stringify([temporaryLessonId])&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&await snapshot()===before&&
+    await page.evaluate(()=>state.preflightRequest)===preflightBefore&&
+    countWrites(editor.profile)===writes&&businessRequests.filter(request=>request.profile===editor.profile).length===requests,
+    "The local search must exclude body buffers and preserve both unsaved forms, selection and complete order with zero HTTP requests");
+  await page.locator(".lesson-filters").screenshot({path:path.join(evidenceDir,"framework-editorial-lesson-filter-desktop.png")});
+  await clear.focus();await page.keyboard.press("Enter");
+  check(await query.inputValue()===""&&await clear.isDisabled()&&await query.evaluate(node=>document.activeElement===node)&&
+    JSON.stringify(await rows())===JSON.stringify([firstLessonId,temporaryLessonId])&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending),
+    "Clearing the editorial search through native Enter must restore every row without discarding pending course or lesson text");
+  await page.setViewportSize({width:390,height:844});await query.fill("sem correspondencia");
+  check((await message.textContent())===emptyPinned&&await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&
+    JSON.stringify(await rows())===JSON.stringify([temporaryLessonId])&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(pending)&&await snapshot()===before&&
+    await page.evaluate(()=>state.preflightRequest)===preflightBefore&&
+    countWrites(editor.profile)===writes&&businessRequests.filter(request=>request.profile===editor.profile).length===requests,
+    "The mobile editorial locator must fit 390 pixels while preserving the pinned lesson, both forms and complete authoritative order");
+  await page.locator(".lesson-filters").screenshot({path:path.join(evidenceDir,"framework-editorial-lesson-filter-mobile.png")});
+  await clear.focus();await page.keyboard.press("Space");
+  const preflightAfterFiltering=await page.evaluate(()=>state.preflightRequest);
+  await page.locator("#course-summary").fill(original[3]);await page.locator("#lesson-body").fill(original[7]);
+  check(await query.inputValue()===""&&JSON.stringify(await rows())===JSON.stringify([firstLessonId,temporaryLessonId])&&
+    JSON.stringify(await fields(page,fieldIds))===JSON.stringify(original)&&await snapshot()===before&&
+    preflightAfterFiltering===preflightBefore&&
+    await page.evaluate(()=>!editorialHasUnsavedChanges())&&countWrites(editor.profile)===writes&&
+    businessRequests.filter(request=>request.profile===editor.profile).length===requests,
+    "Restoring the original literal fields must leave a clean unfiltered draft for the existing real reorder journey without any write");
+  await page.setViewportSize({width:1440,height:1000});
 }
 async function editorialLessonReorder(editor,courseId,firstLessonId,temporaryLessonId){
   enterStage("atomic editorial lesson order");
@@ -744,6 +870,7 @@ async function main(){
   const temporaryLesson=await clickResponse(editor.page,"#lesson-save","POST",adminRoot+"/courses/"+courseId+"/lessons");
   const temporaryLessonId=(await json(temporaryLesson,"Temporary lesson creation")).id;
   await editor.page.locator("#lesson-items [data-lesson='"+temporaryLessonId+"'][aria-current='true']").waitFor();
+  await editorialLessonFilter(editor,courseId,firstLessonId,temporaryLessonId);
   await editorialLessonReorder(editor,courseId,firstLessonId,temporaryLessonId);
   const deletedLesson=await confirmResponse(editor.page,"#delete-lesson","DELETE",
     adminRoot+"/lessons/"+temporaryLessonId,"Excluir esta aula em rascunho");
@@ -812,6 +939,7 @@ async function main(){
       active.matches("button:not([disabled]),a[href],input:not([disabled]),textarea:not([disabled])");
   }),"Keyboard navigation after the real lesson heading must continue into an enabled lesson action without a focus trap");
   await lessonSectionNavigation(studentA);
+  await studentLessonFilter(studentA,courseId,firstLessonId);
   await openStudent(studentB,courseId,firstTitle);
   const forbiddenAdmin=await studentA.context.request.get(base+adminRoot+"/courses",{headers:{Accept:"application/json"}});
   check(forbiddenAdmin.status()===403,"A learner's real session must not authorize editorial endpoints");
@@ -1142,8 +1270,8 @@ async function main(){
   check(pageErrors.length===0,"The real framework browser flow must have no uncaught page errors");
   fs.writeFileSync(path.join(evidenceDir,"framework-browser-summary.json"),JSON.stringify({
     status:"passed",checks,framework:"Laravel",database:"disposable SQLite",business_responses:"real HTTP",
-    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","atomic lesson reorder","publication hash","audit","editorial overview","private favorites","favorites export download",
-      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","revocation"],
+    synthetic_profiles:3,scenarios:["csrf","editorial CRUD","local editorial lesson search","atomic lesson reorder","publication hash","audit","editorial overview","private favorites","favorites export download",
+      "retained favorites manager","explicit reading position","reading position export","read-only editorial archive","completion isolation","disabled tutor","withdrawal and republication","withdrawn selected course reconciliation","historical progress","contextual courses without personal ranking","manual completion history","explicit navigation focus","local lesson section index","local student lesson locator","revocation"],
   },null,2)+"\n",{mode:0o600});
   console.log("PASS framework browser: "+checks+" checks against real Laravel/SQLite; no business responses intercepted");
 }

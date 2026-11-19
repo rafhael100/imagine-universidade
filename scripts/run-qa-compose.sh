@@ -46,6 +46,20 @@ echo "This run downloads disposable images/dependencies and uses local CPU/netwo
 echo "Running QA does not approve deployment or production access."
 docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa build qa
 docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa run --rm qa
+# Negative transport check: injected libpq routing must fail BEFORE psql
+# receives any query, rather than attempting an external host connection.
+set +e
+injection_log="$(docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa \
+  exec -T -e PGHOST=synthetic-unreachable.invalid db sh -s \
+  < scripts/qa-pg-backup-restore.sh 2>&1)"
+injection_status=$?
+set -e
+if [[ "$injection_status" -eq 0 ]] ||
+   ! grep -Fq 'FAIL: forbidden libpq override PGHOST' <<< "$injection_log"; then
+  echo "FAIL: a client PGHOST override was not rejected before a DB query." >&2
+  exit 2
+fi
+echo "PASS: backup/restore QA rejects external PGHOST override before connection."
 echo "QA synthetic PostgreSQL backup and restore in disposable db container."
 docker compose -p "$PROJECT" -f compose.qa.yml --profile manual-qa exec -T db sh -s \
   < scripts/qa-pg-backup-restore.sh

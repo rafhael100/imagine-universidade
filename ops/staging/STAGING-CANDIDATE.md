@@ -19,4 +19,6 @@ O teste CI lê o YAML como texto, confere a restrição de porta, redes, limites
 
 ## Validação de configuração do Compose
 
-O CI executa `bash ops/staging/check-compose-syntax.sh` com variáveis e segredos estritamente **fictícios**, em um arquivo transitório apagado ao final. O único comando Docker é `docker compose config --quiet` (parsing), sem acessar a VPS, iniciar serviços ou reservar porta; `18123` é só um exemplo de sintaxe e não deve ser usada como porta escolhida. A validação de recursos reais e segurança continua bloqueada.
+O CI executa `bash ops/staging/check-compose-syntax.sh` com variáveis e segredos estritamente **fictícios**, em um arquivo transitório apagado ao final. Além de consultar a versão, usa `docker compose config --format json` para validar o modelo resolvido e a separação de credenciais. O JSON tem permissão restrita, não é impresso e é removido ao final. Não acessa a VPS, inicia serviços ou reserva porta; `18123` é só um exemplo de sintaxe e não deve ser usada como porta escolhida. A validação de recursos reais e segurança continua bloqueada.
+
+O arquivo passado ao CLI com `--env-file` é usado apenas na interpolação. A aplicação recebe a lista explícita de configurações runtime; as credenciais do proprietário do banco ficam no serviço `db`. Não adicionar `env_file` amplo ao serviço `app` ou `web`.

@@ -34,9 +34,23 @@
     .catalog-recovery{margin:0 10px 13px;padding:15px;border:1px solid #E8C99F;background:#FFF8F0;border-radius:12px}
     .catalog-recovery p{font-size:13px;color:#65431B;margin:0 0 10px}
     .catalog-recovery[hidden]{display:none}
-    .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%}
+    .catalog-filters{padding:14px;border-bottom:1px solid var(--line);display:grid;gap:10px}
+    .catalog-filters .field{margin:0}
+    .catalog-filter-row{display:flex;flex-wrap:wrap;gap:8px}
+    .catalog-filter-row .field{flex:1 1 160px;min-width:0}
+    .catalog-filters p{font-size:12px;margin:0;overflow-wrap:anywhere}
+    .catalog-filter-count{padding:10px 14px 0;font-size:12px;margin:0;overflow-wrap:anywhere}
+    .catalog-pinned{font-weight:750;color:#70410C}
+    .item{border:1px solid transparent;background:#fff;text-align:left;border-radius:10px;padding:13px 12px;width:100%;min-width:0;overflow-wrap:anywhere}
     .item:hover{background:#F8F9FB}.item[aria-current="true"]{background:#FFF3E2;border-color:#F2D2AA}
     .item strong{display:block;font-size:14px}.item small{display:block;color:#505650;font-size:12px;margin-top:3px}
+    .lesson-row{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0;border:1px solid var(--line);border-radius:10px;padding:4px}
+    .lesson-row>.item{flex:1 1 230px;width:auto}.lesson-order-actions{display:flex;gap:6px;padding:4px;flex-wrap:wrap}
+    .lesson-order-actions .secondary{padding:7px 10px;font-size:12px}
+    .lesson-order-status{font-size:12px;margin:0 0 9px;overflow-wrap:anywhere}
+    .lesson-filters{display:flex;flex-wrap:wrap;gap:9px;align-items:end;margin-bottom:9px;min-width:0}
+    .lesson-filters .field{flex:1 1 240px;min-width:0;margin:0}
+    .lesson-filter-status{font-size:12px;margin:0 0 9px;overflow-wrap:anywhere}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:5px;margin-bottom:14px}
     .field label{font-size:12px;font-weight:750;color:#465369}.span{grid-column:1/-1}
     input,select,textarea{padding:11px;border:1px solid #D7DDE5;border-radius:10px;min-width:0;width:100%;color:var(--ink);background:white}
@@ -57,14 +71,42 @@
     .readiness p{color:#484848;margin:6px 0;font-size:13px}
     .audit-panel{margin-top:20px}
     .audit-list{padding:10px 20px;display:grid;gap:6px}
-    .audit-row{padding:12px 0;border-bottom:1px solid var(--line)}
+    .audit-status{margin:10px 20px 0;font-size:13px}
+    .audit-row{padding:12px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
     .audit-row strong{display:block;font-weight:750}
     .audit-row small{display:block;color:#505650;font-size:12px}
+    .archive-panel{margin-top:20px}
+    .archive-panel .panel-header{flex-wrap:wrap}
+    .archive-context,.archive-status{font-size:13px;margin:0 0 10px;overflow-wrap:anywhere}
+    .archive-grid{display:grid;grid-template-columns:minmax(180px,.8fr) minmax(0,2fr);gap:18px}
+    .archive-grid h3{font-size:15px;margin:0 0 9px}
+    .archive-list{display:grid;gap:4px;max-height:340px;overflow:auto;margin-bottom:10px}
+    .archive-list .item{border-color:var(--line)}
+    .archive-reader{border-top:1px solid var(--line);padding-top:16px;margin-top:16px;overflow-wrap:anywhere}
+    .archive-reader h4{font-size:18px;margin:0 0 8px}
+    .archive-text{white-space:pre-wrap;line-height:1.65;color:#465369}
+    .archive-panel [hidden]{display:none}
+    .overview-panel{margin:0 0 20px}
+    .overview-panel .panel-header{flex-wrap:wrap;padding:15px 20px}
+    .overview-body{padding:16px 20px}
+    .overview-status{font-size:13px;margin:0 0 12px}
+    .overview-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px}
+    .overview-card{padding:10px 12px;background:#F7F8FA;border:1px solid var(--line);border-radius:10px;min-width:0}
+    .overview-card strong{display:block;font-size:23px;line-height:1.3;overflow-wrap:anywhere}
+    .overview-card span{display:block;font-size:12px;color:#505650}
+    .overview-warnings{display:flex;flex-wrap:wrap;gap:4px 22px;padding-left:18px;margin:0 0 12px;font-size:13px;color:#505650}
+    .overview-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:12px}
+    .overview-table caption{text-align:left;font-weight:750;color:var(--ink);padding:0 0 6px}
+    .overview-table th,.overview-table td{padding:8px 5px;border-bottom:1px solid var(--line);text-align:right;overflow-wrap:anywhere}
+    .overview-table th:first-child{width:36%;text-align:left}
+    .overview-body>.help{margin:10px 0 0}
+    #overview-content[hidden]{display:none}
     .editorial-preview h3{font-size:19px;color:#263044}
     .editorial-preview h4{font-size:14px;color:#70410C;margin:18px 0 6px}
     .editorial-preview p{white-space:pre-wrap;line-height:1.65;color:#465369}
     .footer{font-size:12px;color:#565D56;margin-top:28px}
-    @media(max-width:820px){.layout{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
+    @media(max-width:820px){.layout,.archive-grid{grid-template-columns:1fr}.container{padding:18px 14px}.top-inner{padding:14px;flex-wrap:wrap}.grid{grid-template-columns:1fr}.nav-links{width:100%}.logo{width:145px}}
+    @media(max-width:520px){.overview-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-body{padding:14px}.overview-panel .panel-header{padding:14px}.overview-table th:first-child{width:32%}}
   </style>
 </head>
 <body>
@@ -79,12 +121,38 @@
   <h1>Biblioteca de cursos</h1>
   <p>Cadastre cursos e aulas em rascunho. A publicação só é permitida a operadores autorizados pelo Portal.</p>
   <div id="status" class="notice" role="status" aria-live="polite" hidden></div>
+  <section id="editorial-overview" class="panel overview-panel" aria-labelledby="overview-title">
+    <div class="panel-header"><h2 id="overview-title">Visão do acervo</h2><button type="button" id="refresh-overview" class="secondary" disabled>Atualizar visão</button></div>
+    <div class="overview-body">
+      <p id="overview-status" class="overview-status" role="status" aria-live="polite">A visão do acervo estará disponível após carregar os cursos.</p>
+      <div id="overview-content" hidden>
+        <div id="overview-cards" class="overview-cards"></div>
+        <ul id="overview-warnings" class="overview-warnings"></ul>
+        <table class="overview-table">
+          <caption>Distribuição por categoria</caption>
+          <thead><tr><th scope="col">Categoria</th><th scope="col">Cursos</th><th scope="col">Publicados</th><th scope="col">Rascunhos</th><th scope="col">Aulas</th></tr></thead>
+          <tbody id="overview-categories"></tbody>
+        </table>
+      </div>
+      <p class="help">Os números consideram o acervo salvo e as aulas da versão mais recente de cada curso. Os avisos de aula e descrição não substituem a conferência de publicação.</p>
+    </div>
+  </section>
   <div class="layout">
-    <section class="panel" aria-labelledby="courses-title">
+    <section id="editorial-catalog-panel" class="panel" aria-labelledby="courses-title">
       <div class="panel-header"><h2 id="courses-title">Cursos</h2><button type="button" class="primary" id="new-course">+ Novo</button></div>
+      <div class="catalog-filters" role="search" aria-label="Buscar no catálogo editorial">
+        <div class="field"><label for="editorial-course-search">Buscar curso</label><input id="editorial-course-search" type="search" maxlength="120" placeholder="Título, slug ou descrição" autocomplete="off" disabled></div>
+        <div class="catalog-filter-row">
+          <div class="field"><label for="editorial-category-filter">Categoria</label><select id="editorial-category-filter" disabled><option value="todos">Todas</option><option value="metodologia">Metodologia</option><option value="negocios">Negócios</option><option value="sistemas">Sistemas Imagine</option></select></div>
+          <div class="field"><label for="editorial-state-filter">Publicação</label><select id="editorial-state-filter" disabled><option value="todos">Todos</option><option value="published">Publicados</option><option value="draft">Rascunhos</option></select></div>
+        </div>
+        <button type="button" id="clear-editorial-filters" class="secondary" disabled>Limpar filtros</button>
+        <p>Os filtros usam os dados salvos e mantêm o curso em edição visível.</p>
+      </div>
+      <p id="editorial-filter-status" class="catalog-filter-count" role="status" aria-live="polite"></p>
       <div id="course-items" class="items"><p>Carregando cursos...</p></div>
       <div id="catalog-recovery" class="catalog-recovery" hidden>
-        <p role="alert">Não foi possível consultar os cursos. Verifique a conexão e tente novamente. Uma sessão expirada exige novo acesso pelo Portal.</p>
+        <p role="alert">Consulte novamente os cursos e aulas para continuar. Se uma alteração não foi confirmada, não repita a operação: confira primeiro os dados do servidor.</p>
         <button type="button" id="retry-catalog" class="secondary">Tentar carregar cursos</button>
       </div>
     </section>
@@ -93,10 +161,13 @@
       <div class="panel-body">
         <form id="course-form">
           <div class="grid">
-            <div class="field span"><label for="course-title">Título</label><input id="course-title" maxlength="200" required></div>
+            <div class="field span"><label for="course-title">Título</label><input id="course-title" required></div>
             <div class="field"><label for="course-slug">Identificador do curso</label><input id="course-slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
             <div class="field"><label for="course-category">Categoria</label><select id="course-category"><option value="metodologia">Metodologia</option><option value="negocios">Negócios</option><option value="sistemas">Sistemas Imagine</option></select></div>
-            <div class="field span"><label for="course-summary">Descrição curta</label><textarea id="course-summary" maxlength="500"></textarea></div>
+            <div class="field span"><label for="course-summary">Descrição curta</label><textarea id="course-summary"></textarea></div>
+            <div class="field span"><label for="course-audience">Para quem</label><textarea id="course-audience" aria-describedby="course-context-help"></textarea></div>
+            <div class="field span"><label for="course-suggested-knowledge">Conhecimentos úteis</label><textarea id="course-suggested-knowledge" aria-describedby="course-context-help"></textarea></div>
+            <p id="course-context-help" class="help span">Orientações opcionais para escolher o curso. Até 500 caracteres em cada campo. Conhecimentos úteis são sugestões, sem pré-requisito obrigatório.</p>
             <div class="field"><label for="course-sort">Ordem</label><input id="course-sort" type="number" min="0" max="9999" step="1" value="0"></div>
           </div>
           <div class="actions">
@@ -112,14 +183,20 @@
         </form>
         <hr>
         <h3>Aulas do curso</h3>
+        <div class="lesson-filters" role="search" aria-label="Buscar aulas do curso">
+          <div class="field"><label for="editorial-lesson-search">Buscar aula neste curso</label><input id="editorial-lesson-search" type="search" maxlength="120" placeholder="Título ou identificador" autocomplete="off" disabled></div>
+          <button type="button" id="clear-editorial-lesson-filter" class="secondary" disabled>Limpar busca</button>
+        </div>
+        <p id="editorial-lesson-filter-status" class="lesson-filter-status" role="status" aria-live="polite">Selecione um curso para buscar aulas.</p>
+        <p id="lesson-order-status" class="lesson-order-status" role="status" aria-live="polite">Selecione um curso para consultar a ordem das aulas.</p>
         <div id="lesson-items" class="items"><p class="help">Selecione um curso.</p></div>
         <form id="lesson-form">
           <h3 id="lesson-title-heading">Nova aula</h3>
           <div class="grid">
-            <div class="field span"><label for="lesson-title">Título da aula</label><input id="lesson-title" maxlength="200" required></div>
+            <div class="field span"><label for="lesson-title">Título da aula</label><input id="lesson-title" required></div>
             <div class="field"><label for="lesson-slug">Identificador</label><input id="lesson-slug" maxlength="120" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></div>
             <div class="field"><label for="lesson-sort">Ordem</label><input id="lesson-sort" type="number" min="0" max="9999" step="1" value="0"></div>
-            <div class="field span"><label for="lesson-body">Conteúdo (texto simples)</label><textarea id="lesson-body" minlength="10" maxlength="30000" required></textarea></div>
+            <div class="field span"><label for="lesson-body">Conteúdo (texto simples)</label><textarea id="lesson-body" required></textarea></div>
           </div>
           <div class="actions"><button class="primary" id="lesson-save" type="submit">Salvar aula</button><button class="secondary" type="button" id="clear-lesson">Nova aula</button><button class="secondary" type="button" id="preview-lesson">Pré-visualizar aula</button><button class="secondary danger" type="button" id="delete-lesson" disabled>Excluir rascunho</button></div>
         </form>
@@ -132,12 +209,39 @@
       </div>
     </section>
   </div>
+  <section id="editorial-versions-panel" class="panel archive-panel" aria-labelledby="archived-versions-title">
+    <div class="panel-header">
+      <h2 id="archived-versions-title">Versões arquivadas</h2>
+      <button type="button" id="refresh-editorial-versions" class="secondary" disabled>Consultar versões</button>
+    </div>
+    <div class="panel-body">
+      <p id="editorial-versions-context" class="archive-context" hidden></p>
+      <p id="editorial-versions-status" class="archive-status" role="status" aria-live="polite">Selecione um curso para consultar suas versões arquivadas.</p>
+      <div id="editorial-version-browser" class="archive-grid" hidden>
+        <div>
+          <h3>Versões disponíveis para consulta</h3>
+          <div id="editorial-version-list" class="archive-list" aria-label="Versões arquivadas do curso"></div>
+          <button type="button" id="more-editorial-versions" class="secondary" hidden disabled>Carregar versões anteriores</button>
+        </div>
+        <div>
+          <h3 id="editorial-version-heading">Selecione uma versão</h3>
+          <p id="editorial-version-lessons-status" class="archive-status" role="status" aria-live="polite"></p>
+          <div id="editorial-version-lessons" class="archive-list" aria-label="Aulas da versão arquivada"></div>
+          <button type="button" id="more-version-lessons" class="secondary" hidden disabled>Carregar mais aulas</button>
+          <p id="editorial-version-body-status" class="archive-status" role="status" aria-live="polite"></p>
+          <article id="editorial-version-content" class="archive-reader" aria-label="Aula arquivada, somente leitura" hidden></article>
+        </div>
+      </div>
+      <p class="help">Consulta do conteúdo salvo em cada versão arquivada, somente leitura. O rascunho e a versão publicada continuam no editor acima.</p>
+    </div>
+  </section>
   <section id="audit-panel" class="panel audit-panel" aria-labelledby="audit-title">
     <div class="panel-header">
       <h2 id="audit-title">Histórico editorial</h2>
       <button type="button" id="refresh-audit" class="secondary">Atualizar histórico</button>
     </div>
-    <div id="audit-items" class="audit-list" aria-live="polite"><p class="help">Carregando alterações autorizadas...</p></div>
+    <p id="audit-status" class="audit-status" role="status" aria-live="polite">Carregando alterações autorizadas...</p>
+    <div id="audit-items" class="audit-list"></div>
     <div class="panel-body"><button type="button" class="secondary" id="load-more-audit" disabled>Carregar anteriores</button>
       <p class="help">Eventos paginados, sem identificadores pessoais dos operadores. A retenção depende da política Imagine.</p>
     </div>
@@ -149,7 +253,15 @@
 const base="/universidade/private/admin";
 const csrf=document.querySelector('meta[name="csrf-token"]')?.content||"";
 const $=id=>document.getElementById(id),note=$("status");
-const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false};
+const state={courses:[],course:null,lessons:[],lesson:null,courseRequest:0,lessonRequest:0,auditRequest:0,auditEvents:[],auditNextBeforeId:null,preflightRequest:0,writePending:false,accessDenied:false,accessMessage:"",catalogLoading:false,catalogReady:false,lessonsReady:false,writeOutcomeUnknown:false,confirmedSaveNeedsRead:false,confirmedSaveReadTarget:null,
+  auditLoading:false,auditLoaded:false,auditMessage:"Carregando alterações autorizadas...",
+  courseQuery:"",courseCategory:"todos",courseStatus:"todos",lessonQuery:"",lessonQueryCourseId:null,
+  overviewSnapshot:null,overviewRequest:0,overviewLoading:false,overviewAttempted:false,
+  overviewMessage:"A visão do acervo estará disponível após carregar os cursos.",
+  archive:{courseId:null,versions:[],nextBefore:null,selectedVersion:null,lessons:[],nextAfter:null,lesson:null,bodyLessonId:null,
+    versionsLoaded:false,lessonsLoaded:false,versionsLoading:false,lessonsLoading:false,bodyLoading:false,
+    versionsRequest:0,lessonsRequest:0,bodyRequest:0,message:"Selecione um curso para consultar suas versões arquivadas.",
+    lessonsMessage:"",bodyMessage:""}};
 const cats={metodologia:"Metodologia",negocios:"Negócios",sistemas:"Sistemas Imagine"};
 function say(message){
   const shown=state.accessDenied?state.accessMessage:message;
@@ -157,8 +269,13 @@ function say(message){
 }
 function beginWrite(){
   if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady||(state.course!==null&&!state.lessonsReady))return false;
+  state.confirmedSaveNeedsRead=false;state.confirmedSaveReadTarget=null;
   state.writePending=true;
+  renderEditorialCourseFilters();
+  renderLessonReorderControls();
   ++state.courseRequest;++state.lessonRequest;
+  invalidateEditorialOverview("O acervo pode ter mudado. Atualize a visão após concluir a alteração.");
+  invalidateEditorialArchive("O acervo pode ter mudado. Consulte as versões após concluir a alteração.");
   const layout=document.querySelector(".layout");
   layout.inert=true;
   layout.setAttribute("aria-busy","true");
@@ -167,9 +284,13 @@ function beginWrite(){
 }
 function finishWrite(){
   state.writePending=false;
+  renderEditorialCourseFilters();
   const layout=document.querySelector(".layout");
   layout.setAttribute("aria-busy","false");
   layout.inert=state.accessDenied;
+  renderEditorialOverview();
+  renderEditorialArchive();
+  renderLessonReorderControls();
 }
 // A server may commit an editorial mutation before its HTTP response is
 // lost. Do not let a rejected/ambiguous response unlock a second write.
@@ -179,17 +300,23 @@ function freezeUncertainEditorialWrite(){
   if(state.accessDenied)return;
   state.writeOutcomeUnknown=true;
   state.catalogReady=false;state.lessonsReady=false;
+  renderEditorialCourseFilters();
   ++state.courseRequest;++state.lessonRequest;
   for(const id of ["new-course","course-save","lesson-save","delete-course",
       "delete-lesson","publish","unpublish","check-publication",
-      "course-title","course-category","course-summary","course-sort",
+      "course-title","course-category","course-summary","course-sort","course-audience","course-suggested-knowledge",
       "lesson-title","lesson-slug","lesson-body","lesson-sort"]){
     const element=$(id);if(element)element.disabled=true;
   }
   $("catalog-recovery").hidden=false;
   $("retry-catalog").disabled=false;
   clearPublicationCheck();hideLessonPreview();
-  say("O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
+  invalidateEditorialOverview("Consulte novamente os cursos para confirmar a alteração antes de atualizar a visão do acervo.");
+  invalidateEditorialArchive("Confirme a alteração consultando os cursos antes de abrir as versões arquivadas.");
+  renderLessonReorderControls();
+  say(state.confirmedSaveNeedsRead
+    ?"O salvamento foi confirmado, mas não foi possível atualizar a tela. Os campos foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar."
+    :"O resultado da alteração não pôde ser confirmado. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.");
 }
 function clearPublicationCheck(){
   ++state.preflightRequest;
@@ -198,9 +325,14 @@ function clearPublicationCheck(){
 }
 function lockAccess(message){
   if(state.accessDenied)return;
+  state.confirmedSaveNeedsRead=false;state.confirmedSaveReadTarget=null;
   state.accessDenied=true;state.accessMessage=message;state.catalogReady=false;state.lessonsReady=false;
   document.querySelector(".layout").inert=true;
   state.courses=[];state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
+  state.courseQuery="";state.courseCategory="todos";state.courseStatus="todos";
+  state.lessonQuery="";state.lessonQueryCourseId=null;
+  renderEditorialCourseFilters();
+  renderEditorialLessonFilters();
   ++state.courseRequest;++state.lessonRequest;
   $("course-items").replaceChildren();$("lesson-items").replaceChildren();
   $("catalog-recovery").hidden=true;
@@ -208,12 +340,17 @@ function lockAccess(message){
   hideLessonPreview();
   clearPublicationCheck();
   ++state.auditRequest;state.auditEvents=[];state.auditNextBeforeId=null;
+  state.auditLoading=false;state.auditLoaded=false;state.auditMessage="";
+  $("audit-status").textContent="";$("audit-panel").setAttribute("aria-busy","false");
   $("audit-items").replaceChildren();
   $("course-items").append(el("p","Cursos indisponíveis até novo acesso autorizado.","help"));
   $("lesson-items").append(el("p","Retorne ao Portal para verificar a sessão.","help"));
   document.querySelectorAll(".layout button,.layout input,.layout select,.layout textarea,.audit-panel button")
     .forEach(field=>{if("value" in field&&field.tagName!=="SELECT")field.value="";field.disabled=true;});
   $("publication-status").textContent="Acesso encerrado";
+  $("lesson-order-status").textContent="";$("lesson-order-status").hidden=true;
+  invalidateEditorialOverview("");
+  invalidateEditorialArchive("");
   say(message);
 }
 function el(tag,text,className){
@@ -222,6 +359,45 @@ function el(tag,text,className){
   if(className)x.className=className;
   return x;
 }
+// Error bodies do not contribute UI data, but their streams still need a
+// bounded cleanup. Discard chunks without decoding, retaining or logging them.
+// Never await this cleanup before revocation, fallback or an error action.
+async function discardErrorBody(response){
+  let reader=null,timer=null,cancelled=false;
+  const cancel=()=>{
+    if(cancelled||reader===null)return;
+    cancelled=true;
+    try{Promise.resolve(reader.cancel()).catch(()=>{});}catch{}
+  };
+  try{
+    const body=response?.body;
+    if(!body||typeof body.getReader!=="function")return;
+    reader=body.getReader();
+    if(!reader||typeof reader.read!=="function"){cancel();return;}
+    const expired={};
+    const deadline=new Promise(resolve=>{
+      timer=setTimeout(()=>{cancel();resolve(expired);},2000);
+    });
+    let bytes=0;
+    for(let reads=0;reads<64;reads++){
+      // Promise.race observes late read rejections too, after the deadline
+      // has won. Cancellation itself is deliberately never awaited.
+      const chunk=await Promise.race([reader.read(),deadline]);
+      if(chunk===expired)return;
+      if(!chunk||typeof chunk.done!=="boolean"){cancel();return;}
+      if(chunk.done)return;
+      const length=chunk.value?.byteLength;
+      if(!Number.isSafeInteger(length)||length<0){cancel();return;}
+      bytes+=length;
+      if(bytes>=16384){cancel();return;}
+    }
+    cancel();
+  }catch{cancel();}
+  finally{
+    if(timer!==null)clearTimeout(timer);
+    try{reader?.releaseLock();}catch{}
+  }
+}
 async function api(path,method="GET",payload=null){
   if(state.accessDenied)throw new Error(state.accessMessage);
   const response=await fetch(base+path,{
@@ -229,6 +405,9 @@ async function api(path,method="GET",payload=null){
     headers:{"Accept":"application/json","X-Requested-With":"XMLHttpRequest","Content-Type":"application/json","X-CSRF-TOKEN":csrf},
     body:payload===null?undefined:JSON.stringify(payload)
   });
+  // A successful response can arrive after another request revokes access.
+  // Release that unread body too, without decoding it or delaying denial.
+  if(!response.ok||state.accessDenied)void discardErrorBody(response);
   if(response.status===403)lockAccess("Acesso administrativo não autorizado. Volte ao Portal.");
   if(response.status===419)lockAccess("Sessão expirada. Acesse novamente pelo Portal.");
   if(state.accessDenied)throw new Error(state.accessMessage);
@@ -237,8 +416,302 @@ async function api(path,method="GET",payload=null){
   if(state.accessDenied)throw new Error(state.accessMessage);
   return data;
 }
+// The summary describes persisted editorial material. A valid zero is useful;
+// missing, rounded or inconsistent counts must never masquerade as an empty
+// collection. Select only the documented aggregate fields from the response.
+function validatedEditorialOverview(payload){
+  const record=value=>value!==null&&typeof value==="object"&&!Array.isArray(value);
+  const count=value=>Number.isSafeInteger(value)&&value>=0;
+  const names=["metodologia","negocios","sistemas"];
+  const keys=["courses","published_courses","draft_courses","current_lessons"];
+  if(!record(payload)||payload.schema_version!==1||payload.scope!=="current_editorial_catalog"||
+     !record(payload.totals)||!Array.isArray(payload.categories)||payload.categories.length!==3)return null;
+  const totals={};
+  for(const key of [...keys,"courses_without_lessons","courses_without_summary"]){
+    if(!count(payload.totals[key]))return null;
+    totals[key]=payload.totals[key];
+  }
+  if(!Number.isSafeInteger(totals.published_courses+totals.draft_courses)||
+     totals.published_courses+totals.draft_courses!==totals.courses||
+     totals.courses_without_lessons>totals.courses||totals.courses_without_summary>totals.courses||
+     totals.current_lessons<totals.courses-totals.courses_without_lessons||
+     (totals.courses_without_lessons===totals.courses&&totals.current_lessons!==0))return null;
+  const categories=[],sums=Object.fromEntries(keys.map(key=>[key,0]));
+  for(let index=0;index<names.length;index++){
+    const item=payload.categories[index];
+    if(!record(item)||item.category!==names[index])return null;
+    const category={category:names[index]};
+    for(const key of keys){
+      if(!count(item[key])||!Number.isSafeInteger(sums[key]+item[key]))return null;
+      category[key]=item[key];sums[key]+=item[key];
+    }
+    if(!Number.isSafeInteger(category.published_courses+category.draft_courses)||
+       category.published_courses+category.draft_courses!==category.courses||
+       (category.courses===0&&category.current_lessons!==0))return null;
+    categories.push(category);
+  }
+  if(keys.some(key=>sums[key]!==totals[key]))return null;
+  return {schema_version:1,scope:"current_editorial_catalog",totals,categories};
+}
+function renderEditorialOverview(){
+  const active=!state.accessDenied&&state.catalogReady&&!state.catalogLoading&&
+    !state.writePending&&!state.writeOutcomeUnknown;
+  $("refresh-overview").disabled=!active||state.overviewLoading;
+  $("overview-status").textContent=state.accessDenied?"":state.overviewMessage;
+  const snapshot=active?state.overviewSnapshot:null;
+  $("overview-content").hidden=snapshot===null;
+  for(const id of ["overview-cards","overview-warnings","overview-categories"])$(id).replaceChildren();
+  if(snapshot===null)return;
+  for(const [key,label] of [["courses","Cursos"],["published_courses","Publicados"],
+      ["draft_courses","Rascunhos"],["current_lessons","Aulas atuais"]]){
+    const card=el("div",undefined,"overview-card");card.dataset.overviewMetric=key;
+    card.append(el("strong",String(snapshot.totals[key])),el("span",label));
+    $("overview-cards").append(card);
+  }
+  $("overview-warnings").append(
+    el("li",String(snapshot.totals.courses_without_lessons)+" curso(s) sem aulas na versão mais recente."),
+    el("li",String(snapshot.totals.courses_without_summary)+" curso(s) sem descrição curta.")
+  );
+  for(const category of snapshot.categories){
+    const row=el("tr");row.dataset.overviewCategory=category.category;
+    const heading=el("th",cats[category.category]);heading.scope="row";row.append(heading);
+    for(const key of ["courses","published_courses","draft_courses","current_lessons"])
+      row.append(el("td",String(category[key])));
+    $("overview-categories").append(row);
+  }
+}
+function invalidateEditorialOverview(message){
+  ++state.overviewRequest;
+  state.overviewSnapshot=null;state.overviewMessage=message;
+  // Keep an outstanding read single-flight until it settles. Its generation
+  // can no longer render, even if the write finishes before the old GET.
+  renderEditorialOverview();
+}
+async function refreshEditorialOverview(){
+  if(state.accessDenied||!state.catalogReady||state.catalogLoading||state.writePending||
+     state.writeOutcomeUnknown||state.overviewLoading)return;
+  const request=++state.overviewRequest;
+  const current=()=>!state.accessDenied&&state.catalogReady&&!state.catalogLoading&&
+    !state.writePending&&!state.writeOutcomeUnknown&&state.overviewRequest===request;
+  state.overviewAttempted=true;state.overviewLoading=true;state.overviewSnapshot=null;
+  state.overviewMessage="Consultando a visão do acervo...";renderEditorialOverview();
+  try{
+    const payload=await api("/overview");
+    if(!current())return;
+    const snapshot=validatedEditorialOverview(payload);
+    if(snapshot===null)throw new Error("invalid_editorial_overview");
+    state.overviewSnapshot=snapshot;
+    state.overviewMessage=snapshot.totals.courses===0
+      ?"Nenhum curso cadastrado. Os totais do acervo estão zerados."
+      :"Visão atualizada com os dados salvos do acervo.";
+  }catch(error){
+    if(current()){
+      state.overviewSnapshot=null;
+      state.overviewMessage="A visão do acervo está indisponível. Você pode atualizar novamente; o editor continua disponível.";
+    }
+  }finally{
+    state.overviewLoading=false;
+    renderEditorialOverview();
+  }
+}
+$("refresh-overview").addEventListener("click",refreshEditorialOverview);
 const intField=id=>Number.parseInt($(id).value,10)||0;
 const draft=()=>!state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&(state.course===null||(state.lessonsReady&&!Boolean(state.course.is_published)));
+function archiveRecord(value){
+  return value!==null&&typeof value==="object"&&!Array.isArray(value);
+}
+function archiveText(value,max){
+  return typeof value==="string"&&value.length<=max*2&&value.trim().length>0&&Array.from(value).length<=max;
+}
+function archiveSlug(value){
+  return typeof value==="string"&&value.length<=120&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+}
+function archivePositive(value){
+  return Number.isSafeInteger(value)&&value>0;
+}
+function archiveEnvelope(payload,courseId){
+  return archiveRecord(payload)&&payload.schema_version===1&&payload.scope==="editorial_archived_content"&&payload.course_id===courseId;
+}
+function validatedArchivedVersions(payload,courseId,beforeVersion=null,existing=[]){
+  if(!archiveEnvelope(payload,courseId)||!Array.isArray(payload.versions)||payload.versions.length>50)return null;
+  const seen=new Set(existing.map(item=>item.version)),versions=[];
+  let previous=beforeVersion??Infinity;
+  for(const item of payload.versions){
+    if(!archiveRecord(item)||!archivePositive(item.version)||item.version>=previous||seen.has(item.version)||
+       item.status!=="archived"||!Number.isSafeInteger(item.lesson_count)||item.lesson_count<0)return null;
+    previous=item.version;seen.add(item.version);
+    versions.push({version:item.version,status:"archived",lesson_count:item.lesson_count});
+  }
+  const next=payload.next_before_version;
+  if(next!==null&&(!archivePositive(next)||versions.length!==50||next!==versions[versions.length-1]?.version))return null;
+  return {versions,next_before_version:next};
+}
+function archivePairAfter(item,cursor){
+  return cursor===null||item.sort_order>cursor.sort_order||(item.sort_order===cursor.sort_order&&item.id>cursor.lesson_id);
+}
+function validatedArchivedLessons(payload,courseId,version,after=null,existing=[],lessonCount=null){
+  if(!archiveEnvelope(payload,courseId)||payload.course_version!==version||payload.status!=="archived"||
+     !Array.isArray(payload.lessons)||payload.lessons.length>50)return null;
+  const ids=new Set(existing.map(item=>item.id)),slugs=new Set(existing.map(item=>item.slug)),lessons=[];
+  let cursor=after;
+  for(const item of payload.lessons){
+    if(!archiveRecord(item)||!archivePositive(item.id)||ids.has(item.id)||!archiveSlug(item.slug)||slugs.has(item.slug)||
+       !archiveText(item.title,200)||!Number.isSafeInteger(item.sort_order)||item.sort_order<0||!archivePairAfter(item,cursor))return null;
+    ids.add(item.id);slugs.add(item.slug);cursor={sort_order:item.sort_order,lesson_id:item.id};
+    lessons.push({id:item.id,slug:item.slug,title:item.title,sort_order:item.sort_order});
+  }
+  const next=payload.next_after;
+  if(next!==null&&(!archiveRecord(next)||!Number.isSafeInteger(next.sort_order)||next.sort_order<0||
+     !archivePositive(next.lesson_id)||lessons.length!==50||next.sort_order!==cursor?.sort_order||next.lesson_id!==cursor?.lesson_id))return null;
+  const total=existing.length+lessons.length;
+  if(lessonCount!==null&&(!Number.isSafeInteger(lessonCount)||lessonCount<0||total>lessonCount||
+     (next===null?total!==lessonCount:total>=lessonCount)))return null;
+  return {lessons,next_after:next===null?null:{sort_order:next.sort_order,lesson_id:next.lesson_id}};
+}
+function validatedArchivedLesson(payload,courseId,version,expected){
+  if(!archiveEnvelope(payload,courseId)||payload.course_version!==version||payload.status!=="archived"||!archiveRecord(payload.lesson))return null;
+  const item=payload.lesson;
+  if(item.id!==expected.id||item.slug!==expected.slug||item.title!==expected.title||item.sort_order!==expected.sort_order||
+     !archiveText(item.body,30000))return null;
+  return {id:item.id,slug:item.slug,title:item.title,body:item.body,sort_order:item.sort_order};
+}
+function editorialArchiveAllowed(){
+  return !state.accessDenied&&state.catalogReady&&!state.catalogLoading&&!state.writePending&&!state.writeOutcomeUnknown&&
+    archivePositive(state.course?.id)&&state.courses.some(course=>course.id===state.course.id);
+}
+function renderEditorialArchive(){
+  const a=state.archive,active=editorialArchiveAllowed(),scoped=active&&a.courseId===state.course.id;
+  const renderedCourse=a.courseId,renderedVersion=a.selectedVersion;
+  $("editorial-versions-panel").hidden=state.accessDenied;
+  const context=$("editorial-versions-context");
+  context.hidden=!active;context.textContent=active?"Curso no cadastro atual: "+state.course.title:"";
+  $("editorial-versions-status").textContent=state.accessDenied?"":!state.course
+    ?"Selecione um curso para consultar suas versões arquivadas.":a.message;
+  const refresh=$("refresh-editorial-versions");refresh.disabled=!active||a.versionsLoading;
+  refresh.textContent=a.versionsLoading?"Consultando versões...":a.versionsLoaded?"Atualizar versões":"Consultar versões";
+  $("editorial-version-browser").hidden=!scoped||!a.versionsLoaded||a.versions.length===0;
+  const versions=$("editorial-version-list");versions.replaceChildren();
+  if(scoped)for(const item of a.versions){
+    const button=el("button",undefined,"item");button.type="button";button.dataset.archiveVersion=String(item.version);
+    button.disabled=a.versionsLoading;button.setAttribute("aria-current",String(a.selectedVersion===item.version));
+    button.append(el("strong","Versão "+item.version+" · Arquivada"),el("small",item.lesson_count+" aula"+(item.lesson_count===1?"":"s")));
+    button.addEventListener("click",()=>{
+      if(state.course?.id===renderedCourse)void loadEditorialArchiveLessons(item.version);
+    });versions.append(button);
+  }
+  const more=$("more-editorial-versions");more.hidden=!scoped||a.nextBefore===null;more.disabled=!active||a.versionsLoading;
+  $("editorial-version-heading").textContent=scoped&&a.selectedVersion!==null?"Versão "+a.selectedVersion+" · Arquivada":"Selecione uma versão";
+  $("editorial-version-lessons-status").textContent=scoped?a.lessonsMessage:"";
+  const lessons=$("editorial-version-lessons");lessons.replaceChildren();
+  if(scoped)for(const item of a.lessons){
+    const button=el("button",undefined,"item");button.type="button";button.dataset.archiveLesson=String(item.id);
+    button.disabled=!a.lessonsLoaded||(a.bodyLoading&&a.bodyLessonId===item.id);button.setAttribute("aria-current",String(a.lesson?.id===item.id));
+    button.append(el("strong",item.title),el("small",item.slug));
+    button.addEventListener("click",()=>{
+      if(state.course?.id===renderedCourse&&a.selectedVersion===renderedVersion)void loadEditorialArchiveBody(item.id);
+    });lessons.append(button);
+  }
+  const next=$("more-version-lessons");next.hidden=!scoped||a.nextAfter===null;next.disabled=!active||a.lessonsLoading;
+  $("editorial-version-body-status").textContent=scoped?a.bodyMessage:"";
+  const content=$("editorial-version-content");content.replaceChildren();content.hidden=!scoped||a.lesson===null;
+  if(scoped&&a.lesson){
+    content.append(el("p","Versão "+a.selectedVersion+" · Arquivada · Somente leitura","help"),
+      el("h4",a.lesson.title),el("p",a.lesson.body,"archive-text"));
+  }
+}
+function clearEditorialArchiveSelection(){
+  const a=state.archive;++a.lessonsRequest;++a.bodyRequest;
+  a.selectedVersion=null;a.lessons=[];a.nextAfter=null;a.lesson=null;a.bodyLessonId=null;
+  a.lessonsLoaded=false;a.lessonsLoading=false;a.bodyLoading=false;a.lessonsMessage="";a.bodyMessage="";
+}
+function invalidateEditorialArchive(message){
+  const a=state.archive;++a.versionsRequest;
+  a.courseId=null;a.versions=[];a.nextBefore=null;a.versionsLoaded=false;a.versionsLoading=false;a.message=message;
+  clearEditorialArchiveSelection();renderEditorialArchive();
+}
+async function loadEditorialArchiveVersions(beforeVersion=null){
+  const a=state.archive;
+  if(!editorialArchiveAllowed()||a.versionsLoading)return;
+  const courseId=state.course.id,append=beforeVersion!==null;
+  if(append&&(!archivePositive(beforeVersion)||!a.versionsLoaded||a.courseId!==courseId||beforeVersion!==a.nextBefore))return;
+  if(!append)invalidateEditorialArchive("Consultando versões arquivadas...");
+  const request=++a.versionsRequest,existing=append?a.versions:[];
+  a.courseId=courseId;a.versionsLoading=true;a.message="Consultando versões arquivadas...";renderEditorialArchive();
+  const current=()=>editorialArchiveAllowed()&&state.course.id===courseId&&a.courseId===courseId&&a.versionsRequest===request;
+  try{
+    const query=append?"?before_version="+encodeURIComponent(String(beforeVersion)):"";
+    const payload=await api("/courses/"+courseId+"/versions"+query);
+    if(!current())return;
+    const page=validatedArchivedVersions(payload,courseId,beforeVersion,existing);
+    if(page===null)throw new Error("invalid_archived_versions");
+    a.versions=[...existing,...page.versions];a.nextBefore=page.next_before_version;a.versionsLoaded=true;
+    a.message=a.versions.length===0?"Este curso não possui versões arquivadas.":
+      a.versions.length+" vers"+(a.versions.length===1?"ão arquivada carregada":"ões arquivadas carregadas")+". Selecione uma versão para consultar suas aulas.";
+  }catch(error){
+    if(current())invalidateEditorialArchive("Não foi possível consultar as versões arquivadas. Use Consultar versões para tentar novamente.");
+  }finally{
+    if(a.versionsRequest===request){a.versionsLoading=false;renderEditorialArchive();}
+  }
+}
+async function loadEditorialArchiveLessons(version,after=null){
+  const a=state.archive,courseId=state.course?.id;
+  if(!editorialArchiveAllowed()||a.courseId!==courseId||!a.versionsLoaded||a.versionsLoading||!archivePositive(version))return;
+  const metadata=a.versions.find(item=>item.version===version);if(!metadata)return;
+  const append=after!==null;
+  if(append&&(!a.lessonsLoaded||a.selectedVersion!==version||a.lessonsLoading||!archiveRecord(after)||
+     after.sort_order!==a.nextAfter?.sort_order||after.lesson_id!==a.nextAfter?.lesson_id))return;
+  if(!append){
+    if(a.lessonsLoading&&a.selectedVersion===version)return;
+    clearEditorialArchiveSelection();a.selectedVersion=version;
+  }
+  const request=++a.lessonsRequest,existing=append?a.lessons:[];
+  a.lessonsLoading=true;a.lessonsMessage="Consultando aulas arquivadas...";renderEditorialArchive();
+  const current=()=>editorialArchiveAllowed()&&state.course.id===courseId&&a.courseId===courseId&&
+    a.selectedVersion===version&&a.lessonsRequest===request;
+  try{
+    const query=append?"?after_sort_order="+encodeURIComponent(String(after.sort_order))+"&after_lesson_id="+encodeURIComponent(String(after.lesson_id)):"";
+    const payload=await api("/courses/"+courseId+"/versions/"+version+"/lessons"+query);
+    if(!current())return;
+    const page=validatedArchivedLessons(payload,courseId,version,after,existing,metadata.lesson_count);
+    if(page===null)throw new Error("invalid_archived_lessons");
+    a.lessons=[...existing,...page.lessons];a.nextAfter=page.next_after;a.lessonsLoaded=true;
+    a.lessonsMessage=a.lessons.length===0?"Esta versão arquivada não possui aulas.":
+      a.lessons.length+" aula"+(a.lessons.length===1?" carregada":"s carregadas")+". Selecione uma aula para ler o conteúdo salvo.";
+  }catch(error){
+    if(current()){
+      clearEditorialArchiveSelection();a.selectedVersion=version;
+      a.lessonsMessage="Não foi possível consultar as aulas desta versão. Selecione a versão novamente para tentar.";renderEditorialArchive();
+    }
+  }finally{
+    if(a.lessonsRequest===request){a.lessonsLoading=false;renderEditorialArchive();}
+  }
+}
+async function loadEditorialArchiveBody(lessonId){
+  const a=state.archive,courseId=state.course?.id,version=a.selectedVersion;
+  if(!editorialArchiveAllowed()||a.courseId!==courseId||!a.lessonsLoaded||!archivePositive(version))return;
+  const metadata=a.lessons.find(item=>item.id===lessonId);if(!metadata)return;
+  if(a.bodyLoading&&a.bodyLessonId===lessonId)return;
+  const request=++a.bodyRequest;a.lesson=null;a.bodyLessonId=lessonId;a.bodyLoading=true;a.bodyMessage="Carregando conteúdo arquivado...";renderEditorialArchive();
+  const current=()=>editorialArchiveAllowed()&&state.course.id===courseId&&a.courseId===courseId&&a.selectedVersion===version&&a.bodyRequest===request;
+  try{
+    const payload=await api("/courses/"+courseId+"/versions/"+version+"/lessons/"+lessonId);
+    if(!current())return;
+    const lesson=validatedArchivedLesson(payload,courseId,version,metadata);
+    if(lesson===null)throw new Error("invalid_archived_lesson");
+    a.lesson=lesson;a.bodyMessage="Conteúdo arquivado carregado para leitura.";
+  }catch(error){
+    if(current()){a.lesson=null;a.bodyMessage="Não foi possível ler esta aula arquivada. Selecione a aula novamente para tentar.";}
+  }finally{
+    if(a.bodyRequest===request){a.bodyLoading=false;renderEditorialArchive();}
+  }
+}
+$("refresh-editorial-versions").addEventListener("click",()=>{void loadEditorialArchiveVersions();});
+$("more-editorial-versions").addEventListener("click",()=>{
+  if(state.archive.nextBefore!==null)void loadEditorialArchiveVersions(state.archive.nextBefore);
+});
+$("more-version-lessons").addEventListener("click",()=>{
+  if(state.archive.nextAfter!==null)void loadEditorialArchiveLessons(state.archive.selectedVersion,state.archive.nextAfter);
+});
 function fillCourse(){
   if(state.accessDenied)return;
   const c=state.course;
@@ -247,11 +720,21 @@ function fillCourse(){
   $("course-slug").disabled=!!c;
   $("course-category").value=c?.category||"metodologia";
   $("course-summary").value=c?.summary||"";
+  $("course-audience").value=c?.audience??"";
+  $("course-suggested-knowledge").value=c?.suggested_knowledge??"";
   $("course-sort").value=String(c?.sort_order??0);
   $("publication-status").textContent=c?.is_published?"Publicado":"Rascunho";
   $("publication-status").className="chip"+(c?.is_published?" published":"");
+  updateEditorialControls();
+  renderEditorialArchive();
+}
+// Refreshing lessons must update permissions without replacing the course
+// fields: the editor may still have an independent, unsaved course draft.
+function updateEditorialControls(){
+  if(state.accessDenied)return;
+  const c=state.course;
   const editable=draft();
-  for(const id of ["course-title","course-category","course-summary","course-sort"]){$(id).disabled=!editable;}
+  for(const id of ["course-title","course-category","course-summary","course-sort","course-audience","course-suggested-knowledge"]){$(id).disabled=!editable;}
   $("course-save").disabled=!editable;
   $("publish").disabled=!c||!!c.is_published||!state.lessonsReady;
   $("check-publication").disabled=!c||!!c.is_published||!state.lessonsReady;
@@ -259,10 +742,14 @@ function fillCourse(){
   $("unpublish").disabled=!c||!c.is_published||!state.lessonsReady;
   $("delete-course").disabled=!c||!!c.is_published||!state.lessonsReady;
   $("lesson-form").querySelectorAll("input,textarea,button").forEach(x=>x.disabled=!c||!editable);
+  $("lesson-slug").disabled=!c||!editable||state.lesson!==null;
+  $("delete-lesson").disabled=!c||!editable||!state.lesson||
+    state.lesson.is_published||state.lesson.status!=="draft";
+  renderLessonReorderControls();
 }
 function previewLessonParts(body){
   const markers=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
-  return String(body||"").slice(0,30000)
+  return String(body||"")
     .split(/\n\n(?=(?:EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE)\n)/)
     .map((chunk,index)=>{
       const nl=chunk.indexOf("\n");
@@ -280,7 +767,13 @@ function showLessonPreview(){
   if(state.accessDenied||!state.course||state.course.is_published)return;
   const title=$("lesson-title").value.trim();
   const body=$("lesson-body").value.trim();
-  if(!title||body.length<10){say("Informe título e conteúdo antes de pré-visualizar.");return;}
+  const titleLength=Array.from(title).length,bodyLength=Array.from(body).length;
+  if(titleLength<3||titleLength>200){
+    say("O título da aula deve ter entre 3 e 200 caracteres. Os campos foram mantidos.");$("lesson-title").focus();return;
+  }
+  if(bodyLength<10||bodyLength>30000){
+    say("O conteúdo deve ter entre 10 e 30000 caracteres. Os campos foram mantidos.");$("lesson-body").focus();return;
+  }
   hideLessonPreview();
   $("preview-title").textContent=title;
   for(const section of previewLessonParts(body)){
@@ -296,31 +789,325 @@ function resetLesson(){
   state.lesson=null;
   $("lesson-form").reset();
   $("lesson-title-heading").textContent="Nova aula";
-  $("lesson-slug").disabled=false;
+  $("lesson-slug").disabled=!state.course||!draft()||state.writePending;
   $("lesson-sort").value="0";
   $("delete-lesson").disabled=true;
 }
+function fillLesson(){
+  if(state.accessDenied||!state.lesson)return;
+  const lesson=state.lesson;
+  hideLessonPreview();
+  $("lesson-title").value=lesson.title;$("lesson-slug").value=lesson.slug;
+  $("lesson-sort").value=String(lesson.sort_order);
+  $("lesson-body").value=lesson.body;$("lesson-title-heading").textContent="Editar aula";
+  updateEditorialControls();
+}
+function editorialCourseFiltersAllowed(){
+  return state.catalogReady&&!state.accessDenied&&!state.writePending&&!state.writeOutcomeUnknown;
+}
+function normalizeEditorialSearch(text){
+  return String(text??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("pt-BR");
+}
+function filteredEditorialCourses(){
+  const term=normalizeEditorialSearch((state.courseQuery||"").trim());
+  const category=state.courseCategory||"todos",status=state.courseStatus||"todos";
+  const matches=state.courses.filter(course=>(category==="todos"||course.category===category)&&
+    (status==="todos"||(status==="published"?course.is_published:!course.is_published))&&
+    (!term||normalizeEditorialSearch([course.title,course.slug,course.summary,cats[course.category]||""].join(" ")).includes(term)));
+  const selected=state.courses.find(course=>course.id===state.course?.id)??null;
+  const pinned=selected&&!matches.some(course=>course.id===selected.id)?selected:null;
+  return {matches,pinned};
+}
+function renderEditorialCourseFilters(){
+  const active=editorialCourseFiltersAllowed();
+  $("editorial-course-search").value=state.courseQuery||"";
+  $("editorial-category-filter").value=state.courseCategory||"todos";
+  $("editorial-state-filter").value=state.courseStatus||"todos";
+  for(const id of ["editorial-course-search","editorial-category-filter","editorial-state-filter"]){$(id).disabled=!active;}
+  $("clear-editorial-filters").disabled=!active||(!(state.courseQuery||"")&&
+    (state.courseCategory||"todos")==="todos"&&(state.courseStatus||"todos")==="todos");
+  const message=$("editorial-filter-status");
+  if(state.accessDenied){message.textContent="";return;}
+  if(!state.catalogReady||state.writeOutcomeUnknown){message.textContent="Consulte o catálogo para usar a busca e os filtros.";return;}
+  const {matches,pinned}=filteredEditorialCourses();
+  message.textContent="Resultados: "+matches.length+" de "+state.courses.length+" curso"+(state.courses.length===1?"":"s")+"."+
+    (pinned?" O curso em edição também permanece visível.":"");
+}
+function updateEditorialCourseFilters(){
+  if(!editorialCourseFiltersAllowed())return;
+  const category=$("editorial-category-filter").value,status=$("editorial-state-filter").value;
+  if(!["todos","metodologia","negocios","sistemas"].includes(category)||
+    !["todos","published","draft"].includes(status)){renderEditorialCourseFilters();return;}
+  state.courseQuery=String($("editorial-course-search").value).slice(0,120);
+  state.courseCategory=category;state.courseStatus=status;
+  // Filtering only redraws navigation. It does not select a course, refill a
+  // form, invalidate a preflight or fetch/write editorial data.
+  renderCourses();
+}
+$("editorial-course-search").addEventListener("input",updateEditorialCourseFilters);
+$("editorial-category-filter").addEventListener("change",updateEditorialCourseFilters);
+$("editorial-state-filter").addEventListener("change",updateEditorialCourseFilters);
+$("clear-editorial-filters").addEventListener("click",()=>{
+  if(!editorialCourseFiltersAllowed())return;
+  state.courseQuery="";state.courseCategory="todos";state.courseStatus="todos";
+  renderCourses();$("editorial-course-search").focus();
+});
 function renderCourses(){
+  renderEditorialCourseFilters();
   if(state.accessDenied)return;
   $("course-items").replaceChildren();
+  if(!state.catalogReady){$("course-items").append(el("p","Consulte o catálogo para ver os cursos.","help"));return;}
   if(!state.courses.length){$("course-items").append(el("p","Nenhum curso cadastrado."));return;}
-  for(const c of state.courses){
+  const {matches,pinned}=filteredEditorialCourses();
+  if(!matches.length)$("course-items").append(el("p","Nenhum curso corresponde à busca e aos filtros.","help"));
+  for(const c of pinned?[pinned,...matches]:matches){
     const b=el("button",undefined,"item");b.type="button";b.dataset.course=String(c.id);
     b.setAttribute("aria-current",String(c.id===state.course?.id));
+    if(pinned?.id===c.id){b.dataset.outsideFilter="true";b.append(el("small","Em edição · fora do filtro","catalog-pinned"));}
     b.append(el("strong",c.title),el("small",(cats[c.category]||"Curso")+" · "+(c.is_published?"Publicado":"Rascunho")));
     $("course-items").append(b);
   }
 }
+function editorialLessonListReady(){
+  return !state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&state.lessonsReady&&
+    state.course!==null&&Array.isArray(state.lessons)&&state.lessons.length<=5000;
+}
+function editorialLessonFiltersAllowed(){
+  return editorialLessonListReady()&&!state.writePending&&!state.catalogLoading;
+}
+function filteredEditorialLessons(){
+  if(!editorialLessonListReady())return {ordered:[],matches:[],pinned:null};
+  const ordered=state.lessons.slice().sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id);
+  const term=normalizeEditorialSearch((state.lessonQuery||"").trim());
+  const matches=ordered.filter(lesson=>!term||[lesson.title,lesson.slug]
+    .some(value=>normalizeEditorialSearch(value).includes(term)));
+  const selected=ordered.find(lesson=>lesson.id===state.lesson?.id)??null;
+  const pinned=selected&&!matches.some(lesson=>lesson.id===selected.id)?selected:null;
+  return {ordered,matches,pinned};
+}
+function renderEditorialLessonFilters(){
+  const courseId=state.course?.id??null;
+  // The query belongs only to this selected course. A refresh of the same
+  // course, including a confirmed reorder, keeps it; a course change clears it.
+  if(state.lessonQueryCourseId!==courseId){state.lessonQueryCourseId=courseId;state.lessonQuery="";}
+  const active=editorialLessonFiltersAllowed(),input=$("editorial-lesson-search");
+  input.value=state.lessonQuery||"";input.disabled=!active;
+  $("clear-editorial-lesson-filter").disabled=!active||!state.lessonQuery;
+  const message=$("editorial-lesson-filter-status");
+  message.hidden=state.accessDenied;
+  if(state.accessDenied){message.textContent="";return;}
+  if(courseId===null){message.textContent="Selecione um curso para buscar aulas.";return;}
+  if(!editorialLessonListReady()){message.textContent="Consulte as aulas deste curso para usar a busca.";return;}
+  if(state.writePending||state.catalogLoading){message.textContent="Aguarde a atualização editorial para buscar aulas.";return;}
+  const {ordered,matches,pinned}=filteredEditorialLessons();
+  message.textContent="Resultados: "+matches.length+" de "+ordered.length+" aula"+(ordered.length===1?"":"s")+"."+
+    (pinned?" A aula em edição também permanece visível.":"")+
+    ((state.lessonQuery||"").trim()?" Subir e Descer consideram todas as aulas do curso.":"");
+}
+function updateEditorialLessonFilter(){
+  if(!editorialLessonFiltersAllowed()){renderEditorialLessonFilters();return;}
+  state.lessonQuery=String($("editorial-lesson-search").value).slice(0,120);
+  // Only navigation is projected. Keep the complete state.lessons snapshot,
+  // form buffers, previews, preflight, archive and request generations intact.
+  renderLessons();
+}
+$("editorial-lesson-search").addEventListener("input",updateEditorialLessonFilter);
+$("clear-editorial-lesson-filter").addEventListener("click",()=>{
+  if(!editorialLessonFiltersAllowed()){renderEditorialLessonFilters();return;}
+  state.lessonQuery="";renderLessons();$("editorial-lesson-search").focus();
+});
 function renderLessons(){
+  renderEditorialLessonFilters();
   if(state.accessDenied)return;
   $("lesson-items").replaceChildren();
-  if(!state.lessons.length){$("lesson-items").append(el("p",state.course&&!state.lessonsReady?"Verificando aulas autorizadas...":"Nenhuma aula cadastrada.","help"));return;}
-  for(const l of state.lessons){
+  if(!editorialLessonListReady()){
+    $("lesson-items").append(el("p",state.course?"Consulte as aulas autorizadas deste curso.":"Selecione um curso.","help"));
+    renderLessonReorderControls();return;
+  }
+  const {ordered,matches,pinned}=filteredEditorialLessons();
+  if(!ordered.length)$("lesson-items").append(el("p","Nenhuma aula cadastrada.","help"));
+  else if(!matches.length)$("lesson-items").append(el("p","Nenhuma aula corresponde à busca.","help"));
+  const courseId=state.course?.id??null,request=state.lessonRequest;
+  const positions=new Map(ordered.map((lesson,index)=>[lesson.id,index]));
+  for(const l of pinned?[pinned,...matches]:matches){
+    const row=el("div",undefined,"lesson-row");row.dataset.lessonRow=String(l.id);
     const btn=el("button",undefined,"item");btn.type="button";btn.dataset.lesson=String(l.id);
     btn.setAttribute("aria-current",String(l.id===state.lesson?.id));
-    btn.append(el("strong",l.title),el("small",l.status+" · "+(l.is_published?"Publicada":"Rascunho")));
-    $("lesson-items").append(btn);
+    if(pinned?.id===l.id){row.dataset.outsideFilter="true";btn.append(el("small","Em edição · fora da busca","catalog-pinned"));}
+    btn.append(el("strong",l.title),el("small","Posição "+(positions.get(l.id)+1)+" · "+l.status+" · "+(l.is_published?"Publicada":"Rascunho")));
+    const actions=el("div",undefined,"lesson-order-actions");
+    for(const direction of ["up","down"]){
+      const move=el("button",direction==="up"?"↑ Subir":"↓ Descer","secondary");move.type="button";
+      move.dataset.moveLesson=String(l.id);move.dataset.direction=direction;
+      move.setAttribute("aria-label",(direction==="up"?"Subir aula: ":"Descer aula: ")+l.title);
+      move.addEventListener("click",()=>{
+        if(state.course?.id===courseId&&state.lessonRequest===request&&move.isConnected&&
+           row.contains(move)&&$("lesson-items").contains(row))
+          void reorderLesson(l.id,direction);
+      });
+      actions.append(move);
+    }
+    row.append(btn,actions);$("lesson-items").append(row);
   }
+  renderLessonReorderControls();
+}
+function validatedLessonOrder(order){
+  if(!Array.isArray(order)||order.length>5000)return null;
+  const ids=new Set(),pairs=[];
+  for(const item of order){
+    if(!item||typeof item!=="object"||Array.isArray(item)||
+       !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
+       !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999)return null;
+    const previous=pairs[pairs.length-1];
+    if(previous&&(previous.sort_order>item.sort_order||
+       (previous.sort_order===item.sort_order&&previous.id>=item.id)))return null;
+    ids.add(item.id);pairs.push({id:item.id,sort_order:item.sort_order});
+  }
+  return pairs;
+}
+function draftLessonOrder(){
+  if(!Array.isArray(state.lessons)||state.lessons.length>5000||
+     state.lessons.some(lesson=>!lesson||lesson.status!=="draft"||lesson.is_published!==false))return null;
+  return validatedLessonOrder(state.lessons.map(lesson=>({id:lesson.id,sort_order:lesson.sort_order}))
+    .sort((a,b)=>a.sort_order-b.sort_order||a.id-b.id));
+}
+function lessonReorderTarget(expectedOrder,lessonId,direction){
+  const order=validatedLessonOrder(expectedOrder);
+  if(order===null||!Number.isSafeInteger(lessonId)||lessonId<1||!["up","down"].includes(direction))return null;
+  const index=order.findIndex(lesson=>lesson.id===lessonId);
+  if(index<0)return null;
+  const neighbor=index+(direction==="up"?-1:1);
+  if(neighbor<0||neighbor>=order.length)return {order,boundary:true};
+  [order[index],order[neighbor]]=[order[neighbor],order[index]];
+  return {order:order.map((lesson,position)=>({id:lesson.id,sort_order:position})),boundary:false};
+}
+function validatedLessonReorderReceipt(payload,courseId,lessonId,direction,expectedOrder){
+  const target=lessonReorderTarget(expectedOrder,lessonId,direction);
+  if(!target||!payload||typeof payload!=="object"||Array.isArray(payload)||
+     !Number.isSafeInteger(courseId)||courseId<1||payload.schema_version!==1||
+     payload.scope!=="current_editorial_draft"||payload.course_id!==courseId||
+     !Number.isSafeInteger(payload.course_version)||payload.course_version<1||payload.status!=="draft"||
+     payload.lesson_id!==lessonId||payload.direction!==direction||typeof payload.changed!=="boolean"||
+     (target.boundary&&payload.changed)||!Array.isArray(payload.order)||payload.order.length!==target.order.length)return null;
+  for(let index=0;index<target.order.length;index++){
+    const actual=payload.order[index],expected=target.order[index];
+    if(!actual||typeof actual!=="object"||Array.isArray(actual)||
+       actual.id!==expected.id||actual.sort_order!==expected.sort_order)return null;
+  }
+  return {schema_version:1,scope:"current_editorial_draft",course_id:courseId,course_version:payload.course_version,
+    status:"draft",lesson_id:lessonId,direction,changed:payload.changed,order:target.order};
+}
+function lessonReorderFormSnapshot(){
+  const values=ids=>ids.map(id=>String($(id).value));
+  return {courseId:state.course?.id??null,lessonId:state.lesson?.id??null,
+    course:values(["course-title","course-slug","course-category","course-summary","course-sort","course-audience","course-suggested-knowledge"]),
+    lesson:values(["lesson-title","lesson-slug","lesson-body","lesson-sort"])};
+}
+function captureEditorialDraft(){
+  return {forms:lessonReorderFormSnapshot(),course:state.course,lesson:state.lesson,
+    lessonQuery:state.lessonQuery,lessonQueryCourseId:state.lessonQueryCourseId};
+}
+// Local buffers are recoverable text, never authority for another mutation.
+// Only failed manual recovery or an explicitly opted-in post-save read uses
+// this helper. Normal navigation and confirmed deletion keep their cleanup.
+function restoreEditorialDraft(snapshot){
+  if(state.accessDenied||!snapshot)return;
+  state.catalogReady=false;state.lessonsReady=false;
+  state.courses=[];state.lessons=[];state.course=snapshot.course;state.lesson=snapshot.lesson;
+  state.lessonQuery=snapshot.lessonQuery;state.lessonQueryCourseId=snapshot.lessonQueryCourseId;
+  renderCourses();renderLessons();fillCourse();
+  if(state.lesson)fillLesson();else resetLesson();
+  const restore=(ids,values)=>ids.forEach((id,index)=>{
+    $(id).value=values[index];$(id).disabled=true;
+  });
+  restore(["course-title","course-slug","course-category","course-summary","course-sort",
+    "course-audience","course-suggested-knowledge"],snapshot.forms.course);
+  restore(["lesson-title","lesson-slug","lesson-body","lesson-sort"],snapshot.forms.lesson);
+  freezeUncertainEditorialWrite();
+  $("course-items").replaceChildren();
+  $("course-items").append(el("p","Cursos temporariamente indisponíveis.","help"));
+  $("lesson-items").replaceChildren();
+}
+function lessonReorderDirtyForms(snapshot=lessonReorderFormSnapshot()){
+  const c=state.course,l=state.lesson;
+  const course=[c?.title??"",c?.slug??"",c?.category??"metodologia",c?.summary??"",String(c?.sort_order??0),
+    c?.audience??"",c?.suggested_knowledge??""];
+  const lesson=[l?.title??"",l?.slug??"",l?.body??"",String(l?.sort_order??0)];
+  return {course:snapshot.course.some((value,index)=>value!==course[index]),
+    lesson:snapshot.lesson.some((value,index)=>value!==lesson[index])};
+}
+function renderLessonReorderControls(){
+  renderEditorialLessonFilters();
+  const message=$("lesson-order-status"),course=state.course;
+  const order=draftLessonOrder();
+  const valid=!state.accessDenied&&!state.writeOutcomeUnknown&&state.catalogReady&&state.lessonsReady&&
+    course?.is_published===false&&order!==null&&
+    (state.lesson===null||order.some(lesson=>lesson.id===state.lesson.id));
+  const dirty=valid?lessonReorderDirtyForms():{course:false,lesson:false};
+  const ready=valid&&!state.writePending&&!state.catalogLoading&&!dirty.course&&!dirty.lesson;
+  const positions=new Map((order||[]).map((lesson,index)=>[lesson.id,index]));
+  $("lesson-items").querySelectorAll("[data-move-lesson]").forEach(button=>{
+    const index=positions.get(Number(button.dataset.moveLesson))??-1;
+    button.disabled=!ready||index<0||
+      (button.dataset.direction==="up"?index===0:index===order.length-1);
+  });
+  message.hidden=state.accessDenied;
+  message.textContent=state.accessDenied?"":!course?"Selecione um curso para consultar a ordem das aulas.":
+    course.is_published?"A ordem desta versão publicada é somente leitura.":
+    !valid?"Consulte os cursos e as aulas para conferir a ordem antes de movimentar.":
+    state.writePending?"Aplicando alteração editorial...":
+    dirty.course||dirty.lesson?"Salve os formulários antes de mudar a ordem. Se ambos foram alterados, salve a aula primeiro.":
+    order.length<2?"Inclua pelo menos duas aulas em rascunho para usar Subir e Descer.":
+    "Use Subir e Descer para mover uma aula por vez. As posições são confirmadas pelo servidor.";
+}
+async function reorderLesson(lessonId,direction){
+  if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||state.catalogLoading||
+     !state.catalogReady||!state.lessonsReady||state.course?.is_published!==false)return;
+  const expected=draftLessonOrder(),target=lessonReorderTarget(expected,lessonId,direction);
+  if(!target||state.lesson!==null&&!expected.some(lesson=>lesson.id===state.lesson.id))return;
+  const forms=lessonReorderFormSnapshot(),dirty=lessonReorderDirtyForms(forms);
+  if(dirty.course||dirty.lesson){
+    say(dirty.course&&dirty.lesson
+      ?"Salve primeiro a aula e depois o curso antes de mudar a ordem. Os campos não salvos foram mantidos."
+      :"Salve as alterações "+(dirty.lesson?"da aula":"do curso")+" antes de mudar a ordem. Os campos não salvos foram mantidos.");
+    renderLessonReorderControls();return;
+  }
+  if(target.boundary)return;
+  const courseId=state.course.id;
+  if(!beginWrite())return;
+  const courseRequest=state.courseRequest,lessonRequest=state.lessonRequest;
+  clearPublicationCheck();hideLessonPreview();
+  try{
+    const payload=await api("/courses/"+courseId+"/lessons/reorder","POST",{
+      lesson_id:lessonId,direction,expected_order:expected});
+    if(state.accessDenied)return;
+    const receipt=validatedLessonReorderReceipt(payload,courseId,lessonId,direction,expected);
+    if(receipt===null)throw new Error("invalid_lesson_order_receipt");
+    const current=lessonReorderFormSnapshot(),order=draftLessonOrder();
+    if(state.course?.id!==courseId||state.course.is_published||state.courseRequest!==courseRequest||
+       state.lessonRequest!==lessonRequest||!state.catalogReady||!state.lessonsReady||
+       current.courseId!==forms.courseId||current.lessonId!==forms.lessonId||
+       current.course.some((value,index)=>value!==forms.course[index])||
+       current.lesson.some((value,index)=>value!==forms.lesson[index])||order===null||
+       JSON.stringify(order)!==JSON.stringify(expected)){
+      freezeUncertainEditorialWrite();
+      say("Os formulários ou a seleção mudaram durante a alteração de ordem. Os campos atuais foram preservados. Consulte novamente os cursos e aulas antes de continuar.");
+      return;
+    }
+    // The receipt authorizes only these order pairs. Keep current form text,
+    // selected IDs and filters; never refill either form after this mutation.
+    const lessons=new Map(state.lessons.map(lesson=>[lesson.id,lesson]));
+    state.lessons=receipt.order.map(pair=>({...lessons.get(pair.id),sort_order:pair.sort_order}));
+    state.lesson=state.lessons.find(lesson=>lesson.id===forms.lessonId)||null;
+    if(state.lesson)$("lesson-sort").value=String(state.lesson.sort_order);
+    renderLessons();
+    say(receipt.changed?"Ordem das aulas atualizada.":"Ordem das aulas confirmada. Nenhuma nova alteração foi necessária.");
+  }catch(error){
+    if(!state.accessDenied){
+      freezeUncertainEditorialWrite();
+      say("A ordem não pôde ser confirmada. Não repita o movimento: consulte novamente os cursos e aulas antes de continuar.");
+    }
+  }finally{finishWrite();}
 }
 // Validate the catalogue as a whole BEFORE setting catalogReady. A 200
 // response containing missing/duplicate IDs or invalid editorial metadata
@@ -335,35 +1122,52 @@ function validatedAdminCourses(payload){
        !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
        typeof item.slug!=="string"||item.slug.length>120||
        !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug)||
-       typeof item.title!=="string"||!item.title.trim()||item.title.length>200||
+       typeof item.title!=="string"||!item.title.trim()||item.title.length>400||Array.from(item.title).length>200||
        !["metodologia","negocios","sistemas"].includes(item.category)||
        !(item.summary===null||typeof item.summary==="string")||
-       (typeof item.summary==="string"&&item.summary.length>500)||
+       (typeof item.summary==="string"&&(item.summary.length>1000||Array.from(item.summary).length>500))||
+       ["audience","suggested_knowledge"].some(field=>item[field]!==undefined&&item[field]!==null&&
+         (typeof item[field]!=="string"||item[field].length>1000||Array.from(item[field]).length>500))||
        !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
        ![true,false,0,1].includes(item.is_published))return null;
     ids.add(item.id);
     courses.push({id:item.id,slug:item.slug,title:item.title,
       category:item.category,summary:item.summary??"",sort_order:item.sort_order,
+      audience:item.audience??"",suggested_knowledge:item.suggested_knowledge??"",
       is_published:Boolean(item.is_published)});
   }
   return courses;
 }
-async function refreshCourses(preferredId=state.course?.id??null){
+async function refreshCourses(preferredId=state.course?.id??null,preserveAfterSave=false,preferredLessonId=state.lesson?.id??null){
+  const savedDraft=state.writePending&&preserveAfterSave?captureEditorialDraft():null;
+  const savedTarget=savedDraft?{courseId:preferredId,lessonId:preferredLessonId}:null;
   const request=++state.courseRequest;
   // A failed refresh after an editorial write must never leave the old
   // catalog eligible for another mutation merely because it was once valid.
   state.catalogReady=false;
+  renderEditorialCourseFilters();
+  renderLessonReorderControls();
+  invalidateEditorialOverview("Consulte os cursos e atualize a visão para conferir os números do acervo.");
+  invalidateEditorialArchive("Consulte as versões arquivadas após carregar os cursos.");
   $("new-course").disabled=true;
-  const result=await api("/courses");
-  if(state.accessDenied||state.courseRequest!==request)return;
-  const verified=validatedAdminCourses(result);
-  if(verified===null)throw new Error("O catálogo editorial recebido é inválido. Tente novamente.");
-  state.courses=verified;
-  state.course=state.courses.find(c=>c.id===preferredId)||null;
-  state.catalogReady=true;
-  $("new-course").disabled=false;
-  renderCourses();fillCourse();
-  await refreshLessons();
+  try{
+    const result=await api("/courses");
+    if(state.accessDenied||state.courseRequest!==request)return;
+    const verified=validatedAdminCourses(result);
+    if(verified===null)throw new Error("O catálogo editorial recebido é inválido. Tente novamente.");
+    state.courses=verified;
+    state.course=state.courses.find(c=>c.id===preferredId)||null;
+    state.catalogReady=true;
+    $("new-course").disabled=false;
+    renderCourses();fillCourse();
+    await refreshLessons(preferredLessonId);
+  }catch(error){
+    if(savedDraft&&!state.accessDenied&&state.courseRequest===request){
+      state.confirmedSaveNeedsRead=true;state.confirmedSaveReadTarget=savedTarget;
+      restoreEditorialDraft(savedDraft);
+    }
+    throw error;
+  }
 }
 // A course is not editable until its current lesson-version list is
 // authenticated and structurally consistent. Invalid 200 responses must
@@ -377,8 +1181,8 @@ function validatedAdminLessons(payload){
        !Number.isSafeInteger(item.id)||item.id<1||ids.has(item.id)||
        typeof item.slug!=="string"||item.slug.length>120||
        !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug)||slugs.has(item.slug)||
-       typeof item.title!=="string"||!item.title.trim()||item.title.length>200||
-       typeof item.body!=="string"||item.body.length>30000||
+       typeof item.title!=="string"||!item.title.trim()||item.title.length>400||Array.from(item.title).length>200||
+       typeof item.body!=="string"||item.body.length>60000||Array.from(item.body).length>30000||
        !Number.isSafeInteger(item.sort_order)||item.sort_order<0||item.sort_order>9999||
        !["draft","published","archived"].includes(item.status)||
        ![true,false,0,1].includes(item.is_published))return null;
@@ -389,11 +1193,12 @@ function validatedAdminLessons(payload){
   }
   return lessons;
 }
-async function refreshLessons(){
+async function refreshLessons(preferredLessonId=state.lesson?.id??null,preserveAfterSave=false){
+  const savedDraft=state.writePending&&preserveAfterSave?captureEditorialDraft():null;
   const request=++state.lessonRequest;
   const courseId=state.course?.id??null;
   state.lessonsReady=false;
-  state.lessons=[];state.lesson=null;renderLessons();resetLesson();fillCourse();
+  state.lessons=[];state.lesson=null;renderLessons();resetLesson();updateEditorialControls();
   if(courseId===null||state.accessDenied)return;
   let result;
   try{
@@ -402,10 +1207,20 @@ async function refreshLessons(){
     const verified=validatedAdminLessons(result);
     if(verified===null)throw new Error("A lista de aulas recebida é inválida. Tente novamente.");
     state.lessons=verified;
+    // Only a lesson present in this fresh, authorized list may remain selected.
+    // A removed lesson or a new version must never revive the old editor.
+    state.lesson=state.lessons.find(lesson=>lesson.id===preferredLessonId)||null;
     state.lessonsReady=true;
-    renderLessons();fillCourse();
+    if(state.lesson)fillLesson();
+    renderLessons();updateEditorialControls();
   }catch(error){
     if(!state.accessDenied&&state.lessonRequest===request&&state.course?.id===courseId){
+      if(savedDraft){
+        state.confirmedSaveNeedsRead=true;
+        state.confirmedSaveReadTarget={courseId,lessonId:preferredLessonId};
+        restoreEditorialDraft(savedDraft);
+        throw error;
+      }
       // The selected course remains authoritative; no stale lesson data is
       // shown. A human may retry this read without abandoning the course.
       const panel=$("lesson-items");panel.replaceChildren();
@@ -427,6 +1242,7 @@ $("course-items").addEventListener("click",async event=>{
   if(state.course?.id===nextId)return;
   if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;
+  invalidateEditorialArchive("Consulte as versões arquivadas do curso selecionado.");
   say("");state.course=state.courses.find(c=>c.id===Number(b.dataset.course))||null;
   renderCourses();fillCourse();
   try{await refreshLessons();}catch(error){say(error.message);}
@@ -435,35 +1251,74 @@ $("new-course").addEventListener("click",()=>{
   if(state.accessDenied||state.writePending||state.writeOutcomeUnknown||!state.catalogReady)return;
   if(!confirmDiscardCourseAndLesson())return;
   ++state.courseRequest;++state.lessonRequest;
+  invalidateEditorialArchive("Selecione um curso para consultar suas versões arquivadas.");
   state.course=null;state.lessons=[];state.lesson=null;state.lessonsReady=false;
   renderCourses();renderLessons();fillCourse();resetLesson();$("course-title").focus();say("");
 });
 $("course-form").addEventListener("submit",async event=>{
   event.preventDefault();if(!draft())return;
+  // Save the lesson first: its refresh preserves these course fields. This
+  // prevents a course refresh from silently discarding the other form.
+  if(lessonHasUnsavedEdits()){
+    say("Salve a aula em edição antes de salvar o curso. Para descartá-la, use Nova aula. As alterações do curso foram mantidas.");
+    return;
+  }
+  const baseline=state.course===null?null:{id:state.course.id,sort_order:state.course.sort_order,
+    audience:state.course.audience??"",suggested_knowledge:state.course.suggested_knowledge??""};
   const payload={title:$("course-title").value.trim(),slug:$("course-slug").value.trim(),
     category:$("course-category").value,summary:$("course-summary").value.trim(),sort_order:intField("course-sort")};
-  if(!payload.title){say("Informe o título.");return;}
-  const courseId=state.course?.id??null;
+  const titleLength=Array.from(payload.title).length;
+  if(titleLength<3||titleLength>200){
+    say("O título deve ter entre 3 e 200 caracteres. Os campos foram mantidos.");$("course-title").focus();return;
+  }
+  if(Array.from(payload.summary).length>500){
+    say("A descrição curta deve ter no máximo 500 caracteres. Os campos foram mantidos.");$("course-summary").focus();return;
+  }
+  for(const [field,id,label] of [["audience","course-audience","Para quem"],
+    ["suggested_knowledge","course-suggested-knowledge","Conhecimentos úteis"]]){
+    const value=$(id).value.trim();
+    // Count Unicode characters, never truncate a valid surrogate pair.
+    // No HTML maxlength: it would count UTF-16 units rather than characters.
+    if(value.length>1000||Array.from(value).length>500){
+      say(label+" deve ter no máximo 500 caracteres. Os campos foram mantidos.");$(id).focus();return;
+    }
+    if(baseline?value!==baseline[field].trim():value!=="")payload[field]=value||null;
+  }
+  const courseId=baseline?.id??null;
   if(!beginWrite())return;
   try{
-    const result=courseId!==null
-      ? await api("/courses/"+courseId,"PATCH",(({slug,...withoutSlug})=>withoutSlug)(payload))
-      : await api("/courses","POST",payload);
-    if(!state.accessDenied){await refreshCourses(courseId??result.id);say("Rascunho salvo.");}
+    let result;
+    if(courseId!==null){
+      const {slug,sort_order,...data}=payload;
+      // A text edit must not replay an order another editor changed.
+      // Only an explicit numeric change carries the original order baseline.
+      if(sort_order!==baseline.sort_order){
+        data.sort_order=sort_order;data.expected_sort_order=baseline.sort_order;
+      }
+      result=await api("/courses/"+courseId,"PATCH",data);
+    }else result=await api("/courses","POST",payload);
+    // HTTP success alone cannot confirm a write or authorize replacing drafts.
+    if(courseId!==null){
+      if(result?.saved!==true)throw new Error("invalid_course_save_receipt");
+    }else if(!result||typeof result!=="object"||Array.isArray(result)||
+      !Number.isSafeInteger(result.id)||result.id<1||result.status!=="draft"){
+      throw new Error("invalid_course_create_receipt");
+    }
+    if(!state.accessDenied){await refreshCourses(courseId??result.id,true);say("Rascunho salvo.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
 $("lesson-items").addEventListener("click",event=>{
-  const b=event.target.closest("[data-lesson]");if(!b||state.accessDenied||state.writePending)return;
+  const b=event.target.closest("[data-lesson]");
+  if(!b||!editorialLessonFiltersAllowed()||!b.isConnected||b.hidden||!$("lesson-items").contains(b))return;
+  const selected=state.lessons.find(lesson=>lesson.id===Number(b.dataset.lesson));
+  if(!selected)return;
   if(state.lesson?.id===Number(b.dataset.lesson))return;
   if(!confirmDiscardLesson())return;
-  state.lesson=state.lessons.find(l=>l.id===Number(b.dataset.lesson))||null;
+  state.lesson=selected;
   hideLessonPreview();
   if(!state.lesson)return;
-  $("lesson-title").value=state.lesson.title;$("lesson-slug").value=state.lesson.slug;
-  $("lesson-slug").disabled=true;$("lesson-sort").value=String(state.lesson.sort_order);
-  $("lesson-body").value=state.lesson.body;$("lesson-title-heading").textContent="Editar aula";
-  $("delete-lesson").disabled=!draft()||state.lesson.is_published||state.lesson.status!=="draft";
+  fillLesson();
   renderLessons();
 });
 $("clear-lesson").addEventListener("click",()=>{
@@ -471,6 +1326,8 @@ $("clear-lesson").addEventListener("click",()=>{
   resetLesson();renderLessons();
 });
 $("preview-lesson").addEventListener("click",showLessonPreview);
+$("lesson-title").addEventListener("input",hideLessonPreview);
+$("lesson-body").addEventListener("input",hideLessonPreview);
 $("delete-lesson").addEventListener("click",async()=>{
   const lesson=state.lesson,course=state.course;
   if(state.accessDenied||!course||course.is_published||!lesson||lesson.is_published||lesson.status!=="draft")return;
@@ -478,26 +1335,47 @@ $("delete-lesson").addEventListener("click",async()=>{
   if(!beginWrite())return;
   $("delete-lesson").disabled=true;
   try{
-    await api("/lessons/"+encodeURIComponent(String(lesson.id)),"DELETE");
+    const receipt=await api("/lessons/"+encodeURIComponent(String(lesson.id)),"DELETE");
+    if(receipt?.deleted!==true)throw new Error("invalid_lesson_delete_receipt");
     if(!state.accessDenied){await refreshLessons();say("Aula em rascunho excluída. Histórico publicado foi preservado.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
 $("lesson-form").addEventListener("submit",async event=>{
   event.preventDefault();if(!state.course||!draft())return;
+  const baseline=state.lesson===null?null:{id:state.lesson.id,sort_order:state.lesson.sort_order};
   const payload={title:$("lesson-title").value.trim(),slug:$("lesson-slug").value.trim(),
     body:$("lesson-body").value.trim(),sort_order:intField("lesson-sort")};
-  if(!payload.title||payload.body.length<10){say("Preencha título e conteúdo.");return;}
-  const courseId=state.course.id,lessonId=state.lesson?.id??null;
+  const titleLength=Array.from(payload.title).length,bodyLength=Array.from(payload.body).length;
+  if(titleLength<3||titleLength>200){
+    say("O título da aula deve ter entre 3 e 200 caracteres. Os campos foram mantidos.");$("lesson-title").focus();return;
+  }
+  if(bodyLength<10||bodyLength>30000){
+    say("O conteúdo deve ter entre 10 e 30000 caracteres. Os campos foram mantidos.");$("lesson-body").focus();return;
+  }
+  const courseId=state.course.id,lessonId=baseline?.id??null;
   if(!beginWrite())return;
   try{
+    let savedLessonId=lessonId;
     if(lessonId!==null){
-      const {slug,...data}=payload;
-      await api("/lessons/"+lessonId,"PATCH",data);
+      const {slug,sort_order,...data}=payload;
+      // Saving text must not replay an order that another editor changed.
+      // Only an explicit numeric change carries the order baseline as a
+      // condition; a conflict follows the existing manual recovery fence.
+      if(sort_order!==baseline.sort_order){
+        data.sort_order=sort_order;data.expected_sort_order=baseline.sort_order;
+      }
+      const receipt=await api("/lessons/"+lessonId,"PATCH",data);
+      if(receipt?.saved!==true)throw new Error("invalid_lesson_save_receipt");
     }else{
-      await api("/courses/"+courseId+"/lessons","POST",payload);
+      const result=await api("/courses/"+courseId+"/lessons","POST",payload);
+      if(!result||typeof result!=="object"||Array.isArray(result)||
+        !Number.isSafeInteger(result.id)||result.id<1||result.status!=="draft"){
+        throw new Error("invalid_lesson_create_receipt");
+      }
+      savedLessonId=result.id;
     }
-    if(!state.accessDenied){await refreshLessons();say("Aula salva em rascunho.");}
+    if(!state.accessDenied){await refreshLessons(savedLessonId,true);say("Aula salva em rascunho.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
@@ -508,7 +1386,8 @@ $("delete-course").addEventListener("click",async()=>{
   if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
   $("delete-course").disabled=true;
   try{
-    await api("/courses/"+courseId,"DELETE");
+    const receipt=await api("/courses/"+courseId,"DELETE");
+    if(receipt?.deleted!==true)throw new Error("invalid_course_delete_receipt");
     if(!state.accessDenied){await refreshCourses(null);say("Rascunho nunca publicado excluído com registro de auditoria.");}
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
@@ -519,6 +1398,8 @@ function editorialHasUnsavedChanges(){
   if($("course-title").value.trim()!==String(c.title||"")||
      $("course-category").value!==String(c.category||"")||
      $("course-summary").value.trim()!==String(c.summary||"")||
+     $("course-audience").value.trim()!==String(c.audience??"").trim()||
+     $("course-suggested-knowledge").value.trim()!==String(c.suggested_knowledge??"").trim()||
      intField("course-sort")!==Number(c.sort_order||0))return true;
   const lesson=state.lesson;
   if(lesson){
@@ -534,11 +1415,14 @@ function editorialHasUnsavedChanges(){
 function courseHasUnsavedEdits(){
   const c=state.course;
   if(!c)return Boolean($("course-title").value.trim()||$("course-slug").value.trim()||
-    $("course-summary").value.trim()||Number($("course-sort").value)!==0||
+    $("course-summary").value.trim()||$("course-audience").value.trim()||
+    $("course-suggested-knowledge").value.trim()||Number($("course-sort").value)!==0||
     $("course-category").value!=="metodologia");
   return $("course-title").value.trim()!==String(c.title||"")||
     $("course-category").value!==String(c.category||"")||
     $("course-summary").value.trim()!==String(c.summary||"")||
+    $("course-audience").value.trim()!==String(c.audience??"").trim()||
+    $("course-suggested-knowledge").value.trim()!==String(c.suggested_knowledge??"").trim()||
     intField("course-sort")!==Number(c.sort_order||0);
 }
 function lessonHasUnsavedEdits(){
@@ -571,6 +1455,30 @@ window.addEventListener("beforeunload",event=>{
   event.returnValue="";
 });
 
+// The UI always publishes the exact diagnostic it just checked. Legacy
+// API consumers may omit a hash, but an incomplete 200 response must never
+// silently send this interface down that compatibility path.
+function validatedPublicationCheck(payload,courseId){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)||
+     !Number.isSafeInteger(courseId)||courseId<1||
+     payload.course_id!==courseId||
+     !Number.isSafeInteger(payload.version)||payload.version<1||
+     !Number.isSafeInteger(payload.lesson_count)||payload.lesson_count<0||
+     typeof payload.ready!=="boolean"||payload.advisory_only!==true||
+     typeof payload.content_hash!=="string"||!/^[a-f0-9]{64}$/.test(payload.content_hash)||
+     !Array.isArray(payload.issues)||payload.issues.length>3||
+     !Array.isArray(payload.warnings)||payload.warnings.length>1)return null;
+  const issueCodes=["not_draft","missing_lessons","invalid_lesson"];
+  if(payload.issues.some(code=>!issueCodes.includes(code))||
+     new Set(payload.issues).size!==payload.issues.length||
+     payload.warnings.some(code=>code!=="missing_optional_summary")||
+     payload.ready!==(payload.issues.length===0)||
+     payload.issues.includes("missing_lessons")!==(payload.lesson_count===0)||
+     (payload.lesson_count===0&&payload.issues.includes("invalid_lesson")))return null;
+  return {course_id:courseId,version:payload.version,lesson_count:payload.lesson_count,
+    ready:payload.ready,issues:payload.issues.slice(),warnings:payload.warnings.slice(),
+    content_hash:payload.content_hash,advisory_only:true};
+}
 function renderPublicationCheck(snapshot){
   const box=$("publication-readiness");box.replaceChildren();box.hidden=false;
   box.append(el("strong",snapshot.ready?
@@ -597,14 +1505,22 @@ async function publicationCheck(){
     return null;
   }
   const request=++state.preflightRequest;
+  // A failed or malformed new read must not leave the previous readiness
+  // visible. Only this diagnostic card is cleared; editor drafts stay intact.
+  $("publication-readiness").replaceChildren();
+  $("publication-readiness").hidden=true;
   const snapshot=await api("/courses/"+courseId+"/publication-check");
   if(state.accessDenied||state.writePending||state.course?.id!==courseId||
     state.preflightRequest!==request||editorialHasUnsavedChanges())return null;
-  renderPublicationCheck(snapshot);
-  return snapshot;
+  const verified=validatedPublicationCheck(snapshot,courseId);
+  if(verified===null)throw new Error("Não foi possível validar a conferência de publicação. Tente novamente.");
+  renderPublicationCheck(verified);
+  return verified;
 }
 $("course-form").addEventListener("input",clearPublicationCheck);
 $("lesson-form").addEventListener("input",clearPublicationCheck);
+$("course-form").addEventListener("input",renderLessonReorderControls);
+$("lesson-form").addEventListener("input",renderLessonReorderControls);
 $("check-publication").addEventListener("click",async()=>{
   try{await publicationCheck();}catch(error){say(error.message);}
 });
@@ -621,7 +1537,8 @@ $("publish").addEventListener("click",async()=>{
   if(!confirm("Publicar esta versão revisada para os clientes elegíveis? Confirme somente após revisão editorial independente. A publicação não libera o SSO ou o Portal por si só."))return;
   if(state.accessDenied||state.course?.id!==courseId||state.course.is_published||!beginWrite())return;
   try{
-    await api("/courses/"+courseId+"/publish","POST",{expected_content_hash:reviewed.content_hash});
+    const receipt=await api("/courses/"+courseId+"/publish","POST",{expected_content_hash:reviewed.content_hash});
+    if(receipt?.published!==true)throw new Error("invalid_publish_receipt");
     if(!state.accessDenied){
       await refreshCourses(courseId);
       say("Versão do curso publicada no catálogo privado; elegibilidade continua decidida pelo Portal.");
@@ -639,7 +1556,8 @@ $("unpublish").addEventListener("click",async()=>{
   if(!confirm(unpublishWarning(state.course.title)))return;
   if(state.accessDenied||state.course?.id!==courseId||!beginWrite())return;
   try{
-    await api("/courses/"+courseId+"/unpublish","POST");
+    const receipt=await api("/courses/"+courseId+"/unpublish","POST");
+    if(receipt?.published!==false)throw new Error("invalid_unpublish_receipt");
     if(!state.accessDenied){
       await refreshCourses(courseId);
       say("Versão anterior arquivada; novo rascunho criado. O progresso da versão nova começa separado.");
@@ -647,36 +1565,82 @@ $("unpublish").addEventListener("click",async()=>{
   }catch(error){freezeUncertainEditorialWrite();}
   finally{finishWrite();}
 });
+// Keep native SQL timestamps intact: SQLite may omit an offset, PostgreSQL
+// uses +00 or +00:00, and JSON fixtures may use ISO T/Z. Do not infer a zone.
+function validEditorialAuditDate(value){
+  if(typeof value!=="string")return false;
+  const parts=/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|([+-])(\d{2})(?::?(\d{2}))?)?$/.exec(value);
+  if(!parts)return false;
+  const [,year,month,day,hour,minute,second,,offsetHour,offsetMinute]=parts;
+  const y=Number(year),m=Number(month),d=Number(day);
+  const days=[31,y%4===0&&(y%100!==0||y%400===0)?29:28,31,30,31,30,31,31,30,31,30,31];
+  return y>0&&m>=1&&m<=12&&d>=1&&d<=days[m-1]&&Number(hour)<24&&Number(minute)<60&&
+    Number(second)<60&&(offsetHour===undefined||Number(offsetHour)<24)&&
+    (offsetMinute===undefined||Number(offsetMinute)<60);
+}
+function validatedEditorialAuditPage(payload,beforeId=null,previous=[]){
+  if(!payload||typeof payload!=="object"||Array.isArray(payload)||!Array.isArray(payload.events)||
+    payload.events.length>50||!Object.hasOwn(payload,"next_before_id"))return null;
+  const positive=value=>Number.isSafeInteger(value)&&value>0;
+  const text=(value,limit)=>typeof value==="string"&&value.trim()!==""&&Array.from(value).length<=limit;
+  if(beforeId!==null&&!positive(beforeId))return null;
+  const ids=new Set(previous.map(item=>item.id)),events=[];
+  let ceiling=beforeId;
+  for(const item of payload.events){
+    if(!item||typeof item!=="object"||Array.isArray(item)||!positive(item.id)||ids.has(item.id)||
+      (ceiling!==null&&item.id>=ceiling)||!positive(item.resource_id)||!text(item.action,48)||
+      !text(item.resource_kind,24)||!validEditorialAuditDate(item.occurred_at))return null;
+    ids.add(item.id);ceiling=item.id;
+    events.push({id:item.id,action:item.action,resource_kind:item.resource_kind,
+      resource_id:item.resource_id,occurred_at:item.occurred_at});
+  }
+  const next=payload.next_before_id;
+  if(next!==null&&(!positive(next)||events.length!==50||next!==events[events.length-1].id))return null;
+  return {events,next_before_id:next};
+}
 function renderAudit(){
   if(state.accessDenied)return;
   const box=$("audit-items");box.replaceChildren();
-  if(!state.auditEvents.length)box.append(el("p","Nenhuma alteração editorial registrada.","help"));
+  $("audit-status").textContent=state.auditMessage;
+  $("audit-panel").setAttribute("aria-busy",String(state.auditLoading));
+  if(state.auditLoaded&&!state.auditEvents.length)box.append(el("p","Nenhuma alteração editorial registrada.","help"));
   for(const item of state.auditEvents){
     const row=el("div",undefined,"audit-row");
+    row.dataset.auditId=String(item.id);
     row.append(
-      el("strong",String(item.action||"alteração")),
-      el("small",String(item.resource_kind||"recurso")+" #"+
-        String(item.resource_id??"")+" · "+String(item.occurred_at||"").slice(0,19))
+      el("strong",item.action),
+      el("small",item.resource_kind+" #"+String(item.resource_id)+" · "+item.occurred_at)
     );
     box.append(row);
   }
-  $("load-more-audit").disabled=state.auditNextBeforeId===null;
+  $("refresh-audit").disabled=state.auditLoading;
+  $("load-more-audit").disabled=state.auditLoading||!state.auditLoaded||state.auditNextBeforeId===null;
 }
 async function refreshAudit(beforeId=null){
-  if(state.accessDenied)return;
+  if(state.accessDenied||state.auditLoading)return;
+  if(beforeId!==null&&(!state.auditLoaded||beforeId!==state.auditNextBeforeId))return;
   const request=++state.auditRequest;
-  $("refresh-audit").disabled=true;$("load-more-audit").disabled=true;
+  state.auditLoading=true;
+  if(beforeId===null){state.auditEvents=[];state.auditNextBeforeId=null;state.auditLoaded=false;}
+  state.auditMessage=beforeId===null?"Carregando alterações autorizadas...":"Carregando alterações anteriores...";
+  renderAudit();
   try{
     const query=beforeId!==null?"?before_id="+encodeURIComponent(String(beforeId)):"";
     const response=await api("/audit"+query);
     if(state.accessDenied||state.auditRequest!==request)return;
-    const rows=Array.isArray(response.events)?response.events:[];
-    state.auditEvents=beforeId===null?rows:state.auditEvents.concat(rows);
-    state.auditNextBeforeId=Number.isSafeInteger(response.next_before_id)&&response.next_before_id>0
-      ?response.next_before_id:null;
-    renderAudit();
+    const page=validatedEditorialAuditPage(response,beforeId,beforeId===null?[]:state.auditEvents);
+    if(page===null)throw new Error("Invalid editorial audit page");
+    state.auditEvents=beforeId===null?page.events:state.auditEvents.concat(page.events);
+    state.auditNextBeforeId=page.next_before_id;state.auditLoaded=true;
+    state.auditMessage=state.auditEvents.length===0?"Consulta concluída.":
+      String(state.auditEvents.length)+" alteração(ões) carregada(s). "+
+      (state.auditNextBeforeId===null?"Não há alterações anteriores nesta consulta.":"Use Carregar anteriores para continuar.");
+  }catch{
+    if(state.accessDenied||state.auditRequest!==request)return;
+    state.auditEvents=[];state.auditNextBeforeId=null;state.auditLoaded=false;
+    state.auditMessage="Histórico temporariamente indisponível. Atualize o histórico para tentar novamente.";
   }finally{
-    if(!state.accessDenied&&state.auditRequest===request)$("refresh-audit").disabled=false;
+    if(!state.accessDenied&&state.auditRequest===request){state.auditLoading=false;renderAudit();}
   }
 }
 $("refresh-audit").addEventListener("click",()=>{refreshAudit().catch(error=>say(error.message));});
@@ -687,7 +1651,16 @@ $("load-more-audit").addEventListener("click",()=>{
 });
 async function loadAdminCatalog(){
   if(state.accessDenied||state.writePending||state.catalogLoading)return;
-  if(state.writeOutcomeUnknown&&!confirm("O resultado da última alteração editorial não foi confirmado. Consultar novamente o servidor poderá substituir os campos não salvos desta tela. Continuar?"))return;
+  if(state.writeOutcomeUnknown&&!confirm(state.confirmedSaveNeedsRead
+    ?"O salvamento foi confirmado, mas a atualização da tela falhou. Consultar novamente o servidor poderá substituir os campos desta tela. Continuar?"
+    :"O resultado da última alteração editorial não foi confirmado. Consultar novamente o servidor poderá substituir os campos não salvos desta tela. Continuar?"))return;
+  // The consent permits replacement by a complete, validated read. Keep
+  // both literal drafts if either the catalog or its lesson read fails.
+  // These are disabled buffers, never a replacement for current authority.
+  const recoveryDraft=state.writeOutcomeUnknown?captureEditorialDraft():null;
+  // A valid creation receipt supplies a navigation target, not a course or
+  // lesson object. Only the fresh validated lists may establish selection.
+  const recoveryTarget=state.confirmedSaveNeedsRead?state.confirmedSaveReadTarget:null;
   state.catalogLoading=true;
   if(!state.catalogReady)$("new-course").disabled=true;
   const retry=$("retry-catalog"),recovery=$("catalog-recovery");
@@ -695,34 +1668,54 @@ async function loadAdminCatalog(){
   $("course-items").replaceChildren();
   $("course-items").append(el("p","Verificando acesso editorial e cursos...", "help"));
   try{
-    await refreshCourses();
+    if(recoveryTarget)await refreshCourses(recoveryTarget.courseId,false,recoveryTarget.lessonId);
+    else await refreshCourses();
     if(!state.accessDenied){
       // Only a fully successful course + lesson read resolves uncertainty.
       // Re-render after clearing the fence: controls were intentionally
       // disabled while reconciliation was in progress.
       state.writeOutcomeUnknown=false;
+      state.confirmedSaveNeedsRead=false;state.confirmedSaveReadTarget=null;
+      renderLessons();
       fillCourse();
       $("new-course").disabled=false;
       say("");
     }
   }catch(error){
     if(!state.accessDenied){
-      // A failed catalog read cannot keep stale editorial data on screen.
-      state.catalogReady=false;
-      $("new-course").disabled=true;
-      state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
-      ++state.lessonRequest;
-      renderCourses();renderLessons();fillCourse();resetLesson();
+      // Invalidate navigation and all write authority even when an earlier
+      // read in this recovery already replaced part of the catalog.
+      if(recoveryDraft){
+        restoreEditorialDraft(recoveryDraft);
+      }else{
+        state.catalogReady=false;state.lessonsReady=false;
+        $("new-course").disabled=true;
+        state.courses=[];state.course=null;state.lessons=[];state.lesson=null;
+        ++state.lessonRequest;
+        renderCourses();renderLessons();fillCourse();resetLesson();
+      }
       $("course-items").replaceChildren();
       $("course-items").append(el("p","Cursos temporariamente indisponíveis.", "help"));
       $("lesson-items").replaceChildren();
       hideLessonPreview();clearPublicationCheck();
-      say(error.message);
+      say(recoveryDraft
+        ?(state.confirmedSaveNeedsRead
+          ?"Não foi possível concluir a consulta. O salvamento foi confirmado e os campos desta tela foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar."
+          :"Não foi possível concluir a consulta. Os campos não salvos foram mantidos. Não repita a operação: consulte novamente os cursos e aulas antes de continuar.")
+        :error.message);
       recovery.hidden=false;
     }
   }finally{
     state.catalogLoading=false;
     if(!state.accessDenied)retry.disabled=false;
+    renderEditorialCourseFilters();
+    renderLessonReorderControls();
+    renderEditorialOverview();
+    renderEditorialArchive();
+    // Only the first fully validated catalogue starts an automatic overview
+    // read. Failures and later editorial changes always require a new click.
+    if(!state.accessDenied&&state.catalogReady&&!state.writeOutcomeUnknown&&!state.overviewAttempted)
+      void refreshEditorialOverview();
   }
 }
 $("retry-catalog").addEventListener("click",loadAdminCatalog);

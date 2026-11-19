@@ -7,9 +7,10 @@
  */
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import {mkdir,readFile,writeFile} from "node:fs/promises";
-import {resolve} from "node:path";
+import {lstat,mkdir,readFile,readdir,writeFile} from "node:fs/promises";
+import {dirname,resolve} from "node:path";
 import {fileURLToPath} from "node:url";
+import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -18,6 +19,32 @@ assert.equal(args.length,2,"Usage: --out <explicit temporary directory>");
 assert.equal(args[0],"--out","Missing --out");
 assert.ok(typeof args[1]==="string"&&args[1].trim()!=="","Missing output path");
 const dest=resolve(args[1]);
+// C187: reject a linked ancestor BEFORE mkdir(). Checking only the final
+// destination is insufficient: /tmp/link-to-other-directory/new-package
+// otherwise writes outside the path an operator believes they selected.
+async function assertNoLinkedAncestors(path){
+  for(let cursor=path;;cursor=dirname(cursor)){
+    try{
+      const stat=await lstat(cursor);
+      assert.ok(!stat.isSymbolicLink(),
+        "Review package destination path has a symlink ancestor");
+      assert.ok(stat.isDirectory(),
+        "Review package destination path has a non-directory ancestor");
+    }catch(error){
+      if(error?.code!=="ENOENT")throw error;
+    }
+    if(cursor===dirname(cursor))break;
+  }
+}
+await assertNoLinkedAncestors(dest);
+// A second run must never destroy an editor's CSV, observations or evidence.
+// Accept a fresh destination or an existing EMPTY, non-symlink directory.
+await mkdir(dest,{recursive:true});
+const destinationStat=await lstat(dest);
+assert.ok(destinationStat.isDirectory()&&!destinationStat.isSymbolicLink(),
+  "Review package destination must be a real directory, not a symlink");
+assert.deepEqual(await readdir(dest),[],
+  "Review package destination must be empty to preserve existing reviews");
 const source=await readFile(sourceFile,"utf8");
 const payload=JSON.parse(source);
 assert.equal(payload.schema_version,1);
@@ -45,7 +72,6 @@ function safeBody(v){
   return v.trim();
 }
 const indexes=[],reviewRows=[],hashes=[],seenCourse=new Set(),seenLesson=new Set();
-await mkdir(dest,{recursive:true});
 const lessonsDir=resolve(dest,"cursos");
 await mkdir(lessonsDir,{recursive:true});
 let lessonCount=0;
@@ -116,6 +142,9 @@ const doc=[
   "",
   "## Etapas para a equipe editorial",
   "",
+  "Abra revisao-navegavel.html para navegar pelos 10 cursos e 35 aulas offline.",
+  "Exporte o CSV; o registro nunca confirma identidade ou aprova publicação.",
+  "",
   "1. Ler todos os textos em \`cursos/\` e registrar observações em \`revisao.csv\`.",
   "2. Confirmar qualidade, atualidade das orientações, revisão de exemplos e ausência de dados pessoais.",
   "3. Registrar aprovação humana em issue/PR identificável, incluindo SHA-256 da aula e responsável.",
@@ -132,6 +161,7 @@ const csv=[
   ...reviewRows
 ].map(row=>row.map(csvField).join(",")).join("\n")+"\n";
 await writeFile(resolve(dest,"revisao.csv"),csv,"utf8");
+await writeFile(resolve(dest,"revisao-navegavel.html"),renderOfflineReviewPage(payload,hashes),"utf8");
 const machine={schema_version:1,source_path:"content/mvp-cursos-v1.json",
   source_sha256:sourceHash,status:"PENDING_HUMAN_REVIEW",publishable:false,
   course_count:indexes.length,lesson_count:lessonCount,courses:indexes,lessons:hashes};

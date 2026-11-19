@@ -10,9 +10,14 @@ use App\Domain\Tutor\TutorGateway;
 use App\Domain\Tutor\TutorQuestion;
 use App\Domain\Learning\UniversityCatalogRepository;
 use App\Domain\Learning\UniversityTenantProvisioner;
+use App\Domain\Learning\ReadingPositionRevision;
+use App\Domain\Learning\EditorialLessonOrderConflict;
+use App\Domain\Learning\EditorialCourseOrderConflict;
+use App\Domain\Learning\PublishedLessonSearchCursor;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
@@ -36,6 +41,29 @@ final class UniversityController
     }
 
     /**
+     * Preserve legacy decimal route aliases, including zero and leading zeros.
+     * Check the PHP integer boundary as text before casting; the newer archived
+     * routes deliberately have a separate positive/safe-integer contract.
+     */
+    private function legacyRouteIdentifier(string $value): ?int
+    {
+        if (preg_match('/\A[0-9]+\z/D', $value) !== 1) {
+            return null;
+        }
+        $normalized = ltrim($value, '0');
+        if ($normalized === '') {
+            return 0;
+        }
+        $maximum = (string) PHP_INT_MAX;
+        if (strlen($normalized) > strlen($maximum)
+            || (strlen($normalized) === strlen($maximum) && strcmp($normalized, $maximum) > 0)) {
+            return null;
+        }
+
+        return (int) $normalized;
+    }
+
+    /**
      * Never release protected data after a slow DB/model operation unless
      * the live Portal decision still matches the original subject, tenant,
      * permission and revision. Neither signatures nor cached sessions replace
@@ -49,12 +77,22 @@ final class UniversityController
         try {
             $credential = $request->session()->get('portal_server_credential');
             $company = $request->session()->get('portal_company_id');
-            if (!is_string($credential) || !is_string($company)) {
+            $boundDigest = $request->attributes->get('university.initial_credential_digest');
+            if (!is_string($credential) || !is_string($company)
+                || !is_string($boundDigest)
+                || strlen($boundDigest) !== 64
+                || !hash_equals($boundDigest, hash('sha256', $credential))
+                || $company !== $expected->companyId) {
                 return null;
             }
 
             $latest = $gate->authorize($credential, $company, $expected->permission, time());
-            if (!$latest->allowed
+            // A session may change while the live Portal lookup waits.
+            // Check the server-held values again before this grant can be
+            // used in a transaction or a read of private references.
+            if ($request->session()->get('portal_server_credential') !== $credential
+                || $request->session()->get('portal_company_id') !== $company
+                || !$latest->allowed
                 || $latest->companyId !== $expected->companyId
                 || $latest->subjectId !== $expected->subjectId
                 || $latest->revision !== $expected->revision
@@ -95,6 +133,209 @@ final class UniversityController
         return response()->json(['courses' => $this->catalog->catalog($this->grant($request))]);
     }
 
+    public function favorites(Request $request): JsonResponse
+    {
+        try {
+            $ids = $this->catalog->favoriteCourseIds($this->grant($request));
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        // The private GET middleware revalidates Portal before releasing IDs.
+        return response()->json(['course_ids' => $ids]);
+    }
+
+    public function exportFavorites(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $favorites = $this->catalog->exportFavorites($grant);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        if ($favorites === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
+        return response()->json($favorites, 200, [
+            'Content-Disposition' => 'attachment; filename="imagine-universidade-favoritos.json"',
+        ]);
+    }
+
+    public function retainedFavorites(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        $validator = Validator::make($request->query(), [
+            'after_course_id' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991',
+                'regex:/\A[1-9][0-9]{0,15}\z/D'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $cursor = $request->query('after_course_id');
+        try {
+            $favorites = $this->catalog->retainedFavorites($grant, $cursor === null ? null : (int) $cursor);
+        } catch (\Throwable) {
+            $favorites = 'temporarily_unavailable';
+        }
+        // Recheck after a successful snapshot AND after a repository failure.
+        // The private GET middleware checks the decision once more at output.
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        if (is_array($favorites)) {
+            return response()->json($favorites);
+        }
+        return match ($favorites) {
+            'access_denied' => response()->json(['error' => 'access_denied'], 403),
+            'invalid_cursor' => response()->json(['error' => 'invalid_cursor'], 422),
+            default => response()->json(['error' => 'temporarily_unavailable'], 503),
+        };
+    }
+
+    public function readingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $position = $this->catalog->readingPosition($grant, $revisions);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($position === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        return response()->json($position);
+    }
+
+    public function exportReadingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $position = $this->catalog->exportReadingPosition($grant, $revisions);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($position === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        return response()->json($position, 200, [
+            'Content-Disposition' => 'attachment; filename="imagine-universidade-posicao-leitura.json"',
+        ]);
+    }
+
+    /** @param array<string, mixed>|string $result */
+    private function readingPositionWriteResponse(array|string $result): JsonResponse
+    {
+        if (is_array($result)) {
+            return response()->json($result);
+        }
+        $status = match ($result) {
+            'access_denied' => 403,
+            'not_found' => 404,
+            'reading_position_changed' => 409,
+            default => 503,
+        };
+        return response()->json(['error' => $status === 503 ? 'temporarily_unavailable' : $result], $status);
+    }
+
+    public function saveReadingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $data = $request->validate([
+            'course_id' => ['required', 'integer', 'min:1', 'max:9007199254740991'],
+            'course_version' => ['required', 'integer', 'min:1', 'max:9007199254740991'],
+            'lesson_id' => ['required', 'integer', 'min:1', 'max:9007199254740991'],
+            'expected_revision' => ['required', 'string', 'max:'.ReadingPositionRevision::MAX_LENGTH],
+        ]);
+        $grant = $this->grant($request);
+        try {
+            $result = $this->catalog->saveReadingPosition(
+                $grant, (int) $data['course_id'], (int) $data['course_version'], (int) $data['lesson_id'],
+                $data['expected_revision'], $revisions,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        return $this->readingPositionWriteResponse($result);
+    }
+
+    public function clearReadingPosition(Request $request, PortalAccessGate $gate, ReadingPositionRevision $revisions): JsonResponse
+    {
+        $data = $request->validate([
+            'expected_revision' => ['required', 'string', 'max:'.ReadingPositionRevision::MAX_LENGTH],
+        ]);
+        $grant = $this->grant($request);
+        try {
+            $result = $this->catalog->clearReadingPosition(
+                $grant, $data['expected_revision'], $revisions,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        return $this->readingPositionWriteResponse($result);
+    }
+
+    public function favoriteCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
+    {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $grant = $this->grant($request);
+        try {
+            $saved = $this->catalog->favoriteCourse(
+                $grant,
+                $courseId,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        return $saved
+            ? response()->json(['course_id' => $courseId, 'favorite' => true])
+            : response()->json(['error' => 'not_found'], 404);
+    }
+
+    public function unfavoriteCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
+    {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        if ($courseId < 1) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $grant = $this->grant($request);
+        try {
+            $removed = $this->catalog->unfavoriteCourse(
+                $grant,
+                $courseId,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+
+        // Missing and already-removed favorites share the same receipt.
+        // No course content or ownership is disclosed by this operation.
+        return $removed
+            ? response()->json(['course_id' => $courseId, 'favorite' => false])
+            : response()->json(['error' => 'access_denied'], 403);
+    }
+
     /**
      * Student search is a POST only to avoid putting study terms in URL logs.
      * It is read-only, bounded, private and always rechecks Portal afterward.
@@ -106,22 +347,40 @@ final class UniversityController
             'query' => ['required', 'string', 'min:3', 'max:60',
                 'regex:/\A[\p{L}\p{N} -]{3,60}\z/u'],
         ]);
+        // Read new flags before the empty-string middleware's normalization.
+        // The opt-in is a JSON boolean; legacy query-only callers stay intact.
+        $raw = $request->isJson() ? json_decode($request->getContent(), true) : $request->all();
+        $raw = is_array($raw) ? $raw : [];
+        $paginated = $raw['paginated'] ?? false;
+        $cursor = $raw['cursor'] ?? null;
+        $invalidCursor = (array_key_exists('paginated', $raw) && !is_bool($raw['paginated']))
+            || ($cursor !== null && ($paginated !== true || !is_string($cursor) || $cursor === ''
+                || strlen($cursor) > PublishedLessonSearchCursor::MAX_LENGTH
+                || preg_match('/\A[\x21-\x7E]+\z/D', $cursor) !== 1));
         try {
-            $results = $this->catalog->searchPublishedLessons($grant, (string) $data['query']);
+            $results = $invalidCursor ? 'invalid_cursor' : ($paginated === true
+                ? $this->catalog->searchPublishedLessonsPage($grant, (string) $data['query'], $cursor)
+                : $this->catalog->searchPublishedLessons($grant, (string) $data['query']));
         } catch (\Throwable) {
-            return response()->json(['error' => 'temporarily_unavailable'], 503);
+            $results = 'temporarily_unavailable';
         }
 
-        if ($results === null) {
-            return response()->json(['error' => 'temporarily_unavailable'], 503);
-        }
+        // This read uses POST to keep query terms out of URLs. GET middleware
+        // does not recheck it, so denial must win after success AND any failure.
         if ($this->freshGrant($request, $gate, $grant) === null) {
             return response()->json(['error' => 'access_denied'], 403);
         }
-
-        return response()->json(['results' => $results], 200, [
-            'Cache-Control' => 'private, no-store',
-        ]);
+        if (is_array($results)) {
+            return response()->json($paginated === true ? $results : ['results' => $results], 200, [
+                'Cache-Control' => 'private, no-store',
+            ]);
+        }
+        return match ($results) {
+            'access_denied' => response()->json(['error' => 'access_denied'], 403),
+            'invalid_cursor' => response()->json(['error' => 'invalid_cursor'], 422),
+            'search_context_changed' => response()->json(['error' => 'search_context_changed'], 409),
+            default => response()->json(['error' => 'temporarily_unavailable'], 503),
+        };
     }
 
     public function exportProgress(Request $request, PortalAccessGate $gate): JsonResponse
@@ -147,13 +406,52 @@ final class UniversityController
         ]);
     }
 
-    public function lessons(Request $request, int $courseId): JsonResponse
+    public function progressHistory(Request $request, PortalAccessGate $gate): JsonResponse
     {
+        $grant = $this->grant($request);
+        $validator = Validator::make($request->query(), [
+            'before_id' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991',
+                'regex:/\A[1-9][0-9]{0,15}\z/D'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $cursor = $request->query('before_id');
+        try {
+            $history = $this->catalog->progressHistory($grant, $cursor === null ? null : (int) $cursor);
+        } catch (\Throwable) {
+            $history = 'temporarily_unavailable';
+        }
+        // Check authority after a successful read AND a repository failure.
+        // GET middleware will check the same identity again before output.
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        if (is_array($history)) {
+            return response()->json($history);
+        }
+        return match ($history) {
+            'access_denied' => response()->json(['error' => 'access_denied'], 403),
+            'invalid_cursor' => response()->json(['error' => 'invalid_cursor'], 422),
+            default => response()->json(['error' => 'temporarily_unavailable'], 503),
+        };
+    }
+
+    public function lessons(Request $request, string $courseId): JsonResponse
+    {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         return response()->json(['lessons' => $this->catalog->lessons($this->grant($request), $courseId)]);
     }
 
-    public function lesson(Request $request, int $lessonId): JsonResponse
+    public function lesson(Request $request, string $lessonId): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $lesson = $this->catalog->lesson($this->grant($request), $lessonId);
         return $lesson === null
             ? response()->json(['error' => 'not_found'], 404)
@@ -166,10 +464,14 @@ final class UniversityController
      */
     public function askTutor(
         Request $request,
-        int $lessonId,
+        string $lessonId,
         TutorGateway $gateway,
         PortalAccessGate $gate,
     ): JsonResponse {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $data = $request->validate([
             'question' => ['required', 'string', 'min:3', 'max:500'],
@@ -180,6 +482,7 @@ final class UniversityController
             return response()->json(['error' => 'not_found'], 404);
         }
 
+        $reply = null;
         try {
             $reply = $gateway->explain(new TutorQuestion(
                 (string) $data['question'],
@@ -188,7 +491,9 @@ final class UniversityController
                 (string) $lesson->body,
             ));
         } catch (\Throwable) {
-            return response()->json(['error' => 'tutor_unavailable'], 503);
+            // Even an unavailable gateway must pass the live access/source
+            // checks below. The UI may offer already displayed lesson text
+            // after a 503; revoked access must instead receive a 403.
         }
 
         // A slow tutor response must satisfy the same live authority fence
@@ -212,7 +517,7 @@ final class UniversityController
             return response()->json(['error' => 'access_denied'], 403);
         }
 
-        if (trim($reply->message) === '' || strlen($reply->message) > 12000) {
+        if ($reply === null || trim($reply->message) === '' || strlen($reply->message) > 12000) {
             return response()->json(['error' => 'tutor_unavailable'], 503);
         }
 
@@ -225,16 +530,24 @@ final class UniversityController
         ]);
     }
 
-    public function progress(Request $request, int $lessonId): JsonResponse
+    public function progress(Request $request, string $lessonId): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $completed = $this->catalog->isComplete($this->grant($request), $lessonId);
         return $completed === null
             ? response()->json(['error' => 'not_found'], 404)
             : response()->json(['completed' => $completed]);
     }
 
-    public function complete(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
+    public function complete(Request $request, string $lessonId, PortalAccessGate $gate): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $ok = $this->catalog->complete(
             $grant,
@@ -250,7 +563,7 @@ final class UniversityController
     public function adminAudit(Request $request): JsonResponse
     {
         $input = $request->validate([
-            'before_id' => ['sometimes', 'integer', 'min:1', 'max:2147483647'],
+            'before_id' => ['sometimes', 'integer', 'min:1', 'max:9007199254740991'],
         ]);
         return response()->json($this->catalog->adminAudit(
             $this->grant($request),
@@ -258,8 +571,12 @@ final class UniversityController
         ));
     }
 
-    public function publicationPreflight(Request $request, int $courseId): JsonResponse
+    public function publicationPreflight(Request $request, string $courseId): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $result = $this->catalog->publicationPreflight($this->grant($request), $courseId);
         return $result === null
             ? response()->json(['error' => 'not_found'], 404)
@@ -271,8 +588,122 @@ final class UniversityController
         return response()->json(['courses' => $this->catalog->adminCourses($this->grant($request))]);
     }
 
-    public function adminLessons(Request $request, int $courseId): JsonResponse
+    private function archivedRouteNumber(string $value): ?int
     {
+        if (preg_match('/\A[1-9][0-9]{0,15}\z/D', $value) !== 1) {
+            return null;
+        }
+        $number = filter_var($value, FILTER_VALIDATE_INT, ['options' => [
+            'min_range' => 1, 'max_range' => 9007199254740991,
+        ]]);
+        return $number === false ? null : $number;
+    }
+
+    /** Keep failure responses behind the same live read boundary as content. */
+    private function archivedReadResponse(Request $request, PortalAccessGate $gate, callable $read): JsonResponse
+    {
+        $grant = $this->grant($request);
+        try {
+            $result = $read($grant);
+        } catch (\Throwable) {
+            $result = 'temporarily_unavailable';
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        if (is_array($result)) {
+            return response()->json($result);
+        }
+        $status = match ($result) {
+            'access_denied' => 403,
+            'not_found' => 404,
+            'invalid_cursor' => 422,
+            default => 503,
+        };
+        return response()->json(['error' => $status === 503 ? 'temporarily_unavailable' : $result], $status);
+    }
+
+    public function archivedVersions(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
+    {
+        $course = $this->archivedRouteNumber($courseId);
+        if ($course === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $validator = Validator::make($request->query(), [
+            'before_version' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991'],
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $input = $validator->validated();
+        $before = isset($input['before_version']) ? (int) $input['before_version'] : null;
+        return $this->archivedReadResponse($request, $gate,
+            fn (PortalGrant $grant): array|string => $this->catalog->archivedVersions($grant, $course, $before));
+    }
+
+    public function archivedLessons(Request $request, string $courseId, string $courseVersion, PortalAccessGate $gate): JsonResponse
+    {
+        $course = $this->archivedRouteNumber($courseId);
+        $version = $this->archivedRouteNumber($courseVersion);
+        if ($course === null || $version === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $query = $request->query();
+        $validator = Validator::make($query, [
+            'after_sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:9007199254740991'],
+            'after_lesson_id' => ['sometimes', 'required', 'integer', 'min:1', 'max:9007199254740991'],
+        ]);
+        if (array_key_exists('after_sort_order', $query) !== array_key_exists('after_lesson_id', $query)
+            || $validator->fails()) {
+            return response()->json(['error' => 'invalid_cursor'], 422);
+        }
+        $input = $validator->validated();
+        $afterSort = isset($input['after_sort_order']) ? (int) $input['after_sort_order'] : null;
+        $afterLesson = isset($input['after_lesson_id']) ? (int) $input['after_lesson_id'] : null;
+        return $this->archivedReadResponse($request, $gate,
+            fn (PortalGrant $grant): array|string => $this->catalog->archivedLessons($grant, $course, $version, $afterSort, $afterLesson));
+    }
+
+    public function archivedLesson(Request $request, string $courseId, string $courseVersion,
+        string $lessonId, PortalAccessGate $gate): JsonResponse
+    {
+        $course = $this->archivedRouteNumber($courseId);
+        $version = $this->archivedRouteNumber($courseVersion);
+        $lesson = $this->archivedRouteNumber($lessonId);
+        if ($course === null || $version === null || $lesson === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        return $this->archivedReadResponse($request, $gate,
+            fn (PortalGrant $grant): array|string => $this->catalog->archivedLesson($grant, $course, $version, $lesson));
+    }
+
+    public function adminOverview(Request $request, PortalAccessGate $gate): JsonResponse
+    {
+        $grant = $this->grant($request);
+        if ($grant->companyId !== 'imagine-editorial') {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+        try {
+            $overview = $this->catalog->adminOverview($grant);
+        } catch (\Throwable) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($overview === null) {
+            return response()->json(['error' => 'temporarily_unavailable'], 503);
+        }
+        if ($this->freshGrant($request, $gate, $grant) === null) {
+            return response()->json(['error' => 'access_denied'], 403);
+        }
+
+        return response()->json($overview);
+    }
+
+    public function adminLessons(Request $request, string $courseId): JsonResponse
+    {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         return response()->json(['lessons' => $this->catalog->adminLessons($this->grant($request), $courseId)]);
     }
 
@@ -284,6 +715,8 @@ final class UniversityController
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'category' => ['required', 'in:metodologia,negocios,sistemas'],
             'summary' => ['nullable', 'string', 'max:500'],
+            'audience' => ['nullable', 'string', 'max:500'],
+            'suggested_knowledge' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
         try {
@@ -301,27 +734,54 @@ final class UniversityController
             : response()->json(['id' => $id, 'status' => 'draft'], 201);
     }
 
-    public function updateCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function updateCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
+        $raw = $request->all();
+        if (array_key_exists('expected_sort_order', $raw)
+            && (!is_int($raw['expected_sort_order']) || $raw['expected_sort_order'] < 0 || $raw['expected_sort_order'] > 9999
+                || !array_key_exists('sort_order', $raw) || !is_int($raw['sort_order'])
+                || $raw['sort_order'] < 0 || $raw['sort_order'] > 9999)) {
+            return response()->json(['error' => 'invalid_order'], 422);
+        }
         $input = $request->validate([
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'category' => ['required', 'in:metodologia,negocios,sistemas'],
             'summary' => ['nullable', 'string', 'max:500'],
+            'audience' => ['nullable', 'string', 'max:500'],
+            'suggested_knowledge' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
+            'expected_sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
 
-        return $this->catalog->updateCourse(
-            $grant,
-            $courseId, $input,
-            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
-        )
+        try {
+            $saved = $this->catalog->updateCourse(
+                $grant,
+                $courseId, $input,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (EditorialCourseOrderConflict) {
+            if ($this->freshGrant($request, $gate, $grant) === null) {
+                return response()->json(['error' => 'access_denied'], 403);
+            }
+            return response()->json(['error' => 'draft_order_changed'], 409);
+        }
+
+        return $saved
             ? response()->json(['saved' => true])
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
-    public function createLesson(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function createLesson(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         $input = $request->validate([
             'slug' => ['required', 'string', 'max:120', 'regex:/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/'],
@@ -344,26 +804,93 @@ final class UniversityController
             : response()->json(['id' => $id, 'status' => 'draft'], 201);
     }
 
-    public function updateLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
+    public function updateLesson(Request $request, string $lessonId, PortalAccessGate $gate): JsonResponse
     {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
+        $raw = $request->all();
+        if (array_key_exists('expected_sort_order', $raw)
+            && (!is_int($raw['expected_sort_order']) || $raw['expected_sort_order'] < 0
+                || $raw['expected_sort_order'] > 9999 || !array_key_exists('sort_order', $raw)
+                || !is_int($raw['sort_order']) || $raw['sort_order'] < 0 || $raw['sort_order'] > 9999)) {
+            return response()->json(['error' => 'invalid_order'], 422);
+        }
         $input = $request->validate([
             'title' => ['required', 'string', 'min:3', 'max:200'],
             'body' => ['required', 'string', 'min:10', 'max:30000'],
             'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
+            'expected_sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
         ]);
 
-        return $this->catalog->updateLesson(
-            $grant,
-            $lessonId, $input,
-            fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
-        )
+        try {
+            $saved = $this->catalog->updateLesson(
+                $grant,
+                $lessonId, $input,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (EditorialLessonOrderConflict) {
+            // This path never committed. Do not disclose a conflict after
+            // the live authority changed while the request was completing.
+            if ($this->freshGrant($request, $gate, $grant) === null) {
+                return response()->json(['error' => 'access_denied'], 403);
+            }
+            return response()->json(['error' => 'draft_order_changed'], 409);
+        }
+        return $saved
             ? response()->json(['saved' => true])
             : response()->json(['error' => 'not_found_or_published'], 404);
     }
 
-    public function deleteDraftLesson(Request $request, int $lessonId, PortalAccessGate $gate): JsonResponse
+    public function reorderDraftLessons(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $parsedCourseId = $this->archivedRouteNumber($courseId);
+        if ($parsedCourseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
+        $grant = $this->grant($request);
+        $lessonId = $request->input('lesson_id');
+        $direction = $request->input('direction');
+        $expectedOrder = $request->input('expected_order');
+        // A bounded linear domain validator avoids quadratic wildcard/distinct
+        // validation and accepts JSON integers only, not coercible strings.
+        if (!is_int($lessonId) || !is_string($direction) || !is_array($expectedOrder)) {
+            return response()->json(['error' => 'invalid_order'], 422);
+        }
+        try {
+            $result = $this->catalog->reorderDraftLessons(
+                $grant, $parsedCourseId, $lessonId, $direction, $expectedOrder,
+                fn (): ?PortalGrant => $this->freshGrant($request, $gate, $grant),
+            );
+        } catch (\Throwable) {
+            $result = 'temporarily_unavailable';
+        }
+        if (is_array($result)) {
+            // Never recheck after commit and misreport a committed write as denied.
+            return response()->json($result);
+        }
+        // Errors/no-commit outcomes must not outlive a changed live authority.
+        if ($result !== 'access_denied' && $this->freshGrant($request, $gate, $grant) === null) {
+            $result = 'access_denied';
+        }
+        $status = match ($result) {
+            'access_denied' => 403,
+            'not_found' => 404,
+            'invalid_order' => 422,
+            'draft_order_changed', 'order_limit_exceeded' => 409,
+            default => 503,
+        };
+        return response()->json(['error' => $status === 503 ? 'temporarily_unavailable' : $result], $status);
+    }
+
+    public function deleteDraftLesson(Request $request, string $lessonId, PortalAccessGate $gate): JsonResponse
+    {
+        $lessonId = $this->legacyRouteIdentifier($lessonId);
+        if ($lessonId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         return $this->catalog->deleteDraftLesson(
             $grant,
@@ -374,8 +901,12 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_protected'], 404);
     }
 
-    public function deleteNeverPublishedCourse(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function deleteNeverPublishedCourse(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         try {
             $deleted = $this->catalog->deleteNeverPublishedCourse(
@@ -391,8 +922,12 @@ final class UniversityController
             : response()->json(['error' => 'not_found_or_protected'], 404);
     }
 
-    public function publish(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function publish(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $input = $request->validate([
             'expected_content_hash' => ['sometimes', 'string', 'size:64', 'regex:/\A[a-f0-9]{64}\z/'],
         ]);
@@ -408,8 +943,12 @@ final class UniversityController
             : response()->json(['error' => 'missing_lesson_or_changed_draft'], 409);
     }
 
-    public function unpublish(Request $request, int $courseId, PortalAccessGate $gate): JsonResponse
+    public function unpublish(Request $request, string $courseId, PortalAccessGate $gate): JsonResponse
     {
+        $courseId = $this->legacyRouteIdentifier($courseId);
+        if ($courseId === null) {
+            return response()->json(['error' => 'not_found'], 404);
+        }
         $grant = $this->grant($request);
         return $this->catalog->setPublished(
             $grant,

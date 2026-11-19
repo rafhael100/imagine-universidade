@@ -125,7 +125,7 @@ assert.match(adminUI,/document.querySelectorAll\("\.layout button,.layout input,
 console.log("PASS revocation UI: student/admin fail-closed on HTTP 403/419, clear private state");
 
 
-const lessonsFn=adminUI.match(/async function refreshLessons\(\)\{[\s\S]*?\n\}/)?.[0];
+const lessonsFn=adminUI.match(/async function refreshLessons\([^\n]*\)\{[\s\S]*?\n\}/)?.[0];
 assert.ok(lessonsFn,"admin: função de atualização de aulas");
 const pendingLessons=[];
 const fakeState={course:{id:1},lessons:[],lesson:null,lessonRequest:0,accessDenied:false};
@@ -133,8 +133,11 @@ const fakeContext={
   state:fakeState,
   api:path=>new Promise(resolve=>pendingLessons.push({path,resolve})),
   renderLessons:()=>{},
+  renderLessonReorderControls:()=>{},
   resetLesson:()=>{},
   fillCourse:()=>{},
+  updateEditorialControls:()=>{},
+  fillLesson:()=>{},
   // Race test isolates request ordering; the actual validator is tested below.
   validatedAdminLessons:response=>response.lessons
 };
@@ -218,14 +221,15 @@ assert.equal(otherCourseFixture([{id:1,lessons_total:2,lessons_completed:2}],1),
 assert.equal(otherCourseFixture([{id:1,lessons_total:1,lessons_completed:0}],1),null,"não indicar o mesmo curso");
 assert.equal(otherCourseFixture(null,1),null,"dados inválidos");
 assert.match(studentProgressUI,/nextCourse.dataset.nextCourse=""/,"aluno: botão de próximo curso");
-assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>openCourseWithAllFilters\(nextCourseId\)\)/,"aluno: troca segura de curso");
-assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null\)/,"aluno: navegação segura por curso e aula selecionada");
-assert.match(studentProgressUI,/if\(state.accessDenied\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
+assert.match(studentProgressUI,/nextCourse.addEventListener\("click",\(\)=>\{\s+if\(current\(\)\)openCourseWithAllFilters\(nextCourseId,null,null,beginNavigationFocus\(\)\)/,"aluno: troca segura de curso com origem atual e intenção explícita de foco");
+assert.match(studentProgressUI,/function openCourseWithAllFilters\(target,preferredLessonId=null,preferredVersion=null,focusIntent=null\)/,"aluno: navegação segura por curso, aula selecionada, versão opcional e intenção original");
+assert.match(studentProgressUI,/if\(state.accessDenied\|\|!state.libraryReady\|\|!Number.isSafeInteger\(target\)\|\|target<1\)return;/,"aluno: transição bloqueada após revogação");
 console.log("PASS cross-course resume: próximo curso incompleto, sem voltar ao atual");
 
 const routes = read("routes/web.php");
 const provider = read("app/Providers/AppServiceProvider.php");
 const middleware = read("app/Http/Middleware/RequireUniversityGrant.php");
+const privateResponsePolicy = read("app/Http/Middleware/ProtectPrivateUniversityResponses.php");
 assert.match(routes, /university\.grant:view/);
 assert.match(routes, /university\.grant:manage/);
 assert.match(routes, /Route::view\('\/app', 'university\.student'\)/);
@@ -233,7 +237,7 @@ assert.match(routes, /Route::view\('\/app', 'university\.admin'\)/);
 assert.match(routes, /Route::fallback/);
 assert.match(provider, /UnavailablePortalAuthority::class/, "provider padrão deve negar");
 assert.match(middleware, /university\.verified_grant/, "decisão do backend");
-assert.match(middleware, /Cache-Control/, "respostas privadas");
+assert.match(privateResponsePolicy, /Cache-Control/, "respostas privadas, inclusive erros anteriores ao grant");
 assert.doesNotMatch(middleware, /->header\(['"]X-(?:Company|Portal)/, "não aceitar prova em header");
 console.log("PASS routes: Cliente/Admin com grants separados, fallback e provider deny-all");
 
@@ -277,7 +281,7 @@ assert.equal(sanitizeExport({...safeExportFixture,completions:[{...safeExportFix
 assert.equal(JSON.stringify(sanitizeExport({...safeExportFixture,completions:[]})),JSON.stringify({
   schema_version:1,scope:"current_authenticated_student",completions:[],
 }),"export: an empty history is still valid");
-assert.match(studentProgressUI,/if\(state\.accessDenied\|\|state\.exportLoading\)return;/,"export: no duplicate requests or revoked download");
+assert.match(studentProgressUI,/if\(state\.accessDenied\|\|!state\.libraryReady\|\|state\.exportLoading\)return;/,"export: no duplicate requests or revoked download");
 assert.match(studentProgressUI,/const sanitized=sanitizedProgressExport\(progress\)/,"export: never serialize raw API payload");
 assert.match(studentProgressUI,/JSON\.stringify\(sanitized,null,2\)/,"export: download only allowlisted progress");
 console.log("PASS export privacy: versioned scope, max 5000 entries, allowlisted fields, single-flight and no foreign data");
@@ -303,9 +307,10 @@ const malicious="<img src=x onerror=alert(1)>";
 const maliciousBlocks=new Script(splitLessonFn+"\nsplitLessonSections(input)").runInNewContext({input:malicious});
 assert.equal(maliciousBlocks[0].text,malicious,"aula: conteúdo potencialmente hostil preservado como texto, não HTML");
 assert.match(studentProgressUI,/function lessonTextFragment\(body\)/,"aula: construção de DOM");
-assert.match(studentProgressUI,/wrapper.append\(el\("h4",section.heading\)\)/,"aula: estrutura semântica");
-assert.match(studentProgressUI,/wrapper.append\(el\("p",section.text\)\)/,"aula: texto seguro");
-assert.match(studentProgressUI,/content.append\(el\("h3",lesson.title\),lessonTextFragment\(lesson.body\)\)/);
+assert.match(studentProgressUI,/const heading=el\("h4",section.heading\);[\s\S]*?wrapper.append\(heading\)/,"aula: estrutura semântica");
+assert.match(studentProgressUI,/wrapper.append\(el\("p",paragraph,"lesson-paragraph"\)\)/,"aula: texto seguro em parágrafos semânticos");
+assert.match(studentProgressUI,/const heading=lessonNavigationTarget\("h3",lesson.title\);\s+content.append\(heading,lessonTextFragment\(lesson.body\)\)/);
+assert.match(studentProgressUI,/function lessonNavigationTarget\(tag,text,className\)\{\s+const target=el\(tag,text,className\)/,"navigation heading retains the safe text renderer");
 assert.doesNotMatch(studentProgressUI,/\.innerHTML\s*=/,"aula: nunca interpretar HTML de currículo");
 console.log("PASS lesson sections: semântica acessível e texto seguro sem HTML");
 
@@ -360,7 +365,7 @@ assert.match(routes,/Route::get\('\/audit', \[UniversityController::class, 'admi
 assert.match(adminUI,/id="audit-panel" class="panel audit-panel"/,"admin: seção de histórico");
 assert.match(adminUI,/state.auditRequest!==request/,"admin: resposta obsoleta ignorada");
 assert.match(adminUI,/\+\+state.auditRequest;state.auditEvents=\[\]/,"admin: zerar histórico após revogação");
-assert.match(adminUI,/el\("strong",String\(item.action\|\|"alteração"\)\)/,"admin: somente texto na tela");
+assert.match(adminUI,/el\("strong",item.action\)/,"admin: somente texto validado na tela");
 console.log("PASS private audit: painel, filtro de acesso, paginação e limpeza por revogação");
 
 
@@ -393,7 +398,9 @@ const result=new Script(writeStart+"\n"+writeEnd+"\n"+
   "courseRequest:state.courseRequest,lessonRequest:state.lessonRequest})",
   {filename:"admin-write-serialization"}).runInNewContext({
     state:{accessDenied:false,writePending:false,catalogReady:true,course:null,lessonsReady:true,courseRequest:0,lessonRequest:0},
-    document:{querySelector:()=>fakeLayout},say:()=>{}
+    document:{querySelector:()=>fakeLayout},say:()=>{},
+    invalidateEditorialOverview:()=>{},renderEditorialOverview:()=>{},
+    invalidateEditorialArchive:()=>{},renderEditorialArchive:()=>{},renderEditorialCourseFilters:()=>{},renderLessonReorderControls:()=>{}
   });
 assert.equal(result.first,true);
 assert.equal(result.duplicate,false,"double-click cannot start second POST");
@@ -447,7 +454,7 @@ assert.match(studentProgressUI,/id="pillar-cards"/,"student: 3 pillars region");
 assert.match(studentProgressUI,/renderPillars\(\);/,"student: refresh from authoritative catalog");
 assert.match(studentProgressUI,/document.getElementById\("pillar-cards"\)\.replaceChildren\(\)/,"student: purge on 403");
 assert.match(studentProgressUI,/button\.disabled=!Number\.isSafeInteger\(pillar\.courseId\)/,"student: unapproved courses are disabled");
-assert.match(studentProgressUI,/openCourseWithAllFilters\(id\)/,"student: route through guarded course selection");
+assert.match(studentProgressUI,/openCourseWithAllFilters\(id,null,null,beginNavigationFocus\(\)\)/,"student: route explicit actions through guarded course selection");
 console.log("PASS student three-pillar journey: only published authorized course IDs clickable");
 
 
@@ -494,14 +501,15 @@ assert.match(adminRecoveryUI,/state\.lesson\?\.id===Number\(b\.dataset\.lesson\)
 console.log("PASS editorial navigation: unsaved course and lesson changes require explicit discard");
 
 assert.ok(studentProgressUI.includes('const retry=el("button","Tentar carregar aulas","secondary lesson-retry")'),"student: failed lesson read must offer manual retry");
-assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id)selectCourse(id);'),"student: lesson retry only with current authorized course");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.courseId===id&&state.courseRequest===request)')&&studentProgressUI.includes('selectCourse(id,preferredLessonId,preferredVersion,beginNavigationFocus());'),"student: lesson retry preserves exact search target, optional saved version and current authorized request");
 assert.ok(adminRecoveryUI.includes('retry.id="retry-lessons"'),"admin: failed lesson read must offer manual retry");
 assert.ok(adminRecoveryUI.includes('if(!state.accessDenied&&!state.writePending&&state.course?.id===courseId)'),"admin: retry forbidden after revocation or concurrent edit");
 console.log("PASS both private lesson lists: fail-closed manual recovery without stale data");
 
 assert.ok(studentProgressUI.includes('"secondary lesson-detail-retry"'),"student: a failed detail or progress read offers deliberate retry");
 assert.ok(studentProgressUI.includes('if(state.lessonRequest===request&&!state.accessDenied&&state.lessonId===id)'),"student: stale or revoked lesson responses do not show retry");
-assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id)selectLesson(id);'),"student: retry only while same lesson and permission context remains active");
+assert.ok(studentProgressUI.includes('if(!state.accessDenied&&state.lessonId===id&&state.lessonRequest===request)')&&studentProgressUI.includes('selectLesson(id,preferredVersion,beginNavigationFocus());'),"student: retry only while same lesson, request and permission context remain active, preserving optional saved version");
+assert.ok(studentProgressUI.includes('if(preferredVersion!==null&&lesson.course_version!==preferredVersion)'),"student: saved reading navigation refuses a different lesson version");
 console.log("PASS individual lesson read: no partial body or progress and no revoked retry");
 
 assert.match(adminRecoveryUI,/function mustConfirmBrowserExit\(\)/,"admin: beforeunload gate is explicit");
@@ -526,7 +534,7 @@ const item={id:1,slug:"curso-um",title:"Curso privado de teste",category:"metodo
 const accepted=parseAdmin({courses:[item]});
 assert.equal(JSON.stringify(accepted),JSON.stringify([{id:1,slug:"curso-um",
   title:"Curso privado de teste",category:"metodologia",summary:"",
-  sort_order:0,is_published:false}]),"admin: drop unexpected internal fields");
+  sort_order:0,audience:"",suggested_knowledge:"",is_published:false}]),"admin: drop unexpected internal fields");
 assert.equal(JSON.stringify(parseAdmin({courses:[]})),JSON.stringify([]),"admin: valid empty list is permitted");
 assert.equal(parseAdmin({}),null,"admin: missing courses is not an empty list");
 assert.equal(parseAdmin({courses:null}),null,"admin: null courses fail closed");
@@ -578,7 +586,7 @@ const frozen= new Script(freezeFn+"\nfreezeUncertainEditorialWrite();"+
   {filename:"ambiguous-editorial-no-replay"}).runInNewContext({
   state:{accessDenied:false,writeOutcomeUnknown:false,catalogReady:true,lessonsReady:true,courseRequest:0,lessonRequest:0},
   $:id=>elements[id]??{disabled:false},clearPublicationCheck:()=>{},hideLessonPreview:()=>{},
-  say:m=>{statusMessage=m;},
+  say:m=>{statusMessage=m;},invalidateEditorialOverview:()=>{},invalidateEditorialArchive:()=>{},renderEditorialCourseFilters:()=>{},renderLessonReorderControls:()=>{},
 });
 assert.equal(frozen.unknown,true,"editor: error after possible commit must freeze writes");
 assert.equal(frozen.catalog,false,"editor: no cached catalogue authority after ambiguous write");
@@ -610,6 +618,206 @@ console.log("PASS completion uncertainty: GET reconciliation before any repeated
 
 
 
+
+// C-110: execute the actual response normalizers and read/recovery flows.
+// These assertions supplement the real Chromium suite; no auth is simulated
+// by replacing production providers and no HTTP request leaves this process.
+const studentFunction=name=>{
+  const source=studentProgressUI.match(new RegExp("(?:async )?function "+name+"\\([^\\n]*\\)\\{[\\s\\S]*?\\n\\}"))?.[0];
+  assert.ok(source,"student function missing: "+name);return source;
+};
+const studentNormalizers=["studentRecord","studentText","studentSlug","validatedStudentCourses",
+  "clearLessonReflection","forgetLessonReflection",
+  "normalizeSearchText","lessonFilterCurrent","resetLessonFilter","renderLessonFilter","renderCourseGuidance",
+  "invalidateLessonSearch","renderLessonSearchControls",
+  "validatedStudentLessons","validatedStudentLesson","validatedStudentProgress"].map(studentFunction).join("\n");
+const studentParsers=new Script(studentNormalizers+"\n({validatedStudentCourses,validatedStudentLessons,validatedStudentLesson,validatedStudentProgress,studentText})")
+  .runInNewContext({});
+const studentCourse={id:1,slug:"curso-ficticio",title:"Curso fictício",category:"metodologia",
+  summary:"Resumo fictício",lessons_total:2,lessons_completed:0};
+const studentRow={id:11,slug:"aula-ficticia",title:"Aula fictícia",sort_order:0,completed:0};
+const studentDetail={id:11,slug:"aula-ficticia",title:"Aula fictícia",body:"Corpo fictício para verificação.",
+  sort_order:0,course_id:1,course_version:1};
+const {validatedStudentCourses:parseStudentCourses,validatedStudentLessons:parseStudentRows,
+  validatedStudentLesson:parseStudentDetail,validatedStudentProgress:parseStudentProgress}=studentParsers;
+assert.deepEqual(JSON.parse(JSON.stringify(parseStudentCourses({courses:[{...studentCourse,private_identity:"excluded",version_id:4}]}))),
+  [{...studentCourse,audience:"",suggested_knowledge:""}],"student catalogue retains only allowed fields");
+assert.equal(JSON.stringify(parseStudentRows({lessons:[{...studentRow,subject_key:"excluded"}]})),
+  JSON.stringify([studentRow]),"student lesson list retains only allowed fields");
+assert.equal(JSON.stringify(parseStudentDetail({lesson:{...studentDetail,subject_key:"excluded"}},11,1)),
+  JSON.stringify(studentDetail),"student detail retains only allowed fields");
+assert.equal(JSON.stringify(parseStudentCourses({courses:[]})),"[]","verified empty catalogue remains empty");
+assert.equal(JSON.stringify(parseStudentRows({lessons:[]})),"[]","verified empty lesson list remains empty");
+for(const payload of [{},{courses:null},{courses:[studentCourse,{...studentCourse,slug:"different"}]},
+  {courses:[studentCourse,{...studentCourse,id:2}]},{courses:[{...studentCourse,id:"1"}]},
+  {courses:[{...studentCourse,lessons_completed:3}]},{courses:[{...studentCourse,lessons_total:"2"}]},
+  {courses:[{...studentCourse,category:"unknown"}]},
+  {courses:[{...studentCourse,lessons_total:Number.MAX_SAFE_INTEGER},{...studentCourse,id:2,slug:"second"}]}]){
+  assert.equal(parseStudentCourses(payload),null,"invalid student catalogue rejected as a whole");
+}
+for(const payload of [{},{lessons:null},{lessons:[studentRow,{...studentRow,slug:"different"}]},
+  {lessons:[studentRow,{...studentRow,id:12}]},{lessons:[{...studentRow,completed:"false"}]},
+  {lessons:[{...studentRow,completed:false}]},{lessons:[{...studentRow,sort_order:-1}]}]){
+  assert.equal(parseStudentRows(payload),null,"invalid student lesson list rejected as a whole");
+}
+assert.equal(parseStudentCourses({courses:Array.from({length:5001},(_,index)=>({
+  ...studentCourse,id:index+1,slug:"course-"+index}))}).length,5001,
+  "catalogue accepts backend-authorized lists without inventing a record limit");
+assert.equal(parseStudentRows({lessons:Array.from({length:5001},(_,index)=>({
+  ...studentRow,id:index+1,slug:"lesson-"+index}))}).length,5001,
+  "lessons accept backend-authorized lists without inventing a record limit");
+for(const payload of [{},{completed:"false"},{completed:0},{completed:1},{completed:null},[]]){
+  assert.equal(parseStudentProgress(payload),null,"individual progress requires a boolean");
+}
+assert.equal(parseStudentProgress({completed:false}).completed,false,"pending boolean preserved");
+assert.equal(parseStudentProgress({completed:true,subject_key:"excluded"}).completed,true,"completed boolean preserved");
+assert.equal(Object.keys(parseStudentProgress({completed:true,subject_key:"excluded"})).join(","),"completed");
+for(const payload of [{},{lesson:null},{lesson:{...studentDetail,id:12}},
+  {lesson:{...studentDetail,course_id:2}},{lesson:{...studentDetail,body:42}},
+  {lesson:{...studentDetail,course_version:0}}]){
+  assert.equal(parseStudentDetail(payload,11,1),null,"wrong or malformed detail cannot render for another lesson");
+}
+assert.ok(parseStudentCourses({courses:[{...studentCourse,title:"😀".repeat(200),summary:"😀".repeat(500)}]}),
+  "valid Unicode titles and summaries use Laravel character limits");
+assert.equal(parseStudentCourses({courses:[{...studentCourse,title:"😀".repeat(201)}]}),null);
+assert.ok(parseStudentDetail({lesson:{...studentDetail,body:"😀".repeat(30000)}},11,1),
+  "valid astral body is not rejected by UTF-16 length");
+assert.equal(parseStudentDetail({lesson:{...studentDetail,body:"😀".repeat(30001)}},11,1),null);
+const unicodeSections=new Script(studentFunction("splitLessonSections")+"\nsplitLessonSections(body)")
+  .runInNewContext({body:"😀".repeat(30000)});
+assert.equal(Array.from(unicodeSections[0].text).length,30000,"renderer does not halve valid astral body");
+
+function studentTestNode(tag,text,className){
+  return {tag,textContent:text??"",className:className??"",children:[],events:{},dataset:{},
+    hidden:false,disabled:false,append(...nodes){this.children.push(...nodes);},
+    replaceChildren(...nodes){this.children=nodes;},setAttribute(){},querySelectorAll(){return[];},
+    addEventListener(event,callback){this.events[event]=callback;}};
+}
+function studentFlowFixture(){
+  const nodes=new Map();
+  const get=id=>{if(!nodes.has(id)){const node=studentTestNode("div");node.disabled=true;nodes.set(id,node);}return nodes.get(id);};
+  const state={courses:[{...studentCourse}],filter:"todos",query:"",courseId:1,lessonId:null,courseRequest:0,lessonRequest:0,
+    lessonFilter:{query:"",courseId:null,request:0,ready:false},
+    searchRequest:0,accessDenied:false,libraryLoading:false,libraryReady:true,exportLoading:false,
+    favoriteIds:[],favoritesReady:false,favoritesLoading:false,favoritesRequest:0,favoriteWriting:false,
+    favoriteOutcomeUnknown:false,favoritesOnly:false,favoritesMessage:""};
+  const content=studentTestNode("article"),lessonsBox=studentTestNode("div"),list=studentTestNode("div");
+  const messages=[],marks=[],calls=[];
+  const filters=["todos","metodologia"].map(filter=>{const node=studentTestNode("button");node.dataset.filter=filter;return node;});
+  const context={state,activeReflection:null,content,lessonsBox,list,overall:studentTestNode("p"),document:{getElementById:get,querySelectorAll:selector=>selector==="[data-filter]"?filters:[]},
+    el:studentTestNode,lessonTextFragment:body=>studentTestNode("div",body),lessonHelpPanel:()=>studentTestNode("section"),lessonReadingPositionAction:()=>studentTestNode("div"),renderReadingPosition:()=>{},loadReadingPosition:async()=>null,renderCourses:()=>{},renderSimulator:()=>{},renderFavoriteControls:()=>{},loadFavorites:async()=>false,
+    invalidateRetainedFavorites:()=>{},
+    lessonReflectionPanel:()=>studentTestNode("details"),
+    renderContextualCourses:()=>{},
+    invalidateProgressHistory:()=>{},renderProgressHistory:()=>{},
+    invalidateNavigationFocus:()=>{},beginNavigationFocus:()=>null,finishNavigationFocus:()=>{},lessonNavigationTarget:studentTestNode,
+    reconcileCatalogSelection:()=>{},
+    markLessonStatus:(id,completed)=>marks.push({id,completed}),offerNextLesson:()=>{},say:message=>messages.push(message)};
+  return {state,content,lessonsBox,list,get,filters,messages,marks,calls,context};
+}
+for(const initial of [{},{ready:false},{ready:"true"}]){
+  const fixture=studentFlowFixture();
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});return path==="/initialize"?initial:{courses:[studentCourse]};};
+  const load=new Script(studentNormalizers+"\n"+studentFunction("loadLibrary")+"\nloadLibrary")
+    .runInNewContext(fixture.context);
+  await load();
+  assert.equal(fixture.calls.length,1,"invalid ready never causes a catalogue read or automatic replay");
+  assert.equal(fixture.get("library-recovery").hidden,false,"invalid ready exposes manual recovery");
+  assert.equal(fixture.get("lesson-search-query").disabled,true);
+  assert.equal(fixture.get("export-progress").disabled,true);
+}
+{
+  const fixture=studentFlowFixture();let fail=true;
+  fixture.context.api=async path=>path==="/initialize"?{ready:true}:fail?{courses:null}:{courses:[studentCourse]};
+  fixture.context.renderPillars=()=>{};
+  fixture.context.coursesFiltered=()=>fixture.state.courses;
+  fixture.context.labels={metodologia:"Metodologia"};
+  const filterEvents=studentProgressUI.match(/document\.getElementById\("course-search"\)\.addEventListener\("input",event=>\{[\s\S]*?\n\/\/ Recovery/)?.[0].replace(/\n\/\/ Recovery$/,"");
+  assert.ok(filterEvents,"actual course filter handlers must be available");
+  const flow=new Script(studentNormalizers+"\n"+
+    ["progressLabel","nextPendingCourseId","renderCourses","loadLibrary"].map(studentFunction).join("\n")+
+    "\n"+filterEvents+"\n({loadLibrary,renderCourses})").runInNewContext(fixture.context);
+  await flow.loadLibrary();assert.equal(fixture.get("library-recovery").hidden,false);
+  assert.equal(fixture.state.courses.length,0,"invalid catalogue has no partial courses");
+  assert.equal(fixture.state.libraryReady,false,"invalid catalogue cannot grant ready state");
+  const unavailable=fixture.context.overall.textContent;
+  fixture.get("course-search").events.input({target:{value:"ignored"}});
+  fixture.filters[1].events.click();
+  flow.renderCourses();
+  assert.equal(fixture.context.overall.textContent,unavailable,"filters cannot turn unavailable data into a valid empty state");
+  assert.equal(fixture.get("export-progress").disabled,true,"filters cannot unlock export after invalid catalogue");
+  assert.equal(fixture.get("course-search").disabled,true,"course search stays disabled after failure");
+  assert.ok(fixture.filters.every(button=>button.disabled),"category filters stay disabled after failure");
+  assert.equal(fixture.state.query,"");assert.equal(fixture.state.filter,"todos");
+  fail=false;await flow.loadLibrary();assert.equal(fixture.get("library-recovery").hidden,true);
+  assert.equal(fixture.state.courses.length,1,"manual recovery accepts later valid catalogue");
+  assert.equal(fixture.state.libraryReady,true,"only a verified catalogue grants ready state");
+  assert.equal(fixture.get("course-search").disabled,false);
+  assert.equal(fixture.get("export-progress").disabled,false);
+  assert.ok(fixture.filters.every(button=>!button.disabled));
+}
+for(const payload of [{},{lessons:null},{lessons:[studentRow,{...studentRow,slug:"another"}]},
+  {lessons:[{...studentRow,completed:"false"}]}]){
+  const fixture=studentFlowFixture();let fail=true;
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});
+    return fail?payload:{lessons:[studentRow]};};
+  const opened=[];fixture.context.selectLesson=async id=>opened.push(id);
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectCourse")+"\nselectCourse").runInNewContext(fixture.context);
+  await select(1,11);
+  assert.equal(fixture.lessonsBox.children.length,0,"malformed list never renders partial rows");
+  assert.equal(opened.length,0,"malformed list never selects a lesson");
+  assert.ok(fixture.content.children.some(node=>node.className.includes("lesson-retry")));
+  fail=false;await select(1,11);
+  assert.deepEqual(opened,[11],"valid recovery preserves the exact selected lesson");
+  assert.equal(fixture.calls.filter(call=>call.method==="POST").length,0);
+}
+for(const [lesson,progress] of [[studentDetail,{}],[studentDetail,{completed:"false"}],
+  [{...studentDetail,id:12},{completed:false}],[{...studentDetail,course_id:2},{completed:false}]]){
+  const fixture=studentFlowFixture();let fail=true;
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});
+    return path.endsWith("/progress")?(fail?progress:{completed:false}):{lesson:fail?lesson:studentDetail};};
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectLesson")+"\nselectLesson").runInNewContext(fixture.context);
+  await select(11);
+  assert.equal(fixture.content.children.some(n=>n.tag==="h3"),false,"invalid detail/progress never renders a partial lesson");
+  assert.equal(fixture.content.children.some(n=>n.className==="primary"),false,"invalid reads never enable completion");
+  assert.equal(fixture.marks.length,0,"invalid progress does not mark local completion");
+  const retry=fixture.content.children.find(n=>n.className.includes("lesson-detail-retry"));assert.ok(retry);
+  fail=false;await select(11);
+  assert.ok(fixture.content.children.some(n=>n.tag==="h3"),"later valid read recovers the lesson");
+  assert.equal(fixture.calls.filter(x=>x.method==="POST").length,0,"read recovery never writes completion");
+}
+{
+  const fixture=studentFlowFixture();
+  fixture.context.api=async(path,options={})=>{fixture.calls.push({path,method:options.method??"GET"});
+    if(options.method==="POST")return{completed:true};
+    if(path==="/courses")return{courses:null};
+    return path.endsWith("/progress")?{completed:false}:{lesson:studentDetail};};
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectLesson")+"\nselectLesson").runInNewContext(fixture.context);
+  await select(11);const action=fixture.content.children.find(n=>n.className==="primary");await action.events.click();
+  assert.equal(action.disabled,true,"confirmed completion remains closed after a catalogue failure");
+  assert.equal(action.textContent,"✓ Aula concluída");
+  assert.equal(fixture.calls.filter(x=>x.method==="POST").length,1,"catalogue failure never replays completion");
+  assert.equal(fixture.state.courses.length,1,"invalid refresh cannot replace known catalogue with false empty success");
+  assert.ok(fixture.messages.at(-1).includes("Aula concluída. Atualize"));
+}
+{
+  const fixture=studentFlowFixture();let resolveOld;
+  fixture.context.api=async(path,options={})=>{
+    fixture.calls.push({path,method:options.method??"GET"});
+    if(path==="/lessons/11")return new Promise(resolve=>{resolveOld=resolve;});
+    if(path.endsWith("/progress"))return{completed:false};
+    return{lesson:{...studentDetail,id:12,slug:"second-lesson",title:"Segunda aula"}};
+  };
+  const select=new Script(studentNormalizers+"\n"+studentFunction("selectLesson")+"\nselectLesson").runInNewContext(fixture.context);
+  const old=select(11);await select(12);
+  resolveOld({lesson:{...studentDetail,id:99}});await old;
+  assert.equal(fixture.content.children.find(node=>node.tag==="h3").textContent,"Segunda aula",
+    "malformed late response cannot replace a newer valid lesson or show its retry");
+  assert.equal(fixture.content.children.some(node=>node.className.includes("lesson-detail-retry")),false);
+  assert.equal(fixture.marks.length,1,"old response cannot mutate lesson progress");
+  assert.equal(fixture.calls.filter(call=>call.method==="POST").length,0);
+}
+console.log("PASS student response integrity: validated catalogue, lists, exact lesson, boolean progress, Unicode, recovery and no replay");
 
 const manifest = JSON.parse(read("content/mvp-cursos-v1.json"));
 assert.equal(manifest.schema_version, 1);
@@ -672,13 +880,46 @@ assert.match(searchController,/function searchLessons\(Request \$request, Portal
 assert.match(searchController,/if \(\$this->freshGrant\(\$request, \$gate, \$grant\) === null\)/,
   "search results cannot be emitted after grant revocation");
 assert.match(studentProgressUI,/id="lesson-search-form"/,"student must expose private lesson search");
-assert.match(studentProgressUI,/function validLessonSearchResults\(payload\)/,"student must check result shape");
-assert.match(studentProgressUI,/api\("\/search",\{method:"POST",body:\{query:phrase\}\}\)/,
-  "student must never place search terms in query URL");
-assert.match(studentProgressUI,/if\(!state\.accessDenied\)openCourseWithAllFilters\(hit\.course_id,hit\.lesson_id\)/,
+assert.match(studentProgressUI,/function validLessonSearchResults\(payload,cursor=null\)/,"student must check page and cursor shape");
+assert.match(studentProgressUI,/const body=\{query:phrase,paginated:true\};if\(cursor!==null\)body\.cursor=cursor;/,
+  "student must opt into pagination and put the phrase and optional cursor only in the request body");
+assert.match(studentProgressUI,/api\("\/search",\{method:"POST",body\}\)/,
+  "student must keep the search URL free of terms and cursors");
+assert.match(studentProgressUI,/const current=\(\)=>!state\.accessDenied&&state\.libraryReady&&!state\.libraryLoading&&\s+request===state\.searchRequest&&state\.searchQuery===phrase;/,
+  "search responses and result clicks must belong to the current authorized library and query generation");
+assert.match(studentProgressUI,/if\(current\(\)&&!state\.searchBusy&&b\.isConnected&&results\.contains\(b\)&&state\.courses\.some\(course=>course\.id===hit\.course_id\)\)\s+openCourseWithAllFilters\(hit\.course_id,hit\.lesson_id,null,beginNavigationFocus\(\)\)/,
   "result must open an authorized selected lesson");
 assert.match(studentProgressUI,/document\.getElementById\("lesson-search-results"\)\.replaceChildren\(\)/,
   "search results must be purged on Portal denial");
 console.log("PASS private lesson search: 8-hit bounded, published-only, CSRF, tenant, revocation and no external AI");
 
+await import("./check-error-body-cleanup.mjs");
+await import("./check-publication-response.mjs");
+await import("./check-student-help.mjs");
+await import("./check-student-favorites.mjs");
+await import("./check-student-favorites-export.mjs");
+await import("./check-retained-favorites.mjs");
+await import("./check-student-reading-position.mjs");
+await import("./check-contextual-courses.mjs");
+await import("./check-progress-history.mjs");
+await import("./check-progress-export-timestamps.mjs");
+await import("./check-progress-export-version.mjs");
+await import("./check-student-navigation-focus.mjs");
+await import("./check-private-search-pages.mjs");
+await import("./check-lesson-sections.mjs");
+await import("./check-student-catalog-reconciliation.mjs");
+await import("./check-student-lesson-filter.mjs");
+await import("./check-student-course-guidance.mjs");
+await import("./check-student-reflection.mjs");
+await import("./check-editor-draft-preservation.mjs");
+await import("./check-editorial-overview.mjs");
+await import("./check-editorial-audit.mjs");
+await import("./check-editorial-course-context.mjs");
+await import("./check-editorial-version-history.mjs");
+await import("./check-editorial-catalog-filters.mjs");
+await import("./check-lesson-reorder.mjs");
+await import("./check-editorial-lesson-filters.mjs");
+await import("./check-lesson-order-patch.mjs");
+await import("./check-editorial-write-receipts.mjs");
+await import("./check-course-order-patch.mjs");
 console.log("PASS: contrato estático de UI, rotas e conteúdo. Não é teste de runtime ou homologação.");

@@ -19,6 +19,10 @@ $expected = [
     'educational_lesson_progress|educational_organizations',
     'educational_lesson_progress|educational_lessons',
     'educational_audit_events|educational_organizations',
+    'educational_course_favorites|educational_organizations',
+    'educational_course_favorites|educational_courses',
+    'educational_reading_positions|educational_organizations',
+    'educational_reading_positions|educational_lessons',
 ];
 
 if (
@@ -93,7 +97,70 @@ try {
         echo "PASS partial UNIQUE {$indexName}\n";
     }
 
-    echo "\n8 PostgreSQL schema invariants verified. No records were mutated.\n";
+    $favoriteIndex = $pdo->query(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'
+         AND indexname = 'edu_favorites_org_subject_course_uq'"
+    )->fetchColumn();
+    if (!is_string($favoriteIndex) || !str_contains($favoriteIndex, 'UNIQUE INDEX')
+        || !str_contains($favoriteIndex, '(educational_organization_id, subject_key, educational_course_id)')) {
+        abortCheck('Favorites require the exact tenant/subject/course unique index.');
+    }
+    echo "PASS private favorites triple UNIQUE\n";
+
+    $favoriteColumns = $pdo->query(
+        "SELECT column_name, character_maximum_length, is_nullable
+         FROM information_schema.columns WHERE table_schema = 'public'
+         AND table_name = 'educational_course_favorites' ORDER BY column_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if (array_column($favoriteColumns, 'column_name') !== [
+        'created_at', 'educational_course_id', 'educational_organization_id', 'subject_key', 'updated_at',
+    ] || (int) $favoriteColumns[3]['character_maximum_length'] !== 120
+        || $favoriteColumns[1]['is_nullable'] !== 'NO'
+        || $favoriteColumns[2]['is_nullable'] !== 'NO'
+        || $favoriteColumns[3]['is_nullable'] !== 'NO') {
+        abortCheck('Favorites schema must contain only non-null identity/resource keys and timestamps.');
+    }
+    echo "PASS private favorites minimal columns and non-null scoped keys\n";
+
+    $positionIndex = $pdo->query(
+        "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'
+         AND indexname = 'edu_reading_position_org_subject_uq'"
+    )->fetchColumn();
+    if (!is_string($positionIndex) || !str_contains($positionIndex, 'UNIQUE INDEX')
+        || !str_contains($positionIndex, '(educational_organization_id, subject_key)')) {
+        abortCheck('Reading positions require one unique slot per tenant and subject.');
+    }
+    echo "PASS private reading position scoped UNIQUE\n";
+
+    $positionColumns = $pdo->query(
+        "SELECT column_name, character_maximum_length, is_nullable
+         FROM information_schema.columns WHERE table_schema = 'public'
+         AND table_name = 'educational_reading_positions' ORDER BY column_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if (array_column($positionColumns, 'column_name') !== [
+        'educational_lesson_id', 'educational_organization_id', 'revision', 'saved_at', 'subject_key',
+    ] || array_column($positionColumns, 'is_nullable') !== ['YES', 'NO', 'NO', 'YES', 'NO']
+        || (int) $positionColumns[2]['character_maximum_length'] !== 67
+        || (int) $positionColumns[4]['character_maximum_length'] !== 120) {
+        abortCheck('Reading position schema must keep only scoped keys, revision and an erasable reference/date.');
+    }
+    echo "PASS private reading position minimal columns and erasable reference\n";
+
+    $courseContextColumns = $pdo->query(
+        "SELECT column_name, data_type, character_maximum_length, is_nullable
+         FROM information_schema.columns WHERE table_schema = 'public'
+         AND table_name = 'educational_courses'
+         AND column_name IN ('audience', 'suggested_knowledge') ORDER BY column_name"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if (array_column($courseContextColumns, 'column_name') !== ['audience', 'suggested_knowledge']
+        || array_column($courseContextColumns, 'data_type') !== ['character varying', 'character varying']
+        || array_map('intval', array_column($courseContextColumns, 'character_maximum_length')) !== [500, 500]
+        || array_column($courseContextColumns, 'is_nullable') !== ['YES', 'YES']) {
+        abortCheck('Course guidance must remain two optional editorial strings of at most 500 characters.');
+    }
+    echo "PASS optional course audience and suggested knowledge columns\n";
+
+    echo "\n17 PostgreSQL schema invariants verified. No records were mutated.\n";
 } catch (Throwable $e) {
     // The schema checker must never log connection secrets or exception trace.
     abortCheck('PostgreSQL connection/schema inspection failed.');

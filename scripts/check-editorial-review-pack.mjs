@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
 import {spawnSync} from "node:child_process";
-import {mkdtemp,readFile,readdir,rm} from "node:fs/promises";
+import {lstat,mkdtemp,readFile,readdir,rm,symlink,writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -75,7 +75,35 @@ try{
   assert.ok(!(csv.includes("VERIFIED")||csv.includes("APPROVED")),"package cannot grant an approval");
   assert.equal(createHash("sha256").update(await readFile(sourcePath,"utf8")).digest("hex"),
     sourceHash,"generator may never modify original editorial fixture");
-  console.log("PASS editorial review pack QA: 10 files, all 35 complete bodies, immutable hashes, no self-approval.");
+  // C181: reopening the same output path must refuse to overwrite actual
+  // human work instead of resetting every status to PENDING.
+  const editedCsv=csv.replace('"PENDING_HUMAN_REVIEW"','"NEEDS_CHANGES"');
+  assert.notEqual(editedCsv,csv,"The human-draft sentinel must change the CSV");
+  await writeFile(join(tmp,"revisao.csv"),editedCsv,"utf8");
+  const accidentalRebuild=spawnSync(process.execPath,[
+    fileURLToPath(new URL("./build-editorial-review-pack.mjs",import.meta.url)),
+    "--out",tmp
+  ],{encoding:"utf8",cwd:repoRoot,env:{...process.env,NODE_ENV:"test"}});
+  assert.notEqual(accidentalRebuild.status,0,"An existing review package must never be overwritten");
+  assert.match(accidentalRebuild.stderr,/destination must be empty/u);
+  assert.equal(await readFile(join(tmp,"revisao.csv"),"utf8"),editedCsv,
+    "Accidental rebuild must preserve the human CSV byte-for-byte");
+  assert.equal(await readFile(join(tmp,"LEIA-PRIMEIRO.md"),"utf8"),index,
+    "Refused rebuild must preserve the existing handoff document");
+  // C187: a symlink in an ancestor of a not-yet-created output path is
+  // just as dangerous as a symlink at the final output path itself.
+  const alias=join(tmp,"atalho-para-cursos");
+  await symlink(join(tmp,"cursos"),alias,"dir");
+  const fakeDest=join(alias,"pacote-inesperado");
+  const linkedBuild=spawnSync(process.execPath,[
+    fileURLToPath(new URL("./build-editorial-review-pack.mjs",import.meta.url)),
+    "--out",fakeDest
+  ],{encoding:"utf8",cwd:repoRoot,env:{...process.env,NODE_ENV:"test"}});
+  assert.notEqual(linkedBuild.status,0,"Symlink parent must fail before mkdir");
+  assert.match(linkedBuild.stderr,/symlink ancestor/u);
+  await assert.rejects(lstat(join(tmp,"cursos","pacote-inesperado")),
+    {code:"ENOENT"},"No output folder may be created through the symlink");
+  console.log("PASS editorial review pack QA: 10 files, all 35 complete bodies, immutable hashes, no self-approval or accidental overwrite.");
 }finally{
   await rm(tmp,{recursive:true,force:true});
 }

@@ -8,6 +8,9 @@ const controller = read("app/Http/Controllers/UniversityController.php");
 const provisioner = read("app/Domain/Learning/UniversityTenantProvisioner.php");
 const bindings = read("app/Providers/AppServiceProvider.php");
 const feature = read("tests/Feature/PortalBoundaryFlowTest.php");
+const favoritesFeature = read("tests/Feature/FavoriteCoursesFlowTest.php");
+const positionFeature = read("tests/Feature/ReadingPositionFlowTest.php");
+const reorderFeature = read("tests/Feature/EditorialLessonReorderFlowTest.php");
 
 function section(text, start, end) {
   const first = text.indexOf(start);
@@ -26,11 +29,16 @@ assert.ok(repository.includes("$verifyFreshGrant === null"));
 assert.match(bindings, /bind\(PortalAuthority::class, UnavailablePortalAuthority::class\)/);
 
 const writes = [
+  ["saveReadingPosition", "clearReadingPosition", "VIEW"],
+  ["clearReadingPosition", "favoriteCourse", "VIEW"],
+  ["favoriteCourse", "unfavoriteCourse", "VIEW"],
+  ["unfavoriteCourse", "searchPublishedLessons", "VIEW"],
   ["complete", "audit", "VIEW"],
   ["createCourse", "updateCourse", "MANAGE"],
   ["updateCourse", "addLesson", "MANAGE"],
   ["addLesson", "updateLesson", "MANAGE"],
-  ["updateLesson", "deleteDraftLesson", "MANAGE"],
+  ["updateLesson", "reorderDraftLessons", "MANAGE"],
+  ["reorderDraftLessons", "deleteDraftLesson", "MANAGE"],
   ["deleteDraftLesson", "deleteNeverPublishedCourse", "MANAGE"],
   ["deleteNeverPublishedCourse", "setPublished", "MANAGE"],
   ["setPublished", null, "MANAGE"],
@@ -44,7 +52,7 @@ for (const [method, next, capability] of writes) {
     capability + ", $verifyFreshGrant)"), "missing live grant fence: " + method);
 
   const fence = body.indexOf("freshWriteGrantMatches(");
-  const mutation = Math.min(...["->insertGetId(", "->insert(", "->update(", "->delete(", "->insertOrIgnore("]
+  const mutation = Math.min(...["->insertGetId(", "->insert(", "->update(", "DB::update(", "->delete(", "->insertOrIgnore("]
     .map(x => body.indexOf(x)).filter(x => x >= 0));
   assert.ok(Number.isFinite(mutation) && fence >= 0 && fence < mutation,
     "authority must be checked before first mutation: " + method);
@@ -63,11 +71,16 @@ assert.ok(initialization.includes("PortalAccessGate $gate"));
 assert.ok(initialization.includes("freshGrant($request, $gate, $grant)"));
 
 const controllers = [
+  ["saveReadingPosition", "clearReadingPosition"],
+  ["clearReadingPosition", "favoriteCourse"],
+  ["favoriteCourse", "unfavoriteCourse"],
+  ["unfavoriteCourse", "searchLessons"],
   ["complete", "adminAudit"],
   ["createCourse", "updateCourse"],
   ["updateCourse", "createLesson"],
   ["createLesson", "updateLesson"],
-  ["updateLesson", "deleteDraftLesson"],
+  ["updateLesson", "reorderDraftLessons"],
+  ["reorderDraftLessons", "deleteDraftLesson"],
   ["deleteDraftLesson", "deleteNeverPublishedCourse"],
   ["deleteNeverPublishedCourse", "publish"],
   ["publish", "unpublish"],
@@ -93,4 +106,27 @@ for (const regression of [
 ]) {
   assert.ok(feature.includes(regression), "missing negative regression: " + regression);
 }
-console.log("PASS: all 10 HTTP write paths use transaction-scoped Portal validation, including tenant provisioning and 2 publish actions.");
+for (const regression of [
+  "test_revocation_during_favorite_write_is_checked_inside_the_transaction",
+  "test_revocation_during_removal_preserves_the_students_preference",
+  "test_live_grant_must_match_for_add_remove_and_absent_removal",
+]) {
+  assert.ok(favoritesFeature.includes(regression), "missing private preference regression: " + regression);
+}
+for (const regression of [
+  "test_revocation_during_target_read_prevents_initial_insert",
+  "test_revocation_during_replacement_or_removal_preserves_the_exact_existing_row",
+  "test_authority_revoked_after_a_contended_insert_rolls_back_the_new_slot",
+  "test_internal_writes_require_a_matching_live_grant_and_do_not_trust_the_revision_as_authority",
+]) {
+  assert.ok(positionFeature.includes(regression), "missing private reading position regression: " + regression);
+}
+for (const regression of [
+  "test_revocation_while_waiting_or_reading_prevents_the_first_update",
+  "test_revocation_after_a_partial_update_rolls_back_the_whole_order_and_audit",
+  "test_a_changed_grant_revision_after_audit_rolls_back_updates_and_the_audit_row",
+  "test_direct_calls_require_the_exact_fresh_authority_even_for_boundary_noops",
+]) {
+  assert.ok(reorderFeature.includes(regression), "missing atomic editorial order regression: " + regression);
+}
+console.log("PASS: all 15 HTTP write paths use transaction-scoped Portal validation, including private favorites/reading positions, atomic lesson reorder, tenant provisioning and 2 publish actions.");

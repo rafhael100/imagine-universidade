@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {checkEnvironmentRegressionCases} from "./check-compose-environment.mjs";
 const read=p=>readFileSync(new URL("../../"+p,import.meta.url),"utf8");
 const compose=read("ops/staging/compose.yaml");
 const php=read("ops/staging/Dockerfile.php");
@@ -14,6 +15,11 @@ assert.doesNotMatch(compose,/\b0\.0\.0\.0:|\bports:\s*\n\s*-\s*['"]?5432/i);
 assert.match(compose,/university_database:\s*\n\s*internal: true/);
 assert.match(compose,/DB_USERNAME: '\$\{UNI_STAGING_APP_DB_USER:\?/);
 assert.match(compose,/POSTGRES_USER: '\$\{UNI_STAGING_DB_OWNER:\?/);
+assert.doesNotMatch(compose,/^\s*env_file\s*:/m,"Never inject the complete interpolation file into a service");
+assert.match(compose,/APP_KEY: '\$\{APP_KEY:\?/);
+assert.match(compose,/APP_URL: '\$\{APP_URL:\?/);
+assert.match(compose,/SESSION_COOKIE: imagine_universidade_staging_session/);
+assert.match(compose,/MAIL_MAILER: array/);
 assert.match(compose,/SESSION_DRIVER: database/);
 assert.match(compose,/SESSION_ENCRYPT: 'true'/);
 assert.match(compose,/SESSION_SECURE_COOKIE: 'true'/);
@@ -33,4 +39,5 @@ assert.match(ignore,/!ops\/staging\/Dockerfile\.php/);
 assert.match(ignore,/\*\*\/\.env\.\*/);
 assert.match(provider,/UnavailablePortalAuthority::class/);
 assert.match(provider,/DisabledTutorGateway::class/);
+checkEnvironmentRegressionCases();
 console.log("PASS staging candidate: isolated loopback-only compose, private roles, no real authority/deploy");

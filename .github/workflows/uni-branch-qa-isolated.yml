@@ -1,5 +1,6 @@
-name: UNI isolated branch QA (test-only, no deploy)
+name: UNI private flow QA (test-only, no deploy)
 
+# UNI C-108/C-109: private error responses and exact search target after manual retry.
 # UNI C-101: repeat all isolated browser and Docker labs with updated course+lesson gate assertions.
 # UNI C-100: full malformed 200 lesson list, no-write/publish and authorized recovery regressions.
 # UNI C-99: full 200-malformed editor catalogue fail-closed and privacy export regressions.
@@ -23,11 +24,13 @@ name: UNI isolated branch QA (test-only, no deploy)
 on:
   push:
     branches:
-      - feat/uni-c70-archive-offline-preview-on-success-2026-11-15
+      - fix/uni-c108-private-flow-2026-11-17
     paths:
       - '.github/workflows/uni-branch-qa-isolated.yml'
       - 'app/**'
       - 'bootstrap/**'
+      - 'resources/views/**'
+      - 'public/assets/**'
       - 'database/**'
       - 'routes/**'
       - 'tests/**'
@@ -41,7 +44,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: uni-branch-qa-isolated-review
+  group: uni-private-flow-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -86,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test "$APP_ENV" = "testing"
           test "$DB_DATABASE" = "uni_ci"
           test ! -e .env
@@ -112,12 +115,20 @@ jobs:
           php scripts/check-provisioner-contract.php
           php scripts/check-learning-mock.php
           node ops/staging/check-release-gates.mjs
+          bash -n ops/staging/inventory-readonly.sh
+          sh -n scripts/qa-pg-backup-restore.sh
+          node ops/staging/check-inventory.mjs
+          node ops/staging/check-compose-static.mjs
+          bash ops/staging/check-compose-syntax.sh
           node scripts/check-release-gate-policy.mjs
+          node scripts/check-main-governance-parity.mjs
+          node scripts/check-university-readiness-pack.mjs
           node scripts/check-write-fence.mjs
           node scripts/check-ui-contract.mjs
           node scripts/check-learning-content.mjs
           node scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-review-validation.mjs
+          node scripts/check-editorial-offline-review.mjs
           node preview/current-check.mjs
           python3 scripts/check-sqlite-contract.py
 
@@ -144,6 +155,13 @@ jobs:
           php artisan migrate:fresh --database=pgsql --force
           php scripts/check-pg-schema.php
           php scripts/check-pg-flow.php
+          php scripts/check-pg-favorites.php
+          php scripts/check-pg-editorial-overview.php
+          php scripts/check-pg-reading-position.php
+          php scripts/check-pg-editorial-archives.php
+          php scripts/check-pg-retained-favorites.php
+          php scripts/check-pg-progress-history.php
+          php scripts/check-pg-lesson-reorder.php
           php scripts/check-pg-nonce.php
           php scripts/check-pg-concurrency.php
           php scripts/check-pg-runtime-roles.php
@@ -166,11 +184,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -e .env && test ! -e .env.production
           test -f content/mvp-cursos-v1.json
           node scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-review-validation.mjs
+          node scripts/check-editorial-offline-review.mjs
           node scripts/build-editorial-review-pack.mjs --out "$RUNNER_TEMP/universidade-editorial-review"
           node scripts/validate-editorial-review.mjs \
             --csv "$RUNNER_TEMP/universidade-editorial-review/revisao.csv" \
@@ -185,6 +204,26 @@ jobs:
         with:
           name: imagine-universidade-revisao-editorial-PENDENTE
           path: ${{ runner.temp }}/universidade-editorial-review/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Build P0 release blockers report from versioned manifest only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
+          test ! -e .env && test ! -e .env.production
+          node scripts/check-university-readiness-pack.mjs
+          node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/universidade-release-readiness"
+          grep -Fq 'HOLD_NO_GO' "$RUNNER_TEMP/universidade-release-readiness/readiness.json"
+          grep -Fq 'NÃO É APROVAÇÃO' "$RUNNER_TEMP/universidade-release-readiness/PENDENCIAS-LANCAMENTO.md"
+          echo "PASS read-only release report: no GO, grant, approval, merge or deploy."
+
+      - name: Upload P0 launch blockers for coordination (not deployment approval)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-PENDENCIAS-LANCAMENTO-P0
+          path: ${{ runner.temp }}/universidade-release-readiness/
           retention-days: 14
           if-no-files-found: error
 
@@ -217,7 +256,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -f .env && test ! -f portal-contract-source/apps/portal/.env
           test "$(git -C portal-contract-source rev-parse HEAD)" = "8f469b7079467098337568178637cc989420a102"
           php -l scripts/check-portal-university-contract.php
@@ -240,7 +279,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -e .env
           test ! -e .env.production
           test -f composer.lock
@@ -269,13 +308,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test ! -e .env
           test ! -e .env.production
           test -f public/assets/logo-imagine.png
           test -f public/assets/imagine-tokens.css
           test -f preview/current.html
           node --check scripts/qa-browser-synthetic.cjs
+          node --check scripts/qa-browser-editorial-offline.cjs
+          node --check scripts/editorial-review-app.js
           node preview/current-check.mjs
       - name: Real Chromium and accessibility QA with synthetic fixture
         shell: bash
@@ -296,6 +337,37 @@ jobs:
         with:
           name: imagine-universidade-synthetic-ui-evidence
           path: ${{ runner.temp }}/uni-browser-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: PHP 8.3 for the real framework browser journey
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, mbstring, dom, xml, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Install locked framework dependencies without scripts or plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+      - name: Complete student and editor journey against real Laravel and SQLite
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uni-framework-browser-evidence"
+          NODE_PATH="$RUNNER_TEMP/uni-browser-packages/node_modules" \
+          UNI_FRAMEWORK_BROWSER_LAB=synthetic \
+          UNI_FRAMEWORK_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-framework-browser-evidence" \
+            bash scripts/qa-framework-browser.sh
+      - name: Upload real framework browser evidence with synthetic identities
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: success()
+        with:
+          name: imagine-universidade-framework-browser-evidence
+          path: ${{ runner.temp }}/uni-framework-browser-evidence/
           if-no-files-found: error
           retention-days: 7
 
@@ -325,7 +397,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "feat/uni-c70-archive-offline-preview-on-success-2026-11-15"
+          test "$GITHUB_REF_NAME" = "fix/uni-c108-private-flow-2026-11-17"
           test "$GITHUB_REPOSITORY" = "rafhael100/imagine-universidade"
           test ! -e .env
           test ! -e .env.production

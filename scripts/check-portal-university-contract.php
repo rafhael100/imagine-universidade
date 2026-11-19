@@ -28,6 +28,15 @@ use App\Domain\Organizations\OrganizationMembership;
 use App\Domain\Organizations\OrganizationRole;
 use App\Domain\ServicePortfolio\PortfolioProduct;
 use App\Domain\ServicePortfolio\UniversityCommercialEligibilityPreflight;
+use App\Domain\ServicePortfolio\UniversityCommercialPolicyAuthority;
+use App\Domain\ServicePortfolio\UniversityCommercialPolicySnapshot;
+use App\Domain\ServicePortfolio\UniversityContractAuthority;
+use App\Domain\ServicePortfolio\UniversityContractSnapshot;
+use App\Domain\ServicePortfolio\UniversityContractStatus;
+use App\Domain\ServicePortfolio\UniversityServiceCoverageAuthority;
+use App\Domain\ServicePortfolio\UniversityServiceCoverageSnapshot;
+use App\Domain\ServicePortfolio\UniversityServiceRevisionAuthority;
+use App\Domain\ServicePortfolio\UniversityServiceRevisionSnapshot;
 use App\Domain\ServicePortfolio\UniversityCoverageBasis;
 use App\Domain\ServicePortfolio\UniversityInteropIdentifiers;
 
@@ -164,5 +173,246 @@ $claim = new \App\Domain\Access\PortalSignedClaimCandidate(
 $assert(!$claim->mayAuthorizeAccess(), 'signed claim candidate cannot authorize');
 $assert(!$claim->provesActiveService(), 'signed claim candidate cannot prove contract');
 $assert(!$claim->provesSessionNotRevoked(), 'signed claim candidate cannot prove non-revocation');
+
+
+/**
+ * UNI C-155: read the REAL pinned Portal V4 classes with four independent
+ * synthetic data providers. This is contract parity, NEVER an access issuer.
+ * The University production binding remains UnavailablePortalAuthority.
+ */
+$now = time();
+$tenant = new OrganizationId('synthetic-company');
+$service = 'svc-onepage-synthetic';
+$sku = 'onepage-basic-synthetic';
+$contract = new UniversityContractSnapshot(
+    $service, $tenant, PortfolioProduct::Onepage, UniversityContractStatus::Active,
+    true, false, 7, $now - 5, $now + 30,
+);
+$revision = new UniversityServiceRevisionSnapshot(
+    $tenant, [$service => 7], [], $now - 5, $now + 30,
+);
+$policy = new UniversityCommercialPolicySnapshot(
+    4, [PortfolioProduct::Onepage->value => [$sku]],
+    $now - 120, $now + 3600, $now - 5, $now + 30,
+);
+$coverageFor = static fn (
+    UniversityCoverageBasis $basis = UniversityCoverageBasis::RecurringContractWindow,
+    ?OrganizationId $organization = null,
+    int $contractRevision = 7,
+    int $policyRevision = 4,
+    ?string $plan = null,
+): UniversityServiceCoverageSnapshot => new UniversityServiceCoverageSnapshot(
+    $service, $organization ?? $tenant, PortfolioProduct::Onepage, $plan ?? $sku,
+    $contractRevision, $policyRevision,
+    $now - 60, $now + 60, $now - 5, $now + 30, $basis,
+);
+
+$validSources = [
+    'contracts' => [$contract],
+    'revisions' => $revision,
+    'policy' => $policy,
+    'coverage' => [$coverageFor()],
+];
+
+/**
+ * @param array{contracts:?array,revisions:?UniversityServiceRevisionSnapshot,
+ *               policy:?UniversityCommercialPolicySnapshot,coverage:?array} $sources
+ */
+$preflightFrom = static function (array $sources): UniversityCommercialEligibilityPreflight {
+    return new UniversityCommercialEligibilityPreflight(
+        new class($sources['contracts']) implements UniversityContractAuthority {
+            public function __construct(private ?array $records)
+            {
+            }
+
+            public function currentFor(OrganizationId $organization): ?array
+            {
+                return $this->records;
+            }
+        },
+        new class($sources['revisions']) implements UniversityServiceRevisionAuthority {
+            public function __construct(private ?UniversityServiceRevisionSnapshot $revision)
+            {
+            }
+
+            public function currentFor(OrganizationId $organization): ?UniversityServiceRevisionSnapshot
+            {
+                return $this->revision;
+            }
+        },
+        new class($sources['policy']) implements UniversityCommercialPolicyAuthority {
+            public function __construct(private ?UniversityCommercialPolicySnapshot $policy)
+            {
+            }
+
+            public function currentFor(OrganizationId $organization): ?UniversityCommercialPolicySnapshot
+            {
+                return $this->policy;
+            }
+        },
+        new class($sources['coverage']) implements UniversityServiceCoverageAuthority {
+            public function __construct(private ?array $coverage)
+            {
+            }
+
+            public function currentFor(OrganizationId $organization): ?array
+            {
+                return $this->coverage;
+            }
+        },
+    );
+};
+
+$complete = $preflightFrom($validSources)->inspect($tenant, $now);
+$assert($complete->reason === 'candidate_pending_official_authority' && $complete->candidateCount === 1,
+    'matching V4 synthetic data only yields a diagnostic candidate');
+$assert(!$complete->mayIssuePortalGrant() && !$complete->provesPaidContract(),
+    'four matching synthetic sources still cannot issue a grant or prove payment');
+
+foreach (array_keys($validSources) as $missing) {
+    $sources = $validSources;
+    $sources[$missing] = null;
+    $result = $preflightFrom($sources)->inspect($tenant, $now);
+    $assert($result->reason === 'source_unavailable' && $result->candidateCount === 0,
+        "missing {$missing} source fails closed independently");
+    $assert(!$result->mayIssuePortalGrant() && !$result->provesPaidContract(),
+        "missing {$missing} source never becomes authority");
+}
+
+$negativeCoverage = [
+    'installation_only' => [$coverageFor(UniversityCoverageBasis::InstallationPaymentOnly), 'coverage_not_authoritative'],
+    'webhook_only' => [$coverageFor(UniversityCoverageBasis::WebhookEventOnly), 'coverage_not_authoritative'],
+    'unsupported_grace' => [$coverageFor(UniversityCoverageBasis::ApprovedGraceWindow), 'grace_not_approved'],
+    'wrong_contract_revision' => [$coverageFor(contractRevision: 6), 'contract_policy_revision_mismatch'],
+    'wrong_policy_revision' => [$coverageFor(policyRevision: 3), 'contract_policy_revision_mismatch'],
+    'wrong_coverage_tenant' => [$coverageFor(organization: new OrganizationId('other-company')), 'wrong_coverage_tenant'],
+    'unapproved_sku' => [$coverageFor(plan: 'not-in-policy'), 'sku_not_approved'],
+    'no_coverage' => [null, 'missing_active_service_coverage'],
+];
+foreach ($negativeCoverage as $scenario => [$badCoverage, $expectedReason]) {
+    $sources = $validSources;
+    $sources['coverage'] = $badCoverage === null ? [] : [$badCoverage];
+    $result = $preflightFrom($sources)->inspect($tenant, $now);
+    $assert($result->reason === $expectedReason && $result->candidateCount === 0,
+        "V4 {$scenario} blocked with the expected reason");
+    $assert(!$result->mayIssuePortalGrant() && !$result->provesPaidContract(),
+        "V4 {$scenario} never confers authority");
+}
+
+// Distinguish an authoritative EMPTY service list from an unavailable feed.
+// Both deny live access; only the diagnostic reason differs.
+$noServices = $validSources;
+$noServices['contracts'] = [];
+$noServices['revisions'] = new UniversityServiceRevisionSnapshot(
+    $tenant, [], [], $now - 5, $now + 30,
+);
+$noServices['coverage'] = [];
+$empty = $preflightFrom($noServices)->inspect($tenant, $now);
+$assert($empty->reason === 'contract_no_eligible_service' && $empty->candidateCount === 0,
+    'Portal V4 empty portfolio uses contract_no_eligible_service');
+$assert(!$empty->mayIssuePortalGrant(),
+    'empty service portfolio does not issue a Portal grant');
+
+
+/*
+ * C161 — Simulate the actual business lifecycle from one or two services.
+ * All four sources here are STILL caller-constructed synthetic diagnostics.
+ * The University authority remains unavailable/deny-all.
+ */
+$contractFor = static function (
+    string $reference,
+    UniversityContractStatus $status,
+    int $revision,
+    bool $eligible = true,
+    bool $trial = false,
+) use ($tenant, $now): UniversityContractSnapshot {
+    return new UniversityContractSnapshot(
+        $reference, $tenant, PortfolioProduct::Onepage, $status,
+        $eligible, $trial, $revision, $now - 5, $now + 30,
+    );
+};
+$revisionFor = static function (array $revisions, array $revoked = []) use ($tenant, $now): UniversityServiceRevisionSnapshot {
+    return new UniversityServiceRevisionSnapshot(
+        $tenant, $revisions, $revoked, $now - 5, $now + 30,
+    );
+};
+$coverageForService = static function (
+    string $reference,
+    int $revision,
+) use ($tenant, $now, $sku): UniversityServiceCoverageSnapshot {
+    return new UniversityServiceCoverageSnapshot(
+        $reference, $tenant, PortfolioProduct::Onepage, $sku,
+        $revision, 4, $now - 60, $now + 60,
+        $now - 5, $now + 30, UniversityCoverageBasis::RecurringContractWindow,
+    );
+};
+
+foreach ([
+    'cancelled' => [UniversityContractStatus::Cancelled, true, false],
+    'suspended' => [UniversityContractStatus::Suspended, true, false],
+    'preparing' => [UniversityContractStatus::Preparing, true, false],
+    'trial_status' => [UniversityContractStatus::Trial, true, false],
+    'active_trial_only' => [UniversityContractStatus::Active, true, true],
+    'active_not_eligible' => [UniversityContractStatus::Active, false, false],
+] as $scenario => [$status, $eligible, $trialOnly]) {
+    $sources = $validSources;
+    $sources['contracts'] = [$contractFor($service, $status, 7, $eligible, $trialOnly)];
+    $sources['coverage'] = [];
+    $actual = $preflightFrom($sources)->inspect($tenant, $now);
+    $assert($actual->reason === 'contract_no_eligible_service'
+        && $actual->candidateCount === 0,
+        "nonactive/noneligible lifecycle {$scenario} cannot leave a qualifying service");
+    $assert(!$actual->mayIssuePortalGrant() && !$actual->provesPaidContract(),
+        "lifecycle {$scenario} cannot grant access or prove payment");
+}
+
+$service2 = 'svc-landing-synthetic';
+$active2 = $contractFor($service2, UniversityContractStatus::Active, 3);
+$cancelled1 = $contractFor($service, UniversityContractStatus::Cancelled, 8);
+$revocation2 = $revisionFor([$service => 8, $service2 => 3]);
+
+$oneRemaining = $validSources;
+$oneRemaining['contracts'] = [$cancelled1, $active2];
+$oneRemaining['revisions'] = $revocation2;
+$oneRemaining['coverage'] = [$coverageForService($service2, 3)];
+$one = $preflightFrom($oneRemaining)->inspect($tenant, $now);
+$assert($one->reason === 'candidate_pending_official_authority' && $one->candidateCount === 1,
+    'one remaining active service stays a diagnostic candidate, not a payment proof');
+$assert(!$one->mayIssuePortalGrant() && !$one->provesPaidContract(),
+    'one remaining service never issues operational grant');
+
+$lastCancelled = $oneRemaining;
+$lastCancelled['contracts'] = [$cancelled1, $contractFor($service2, UniversityContractStatus::Cancelled, 4)];
+$lastCancelled['revisions'] = $revisionFor([$service => 8, $service2 => 4]);
+$lastCancelled['coverage'] = [];
+$last = $preflightFrom($lastCancelled)->inspect($tenant, $now);
+$assert($last->reason === 'contract_no_eligible_service' && $last->candidateCount === 0,
+    'cancelling the LAST eligible service removes every candidate');
+$assert(!$last->mayIssuePortalGrant(), 'last cancellation never creates a grant');
+
+$reactivated = $lastCancelled;
+$reactivated['contracts'] = [$cancelled1, $contractFor($service2, UniversityContractStatus::Active, 5)];
+$reactivated['revisions'] = $revisionFor([$service => 8, $service2 => 5]);
+$reactivated['coverage'] = [$coverageForService($service2, 5)];
+$restored = $preflightFrom($reactivated)->inspect($tenant, $now);
+$assert($restored->reason === 'candidate_pending_official_authority' && $restored->candidateCount === 1,
+    'reactivated contract requires NEW matching revision and coverage');
+$assert(!$restored->mayIssuePortalGrant(), 'reactivated synthetic service remains non-authorizing');
+
+$staleRevision = $reactivated;
+$staleRevision['revisions'] = $revisionFor([$service => 8, $service2 => 4]);
+$deniedRevision = $preflightFrom($staleRevision)->inspect($tenant, $now);
+$assert($deniedRevision->reason !== 'candidate_pending_official_authority'
+    && $deniedRevision->candidateCount === 0,
+    'replay of old revision must block a reactivated service');
+$assert(!$deniedRevision->mayIssuePortalGrant(), 'old revision never grants access');
+
+$explicitRevocation = $reactivated;
+$explicitRevocation['revisions'] = $revisionFor([$service => 8, $service2 => 5], [$service2]);
+$deniedRevoked = $preflightFrom($explicitRevocation)->inspect($tenant, $now);
+$assert($deniedRevoked->reason === 'contract_revoked_active_service'
+    && $deniedRevoked->candidateCount === 0,
+    'independent revoked active service must veto the entire candidate');
+$assert(!$deniedRevoked->mayIssuePortalGrant(), 'revocation veto never grants access');
 
 echo "PASS: {$checked} actual Portal/Universidade cross-repo compatibility and deny-all checks; no grants or network.\n";

@@ -15,9 +15,21 @@ Route::prefix('universidade/private')->group(function (): void {
         Route::view('/app', 'university.student');
         Route::post('/initialize', [UniversityController::class, 'initialize']);
         Route::get('/courses', [UniversityController::class, 'courses']);
+        Route::get('/favorites', [UniversityController::class, 'favorites']);
+        Route::get('/favorites/export', [UniversityController::class, 'exportFavorites']);
+        Route::get('/favorites/retained', [UniversityController::class, 'retainedFavorites']);
+        Route::get('/reading-position', [UniversityController::class, 'readingPosition']);
+        Route::get('/reading-position/export', [UniversityController::class, 'exportReadingPosition']);
+        Route::put('/reading-position', [UniversityController::class, 'saveReadingPosition']);
+        Route::delete('/reading-position', [UniversityController::class, 'clearReadingPosition']);
+        Route::put('/courses/{courseId}/favorite', [UniversityController::class, 'favoriteCourse'])
+            ->whereNumber('courseId');
+        Route::delete('/courses/{courseId}/favorite', [UniversityController::class, 'unfavoriteCourse'])
+            ->whereNumber('courseId');
         Route::post('/search', [UniversityController::class, 'searchLessons'])
             ->middleware('throttle:20,1');
         Route::get('/progress/export', [UniversityController::class, 'exportProgress']);
+        Route::get('/progress/history', [UniversityController::class, 'progressHistory']);
         Route::get('/courses/{courseId}/lessons', [UniversityController::class, 'lessons'])
             ->whereNumber('courseId');
         Route::get('/lessons/{lessonId}', [UniversityController::class, 'lesson'])
@@ -33,6 +45,13 @@ Route::prefix('universidade/private')->group(function (): void {
     Route::middleware('university.grant:manage')->prefix('admin')->group(function (): void {
         Route::view('/app', 'university.admin');
         Route::get('/courses', [UniversityController::class, 'adminCourses']);
+        Route::get('/courses/{courseId}/versions', [UniversityController::class, 'archivedVersions'])
+            ->whereNumber('courseId');
+        Route::get('/courses/{courseId}/versions/{courseVersion}/lessons', [UniversityController::class, 'archivedLessons'])
+            ->whereNumber('courseId')->whereNumber('courseVersion');
+        Route::get('/courses/{courseId}/versions/{courseVersion}/lessons/{lessonId}', [UniversityController::class, 'archivedLesson'])
+            ->whereNumber('courseId')->whereNumber('courseVersion')->whereNumber('lessonId');
+        Route::get('/overview', [UniversityController::class, 'adminOverview']);
         Route::get('/audit', [UniversityController::class, 'adminAudit']);
         Route::post('/courses', [UniversityController::class, 'createCourse']);
         Route::patch('/courses/{courseId}', [UniversityController::class, 'updateCourse'])
@@ -44,6 +63,8 @@ Route::prefix('universidade/private')->group(function (): void {
         Route::get('/courses/{courseId}/publication-check', [UniversityController::class, 'publicationPreflight'])
             ->whereNumber('courseId');
         Route::post('/courses/{courseId}/lessons', [UniversityController::class, 'createLesson'])
+            ->whereNumber('courseId');
+        Route::post('/courses/{courseId}/lessons/reorder', [UniversityController::class, 'reorderDraftLessons'])
             ->whereNumber('courseId');
         Route::patch('/lessons/{lessonId}', [UniversityController::class, 'updateLesson'])
             ->whereNumber('lessonId');

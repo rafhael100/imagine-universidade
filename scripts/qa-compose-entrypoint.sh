@@ -51,6 +51,7 @@ php artisan migrate:fresh --database=pgsql --force
 php artisan migrate:status --database=pgsql
 php scripts/check-pg-schema.php
 php scripts/check-pg-flow.php
+php scripts/check-pg-favorites.php
 php scripts/check-pg-nonce.php
 php scripts/check-pg-concurrency.php
 php scripts/check-pg-runtime-roles.php

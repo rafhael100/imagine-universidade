@@ -36,13 +36,22 @@ const assets={
   "/assets/logo-imagine.png":{body:fs.readFileSync(path.join(root,"public/assets/logo-imagine.png")),type:"image/png"},
   "/assets/imagine-tokens.css":{body:fs.readFileSync(path.join(root,"public/assets/imagine-tokens.css")),type:"text/css; charset=utf-8"}
 };
-const courses=()=>[{id:1,slug:"trilha-visitas-seja-encontrado",title:"Visitas, Leads e Clientes — Exemplo sintético",summary:"Aulas fictícias apenas para QA.",category:"metodologia",lessons_total:2,lessons_completed:completed?1:0}];
+const courses=()=>[{id:1,slug:"trilha-visitas-seja-encontrado",title:"Visitas, Leads e Clientes — Exemplo sintético",summary:"Aulas fictícias apenas para QA.",category:"metodologia",version_id:1,lessons_total:2,lessons_completed:completed?1:0,progress_percent:completed?50:0}];
 const lessonRows=()=>[
- {id:11,title:"Visitas fictícias",completed:completed?1:0},
- {id:12,title:"Leads fictícios",completed:0}
+ {id:11,slug:"visitas-ficticias",title:"Visitas fictícias",sort_order:0,completed:completed?1:0},
+ {id:12,slug:"leads-ficticios",title:"Leads fictícios",sort_order:1,completed:0}
 ];
 let completed=false,denyStudent=false,failInitializeOnce=false,failAdminCoursesOnce=false,invalidAdminCoursesOnce=false,failStudentLessonsOnce=false,failAdminLessonsOnce=false,invalidAdminLessonsOnce=false,failLessonDetailOnce=false,failLessonProgressOnce=false,denyLessonDetailOnce=false,completionFault="none",failReconcileProgressOnce=false,exportFault="none";
 let requests=0,progressReads=0,completionPosts=0,exportReads=0;
+let initializePosts=0,studentCatalogReads=0,studentLessonListReads=0,studentDetailReads=0;
+const studentFaults={initialize:"none",courses:"none",lessons:"none",detail:"none",progress:"none"};
+let heldStudentDetail=null,notifyHeldStudentDetail=null;
+function takeStudentFault(endpoint){const fault=studentFaults[endpoint];studentFaults[endpoint]="none";return fault;}
+function studentLesson(id){
+  const row=lessonRows().find(lesson=>lesson.id===id);
+  return {id:row.id,slug:row.slug,title:row.title,sort_order:row.sort_order,course_id:1,course_version:1,
+    body:id===11?"Contexto da aula.\n\nEXEMPLO FICTÍCIO\nUm visitante fictício.\n\nAPLICAÇÃO OPCIONAL\nDesenhar a jornada.\n\nCUIDADO IMPORTANTE\nSem promessas de vendas.":"Todo interesse deve ser tratado com responsabilidade."};
+}
 let editorialCoursePosts=0,uncertainCourseWriteOnce=false,createdCourseInLab=false;
 let lessonSearchReads=0,failLessonSearchOnce=false,denyLessonSearchOnce=false,malformedLessonSearchOnce=false,staleLessonSearchOnce=false;
 const audit=[
@@ -68,32 +77,79 @@ const server=http.createServer((req,res)=>{
     return send(res,403,{error:"access_denied"});
   }
   if(p==="/universidade/private/initialize"&&req.method==="POST"){
+    initializePosts++;
+    const fault=takeStudentFault("initialize");
+    if(fault==="missing")return send(res,200,{});
+    if(fault==="string")return send(res,200,{ready:"true"});
     if(failInitializeOnce){failInitializeOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     return send(res,200,{ready:true});
   }
-  if(p==="/universidade/private/courses"&&req.method==="GET")return send(res,200,{courses:courses()});
+  if(p==="/universidade/private/courses"&&req.method==="GET"){
+    studentCatalogReads++;
+    const fault=takeStudentFault("courses"),rows=courses();
+    if(fault==="missing")return send(res,200,{});
+    if(fault==="null")return send(res,200,{courses:null});
+    if(fault==="duplicate_id")rows.push({...rows[0],slug:"duplicate-course"});
+    if(fault==="duplicate_slug")rows.push({...rows[0],id:2});
+    if(fault==="missing_total")delete rows[0].lessons_total;
+    if(fault==="empty")return send(res,200,{courses:[]});
+    return send(res,200,{courses:rows});
+  }
+  // Existing journeys have no saved courses. C-116 mutation scenarios use
+  // isolated per-page routes, never a write to this shared fixture.
+  if(p==="/universidade/private/favorites"&&req.method==="GET"){
+    return send(res,200,{course_ids:[]});
+  }
+  // Existing journeys use an empty synthetic position. C-121 mutations and
+  // failures belong to isolated per-page routes in its dedicated module.
+  if(p==="/universidade/private/reading-position"&&req.method==="GET"){
+    return send(res,200,{schema_version:1,scope:"current_authenticated_student",
+      status:"none",revision:"r1."+"a".repeat(64),position:null});
+  }
+  if(p==="/universidade/private/reading-position/export"&&req.method==="GET"){
+    return send(res,200,{schema_version:1,scope:"current_authenticated_student",reading_position:null});
+  }
   if(p==="/universidade/private/search"&&req.method==="POST"){
     lessonSearchReads++;
     if(denyLessonSearchOnce){denyLessonSearchOnce=false;return send(res,403,{error:"access_denied"});}
     if(failLessonSearchOnce){failLessonSearchOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
-    if(malformedLessonSearchOnce){malformedLessonSearchOnce=false;return send(res,200,{results:[{course_id:999,lesson_id:999,course_title:"Vazamento sintético",lesson_title:"Proibido",snippet:""}]});}
-    if(staleLessonSearchOnce){staleLessonSearchOnce=false;return send(res,200,{results:[{course_id:1,lesson_id:99,course_title:"Exemplo sintético",lesson_title:"Aula retirada",snippet:"A versão atual não contém esta aula."}]});}
-    return send(res,200,{results:[{course_id:1,course_title:"Visitas, Leads e Clientes — Exemplo sintético",
+    if(malformedLessonSearchOnce){malformedLessonSearchOnce=false;return send(res,200,{schema_version:1,scope:"current_published_editorial_lessons",next_cursor:null,results:[{course_id:999,lesson_id:999,course_title:"Vazamento sintético",lesson_title:"Proibido",snippet:""}]});}
+    if(staleLessonSearchOnce){staleLessonSearchOnce=false;return send(res,200,{schema_version:1,scope:"current_published_editorial_lessons",next_cursor:null,results:[{course_id:1,lesson_id:99,course_title:"Exemplo sintético",lesson_title:"Aula retirada",snippet:"A versão atual não contém esta aula."}]});}
+    return send(res,200,{schema_version:1,scope:"current_published_editorial_lessons",next_cursor:null,results:[{course_id:1,course_title:"Visitas, Leads e Clientes — Exemplo sintético",
       lesson_id:12,lesson_title:"Leads fictícios",snippet:"Entenda a jornada do lead."}]});
   }
 
   if(p==="/universidade/private/courses/1/lessons"){
+    studentLessonListReads++;
+    const fault=takeStudentFault("lessons"),rows=lessonRows();
+    if(fault==="missing")return send(res,200,{});
+    if(fault==="duplicate_id")rows[1].id=rows[0].id;
+    if(fault==="duplicate_slug")rows[1].slug=rows[0].slug;
+    if(fault==="string_completed")rows[0].completed="false";
+    if(fault==="missing_order")delete rows[0].sort_order;
+    if(fault==="empty")return send(res,200,{lessons:[]});
     if(failStudentLessonsOnce){failStudentLessonsOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
-    return send(res,200,{lessons:lessonRows()});
+    return send(res,200,{lessons:rows});
   }
   if(p==="/universidade/private/lessons/11"&&req.method==="GET"){
+    studentDetailReads++;
+    const fault=takeStudentFault("detail"),lesson=studentLesson(11);
+    if(fault==="wrong_id")lesson.id=12;
+    if(fault==="wrong_course")lesson.course_id=2;
+    if(fault==="missing_title")delete lesson.title;
+    if(fault==="delayed_wrong_id"){heldStudentDetail=res;notifyHeldStudentDetail?.();return;}
     if(denyLessonDetailOnce){denyLessonDetailOnce=false;return send(res,403,{error:"access_denied"});}
     if(failLessonDetailOnce){failLessonDetailOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
-    return send(res,200,{lesson:{id:11,title:"Visitas fictícias",body:"Contexto da aula.\n\nEXEMPLO FICTÍCIO\nUm visitante fictício.\n\nAPLICAÇÃO OPCIONAL\nDesenhar a jornada.\n\nCUIDADO IMPORTANTE\nSem promessas de vendas."}});
+    return send(res,200,{lesson});
   }
-  if(p==="/universidade/private/lessons/12"&&req.method==="GET")return send(res,200,{lesson:{id:12,title:"Leads fictícios",body:"Todo interesse deve ser tratado com responsabilidade."}});
+  if(p==="/universidade/private/lessons/12"&&req.method==="GET"){
+    studentDetailReads++;return send(res,200,{lesson:studentLesson(12)});
+  }
   if(p==="/universidade/private/lessons/11/progress"){
     progressReads++;
+    const fault=takeStudentFault("progress");
+    if(fault==="missing")return send(res,200,{});
+    if(fault==="string_false")return send(res,200,{completed:"false"});
     if(failLessonProgressOnce){failLessonProgressOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     if(failReconcileProgressOnce){failReconcileProgressOnce=false;return send(res,503,{error:"temporarily_unavailable"});}
     return send(res,200,{completed});
@@ -118,6 +174,14 @@ const server=http.createServer((req,res)=>{
       payload.completions[0].email="private-email-must-not-be-downloaded";
     }
     return send(res,200,payload);
+  }
+  if(p==="/universidade/private/admin/overview"&&req.method==="GET"){
+    const count=createdCourseInLab?2:1;
+    return send(res,200,{schema_version:1,scope:"current_editorial_catalog",
+      totals:{courses:count,published_courses:0,draft_courses:count,current_lessons:1,
+        courses_without_lessons:count-1,courses_without_summary:0},
+      categories:[{category:"metodologia",courses:count,published_courses:0,draft_courses:count,current_lessons:1},
+        ...["negocios","sistemas"].map(category=>({category,courses:0,published_courses:0,draft_courses:0,current_lessons:0}))]});
   }
   if(p==="/universidade/private/admin/courses"){
     if(req.method==="POST"){
@@ -162,8 +226,19 @@ const server=http.createServer((req,res)=>{
   send(res,404,{error:"not_found"});
 });
 const results={screenshots:[],accessibility:[],assertions:0};
-function check(value,message){assert.ok(value,message);results.assertions++;}
+let lastCheck="browser startup";
+const suiteStartedAt=Date.now();
+function check(value,message){
+  assert.ok(value,message);
+  results.assertions++;
+  lastCheck=message;
+  if(results.assertions%100===0){
+    console.log("Synthetic browser checkpoint: "+results.assertions+" assertions; elapsed "+Math.round((Date.now()-suiteStartedAt)/1000)+"s; last="+message);
+  }
+}
 async function ensureLocalPage(page){
+  page.setDefaultTimeout(15000);
+  page.setDefaultNavigationTimeout(20000);
   await page.route("**/*",route=>{
     const url=route.request().url();
     if(url.startsWith(base+"/"))return route.continue();
@@ -196,17 +271,33 @@ async function inspect(page,name){
   const issues=axe.violations.map(v=>({id:v.id,impact:v.impact,description:v.help,targets:v.nodes.map(n=>n.target)}));
   fs.writeFileSync(path.join(out,name+"-axe.json"),JSON.stringify({page:name,violations:issues},null,2));
   results.accessibility.push({page:name,seriousOrCritical:issues.filter(v=>v.impact==="serious"||v.impact==="critical").length});
+  if(results.accessibility.at(-1).seriousOrCritical>0){
+    console.error("Synthetic accessibility violations: "+JSON.stringify({page:name,violations:issues.filter(v=>v.impact==="serious"||v.impact==="critical")}));
+  }
   check(results.accessibility.at(-1).seriousOrCritical===0,name+" has serious/critical axe violations.");
 }
 (async()=>{
   await new Promise((resolve,reject)=>server.once("error",reject).listen(port,host,resolve));
-  const browser=await chromium.launch({headless:true});
+  const browser=await chromium.launch({headless:true,timeout:30000});
+  // This full run executes ~900 real browser checks plus embedded modules.
+  // A hard 180-second cap raced the normal ~180-second successful run,
+  // closing Chromium mid-action without an assertion failure. Keep a bounded
+  // five-minute watchdog below the 25-minute isolated CI job limit.
+  const deadline=setTimeout(()=>{
+    console.error("Synthetic browser deadline after "+Math.round((Date.now()-suiteStartedAt)/1000)+"s and "+results.assertions+" checks; last check: "+lastCheck);
+    process.exitCode=1;
+    const forcedExit=setTimeout(()=>process.exit(1),5000);forcedExit.unref();
+    void browser.close().catch(()=>{}).finally(()=>{server.closeAllConnections();server.close();});
+  },300000);deadline.unref();
   try{
     const context=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:"reduce"});
     const page=await context.newPage();
     await ensureLocalPage(page);
     const pageErrors=[];
     page.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+
+    // Offline reviewer is tested with real file:// Chromium and CSV roundtrip.
+    await require("./qa-browser-editorial-offline.cjs")({browser,out,check});
 
     // Temporary Portal/backend outage: no automatic retry, explicit
     // accessible recovery; authorized data appears only after a new
@@ -280,6 +371,143 @@ async function inspect(page,name){
       "403 in individual lesson cannot leave completion enabled");
     await deniedDetail.close();
 
+    // C-110: HTTP 200 must carry a complete, typed response before the
+    // library or a lesson becomes usable. Recovery is always deliberate.
+    async function studentIntegrityPage(){
+      const current=await context.newPage();
+      await ensureLocalPage(current);
+      current.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+      await current.goto(base+"/student");
+      return current;
+    }
+    for(const [endpoint,fault] of [["initialize","missing"],["initialize","string"],
+      ["courses","missing"],["courses","null"],["courses","duplicate_id"],
+      ["courses","duplicate_slug"],["courses","missing_total"]]){
+      studentFaults[endpoint]=fault;
+      const beforeInit=initializePosts,beforeCatalog=studentCatalogReads,beforePost=completionPosts;
+      const beforeExport=exportReads,beforeSearch=lessonSearchReads;
+      const malformed=await studentIntegrityPage();
+      await malformed.locator("#retry-library").waitFor({state:"visible",timeout:8000});
+      check((await malformed.locator("#course-list [data-course-id]").count())===0,
+        endpoint+" "+fault+" cannot render partial authorized courses");
+      check(await malformed.locator("#course-search").isDisabled() &&
+        await malformed.locator("#export-progress").isDisabled() &&
+        await malformed.locator("#lesson-search-submit").isDisabled(),
+        endpoint+" "+fault+" keeps catalogue-dependent controls disabled");
+      const unavailable=await malformed.locator("#overall-progress").innerText();
+      await malformed.evaluate(()=>{
+        const input=document.getElementById("course-search");input.value="Leads";
+        input.dispatchEvent(new Event("input",{bubbles:true}));
+        document.querySelector('[data-filter="metodologia"]').dispatchEvent(new Event("click",{bubbles:true}));
+        document.getElementById("export-progress").dispatchEvent(new Event("click",{bubbles:true}));
+        document.getElementById("lesson-search-form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));
+      });
+      check((await malformed.locator("#overall-progress").innerText())===unavailable &&
+        await malformed.locator("#export-progress").isDisabled(),
+        endpoint+" "+fault+" remains unavailable after filter/search events");
+      check(initializePosts===beforeInit+1 && studentCatalogReads===beforeCatalog+(endpoint==="initialize"?0:1) &&
+        completionPosts===beforePost && exportReads===beforeExport && lessonSearchReads===beforeSearch,
+        endpoint+" "+fault+" does not retry or issue dependent reads/writes automatically");
+      await malformed.locator("#retry-library").click();
+      await malformed.locator("#course-list [data-course-id='1']").waitFor({state:"visible",timeout:8000});
+      check(!(await malformed.locator("#course-search").isDisabled()) &&
+        !(await malformed.locator("#library-recovery").isVisible()) && completionPosts===beforePost,
+        endpoint+" "+fault+" recovers only after a new valid manual read");
+      await malformed.close();
+    }
+
+    for(const fault of ["missing","duplicate_id","duplicate_slug","string_completed","missing_order"]){
+      studentFaults.lessons=fault;
+      const beforePost=completionPosts,beforeList=studentLessonListReads,beforeDetail=studentDetailReads;
+      const malformed=await studentIntegrityPage();
+      await malformed.locator("#course-list [data-course-id='1']").click();
+      await malformed.locator("#lesson-content .lesson-retry").waitFor({state:"visible",timeout:8000});
+      check((await malformed.locator("#lesson-items [data-lesson-id]").count())===0 &&
+        (await malformed.locator("#lesson-content button.primary").count())===0,
+        "malformed lesson list "+fault+" cannot render rows or completion");
+      check(studentLessonListReads===beforeList+1 && studentDetailReads===beforeDetail && completionPosts===beforePost,
+        "malformed lesson list "+fault+" cannot select, retry, or complete a lesson");
+      await malformed.locator("#lesson-content .lesson-retry").click();
+      await malformed.getByRole("heading",{name:"Visitas fictícias"}).waitFor({state:"visible",timeout:8000});
+      check(!(await malformed.locator("#lesson-content button.primary").isDisabled()) && completionPosts===beforePost,
+        "valid list recovery after "+fault+" restores the pending lesson without POST");
+      await malformed.close();
+    }
+
+    for(const [endpoint,fault] of [["detail","wrong_id"],["detail","wrong_course"],["detail","missing_title"],
+      ["progress","missing"],["progress","string_false"]]){
+      studentFaults[endpoint]=fault;
+      const beforePost=completionPosts;
+      const malformed=await studentIntegrityPage();
+      await malformed.locator("#course-list [data-course-id='1']").click();
+      await malformed.locator("#lesson-content .lesson-detail-retry").waitFor({state:"visible",timeout:8000});
+      check((await malformed.locator("#lesson-content h3").count())===0 &&
+        (await malformed.locator("#lesson-content button.primary").count())===0,
+        endpoint+" "+fault+" never displays a partial or mismatched lesson");
+      check((await malformed.locator("#lesson-items [data-lesson-id='11']").getAttribute("data-completed"))==="0" &&
+        completionPosts===beforePost,
+        endpoint+" "+fault+" neither fabricates completion nor sends a POST");
+      await malformed.locator("#lesson-content .lesson-detail-retry").click();
+      await malformed.getByRole("heading",{name:"Visitas fictícias"}).waitFor({state:"visible",timeout:8000});
+      check(!(await malformed.locator("#lesson-content button.primary").isDisabled()) && completionPosts===beforePost,
+        endpoint+" "+fault+" accepts a valid manual recovery without a write");
+      await malformed.close();
+    }
+
+    studentFaults.courses="empty";
+    const emptyLibrary=await studentIntegrityPage();
+    await emptyLibrary.waitForFunction(()=>document.getElementById("overall-progress").textContent.includes("Nenhuma aula publicada"));
+    check(!(await emptyLibrary.locator("#library-recovery").isVisible()) &&
+      !(await emptyLibrary.locator("#course-search").isDisabled()),
+      "valid empty catalogue stays a legitimate empty state");
+    await emptyLibrary.close();
+    studentFaults.lessons="empty";
+    const emptyLessons=await studentIntegrityPage();
+    const beforeEmptyPost=completionPosts;
+    await emptyLessons.locator("#course-list [data-course-id='1']").click();
+    await emptyLessons.waitForFunction(()=>document.getElementById("lesson-content").textContent.includes("Ainda não existem aulas publicadas"));
+    check((await emptyLessons.locator("#lesson-content .lesson-retry").count())===0 &&
+      (await emptyLessons.locator("#lesson-content button.primary").count())===0 && completionPosts===beforeEmptyPost,
+      "valid empty lesson list shows no error or completion action");
+    await emptyLessons.close();
+
+    studentFaults.detail="delayed_wrong_id";
+    const heldDetail=new Promise(resolve=>{notifyHeldStudentDetail=resolve;});
+    const delayed=await studentIntegrityPage();
+    const beforeDelayedPost=completionPosts;
+    await delayed.locator("#course-list [data-course-id='1']").click();
+    await heldDetail;notifyHeldStudentDetail=null;
+    await delayed.locator("#lesson-items [data-lesson-id='12']").click();
+    await delayed.getByRole("heading",{name:"Leads fictícios"}).waitFor({state:"visible",timeout:8000});
+    const oldResponse=delayed.waitForResponse(response=>response.url()===base+"/universidade/private/lessons/11");
+    send(heldStudentDetail,200,{lesson:{...studentLesson(11),id:99}});heldStudentDetail=null;
+    await oldResponse;await delayed.waitForLoadState("networkidle");
+    check((await delayed.locator("#lesson-content h3").innerText())==="Leads fictícios" &&
+      (await delayed.locator("#lesson-content .lesson-detail-retry").count())===0,
+      "late malformed detail cannot replace the newly selected lesson or create stale recovery");
+    check(completionPosts===beforeDelayedPost,"late malformed detail cannot issue a completion POST");
+    await delayed.close();
+
+    const refreshFailure=await studentIntegrityPage();
+    await refreshFailure.locator("#course-list [data-course-id='1']").click();
+    await refreshFailure.locator("#lesson-content button.primary").waitFor({state:"visible",timeout:8000});
+    studentFaults.courses="null";
+    const beforeRefreshPost=completionPosts;
+    await refreshFailure.locator("#lesson-content button.primary").click();
+    await refreshFailure.waitForFunction(()=>document.getElementById("status").textContent.includes("Aula concluída. Atualize"));
+    check(await refreshFailure.locator("#lesson-content button.primary").isDisabled() &&
+      (await refreshFailure.locator("#lesson-content button.primary").innerText()).includes("concluída"),
+      "invalid catalogue refresh cannot reverse confirmed lesson completion");
+    check((await refreshFailure.locator("#course-list [data-course-id]").count())===1 && completionPosts===beforeRefreshPost+1,
+      "invalid refresh retains known catalogue and never repeats the confirmed POST");
+    await refreshFailure.close();completed=false;
+
+    await require("./qa-browser-student-help.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-favorites.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-favorites-export.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-retained-favorites.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-reading-position.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+
     // An uncertain POST may already have committed. Compare read-only
     // authoritative progress before any second write is available.
     for(const fault of ["after_commit","before_commit","unverifiable"]){
@@ -346,6 +574,17 @@ async function inspect(page,name){
     check((await page.locator("#lesson-content h3").innerText())==="Leads fictícios",
       "search result opens its exact authorized lesson, not arbitrary next lesson");
 
+    // C-109: a transient list failure must not lose the search target.
+    failStudentLessonsOnce=true;
+    await page.locator("#lesson-search-results [data-search-lesson='12']").click();
+    await page.locator("#lesson-content .lesson-retry").waitFor({state:"visible",timeout:8000});
+    check((await page.locator("#lesson-content h3").count())===0,
+      "failed search-target navigation does not retain an old lesson");
+    await page.locator("#lesson-content .lesson-retry").click();
+    await page.locator("#lesson-content h3").waitFor({state:"visible",timeout:8000});
+    check((await page.locator("#lesson-content h3").innerText())==="Leads fictícios",
+      "retry after search-target list failure opens the selected lesson, not the first pending lesson");
+
     failLessonSearchOnce=true;
     await sbox.fill("visitas");
     await sgo.click();
@@ -368,6 +607,17 @@ async function inspect(page,name){
     await page.waitForFunction(()=>document.querySelector("#lesson-content").textContent.includes("não está mais disponível"));
     check((await page.locator("#lesson-content h3").count())===0,
       "stale result must not open an unrelated authorized lesson");
+
+    // The exact target remains mandatory when it vanished during a retry.
+    failStudentLessonsOnce=true;
+    await page.locator("#lesson-search-results [data-search-lesson='99']").click();
+    await page.locator("#lesson-content .lesson-retry").waitFor({state:"visible",timeout:8000});
+    await page.locator("#lesson-content .lesson-retry").click();
+    await page.waitForFunction(()=>document.querySelector("#lesson-content").textContent.includes("não está mais disponível"));
+    check((await page.locator("#lesson-content h3").count())===0,
+      "retry for a removed search target must not open another lesson");
+    check((await page.locator("#lesson-content button.primary").count())===0,
+      "retry for a removed search target must not offer completion for another lesson");
 
     const beforeBadQuery=lessonSearchReads;
     await sbox.fill("%");
@@ -578,6 +828,97 @@ async function inspect(page,name){
     await uncertainAdmin.close();
     createdCourseInLab=false;
 
+    await require("./qa-browser-editor-drafts.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-contextual-courses.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-progress-history.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-navigation-focus.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-private-search-pages.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-lesson-sections.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-catalog-reconciliation.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-lesson-filter.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-course-guidance.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-student-reflection.cjs")({browser,base,ensureLocalPage,check,pageErrors,out});
+    await require("./qa-browser-editorial-overview.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-editorial-audit.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-editorial-course-context.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-editorial-version-history.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-editorial-catalog-filters.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-lesson-reorder.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-editorial-lesson-filters.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-lesson-order-patch.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-editorial-write-receipts.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+    await require("./qa-browser-course-order-patch.cjs")({browser,base,ensureLocalPage,check,pageErrors});
+
+    // C-111: the real publication handler must reject incomplete HTTP 200
+    // diagnostics before confirmation or mutation. These per-page routes
+    // stay on the synthetic loopback origin and never reach a live service.
+    const publicationContext=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:"reduce"});
+    const publicationFaults=[
+      ["textual readiness",payload=>{payload.ready="false";}],
+      ["missing hash",payload=>{delete payload.content_hash;}],
+      ["different course",payload=>{payload.course_id=2;}]
+    ];
+    for(const [fault,alter] of publicationFaults){
+      const publicationPage=await publicationContext.newPage();
+      await ensureLocalPage(publicationPage);
+      publicationPage.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
+      const validDiagnostic=()=>({course_id:1,version:1,lesson_count:1,ready:true,
+        issues:[],warnings:[],advisory_only:true,content_hash:"b".repeat(64)});
+      let diagnostic=validDiagnostic(),dialogs=0,acceptPublication=false;
+      const publicationWrites=[];
+      publicationPage.on("dialog",async dialog=>{
+        dialogs++;
+        if(acceptPublication)await dialog.accept();else await dialog.dismiss();
+      });
+      publicationPage.on("request",request=>{
+        if(request.method()!=="GET"&&request.url().startsWith(base+"/universidade/private/admin/")){
+          publicationWrites.push({url:request.url(),method:request.method(),body:request.postDataJSON()});
+        }
+      });
+      await publicationPage.route(base+"/universidade/private/admin/courses/1/publication-check",
+        route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(diagnostic)}));
+      await publicationPage.route(base+"/universidade/private/admin/courses/1/publish",
+        route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({published:true})}));
+      await publicationPage.goto(base+"/admin");
+      await publicationPage.locator("#course-items [data-course='1']").click();
+      await publicationPage.locator("#lesson-items [data-lesson='11']").click();
+      const draftFields=["course-title","course-summary","lesson-title","lesson-body"];
+      const readDrafts=()=>publicationPage.evaluate(ids=>ids.map(id=>document.getElementById(id).value),draftFields);
+      const originalDrafts=await readDrafts();
+      await publicationPage.locator("#check-publication").click();
+      await publicationPage.locator("#publication-readiness").waitFor({state:"visible",timeout:8000});
+      alter(diagnostic);
+      await publicationPage.locator("#publish").click();
+      await publicationPage.waitForFunction(()=>document.getElementById("status").textContent.includes("validar a conferência"));
+      check(dialogs===0&&publicationWrites.length===0,
+        "publication "+fault+" must not open a confirmation or send any write");
+      check(!(await publicationPage.locator("#publication-readiness").isVisible())&&
+        (await publicationPage.locator("#publication-readiness").innerText())==="",
+        "publication "+fault+" clears the previous readiness diagnostic");
+      check(JSON.stringify(await readDrafts())===JSON.stringify(originalDrafts),
+        "publication "+fault+" preserves all course and lesson fields");
+      diagnostic=validDiagnostic();
+      await publicationPage.locator("#check-publication").click();
+      await publicationPage.locator("#publication-readiness").waitFor({state:"visible",timeout:8000});
+      check(dialogs===0&&publicationWrites.length===0&&
+        (await publicationPage.locator("#publication-readiness").innerText()).includes("1 aula"),
+        "publication "+fault+" recovers through a new valid read without publishing");
+      if(fault==="different course"){
+        await Promise.all([publicationPage.waitForEvent("dialog"),publicationPage.locator("#publish").click()]);
+        check(dialogs===1&&publicationWrites.length===0,
+          "cancelling a valid publication confirmation must not send a POST");
+        acceptPublication=true;
+        await publicationPage.locator("#publish").click();
+        await publicationPage.waitForFunction(()=>document.getElementById("status").textContent.includes("Versão do curso publicada"));
+        check(dialogs===2&&publicationWrites.length===1&&publicationWrites[0].method==="POST"&&
+          publicationWrites[0].url===base+"/universidade/private/admin/courses/1/publish"&&
+          JSON.stringify(publicationWrites[0].body)===JSON.stringify({expected_content_hash:diagnostic.content_hash}),
+          "accepted synthetic publication sends exactly one POST containing the reviewed hash");
+      }
+      await publicationPage.close();
+    }
+    await publicationContext.close();
+
     const admin=await context.newPage();
     await ensureLocalPage(admin);
     admin.on("pageerror",error=>pageErrors.push(String(error.message).slice(0,150)));
@@ -654,8 +995,9 @@ async function inspect(page,name){
     check(pageErrors.length===0,"uncaught JavaScript errors: "+pageErrors.join(";"));
     fs.writeFileSync(path.join(out,"summary.json"),JSON.stringify(results,null,2));
     console.log("PASS synthetic Chromium browser: "+results.assertions+" checks, student/admin UI, progress, revocation, draft preview, audit, widths 320/390/768/1440 and WCAG serious/critical scan.");
-  }finally{await browser.close();}
+  }finally{await browser.close();clearTimeout(deadline);}
 })().catch(error=>{
+  console.error("Synthetic browser last completed check: "+lastCheck);
   console.error("Synthetic browser failure: "+String(error.message).slice(0,240));
   process.exitCode=1;
 }).finally(()=>server.close());

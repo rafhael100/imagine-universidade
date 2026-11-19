@@ -7,7 +7,7 @@
  *   node scripts/validate-editorial-review.mjs --csv /path/revisao.csv
  */
 import assert from "node:assert/strict";
-import {readFile} from "node:fs/promises";
+import {open,readFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
 import {resolve} from "node:path";
 import {pathToFileURL} from "node:url";
@@ -17,18 +17,22 @@ function parseCsv(text){
   text=text.replace(/^\uFEFF/,""); // Excel UTF-8 export can add BOM
   const header=text.split(/\r?\n/,1)[0];
   const delimiter=header.includes('";"')?";":","; // Brazilian Excel uses semicolon
-  const rows=[];let row=[],value="",quoted=false,fieldStart=true;
+  const rows=[];let row=[],value="",quoted=false,fieldStart=true,closedQuote=false;
   for(let i=0;i<text.length;i++){
     const ch=text[i];
+    // Noncanonical text after the terminating quote must not be silently
+    // joined to an otherwise valid identity/status field.
+    if(!quoted&&closedQuote&&ch!==delimiter&&ch!=='\n'&&ch!=='\r')
+      assert.fail("Text after closing CSV quote");
     if(quoted){
       if(ch==='"'){
         if(text[i+1]==='"'){value+='"';i++;}
-        else quoted=false;
+        else {quoted=false;closedQuote=true;}
       }else value+=ch;
     }else if(ch==='"'&&fieldStart){quoted=true;fieldStart=false;}
-    else if(ch===delimiter){row.push(value);value="";fieldStart=true;}
+    else if(ch===delimiter){row.push(value);value="";fieldStart=true;closedQuote=false;}
     else if(ch==='\n'){
-      row.push(value);rows.push(row);row=[];value="";fieldStart=true;
+      row.push(value);rows.push(row);row=[];value="";fieldStart=true;closedQuote=false;
     }else if(ch==='\r'){
       assert.equal(text[i+1],'\n',"Carriage return must precede newline");
     }else{
@@ -65,7 +69,7 @@ export function inspectEditorialReview(csvText,sourceText){
   const counters={pending:0,needs_changes:0,claims:0};
   for(const [idx,row] of rows.slice(1).entries()){
     assert.equal(row.length,7,"Invalid review row at "+String(idx+2));
-    const [course,lesson,hash,status,reviewer,ref]=row;
+    const [course,lesson,hash,status,reviewer,ref,notes]=row;
     const key=course+"/"+lesson;
     assert.ok(expected.has(key),"Unknown course or lesson "+key);
     assert.ok(!seen.has(key),"Duplicate review row "+key);
@@ -73,6 +77,16 @@ export function inspectEditorialReview(csvText,sourceText){
     assert.equal(hash,expected.get(key),"Stale or edited content hash: "+key);
     assert.ok(["PENDING_HUMAN_REVIEW","NEEDS_CHANGES","CLAIMED_HUMAN_APPROVED"].includes(status),
       "Unsupported review status: "+key);
+    // CSV exports may be opened by reviewers in Excel/LibreOffice. An
+    // externally edited CSV must not bypass the offline UI's formula fence.
+    // C191: reject C1 NEL/CSI controls in reviewer and notes.
+    const unsafeCell = value => /^\s*[=+\-@]/u.test(value)
+      || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/u.test(value)
+      || /[\p{Cf}\u034f\u180e\u2028\u2029\ufe00-\ufe0f\u{e0100}-\u{e01ef}]/u.test(value);
+    assert.ok(typeof notes==="string" && notes.length<=2000 && !unsafeCell(notes),
+      "Unsafe or oversized editorial notes: "+key);
+    assert.ok(!unsafeCell(reviewer) && !/[\r\n\u2028\u2029]/u.test(reviewer),
+      "Unsafe reviewer field: "+key);
     if(status==="PENDING_HUMAN_REVIEW"){
       assert.equal(reviewer,"","Pending row must not claim reviewer");
       assert.equal(ref,"","Pending row must not claim approval");
@@ -103,7 +117,17 @@ export function inspectEditorialReview(csvText,sourceText){
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   assert.equal(process.argv[2],"--csv","Usage: --csv <review spreadsheet>");
   assert.equal(process.argv.length,4);
-  const csv=await readFile(process.argv[3],"utf8");
+  // The browser already checks byte size before reading; mirror the same
+  // limit in the CLI to avoid allocating arbitrarily large CSV inputs.
+  const handle=await open(process.argv[3],"r");
+  let csv;
+  try{
+    const stat=await handle.stat();
+    assert.ok(stat.isFile()&&stat.size<=1_000_000,"Review CSV exceeds 1 MB byte limit");
+    const bytes=await handle.readFile();
+    assert.ok(bytes.byteLength<=1_000_000,"Review CSV grew past 1 MB during read");
+    csv=new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+  }finally{await handle.close();}
   const source=await readFile(new URL("../content/mvp-cursos-v1.json",import.meta.url),"utf8");
   console.log(JSON.stringify(inspectEditorialReview(csv,source),null,2));
 }

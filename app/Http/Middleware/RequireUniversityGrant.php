@@ -21,30 +21,9 @@ final class RequireUniversityGrant
     {
     }
 
-    private function protectedHeaders(Response $response, ?string $nonce = null): Response
-    {
-        $response->headers->set('Cache-Control', 'private, no-store');
-        $response->headers->set('Pragma', 'no-cache');
-        $response->headers->set('X-Content-Type-Options', 'nosniff');
-        $response->headers->set('X-Frame-Options', 'DENY');
-        $response->headers->set('X-Robots-Tag', 'noindex, nofollow, noarchive');
-        $response->headers->set('Referrer-Policy', 'same-origin');
-        // Denied responses never have executable HTML. Authorized pages
-        // may use ONLY a fresh script/style nonce and local resources.
-        $policy = $nonce === null
-            ? "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
-            : "default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; "
-                ."form-action 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; "
-                ."script-src 'self' 'nonce-".$nonce."'; "
-                ."style-src 'self' 'nonce-".$nonce."'";
-        $response->headers->set('Content-Security-Policy', $policy);
-
-        return $response;
-    }
-
     private function deny(): Response
     {
-        return $this->protectedHeaders(
+        return ProtectPrivateUniversityResponses::apply(
             response()->json(['error' => 'access_denied'], 403)
         );
     }
@@ -79,6 +58,12 @@ final class RequireUniversityGrant
             return $this->deny();
         }
 
+        // Bind the initial server-held session credential to this request
+        // without exposing its raw value in a downstream request attribute.
+        // This digest is only a drift check, NEVER an authority token.
+        $request->attributes->set(
+            'university.initial_credential_digest', hash('sha256', $credential)
+        );
         $request->attributes->set('university.verified_grant', $grant);
         try {
             $nonce = base64_encode(random_bytes(18));
@@ -96,8 +81,21 @@ final class RequireUniversityGrant
         // check after a committed POST could misleadingly report failure.
         if ($request->isMethod('GET') || $request->isMethod('HEAD')) {
             try {
+                // Do not authorize the response for an old tenant/session
+                // when the request's server-held session changed during a read.
+                // The live Portal recheck below alone only validates the
+                // original captured credential and organization.
+                if ($request->session()->get('portal_server_credential') !== $credential
+                    || $request->session()->get('portal_company_id') !== $company) {
+                    return $this->deny();
+                }
+
                 $fresh = $this->gate->authorize($credential, $company, $permission, time());
-                if (!$fresh->allowed
+                // The live authority call itself may race with a session
+                // transition; verify the binding again before any release.
+                if ($request->session()->get('portal_server_credential') !== $credential
+                    || $request->session()->get('portal_company_id') !== $company
+                    || !$fresh->allowed
                     || $fresh->companyId !== $grant->companyId
                     || $fresh->subjectId !== $grant->subjectId
                     || $fresh->permission !== $grant->permission
@@ -109,6 +107,8 @@ final class RequireUniversityGrant
             }
         }
 
-        return $this->protectedHeaders($response, $nonce);
+        // The outer response boundary also covers exceptions before this
+        // middleware and keeps the nonce only for successful authorized HTML.
+        return $response;
     }
 }

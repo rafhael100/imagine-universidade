@@ -60,7 +60,9 @@ const activeMarkup=[
   '![material][external]'
 ];
 for(const fragment of activeMarkup){
-  assert.throws(()=>safeLine("Título "+fragment),/interactive Markdown\/HTML/u);
+  // Reference definitions are active only when they start a Markdown line.
+  const title=fragment.startsWith("[anexo]:")?fragment:"Título "+fragment;
+  assert.throws(()=>safeLine(title),/interactive Markdown\/HTML/u);
   assert.throws(()=>safeBody(body+"\n\n"+fragment),/interactive Markdown\/HTML/u);
   negative+=2;
 }

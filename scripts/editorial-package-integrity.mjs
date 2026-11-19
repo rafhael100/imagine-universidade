@@ -39,6 +39,8 @@ export async function calculateEditorialPackageIntegrity(directory,{sealed=false
     "Source review manifest must be a regular non-symlink file");
   const sourceManifest=JSON.parse(await readFile(manifestPath,"utf8"));
   assert.equal(sourceManifest.schema_version,1);
+  assert.equal(sourceManifest.source_path,"content/mvp-cursos-v1.json",
+    "Review source path must be the pinned versioned curriculum");
   assert.equal(sourceManifest.status,"PENDING_HUMAN_REVIEW");
   assert.equal(sourceManifest.publishable,false);
   assert.equal(sourceManifest.course_count,10);
@@ -46,15 +48,59 @@ export async function calculateEditorialPackageIntegrity(directory,{sealed=false
   assert.match(sourceManifest.source_sha256,/^[a-f0-9]{64}$/u);
   assert.ok(Array.isArray(sourceManifest.courses)&&sourceManifest.courses.length===10);
   assert.ok(Array.isArray(sourceManifest.lessons)&&sourceManifest.lessons.length===35);
-  const coursePaths=[];
-  for(const course of sourceManifest.courses){
+  // ERD-R30: a rehashed but internally contradictory review manifest must
+  // never be accepted as a complete/pending handoff. An unsigned checksum
+  // proves neither authorisation nor provenance; these are schema invariants.
+  const coursePaths=[],courseSlugs=new Set(),lessonCounts=new Map();
+  for(const [index,course] of sourceManifest.courses.entries()){
+    assert.ok(typeof course.course_slug==="string"&&
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(course.course_slug)&&course.course_slug.length<=120,
+      "Invalid course identity in review manifest");
+    assert.ok(!courseSlugs.has(course.course_slug),
+      "Duplicate course identity in review manifest");
+    courseSlugs.add(course.course_slug);
+    lessonCounts.set(course.course_slug,0);
+    assert.ok(typeof course.title==="string"&&course.title.trim().length>0,
+      "Missing course title in review manifest");
+    assert.ok(["metodologia","negocios","sistemas"].includes(course.category),
+      "Unexpected course category in review manifest");
+    assert.ok(Number.isInteger(course.lessons)&&course.lessons>=1&&course.lessons<=15,
+      "Invalid course lesson count in review manifest");
     const relative=course.file;
     assert.ok(typeof relative==="string"&&
       /^cursos\/(?:0[1-9]|10)-[a-z0-9]+(?:-[a-z0-9]+)*\.md$/u.test(relative),
       "Unsafe or unexpected course review path");
+    assert.equal(relative,
+      `cursos/${String(index+1).padStart(2,"0")}-${course.course_slug}.md`,
+      "Course filename and numbered course identity disagree");
     coursePaths.push(relative);
   }
   assert.equal(new Set(coursePaths).size,10,"Duplicate course review file");
+  const lessonIds=new Set();
+  for(const lesson of sourceManifest.lessons){
+    assert.ok(courseSlugs.has(lesson.course_slug),
+      "Lesson references an unknown course");
+    assert.ok(typeof lesson.lesson_slug==="string"&&
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(lesson.lesson_slug)&&lesson.lesson_slug.length<=120,
+      "Invalid lesson identity in review manifest");
+    const id=lesson.course_slug+"/"+lesson.lesson_slug;
+    assert.ok(!lessonIds.has(id),"Duplicate lesson identity in review manifest");
+    lessonIds.add(id);
+    assert.ok(typeof lesson.content_sha256==="string"&&
+      /^[a-f0-9]{64}$/u.test(lesson.content_sha256),
+      "Invalid immutable lesson checksum");
+    assert.equal(lesson.review_status,"PENDING_HUMAN_REVIEW",
+      "Lesson must await human review");
+    assert.equal(lesson.reviewed_by,null,
+      "Offline package must not claim a reviewer identity");
+    assert.equal(lesson.review_evidence,null,
+      "Offline package must not claim human approval evidence");
+    lessonCounts.set(lesson.course_slug,lessonCounts.get(lesson.course_slug)+1);
+  }
+  for(const course of sourceManifest.courses){
+    assert.equal(lessonCounts.get(course.course_slug),course.lessons,
+      "Lesson counts disagree between course and lesson manifest");
+  }
   const courseNames=await readdir(join(root,"cursos"));
   assert.deepEqual(ordered(courseNames),ordered(coursePaths.map(x=>x.slice("cursos/".length))),
     "Missing or unexpected course review file");

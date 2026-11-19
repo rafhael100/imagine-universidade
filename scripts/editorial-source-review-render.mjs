@@ -13,7 +13,7 @@ export function renderEditorialCourseMarkdown(course,courseIndex){
   const courseSlug=safeSlug(course.slug),title=safeLine(course.title);
   assert.ok(["metodologia","negocios","sistemas"].includes(course.category));
   assert.ok(Array.isArray(course.lessons)&&course.lessons.length>=1&&course.lessons.length<=15);
-  const hashes=[],reviewRows=[];
+  const hashes=[],reviewRows=[],seenLesson=new Set();
   const lines=[
     "# "+title,
     "",

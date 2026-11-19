@@ -32,6 +32,11 @@ export async function calculateEditorialPackageIntegrity(directory,{sealed=false
   const expectedTop=ordered([...baseFiles,"cursos",...(sealed?[INTEGRITY_FILE]:[])]);
   assert.deepEqual(ordered(top),expectedTop,"Unexpected or missing package item");
   const manifestPath=join(root,"manifesto-revisao.json");
+  // ERD-R29: never follow a substituted manifest symlink BEFORE validating it.
+  // The later per-file lstat would be too late to prevent the first read.
+  const manifestStat=await lstat(manifestPath);
+  assert.ok(manifestStat.isFile()&&!manifestStat.isSymbolicLink(),
+    "Source review manifest must be a regular non-symlink file");
   const sourceManifest=JSON.parse(await readFile(manifestPath,"utf8"));
   assert.equal(sourceManifest.schema_version,1);
   assert.equal(sourceManifest.status,"PENDING_HUMAN_REVIEW");

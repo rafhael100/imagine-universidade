@@ -55,6 +55,30 @@ async function clonedRehashedCase(name,modify,expectedError,{sourceBound=false}=
   }
   negatives++;
 }
+// ERD-R35: amend a CSV and recompute the checksum manifest. --dir detects
+// no corruption, but --source must reject an altered pending-only CSV.
+async function clonedRehashedCsvCase(name,mutate){
+  const folder=join(temp,"rehashed-csv-"+name);
+  await cp(original,folder,{recursive:true});
+  const csvPath=join(folder,"revisao.csv");
+  const before=await readFile(csvPath,"utf8");
+  const after=mutate(before);
+  assert.notEqual(after,before,"Test mutation must change CSV "+name);
+  const bytes=Buffer.from(after,"utf8");
+  await writeFile(csvPath,bytes);
+  const integrityPath=join(folder,INTEGRITY_FILE);
+  const integrity=JSON.parse(await readFile(integrityPath,"utf8"));
+  const row=integrity.files.find(x=>x.path==="revisao.csv");
+  assert.ok(row,"Checksum manifest must include review CSV");
+  row.bytes=bytes.length;
+  row.sha256=createHash("sha256").update(bytes).digest("hex");
+  await writeFile(integrityPath,JSON.stringify(integrity,null,2)+"\n","utf8");
+  assert.equal((await verifyEditorialPackage(folder)).files.length,15);
+  await assert.rejects(
+    verifyEditorialSourceBinding(folder,join(root,"content","mvp-cursos-v1.json")),
+    /Review CSV differs from original pending-only handoff/u);
+  negatives++;
+}
 try{
   const run=spawnSync(process.execPath,[executable,"--out",original],{
     encoding:"utf8",cwd:root,timeout:30000,env:{...process.env,NODE_ENV:"test"}
@@ -182,7 +206,16 @@ try{
   await clonedRehashedCase("source-lesson-order",m=>{
     [m.lessons[0],m.lessons[1]]=[m.lessons[1],m.lessons[0]];
   },/Review lesson identities\/checksums diverge/u,{sourceBound:true});
-  assert.equal(negatives,30);
+  await clonedRehashedCsvCase("fake-approval",csv=>
+    csv.replace('"PENDING_HUMAN_REVIEW"','"APPROVED"'));
+  await clonedRehashedCsvCase("fake-reviewer",csv=>
+    csv.replace('"PENDING_HUMAN_REVIEW","","",""',
+      '"PENDING_HUMAN_REVIEW","fake-reviewer","",""'));
+  await clonedRehashedCsvCase("fake-hash",csv=>
+    csv.replace(/"[a-f0-9]{64}"/u,'"'+("f".repeat(64))+'"'));
+  await clonedRehashedCsvCase("additional-row",csv=>
+    csv+'"unexpected","row","0","APPROVED","fake","",""\n');
+  assert.equal(negatives,34);
   console.log("PASS ERD-R27: original 15-file package verified; "+negatives+
     " tamper/path/symlink negatives; UNSIGNED/HOLD_NO_GO, no human approval.");
 }finally{

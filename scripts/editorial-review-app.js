@@ -62,7 +62,11 @@
     const matches=[];
     items.forEach((lesson,i)=>{
       if(status!=="ALL"&&state.get(key(lesson)).status!==status)return;
-      const searchable=normalizeSearch(lesson.course_title+" "+lesson.lesson_title);
+      // C193: local-only search includes the reviewer draft, without rendering
+      // untrusted notes in result labels or sending them to a server.
+      const draft=state.get(key(lesson));
+      const searchable=normalizeSearch(lesson.course_title+" "+lesson.lesson_title+
+        " "+draft.notes+" "+draft.reviewer);
       if(term!==""&&!searchable.includes(term))return;
       matches.push([i,lesson]);
     });

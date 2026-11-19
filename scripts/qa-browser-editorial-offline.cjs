@@ -145,6 +145,21 @@ module.exports=async function({browser,out,check}){
     await page.locator("#review-filter").selectOption("ALL");
     check(await page.locator("#review-results").isHidden(),
       "C163 empty search and all-status filter do not clutter the editor");
+    // C193: find notes/reviewers in this local, offline session; preserve
+    // existing status filtering and do not display private notes in buttons.
+    await page.locator("#review-search").fill("metricas");
+    check(await page.locator("#review-results .review-result").count()===1 &&
+      (await page.locator("#review-results .review-result").first().innerText()).includes("Visitas"),
+      "C193 unaccented search finds an accented editorial note");
+    await page.locator("#review-search").fill("equipe editorial qa");
+    check(await page.locator("#review-results .review-result").count()===1,
+      "C193 reviewer drafts are searchable without showing reviewer in result label");
+    await page.locator("#review-filter").selectOption("PENDING_HUMAN_REVIEW");
+    check(await page.locator("#review-results .review-result").count()===0,
+      "C193 draft search still respects selected review status");
+    await page.locator("#review-filter").selectOption("ALL");
+    await page.locator("#review-search").fill("");
+
 
     check((await page.locator("#courses .course-item").first().innerText()).includes("3 pendentes / 4"),
       "C160 first course shows accurate unfinished lesson count");

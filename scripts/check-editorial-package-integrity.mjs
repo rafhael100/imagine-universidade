@@ -55,28 +55,29 @@ async function clonedRehashedCase(name,modify,expectedError,{sourceBound=false}=
   }
   negatives++;
 }
-// ERD-R35: amend a CSV and recompute the checksum manifest. --dir detects
-// no corruption, but --source must reject an altered pending-only CSV.
-async function clonedRehashedCsvCase(name,mutate){
-  const folder=join(temp,"rehashed-csv-"+name);
+// ERD-R35/R38: amend an exported file, then update its UNSIGNED checksum.
+// --dir detects no corruption, but --source must catch deviations from the
+// current versioned curriculum and deterministic offline review UI.
+async function clonedRehashedFileCase(name,relative,mutate,expectedError){
+  const folder=join(temp,"rehashed-file-"+name);
   await cp(original,folder,{recursive:true});
-  const csvPath=join(folder,"revisao.csv");
-  const before=await readFile(csvPath,"utf8");
+  const target=join(folder,relative);
+  const before=await readFile(target,"utf8");
   const after=mutate(before);
-  assert.notEqual(after,before,"Test mutation must change CSV "+name);
+  assert.notEqual(after,before,"Test mutation must change file "+name);
   const bytes=Buffer.from(after,"utf8");
-  await writeFile(csvPath,bytes);
+  await writeFile(target,bytes);
   const integrityPath=join(folder,INTEGRITY_FILE);
   const integrity=JSON.parse(await readFile(integrityPath,"utf8"));
-  const row=integrity.files.find(x=>x.path==="revisao.csv");
-  assert.ok(row,"Checksum manifest must include review CSV");
+  const row=integrity.files.find(x=>x.path===relative);
+  assert.ok(row,"Checksum manifest must include "+relative);
   row.bytes=bytes.length;
   row.sha256=createHash("sha256").update(bytes).digest("hex");
   await writeFile(integrityPath,JSON.stringify(integrity,null,2)+"\n","utf8");
   assert.equal((await verifyEditorialPackage(folder)).files.length,15);
   await assert.rejects(
     verifyEditorialSourceBinding(folder,join(root,"content","mvp-cursos-v1.json")),
-    /Review CSV differs from original pending-only handoff/u);
+    expectedError,"Source binding must reject altered "+relative);
   negatives++;
 }
 try{
@@ -206,16 +207,28 @@ try{
   await clonedRehashedCase("source-lesson-order",m=>{
     [m.lessons[0],m.lessons[1]]=[m.lessons[1],m.lessons[0]];
   },/Review lesson identities\/checksums diverge/u,{sourceBound:true});
-  await clonedRehashedCsvCase("fake-approval",csv=>
-    csv.replace('"PENDING_HUMAN_REVIEW"','"APPROVED"'));
-  await clonedRehashedCsvCase("fake-reviewer",csv=>
+  await clonedRehashedFileCase("fake-approval","revisao.csv",csv=>
+    csv.replace('"PENDING_HUMAN_REVIEW"','"APPROVED"'),/Review CSV differs from original pending-only handoff/u);
+  await clonedRehashedFileCase("fake-reviewer","revisao.csv",csv=>
     csv.replace('"PENDING_HUMAN_REVIEW","","",""',
-      '"PENDING_HUMAN_REVIEW","fake-reviewer","",""'));
-  await clonedRehashedCsvCase("fake-hash",csv=>
-    csv.replace(/"[a-f0-9]{64}"/u,'"'+("f".repeat(64))+'"'));
-  await clonedRehashedCsvCase("additional-row",csv=>
-    csv+'"unexpected","row","0","APPROVED","fake","",""\n');
-  assert.equal(negatives,34);
+      '"PENDING_HUMAN_REVIEW","fake-reviewer","",""'),/Review CSV differs from original pending-only handoff/u);
+  await clonedRehashedFileCase("fake-hash","revisao.csv",csv=>
+    csv.replace(/"[a-f0-9]{64}"/u,'"'+("f".repeat(64))+'"'),/Review CSV differs from original pending-only handoff/u);
+  await clonedRehashedFileCase("additional-row","revisao.csv",csv=>
+    csv+'"unexpected","row","0","APPROVED","fake","",""\n',/Review CSV differs from original pending-only handoff/u);
+  await clonedRehashedFileCase("offline-active-script","revisao-navegavel.html",html=>
+    html.replace("</body>","<script>alert('fake-approval')</script></body>"),
+    /Offline review HTML differs from versioned source and UI/u);
+  await clonedRehashedFileCase("offline-misleading-title","revisao-navegavel.html",html=>
+    html.replace("Revisão editorial offline","Revisão editorial aprovada"),
+    /Offline review HTML differs from versioned source and UI/u);
+  await clonedRehashedFileCase("queue-no-go", "FILA-REVISAO-35.md",md=>
+    md.replace("HOLD_NO_GO","LIBERADO"),
+    /Offline editorial queue differs from versioned source/u);
+  await clonedRehashedFileCase("queue-fake-status", "FILA-REVISAO-35.md",md=>
+    md.replace("PENDING_HUMAN_REVIEW","APPROVED"),
+    /Offline editorial queue differs from versioned source/u);
+  assert.equal(negatives,38);
   console.log("PASS ERD-R27: original 15-file package verified; "+negatives+
     " tamper/path/symlink negatives; UNSIGNED/HOLD_NO_GO, no human approval.");
 }finally{

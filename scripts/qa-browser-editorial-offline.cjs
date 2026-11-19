@@ -127,8 +127,8 @@ module.exports=async function({browser,out,check}){
     await page.locator("#review-filter").selectOption("NEEDS_CHANGES");
     check(await page.locator("#review-results .review-result").count()===1,
       "C163 status filter returns only the lesson marked for adjustments");
-    check((await page.locator("#review-search-count").innerText()).includes("1 aulas"),
-      "C163 status filter has explicit live result count");
+    check((await page.locator("#review-search-count").innerText()).includes("1 aula encontrada"),
+      "C192 singular result count is accessible and correct in Portuguese");
     await page.locator("#review-search").fill("VISITAS");
     const countEvents=await page.evaluate(()=>window.__uniNavMutations.search);
     await page.locator("#review-search").fill("VISITA");
@@ -139,6 +139,8 @@ module.exports=async function({browser,out,check}){
     await page.locator("#review-search").fill("inexistente");
     check(await page.locator("#review-results .review-result").count()===0,
       "C163 missing terms produce no invented matches");
+    check((await page.locator("#review-search-count").innerText()).includes("0 aulas encontradas"),
+      "C192 zero search matches use a pluralized accessible count");
     await page.locator("#review-search").fill("");
     await page.locator("#review-filter").selectOption("ALL");
     check(await page.locator("#review-results").isHidden(),

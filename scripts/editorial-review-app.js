@@ -70,7 +70,7 @@
     holder.hidden=!active;
     holder.replaceChildren();
     const countLabel=active
-      ?matches.length+" aulas encontradas neste filtro"
+      ?(matches.length===1?"1 aula encontrada neste filtro":matches.length+" aulas encontradas neste filtro")
       :"Digite para localizar uma aula ou selecione uma situação.";
     // Only actual changes should enter this aria-live region.
     if($("review-search-count").textContent!==countLabel)

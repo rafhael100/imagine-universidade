@@ -34,6 +34,13 @@ try{
   assert.match(index,/NÃO É APROVAÇÃO NEM PUBLICAÇÃO/);
   assert.match(index,/HOLD_NO_GO/);
   assert.ok(index.includes(sourceHash),"index must identify the complete source revision");
+  // ERD-R25: checklist lives alongside the editable CSV/HTML handoff.
+  const triage=await readFile(join(tmp,"FILA-REVISAO-35.md"),"utf8");
+  assert.match(index,/FILA-REVISAO-35\.md/u);
+  assert.match(triage,/HOLD_NO_GO/u);
+  assert.ok(triage.includes(sourceHash),"triage must bind the exact source bytes");
+  assert.equal((triage.match(/^- \[ \]/gmu)||[]).length,35,
+    "Every lesson must require a separate unchecked human review");
   const files=await readdir(join(tmp,"cursos"));
   assert.equal(files.length,10);
   const expected=new Map(manifest.courses.map(c=>[c.slug,c]));
@@ -43,6 +50,10 @@ try{
     assert.equal(record.review_status,"PENDING_HUMAN_REVIEW");
     assert.equal(record.reviewed_by,null);
     assert.equal(record.review_evidence,null);
+    assert.ok(triage.includes(record.course_slug+"/"+record.lesson_slug),
+      "The pending checklist must list every lesson identity");
+    assert.ok(triage.includes(record.content_sha256),
+      "The pending checklist must cite every immutable lesson hash");
     const course=expected.get(record.course_slug);
     assert.ok(course,"unknown course in review manifest");
     const lesson=course.lessons.find(l=>l.slug===record.lesson_slug);

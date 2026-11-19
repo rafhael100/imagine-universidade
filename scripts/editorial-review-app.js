@@ -160,7 +160,9 @@
   // Invisible Unicode format characters, including zero-width space and BOM,
   // can spoof a reviewer or conceal a spreadsheet formula. Mirror the CLI fence.
   function unsafeDisplayControl(value){
-    return /[\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/u.test(value);
+    // Cf includes further bidi and soft-hyphen controls; extend to invisible
+    // combining grapheme joiner and variation selectors outside category Cf.
+    return /[\p{Cf}\u034f\u180e\u2028\u2029\ufe00-\ufe0f\u{e0100}-\u{e01ef}]/u.test(value);
   }
   function valid(row,id){
     if(!["PENDING_HUMAN_REVIEW","NEEDS_CHANGES","CLAIMED_HUMAN_APPROVED"].includes(row.status))

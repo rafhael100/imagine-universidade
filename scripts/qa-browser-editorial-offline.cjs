@@ -558,6 +558,10 @@ module.exports=async function({browser,out,check}){
     check((await page.locator("#message").innerText()).includes("direção invisível"),
       "C175 offline export blocks zero-width note characters before CSV download");
 
+    await page.locator("#notes").fill("Observação com hífen\u00ADinvisível");
+    await page.locator("#export").click();
+    check((await page.locator("#message").innerText()).includes("direção invisível"),
+      "C190 Unicode Cf soft hyphen blocks offline CSV export");
     await page.locator("#notes").fill("Anotação\u202Einvertida");
     await page.locator("#export").click();
     check((await page.locator("#message").innerText()).includes("direção invisível"),
@@ -567,6 +571,10 @@ module.exports=async function({browser,out,check}){
     await page.locator("#export").click();
     check((await page.locator("#message").innerText()).includes("revisor válido"),
       "C172 offline CSV export blocks invisible reviewer spoofing");
+    await page.locator("#reviewer").fill("Equipe\u061CEditorial QA");
+    await page.locator("#export").click();
+    check((await page.locator("#message").innerText()).includes("revisor válido"),
+      "C190 invisible Arabic mark blocks reviewer spoofing in browser");
     await page.locator("#reviewer").fill("Equipe Editorial QA");
 
     await page.locator("#notes").fill("=HYPERLINK(\"https://example.invalid\")");

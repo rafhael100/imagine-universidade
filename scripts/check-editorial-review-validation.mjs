@@ -97,6 +97,10 @@ try{
   rejects("zero-width space inside notes",alter(csv,1,6,"Texto\u200boculto"));
   rejects("word joiner inside notes",alter(csv,1,6,"Texto\u2060oculto"));
   rejects("internal BOM inside notes",alter(csv,1,6,"Texto\ufeffoculto"));
+  rejects("soft hyphen inside notes",alter(csv,1,6,"Texto\u00ADoculto"));
+  rejects("Arabic letter mark inside notes",alter(csv,1,6,"Texto\u061Coculto"));
+  rejects("combining grapheme joiner inside notes",alter(csv,1,6,"Texto\u034Foculto"));
+  rejects("variation selector inside notes",alter(csv,1,6,"Texto\uFE0Foculto"));
   rejects("zero-width formula prefix",alter(csv,1,6,"\u200b=HYPERLINK(1)"));
   // Invalid UTF-8 within an otherwise valid pending note must fail on bytes.
   const poisoned=csv.replace('"PENDING_HUMAN_REVIEW","","",""',
@@ -133,6 +137,10 @@ try{
   rejects("word joiner reviewer spoofing",alter(named,1,4,"Revisor\u2060Falso"));
   rejects("ASCII BEL in reviewer",alter(named,1,4,"Equipe\u0007Falsa"));
   rejects("ASCII DEL in reviewer",alter(named,1,4,"Equipe\u007fFalsa"));
+  rejects("soft hyphen inside reviewer",alter(named,1,4,"Equipe\u00ADFalsa"));
+  rejects("Arabic letter mark inside reviewer",alter(named,1,4,"Equipe\u061CFalsa"));
+  rejects("combining grapheme joiner inside reviewer",alter(named,1,4,"Equipe\u034FFalsa"));
+  rejects("variation selector inside reviewer",alter(named,1,4,"Equipe\uFE0FFalsa"));
   accepts("valid multiline review notes",alter(csv,1,6,"Revisão clara,\ncom texto em duas linhas."),s=>{
     assert.equal(s.pending,35);
     assert.equal(s.publishable,false);
@@ -142,7 +150,7 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,41);
+  assert.equal(scenarios,49);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

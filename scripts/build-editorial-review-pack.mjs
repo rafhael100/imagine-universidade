@@ -11,6 +11,7 @@ import {lstat,mkdir,readFile,readdir,writeFile} from "node:fs/promises";
 import {dirname,resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
+import {safeBody, safeLine} from "./editorial-text-safety.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -56,20 +57,6 @@ function safeSlug(v){
   assert.ok(typeof v==="string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(v) && v.length<=120,
     "Unsafe course or lesson slug");
   return v;
-}
-function safeLine(v){
-  assert.ok(typeof v==="string" && v.trim()!=="" && v.length<=200 && !/[\r\n]/.test(v),
-    "Title must fit in one line");
-  return v.trim().replace(/[|]/g,"\\|");
-}
-function safeBody(v){
-  assert.ok(typeof v==="string" && v.length<=30000 && v.trim().split(/\s+/).length>=95,
-    "A lesson must contain substantive editorial draft text");
-  for(const heading of ["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"]){
-    assert.ok(v.includes("\n\n"+heading+"\n"),"Missing lesson section "+heading);
-  }
-  assert.doesNotMatch(v,/<script|javascript:|<\//i);
-  return v.trim();
 }
 const indexes=[],reviewRows=[],hashes=[],seenCourse=new Set(),seenLesson=new Set();
 const lessonsDir=resolve(dest,"cursos");

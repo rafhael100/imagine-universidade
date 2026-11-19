@@ -65,7 +65,7 @@ export function inspectEditorialReview(csvText,sourceText){
   const counters={pending:0,needs_changes:0,claims:0};
   for(const [idx,row] of rows.slice(1).entries()){
     assert.equal(row.length,7,"Invalid review row at "+String(idx+2));
-    const [course,lesson,hash,status,reviewer,ref]=row;
+    const [course,lesson,hash,status,reviewer,ref,notes]=row;
     const key=course+"/"+lesson;
     assert.ok(expected.has(key),"Unknown course or lesson "+key);
     assert.ok(!seen.has(key),"Duplicate review row "+key);
@@ -73,6 +73,14 @@ export function inspectEditorialReview(csvText,sourceText){
     assert.equal(hash,expected.get(key),"Stale or edited content hash: "+key);
     assert.ok(["PENDING_HUMAN_REVIEW","NEEDS_CHANGES","CLAIMED_HUMAN_APPROVED"].includes(status),
       "Unsupported review status: "+key);
+    // CSV exports may be opened by reviewers in Excel/LibreOffice. An
+    // externally edited CSV must not bypass the offline UI's formula fence.
+    const unsafeCell = value => /^\s*[=+\-@]/u.test(value)
+      || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u.test(value);
+    assert.ok(typeof notes==="string" && notes.length<=2000 && !unsafeCell(notes),
+      "Unsafe or oversized editorial notes: "+key);
+    assert.ok(!unsafeCell(reviewer) && !/[\r\n\u2028\u2029]/u.test(reviewer),
+      "Unsafe reviewer field: "+key);
     if(status==="PENDING_HUMAN_REVIEW"){
       assert.equal(reviewer,"","Pending row must not claim reviewer");
       assert.equal(ref,"","Pending row must not claim approval");

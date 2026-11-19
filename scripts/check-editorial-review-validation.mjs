@@ -75,9 +75,21 @@ try{
   rejects("missing claimed reviewer",alter(alter(csv,1,3,"CLAIMED_HUMAN_APPROVED"),1,5,ref));
   rejects("unsupported signoff status",alter(csv,1,3,"APPROVED"));
   rejects("pending row with forged reviewer",alter(csv,1,4,"Some Person"));
+  rejects("spreadsheet formula in notes",alter(csv,1,6,'=HYPERLINK("https://invalid.test")'));
+  rejects("spreadsheet formula with leading whitespace",alter(csv,1,6,"  +2+3"));
+  rejects("spreadsheet formula using @ in notes",alter(csv,1,6,"@SUM(2,2)"));
+  rejects("oversized editorial notes",alter(csv,1,6,"z".repeat(2001)));
+  rejects("control character inside notes",alter(csv,1,6,"Inadequado\u0007"));
+  const named=alter(alter(alter(csv,1,3,"NEEDS_CHANGES"),1,4,"Equipe de QA"),1,5,ref);
+  rejects("spreadsheet formula in reviewer",alter(named,1,4,"@cmd"));
+  rejects("newline in reviewer",alter(named,1,4,"Revisora\nFalsa"));
+  accepts("valid multiline review notes",alter(csv,1,6,"Revisão clara,\ncom texto em duas linhas."),s=>{
+    assert.equal(s.pending,35);
+    assert.equal(s.publishable,false);
+  });
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,15);
+  assert.equal(scenarios,23);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

@@ -19,6 +19,9 @@ try{
   pass(html.includes('lang="pt-BR"')&&html.includes("NÃO É APROVAÇÃO"),"review labels");
   pass(html.includes("Visitas → Leads → Clientes")&&html.includes("35 aulas"),"full source");
   pass(html.includes("CLAIMED_HUMAN_APPROVED"),"claim is not authenticated");
+  pass(html.includes("id='export-summary'") && html.includes("resumo-revisao.txt"),
+    "local human handoff report does not depend on any server");
+
   pass(html.includes("id='review-search'")&&html.includes("id='review-filter'"),
     "offline editor offers literal search and status filters");
 

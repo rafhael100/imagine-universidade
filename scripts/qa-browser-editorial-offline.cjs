@@ -103,6 +103,26 @@ module.exports=async function({browser,out,check}){
       "C160 next adjustment wraps to the currently changed lesson");
 
 
+    const [summaryDownload]=await Promise.all([
+      page.waitForEvent("download",{timeout:10000}),
+      page.locator("#export-summary").click()
+    ]);
+    const summaryPath=path.join(dir,"resumo-revisao.txt");
+    await summaryDownload.saveAs(summaryPath);
+    const summary=fs.readFileSync(summaryPath,"utf8");
+    check(summaryDownload.suggestedFilename()==="resumo-revisao.txt" &&
+      summary.includes("HOLD_NO_GO")&&summary.includes("não autenticado")&&
+      summary.includes("Precisa")===false,
+      "C165 local handoff exports plain-text review without claiming release");
+    check(summary.includes("Pendentes: 34")&&summary.includes("Precisam ajustes: 1"),
+      "C165 summary includes exact 35-lesson counters");
+    check(summary.includes("Revisar métricas e clareza")&&summary.includes("SHA-256"),
+      "C165 summary retains review notes and exact lesson provenance");
+    check(await page.evaluate(()=>{
+      const e=new Event("beforeunload",{cancelable:true});
+      dispatchEvent(e);return e.defaultPrevented;
+    }),"C165 exporting summary does not mark editable CSV as safely saved");
+
     const [download]=await Promise.all([
       page.waitForEvent("download",{timeout:10000}),
       page.locator("#export").click()

@@ -162,6 +162,61 @@
       message("CSV exportado. Declarações NÃO são aprovação verificada ou publicação.");
     }catch(error){message(String(error.message),true);}
   }
+  function exportSummary(){
+    try{
+      // A summary is NOT a durable substitute for the editable CSV.
+      // Keep dirty=true until the user explicitly exports the CSV.
+      const rows=[];
+      for(const item of items){
+        const record=state.get(key(item));
+        valid(record,key(item));
+        rows.push({item,record});
+      }
+      const total=(status)=>rows.filter(x=>x.record.status===status).length;
+      const lines=[
+        "UNIVERSIDADE IMAGINE — RELATÓRIO EDITORIAL OFFLINE",
+        "HOLD_NO_GO — NÃO É APROVAÇÃO NEM PUBLICAÇÃO",
+        "Status de revisor é somente DECLARADO, não autenticado.",
+        "35 aulas · 10 cursos · conteúdo verificado por hash no pacote",
+        "Pendentes: "+total("PENDING_HUMAN_REVIEW"),
+        "Precisam ajustes: "+total("NEEDS_CHANGES"),
+        "Aceites declarados NÃO verificados: "+total("CLAIMED_HUMAN_APPROVED"),
+        ""
+      ];
+      for(const slug of courses){
+        const group=rows.filter(x=>x.item.course_slug===slug);
+        const count=(status)=>group.filter(x=>x.record.status===status).length;
+        lines.push(
+          "CURSO: "+group[0].item.course_title,
+          "Pendentes "+count("PENDING_HUMAN_REVIEW")+
+            " | Ajustes "+count("NEEDS_CHANGES")+
+            " | Declarações não verificadas "+count("CLAIMED_HUMAN_APPROVED"),
+          ""
+        );
+        for(const {item,record} of group){
+          lines.push(
+            "["+record.status+"] "+item.lesson_title,
+            "ID "+key(item),
+            "SHA-256 "+item.content_sha256
+          );
+          if(record.reviewer)lines.push("Revisor informado (não autenticado): "+record.reviewer);
+          if(record.evidence)lines.push("Evidência informada (não conferida): "+record.evidence);
+          if(record.notes)lines.push("Observações: "+record.notes);
+          lines.push("");
+        }
+      }
+      lines.push(
+        "Para continuar editando, é obrigatório exportar revisao.csv.",
+        "13 gates operacionais continuam bloqueados; nenhuma aula foi publicada."
+      );
+      const url=URL.createObjectURL(new Blob([lines.join("\n")+"\n"],{type:"text/plain;charset=utf-8"}));
+      const link=document.createElement("a");
+      link.href=url;link.download="resumo-revisao.txt";
+      document.body.append(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      message("Resumo exportado. Exporte o CSV para preservar a revisão editável.");
+    }catch(error){message(String(error.message),true);}
+  }
   // Existing CSV can be imported locally to resume review on another day.
   // Hashes and 35 unique lesson identities must match the CURRENT source.
   function parseCsv(text){
@@ -232,6 +287,7 @@
   $("next-adjustment").addEventListener("click",()=>jumpToStatus("NEEDS_CHANGES"));
   ["status","reviewer","evidence","notes"].forEach(id=>$(id).addEventListener("input",update));
   $("export").addEventListener("click",exportCsv);
+  $("export-summary").addEventListener("click",exportSummary);
   $("import").addEventListener("change",e=>{void importCsv(e.target.files[0]);});
   window.addEventListener("beforeunload",e=>{
     if(dirty){e.preventDefault();e.returnValue="";}

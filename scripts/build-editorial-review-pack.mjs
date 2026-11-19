@@ -58,6 +58,33 @@ function safeSlug(v){
     "Unsafe course or lesson slug");
   return v;
 }
+// ERD-R14: validate the ENTIRE late-source lesson list before creating any
+// course file. A malicious or broken last lesson must not leave a misleading
+// partial package with earlier courses rendered successfully.
+function preflightReviewSource(courses){
+  const courseIds=new Set(), lessonIds=new Set();
+  let total=0;
+  for(const course of courses){
+    const courseSlug=safeSlug(course.slug);
+    assert.ok(!courseIds.has(courseSlug),"Duplicate course slug");
+    courseIds.add(courseSlug);
+    safeLine(course.title);
+    assert.ok(["metodologia","negocios","sistemas"].includes(course.category));
+    assert.ok(Array.isArray(course.lessons)&&course.lessons.length>=1&&course.lessons.length<=15,
+      "Invalid lesson count");
+    for(const lesson of course.lessons){
+      const id=courseSlug+"/"+safeSlug(lesson.slug);
+      assert.ok(!lessonIds.has(id),"Duplicate course+lesson identity");
+      lessonIds.add(id);
+      safeLine(lesson.title);
+      safeBody(lesson.body);
+      total++;
+    }
+  }
+  assert.equal(total,35,"Expected exactly 35 existing drafts");
+}
+preflightReviewSource(payload.courses);
+
 const indexes=[],reviewRows=[],hashes=[],seenCourse=new Set(),seenLesson=new Set();
 const lessonsDir=resolve(dest,"cursos");
 await mkdir(lessonsDir,{recursive:true});

@@ -234,7 +234,7 @@ try{
     md.replace("status PENDENTE","status APROVADO"),
     /Course review Markdown differs from versioned source/u);
   await clonedRehashedFileCase("course-added-passage",baseline.files.find(x=>x.path.startsWith("cursos/")).path,md=>
-    md+"\\n## Conteúdo fictício não revisado\\n",
+    md+"\n## Conteúdo fictício não revisado\n",
     /Course review Markdown differs from versioned source/u);
   await clonedRehashedFileCase("readme-fake-release","LEIA-PRIMEIRO.md",md=>
     md.replace("NÃO É APROVAÇÃO NEM PUBLICAÇÃO","APROVADO PARA PUBLICAÇÃO"),

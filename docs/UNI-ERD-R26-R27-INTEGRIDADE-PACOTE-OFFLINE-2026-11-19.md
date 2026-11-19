@@ -23,9 +23,14 @@ node scripts/check-release-gate-policy.mjs
 TMP="$(mktemp -d)"
 node scripts/build-editorial-review-pack.mjs --out "$TMP"
 node scripts/verify-editorial-package-integrity.mjs --dir "$TMP"
+node scripts/verify-editorial-package-integrity.mjs --dir "$TMP" --source content/mvp-cursos-v1.json
 ~~~
 
 Use apenas um destino vazio para gerar um pacote novo. Não utilize um destino com anotações humanas.
+
+## ERD-R28 — vínculo opcional à fonte original
+
+Quando a fonte versionada está disponível, a opção --source compara também os bytes reais do JSON original com o SHA-256 declarado no pacote. Um teste aceita a fonte intacta; outros dois recusam uma fonte alterada e um link simbólico. A verificação de um pacote recebido sem cópia do repositório permanece possível com --dir, mas não autentica sua procedência.
 
 ## Limite de confiança: checksum não é assinatura
 

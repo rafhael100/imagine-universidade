@@ -34,7 +34,9 @@ final readonly class PortalAccessGate
         if (
             trim($serverSessionCredential) === '' ||
             strlen($serverSessionCredential) > 4096 ||
-            preg_match('/[\x00-\x1F\x7F]/', $serverSessionCredential) === 1 ||
+            // A server-session credential is an opaque ASCII token, never user-facing text.
+            // Deny spaces, C1 controls, bidi/Unicode and malformed bytes before any Portal call.
+            preg_match('/[^\x21-\x7E]/', $serverSessionCredential) === 1 ||
             trim($companyId) === '' ||
             strlen($companyId) > 80 ||
             preg_match('/\A[A-Za-z0-9][A-Za-z0-9._:-]{0,79}\z/D', $companyId) !== 1 ||

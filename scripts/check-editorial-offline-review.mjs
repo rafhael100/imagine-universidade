@@ -36,6 +36,13 @@ try{
 
   pass(html.includes("id='import'")&&html.includes("Importação recusada"),
     "safe CSV reimport offered and errors reported");
+  pass(html.includes("id='message' role='status' aria-live='polite' aria-atomic='true'"),
+    "ERD-R48 status updates are atomic and polite by default");
+  pass(html.includes('role=error?"alert":"status"')&&
+    html.includes('live=error?"assertive":"polite"')&&
+    html.includes('target.setAttribute("role",role)')&&
+    html.includes('target.setAttribute("aria-live",live)'),
+    "ERD-R48 failed CSV exports/imports are assertive without altering success messages");
   pass(!html.includes("<script src=")&&!html.includes("localStorage")&&
     !html.includes("XMLHttpRequest"),"no external scripts or persistence");
   pass(html.includes("connect-src 'none'")&&html.includes("default-src 'none'"),

@@ -244,8 +244,14 @@ module.exports=async function({browser,out,check}){
       await page.locator("#export").click();
       check((await page.locator("#message").innerText()).includes("Informe revisor válido"),
         "C183 reviewer control character rejected before CSV export");
+      check((await page.locator("#message").getAttribute("role"))==="alert"&&
+        (await page.locator("#message").getAttribute("aria-live"))==="assertive",
+        "ERD-R49 invalid reviewer is announced assertively in real Chromium");
     }
     await page.locator("#reviewer").fill("Equipe Editorial QA");
+    check((await page.locator("#message").getAttribute("role"))==="status"&&
+      (await page.locator("#message").getAttribute("aria-live"))==="polite",
+      "ERD-R49 correcting a reviewer restores the polite status live region");
 
     const [summaryDownload]=await Promise.all([
       page.waitForEvent("download",{timeout:10000}),

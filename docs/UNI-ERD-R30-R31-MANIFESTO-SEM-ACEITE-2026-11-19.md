@@ -1,4 +1,4 @@
-# UNI ERD-R30–R35 — invariantes e vínculo à fonte editorial offline
+# UNI ERD-R30–R38 — invariantes e vínculo à fonte editorial offline
 
 **19/11/2026 · PR DRAFT sobre #95 na SHA `38e4f8d57a2845074dd867603de0574abc1d2691`.**
 
@@ -14,6 +14,11 @@ O verificador anterior conferia os 15 arquivos e seus checksums, mas validava ap
 - **R33:** mais 4 regressões produzem pacotes com checksums recalculados e estrutura formalmente válida, mas cursos/aulas com título, hash, identidade ou ordem divergentes. O `--dir` aceita a consistência local e o `--source` deve recusar. Total até R33: **30 cenários negativos**.
 - **R34:** quando `--source` é solicitado, o CSV de revisão também precisa corresponder byte a byte ao CSV pendente construído a partir da fonte original. Isto impede que um pacote localmente re-hashado anuncie `APPROVED`, revisor ou evidência falsos no CSV e ainda passe pela verificação contra a fonte.
 - **R35:** quatro regressões re-hasham CSV adulterado (status `APPROVED`, nome de revisor, checksum da aula e linha extra), comprovam que `--dir` é autoconsistente e que `--source` nega o vínculo. Total agora: **34 cenários negativos**.
+- **R36:** com `--source`, a página HTML navegável deve corresponder byte a byte à renderização determinística do mesmo currículo e dos mesmos scripts locais versionados; um pacote com script injetado ou título enganoso, mesmo re-hashado, falha.
+- **R37:** com `--source`, a fila de revisão das 35 aulas deve corresponder à fila determinística derivada dos bytes originais, inclusive `HOLD_NO_GO` e estados pendentes.
+- **R38:** mais quatro regressões re-hasham duas alterações no HTML e duas alterações na fila. Em todos os casos, `--dir` verifica consistência de arquivos e `--source` recusa a alteração. Total: **38 cenários negativos**.
+
+**Nota de reprodutibilidade:** a checagem `--source` da página HTML utiliza também o código versionado do renderizador e do navegador editorial desta revisão. A combinação de currículo e código da versão de origem é necessária; mudanças legítimas futuras no renderizador exigem gerar pacote novo em diretório vazio, sem sobrescrever anotações humanas.
 
 ## Reprodução sem clientes, VPS ou serviços externos
 

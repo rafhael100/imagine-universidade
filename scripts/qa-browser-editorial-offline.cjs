@@ -152,7 +152,8 @@ module.exports=async function({browser,out,check}){
       (await page.locator("#review-results .review-result").first().innerText()).includes("Visitas"),
       "ERD-R01 unaccented search finds an accented editorial note");
     await page.locator("#review-search").fill("equipe editorial qa");
-    check(await page.locator("#review-results .review-result").count()===1,
+    check(await page.locator("#review-results .review-result").count()===1&&
+      !(await page.locator("#review-results .review-result").first().innerText()).includes("Equipe Editorial QA"),
       "ERD-R01 reviewer drafts are searchable without showing reviewer in result label");
     await page.locator("#review-filter").selectOption("PENDING_HUMAN_REVIEW");
     check(await page.locator("#review-results .review-result").count()===0,
@@ -384,9 +385,12 @@ module.exports=async function({browser,out,check}){
     check(cleanPrompt.includes("Substituir 1 de 35")&&
       (await cleanReplacement.locator("#summary").innerText()).includes("35 pendentes"),
       "C174 clean editor requires explicit confirmation before replacing even one row");
+    const firstLessonInCsv=csv.replace(/^\uFEFF/u,"").split(/\r?\n/u)[1]
+      .match(/^"([^"]+)","([^"]+)"/u);
+    check(Boolean(firstLessonInCsv),"ERD-R03 exported CSV has a canonical first lesson ID");
     check(cleanPrompt.includes("Aulas divergentes (até 5):")&&
-      /\n  - [^\r\n]+\/[^\r\n]+/u.test(cleanPrompt),
-      "ERD-R02 replacement dialog identifies which lesson rows will be overwritten");
+      cleanPrompt.includes("\n  - "+firstLessonInCsv[1]+"/"+firstLessonInCsv[2]),
+      "ERD-R03 replacement dialog identifies the exact CSV lesson key, not any arbitrary slash");
     cleanReplacement.once("dialog",async dialog=>{await dialog.accept();});
     await cleanReplacement.locator("#import").setInputFiles(csvPath);
     await cleanReplacement.waitForFunction(

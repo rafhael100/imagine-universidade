@@ -219,6 +219,42 @@ module.exports=async function({browser,out,check}){
     check(asked && (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
       "C168 user can cancel explicit full replacement without losing work");
 
+    // C174: replacement remains a deliberate action even when the editor
+    // has no unsaved edits. A diff-aware no-op never asks or changes state.
+    const cleanReplacement=await browserContext.newPage();
+    cleanReplacement.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await cleanReplacement.goto(url,{waitUntil:"load"});
+    await cleanReplacement.locator("#import-mode").selectOption("replace");
+    let cleanPrompt="";
+    cleanReplacement.once("dialog",async dialog=>{
+      cleanPrompt=dialog.message();await dialog.dismiss();
+    });
+    await cleanReplacement.locator("#import").setInputFiles(csvPath);
+    await cleanReplacement.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Substituição cancelada"),
+      null,{timeout:10000}
+    );
+    check(cleanPrompt.includes("Substituir 1 de 35")&&
+      (await cleanReplacement.locator("#summary").innerText()).includes("35 pendentes"),
+      "C174 clean editor requires explicit confirmation before replacing even one row");
+    cleanReplacement.once("dialog",async dialog=>{await dialog.accept();});
+    await cleanReplacement.locator("#import").setInputFiles(csvPath);
+    await cleanReplacement.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("carregado por substituição"),
+      null,{timeout:10000}
+    );
+    check((await cleanReplacement.locator("#summary").innerText()).includes("1 pedem ajustes")&&
+      (await cleanReplacement.locator("#message").innerText()).includes("1 aula(s) alterada"),
+      "C174 confirmed replacement imports exactly one changed lesson");
+    await cleanReplacement.locator("#import").setInputFiles(csvPath);
+    await cleanReplacement.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("CSV idêntico"),
+      null,{timeout:10000}
+    );
+    check((await cleanReplacement.locator("#summary").innerText()).includes("1 pedem ajustes"),
+      "C174 identical CSV is a no-op; existing review remains untouched");
+    await cleanReplacement.close();
+
     const partialPage=await browserContext.newPage();
     partialPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
     await partialPage.goto(url,{waitUntil:"load"});

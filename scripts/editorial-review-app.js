@@ -279,14 +279,26 @@
       if(next.size!==35)throw Error("CSV incompleto.");
       const mode=$("import-mode").value;
       if(mode==="replace"){
-        // Validate the ENTIRE input before asking to discard existing work.
-        if(dirty&&!window.confirm("Substituir todas as 35 linhas? Revisões locais não exportadas serão perdidas.")){
+        // A clean editor may still have a valid prior CSV or an accidental
+        // mode selection. Always ask before discarding a differing draft.
+        const differences=[...next].filter(([id,item])=>
+          JSON.stringify(state.get(id))!==JSON.stringify(item)).length;
+        if(differences===0){
+          message("CSV idêntico: sem diferenças para substituir. Rascunho preservado.");
+          return;
+        }
+        const warning="Substituir "+differences+" de 35 aula(s) pelo CSV recebido? "+
+          "Esta ação descarta qualquer revisão local divergente."+
+          (dirty?" Há alterações locais ainda não exportadas.":"")+
+          " Nenhum aceite será autenticado.";
+        if(!window.confirm(warning)){
           message("Substituição cancelada; revisões existentes preservadas.");
           return;
         }
         for(const [id,item] of next)state.set(id,item);
         dirty=true;render();
-        message("CSV carregado por substituição. Nenhuma aprovação foi autenticada.");
+        message("CSV carregado por substituição: "+differences+
+          " aula(s) alterada(s). Nenhuma aprovação foi autenticada.");
         return;
       }
       if(mode!=="merge")throw Error("Modo de importação inválido.");

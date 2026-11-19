@@ -1,4 +1,4 @@
-name: UNI ERD R12-R13 offline editorial source safety
+name: UNI ERD R12-R17 offline editorial source safety
 
 on:
   push:
@@ -48,6 +48,7 @@ jobs:
           node scripts/check-editorial-text-safety.mjs
           node --check scripts/check-editorial-pack-preflight.mjs
           node scripts/check-editorial-pack-preflight.mjs
+          echo 'Editorial preflight includes six late-source failures, including fatal UTF-8'
           node scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-review-validation.mjs
           node scripts/check-release-gate-policy.mjs

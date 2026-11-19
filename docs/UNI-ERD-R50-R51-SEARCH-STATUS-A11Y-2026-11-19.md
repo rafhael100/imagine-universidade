@@ -31,3 +31,9 @@ O workflow dedicado executa também Chromium/axe com Chrome do runner, sem `apt 
 ## Restrições de segurança
 
 O pacote e CSV continuam **não assinados**. Nenhuma declaração de revisão autentica aceite ou autoriza publicação. As 35 aulas ainda exigem aceite editorial humano; o `ops/release-gates.json` deve manter **13/13 `NOT_VERIFIED`** e `HOLD_NO_GO`. Bloqueio P0: [Portal #886](https://github.com/rafhael100/imagine-portal/issues/886) (serviço ativo oficial, revogação, identidade/permite S2S, signoff). Não inclui SSO, permissões reais, cliente, VPS, DNS, deploy, gastos ou mudança de `main`.
+
+## Complemento R52 — gate fail-closed do Portal
+
+A checagem de `AppServiceProvider` era vulnerável a um falso positivo estático: uma declaração da implementação `UnavailablePortalAuthority` comentada poderia satisfazer um simples `assert.match`. O verificador agora ignora comentários de linha/bloco, exige **uma única** associação ativa e exata de `PortalAuthority` a `UnavailablePortalAuthority` e de `TutorGateway` a `DisabledTutorGateway`, e testa mutações sintéticas para linha comentada, substituição e duplicação/override. A CI inclui `node ops/staging/check-release-gates.mjs` além da política dos 13 gates, sem alterar a configuração real de serviços.
+
+**Limite técnico:** esta inspeção textual detecta as mutações ensaiadas, mas não é parser PHP completo, prova de runtime, revisão AppSec nem consulta a contratos do Portal. O bloqueio `HOLD_NO_GO` permanece obrigatório até as evidências reais da issue #886 e demais gates.

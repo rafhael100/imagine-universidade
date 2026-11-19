@@ -1,0 +1,55 @@
+name: UNI ERD R22-R23 curriculum gate and passive Markdown QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r22-structure-fence-2026-11-19
+    paths:
+      - '.github/workflows/uni-erd-r22-r23-source-gate-qa.yml'
+      - 'scripts/build-editorial-review-pack.mjs'
+      - 'scripts/audit-editorial-lesson-structure.mjs'
+      - 'scripts/check-editorial-lesson-structure.mjs'
+      - 'scripts/check-editorial-pack-preflight.mjs'
+      - 'scripts/check-editorial-review-pack.mjs'
+      - 'scripts/editorial-text-safety.mjs'
+      - 'scripts/check-editorial-text-safety.mjs'
+      - 'scripts/editorial-review-html.mjs'
+      - 'scripts/editorial-review-app.js'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R22-R23-STRUCTURAL-MARKDOWN-PREFLIGHT-2026-11-19.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r22-r23-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  editorial-currriculum-preflight:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - name: Checkout exact commit without credential persistence
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Isolated node tests, no networking or production secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r22-structure-fence-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          for f in scripts/build-editorial-review-pack.mjs scripts/editorial-text-safety.mjs scripts/check-editorial-text-safety.mjs scripts/audit-editorial-lesson-structure.mjs scripts/check-editorial-pack-preflight.mjs scripts/check-editorial-review-pack.mjs; do
+            node --check "$f"
+          done
+          node scripts/check-editorial-lesson-structure.mjs
+          node scripts/check-editorial-text-safety.mjs
+          node scripts/check-editorial-pack-preflight.mjs
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-validation.mjs
+          node scripts/check-release-gate-policy.mjs
+          node -e 'const g=require("./ops/release-gates.json"); if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(x=>x.status!=="NOT_VERIFIED"))process.exit(1)'
+          echo 'PASS synthetic-only 35-lesson structural/passive-Markdown preflight; no human signoff or operational release'

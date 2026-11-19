@@ -291,6 +291,15 @@ module.exports=async function({browser,out,check}){
     check(await ackPage.locator("#confirm-export").isEnabled()&&
       (await ackPage.locator("#notes").inputValue()).includes("Revisão local"),
       "C186 rejected CSV restores download acknowledgment and original notes");
+    // C189: a byte-for-byte export of the current 35-row draft should be
+    // a no-op on reimport and retain the pending save acknowledgment.
+    await ackPage.locator("#import").setInputFiles(path.join(dir,"revisao-antes-import-invalido.csv"));
+    await ackPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("CSV sem novidades"),
+      null,{timeout:10000});
+    check(await ackPage.locator("#confirm-export").isEnabled()&&
+      (await ackPage.locator("#notes").inputValue()).includes("Revisão local"),
+      "C189 identical CSV reimport is a no-op preserving pending save acknowledgment");
     await ackPage.locator("#confirm-export").click();
     check(!(await ackPage.evaluate(()=>{
       const event=new Event("beforeunload",{cancelable:true});

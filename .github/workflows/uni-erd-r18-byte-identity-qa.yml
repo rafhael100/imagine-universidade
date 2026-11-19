@@ -1,0 +1,56 @@
+name: UNI ERD R18-R19 raw-byte editorial source QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r18-byte-identity-2026-11-19
+    paths:
+      - '.github/workflows/uni-erd-r18-byte-identity-qa.yml'
+      - 'scripts/build-editorial-review-pack.mjs'
+      - 'scripts/check-editorial-review-pack.mjs'
+      - 'scripts/check-editorial-pack-preflight.mjs'
+      - 'scripts/editorial-text-safety.mjs'
+      - 'scripts/editorial-review-html.mjs'
+      - 'scripts/editorial-review-app.js'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r18-r19-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  editorial-source-byte-identity:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact commit without retained credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Confirm isolation and read-only release posture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r18-byte-identity-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          test -f content/mvp-cursos-v1.json
+          test -f ops/release-gates.json
+      - name: Validate actual drafts, BOM rejection, immutable source bytes and 13 gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/build-editorial-review-pack.mjs
+          node --check scripts/check-editorial-pack-preflight.mjs
+          node --check scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-text-safety.mjs
+          node scripts/check-editorial-pack-preflight.mjs
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-validation.mjs
+          node scripts/check-release-gate-policy.mjs
+          node -e 'const g=require("./ops/release-gates.json"); if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(x=>x.status!=="NOT_VERIFIED"))process.exit(1)'
+          echo 'PASS lab-only verification; never a release, grant or human signoff'

@@ -115,6 +115,15 @@ try{
   assert.notEqual(strict.status,0,"Invalid UTF-8 must fail before CSV schema check");
   assert.match(strict.stderr,/encoded data was not valid|utf-8/iu);
   scenarios++;
+  const hugePath=join(dir,"oversized-utf8.csv");
+  await writeFile(hugePath,Buffer.alloc(1_000_001,0x20));
+  const huge=spawnSync(process.execPath,[
+    fileURLToPath(new URL("./validate-editorial-review.mjs",import.meta.url)),
+    "--csv",hugePath
+  ],{cwd:root,encoding:"utf8"});
+  assert.notEqual(huge.status,0,"Oversized byte input must fail before CSV parsing");
+  assert.match(huge.stderr,/exceeds 1 MB byte limit/u);
+  scenarios++;
   const named=alter(alter(alter(csv,1,3,"NEEDS_CHANGES"),1,4,"Equipe de QA"),1,5,ref);
   rejects("spreadsheet formula in reviewer",alter(named,1,4,"@cmd"));
   rejects("newline in reviewer",alter(named,1,4,"Revisora\nFalsa"));
@@ -131,7 +140,7 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,38);
+  assert.equal(scenarios,39);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

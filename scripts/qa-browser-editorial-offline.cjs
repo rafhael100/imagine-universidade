@@ -440,6 +440,16 @@ module.exports=async function({browser,out,check}){
     check(!(await lockedPage.locator("#import").isDisabled())&&
       !(await lockedPage.locator("#import-mode").isDisabled()),
       "C179 controls unlock after import finishes");
+    // C180: the same 1 MB byte boundary also holds in the browser.
+    const oversizedPath=path.join(dir,"revisao-maior-1mb.csv");
+    fs.writeFileSync(oversizedPath,Buffer.alloc(1000001,0x20));
+    await lockedPage.locator("#import").setInputFiles(oversizedPath);
+    await lockedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("CSV excede 1 MB"),
+      null,{timeout:10000});
+    check((await lockedPage.locator("#status").inputValue())==="NEEDS_CHANGES"&&
+      !(await lockedPage.locator("#import").isDisabled()),
+      "C180 oversized CSV rejects before read and preserves the loaded review");
     await lockedPage.close();
 
     await page.locator("#notes").fill("Observação\u200boculta");

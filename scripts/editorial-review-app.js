@@ -455,6 +455,37 @@
   }
   $("review-search").addEventListener("input",updateReviewResults);
   $("review-filter").addEventListener("change",updateReviewResults);
+  // ERD-R05: keyboard access to the actual result buttons. Arrow keys never
+  // modify draft data, and native Enter/Space activation remains intact.
+  const resultButtons=()=>[...$("review-results").querySelectorAll("button.review-result")];
+  $("review-search").addEventListener("keydown",event=>{
+    if(event.key!=="ArrowDown")return;
+    const buttons=resultButtons();
+    if(!buttons.length)return;
+    event.preventDefault();
+    buttons[0].focus();
+  });
+  $("review-results").addEventListener("keydown",event=>{
+    const buttons=resultButtons(),index=buttons.indexOf(event.target);
+    if(index<0)return;
+    if(event.key==="Escape"){
+      event.preventDefault();
+      $("review-search").focus();
+    }else if(event.key==="ArrowUp"){
+      event.preventDefault();
+      if(index===0)$("review-search").focus();
+      else buttons[index-1].focus();
+    }else if(event.key==="ArrowDown"){
+      event.preventDefault();
+      buttons[Math.min(index+1,buttons.length-1)].focus();
+    }else if(event.key==="Home"){
+      event.preventDefault();
+      buttons[0].focus();
+    }else if(event.key==="End"){
+      event.preventDefault();
+      buttons[buttons.length-1].focus();
+    }
+  });
   $("lessons").addEventListener("change",e=>choose(Number(e.target.value)));
   $("previous").addEventListener("click",()=>choose(current-1));
   $("next").addEventListener("click",()=>choose(current+1));

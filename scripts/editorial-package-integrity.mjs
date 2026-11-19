@@ -190,5 +190,22 @@ export async function verifyEditorialSourceBinding(directory,sourceFile){
     "Review course metadata differs from versioned curriculum");
   assert.deepEqual(reviewManifest.lessons,expectedLessons,
     "Review lesson identities/checksums diverge from versioned curriculum");
+  // ERD-R34: an internally rehashed CSV could masquerade as a reviewer
+  // decision even while the JSON manifest still matches the source. The
+  // original, *unedited* handoff must have one pending row per source lesson.
+  const csvPath=join(resolve(directory),"revisao.csv");
+  const csvStat=await lstat(csvPath);
+  assert.ok(csvStat.isFile()&&!csvStat.isSymbolicLink(),
+    "Review CSV must remain a regular non-symlink file");
+  const csvField=value=>'"'+String(value).replaceAll('"','""')+'"';
+  const expectedCsv=[
+    ["course_slug","lesson_slug","content_sha256","review_status","reviewer","evidence_ref","notes"],
+    ...expectedLessons.map(lesson=>[
+      lesson.course_slug,lesson.lesson_slug,lesson.content_sha256,
+      "PENDING_HUMAN_REVIEW","","",""
+    ])
+  ].map(row=>row.map(csvField).join(",")).join("\n")+"\n";
+  assert.equal(await readFile(csvPath,"utf8"),expectedCsv,
+    "Review CSV differs from original pending-only handoff");
   return verified;
 }

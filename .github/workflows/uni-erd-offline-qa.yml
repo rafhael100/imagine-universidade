@@ -48,6 +48,8 @@ jobs:
           node scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-review-validation.mjs
           node scripts/check-editorial-offline-review.mjs
+          node scripts/check-editorial-lesson-structure.mjs
+          node scripts/audit-editorial-lesson-structure.mjs
           node scripts/check-university-readiness-pack.mjs
           node -e 'const g=require("./ops/release-gates.json");const s=Object.values(g.blocking_evidence);if(s.length!==13||s.some(v=>v.status!=="NOT_VERIFIED")||g.release_decision!=="HOLD_NO_GO")process.exit(1)'
           echo 'PASS draft-only static/editorial checks; 13 gates remain blocked'

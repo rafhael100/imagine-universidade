@@ -83,6 +83,12 @@ try{
     await unlink(join(folder,name));
     await symlink(join(folder,"LEIA-PRIMEIRO.md"),join(folder,name));
   });
+  // ERD-R29: the input manifest must be checked BEFORE reading its bytes.
+  await clonedCase("symlink-source-manifest",async folder=>{
+    const path=join(folder,"manifesto-revisao.json");
+    await unlink(path);
+    await symlink(join(folder,"LEIA-PRIMEIRO.md"),path);
+  });
   await clonedCase("symlink-manifest",async folder=>{
     const path=join(folder,INTEGRITY_FILE);
     await unlink(path);
@@ -99,7 +105,7 @@ try{
   await symlink(original,linked,"dir");
   await assert.rejects(verifyEditorialPackage(linked));
   negatives++;
-  assert.equal(negatives,15);
+  assert.equal(negatives,16);
   console.log("PASS ERD-R27: original 15-file package verified; "+negatives+
     " tamper/path/symlink negatives; UNSIGNED/HOLD_NO_GO, no human approval.");
 }finally{

@@ -11,7 +11,7 @@ const source=JSON.parse(await readFile(new URL("../content/mvp-cursos-v1.json",i
 const temp=await mkdtemp(join(tmpdir(),"uni-editorial-preflight-"));
 const scripts=["build-editorial-review-pack.mjs","editorial-review-html.mjs",
   "editorial-review-app.js","editorial-text-safety.mjs",
-  "audit-editorial-lesson-structure.mjs"];
+  "audit-editorial-lesson-structure.mjs","build-editorial-review-queue.mjs"];
 let scenarios=0;
 try{
   await mkdir(join(temp,"scripts"));

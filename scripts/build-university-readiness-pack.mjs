@@ -22,6 +22,28 @@ const descriptions=Object.freeze({
   production_deployment_approval:["Autorização explícita de produção","Direção"],
 });
 assert.deepEqual(Object.keys(descriptions).sort(), [...requiredReleaseGates].sort());
+// Next proof required is guidance ONLY, never a delegated approval.
+const nextEvidence=Object.freeze({
+  portal_official_active_services:"Homologar autoridade de contrato vigente e SKU elegível por empresa, com conciliação financeira e cancelamento do último serviço.",
+  portal_independent_revocation:"Comprovar revisão monotônica independente, cancelamento, reativação e negação sob indisponibilidade do feed.",
+  portal_business_sso_identity:"Demonstrar sessão empresarial real do Portal com MFA, sujeito, tenant, expiração e troca de empresa sob isolamento.",
+  portal_editorial_staff_authority:"Validar somente equipe editorial autorizada para university:manage, separada de university:view.",
+  tenant_and_resource_authorization:"Provar dois clientes e edição com RLS, permissões de recurso e rejeição de acesso entre empresas.",
+  private_s2s_security_and_key_rotation:"Homologar mTLS ou canal autenticado equivalente, rotação de chaves, orçamento de timeout e isolamento de credenciais.",
+  appsec_independent_review:"Obter revisão AppSec independente com achados, correções e aprovação explícita da revisão aplicável.",
+  dba_independent_review:"Revisar migrações PostgreSQL, RLS, privilégios mínimos, concorrência e restauração em ambiente isolado.",
+  lgpd_independent_review:"Revisar finalidade, minimização, retenção, direitos dos titulares, logs e exclusão, com aceite responsável.",
+  educational_editorial_signoff:"Obter evidência de aceite humano por conteúdo e hash atual de cada uma das 35 aulas; jamais aceitar apenas CSV.",
+  private_vps_staging_functional_homologation:"Executar jornada Cliente/Admin com sessão Portal autorizada em staging privado, sem publicar DNS ou produção.",
+  real_backup_restoration_and_rollback:"Executar restauração e rollback de dados e versão com evidências em ambiente privado autorizado.",
+  production_deployment_approval:"Registrar decisão humana de publicação somente após evidências independentes de todos os gates restantes."
+});
+assert.deepEqual(Object.keys(nextEvidence).sort(), [...requiredReleaseGates].sort());
+for(const [key,action] of Object.entries(nextEvidence)){
+  assert.equal(typeof action,"string",key);
+  assert.ok(action.length>45 && !/[\r\n|]/u.test(action),"Non-empty single-line safe next evidence: "+key);
+}
+
 
 const quote=(value)=>'"'+String(value).replaceAll('"','""')+'"';
 
@@ -31,7 +53,8 @@ export function buildReadinessPack(manifest,sha){
   const gates=requiredReleaseGates.map(key=>{
     const evidence=manifest.blocking_evidence[key];
     const [title,suggestedArea]=descriptions[key];
-    return {key,title,suggested_area:suggestedArea,status:evidence.status,evidence_ref:evidence.evidence_ref};
+    return {key,title,suggested_area:suggestedArea,
+      next_evidence:nextEvidence[key],status:evidence.status,evidence_ref:evidence.evidence_ref};
   });
   const verified=gates.length-missing;
   const snapshot={
@@ -62,10 +85,10 @@ export function buildReadinessPack(manifest,sha){
     "- Evidências verificadas no manifesto: **"+verified+" de "+gates.length+"**",
     "- Dependência oficial: "+manifest.source_issue,
     "",
-    "| Critério | Área sugerida (não designada) | Estado | Evidência |",
-    "|---|---|---|---|",
-    ...gates.map(g=>"| "+g.title+" | "+g.suggested_area+" | "+g.status+
-       " | "+(g.evidence_ref||"PENDENTE")+" |"),
+    "| Critério | Área sugerida (não designada) | Próxima evidência necessária | Estado | Evidência |",
+    "|---|---|---|---|---|",
+    ...gates.map(g=>"| "+g.title+" | "+g.suggested_area+" | "+g.next_evidence+
+       " | "+g.status+" | "+(g.evidence_ref||"PENDENTE")+" |"),
     "",
     "## Próximo passo operacional",
     "",
@@ -77,8 +100,8 @@ export function buildReadinessPack(manifest,sha){
     "",
   ].join("\n");
   const csv=[
-    "gate,titulo,area_sugerida,status,evidencia",
-    ...gates.map(g=>[g.key,g.title,g.suggested_area,g.status,g.evidence_ref??""].map(quote).join(",")),
+    "gate,titulo,area_sugerida,proxima_evidencia,status,evidencia",
+    ...gates.map(g=>[g.key,g.title,g.suggested_area,g.next_evidence,g.status,g.evidence_ref??""].map(quote).join(",")),
     "",
   ].join("\n");
   return {snapshot,markdown:md,csv};

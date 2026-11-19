@@ -17,6 +17,9 @@ check("current manifest holds all 13 gates",()=>{
   assert.equal(report.snapshot.source_sha,sha);
   assert.equal(report.csv.split("\n").filter(line=>line.includes('"NOT_VERIFIED"')).length,13);
   assert.ok(report.markdown.includes("NÃO É APROVAÇÃO"));
+  assert.equal(report.snapshot.gates.filter(g=>g.next_evidence.length>45).length,13);
+  assert.ok(report.markdown.includes("Homologar autoridade de contrato vigente"));
+  assert.ok(report.csv.startsWith("gate,titulo,area_sugerida,proxima_evidencia,status,evidencia"));
 });
 check("partial evidence never creates release approval",()=>{
   const input=structuredClone(manifest);

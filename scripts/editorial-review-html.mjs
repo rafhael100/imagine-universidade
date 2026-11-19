@@ -5,6 +5,8 @@ import {readFileSync} from "node:fs";
 const css=[
 "*,*::before,*::after{box-sizing:border-box}",
 "body{margin:0;font-family:system-ui,Arial,sans-serif;background:#f7f7f8;color:#171b19;line-height:1.5}",
+".skip-link{position:absolute;left:12px;top:-100px;background:#fff;color:#171b19;padding:10px;z-index:1000;border:2px solid #f9941d;border-radius:6px}",
+".skip-link:focus-visible{top:12px;outline:2px solid #171b19;outline-offset:2px}",
 "header{background:#171b19;color:white;padding:20px;border-bottom:5px solid #f9941d}",
 "header p{color:#f7d29e}",
 ".layout{max-width:1480px;margin:auto;display:grid;grid-template-columns:minmax(230px,300px) minmax(0,1fr);gap:16px;padding:16px}",
@@ -68,6 +70,7 @@ export function renderOfflineReviewPage(payload,hashes){
     '<meta http-equiv="Content-Security-Policy" content="'+policy+'">',
     "<title>Universidade Imagine — Revisão editorial offline</title>",
     "<style>"+css+"</style></head><body>",
+    "<a class='skip-link' href='#title'>Pular para a aula atual</a>",
     "<header><strong>Universidade Imagine · Revisão editorial</strong>",
     "<p>35 aulas em rascunho · sem conexão com serviços reais</p></header>",
     '<div class="layout"><nav aria-label="Cursos para revisão">',

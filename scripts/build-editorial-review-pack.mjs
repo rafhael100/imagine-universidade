@@ -11,6 +11,7 @@ import {lstat,mkdir,readFile,readdir,writeFile} from "node:fs/promises";
 import {dirname,resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
+import {safeBody, safeLine} from "./editorial-text-safety.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -45,7 +46,10 @@ assert.ok(destinationStat.isDirectory()&&!destinationStat.isSymbolicLink(),
   "Review package destination must be a real directory, not a symlink");
 assert.deepEqual(await readdir(dest),[],
   "Review package destination must be empty to preserve existing reviews");
-const source=await readFile(sourceFile,"utf8");
+// ERD-R16: fs.readFile(..., "utf8") silently replaces damaged UTF-8 with
+// U+FFFD. Never publish a human-review package from silently corrupted bytes.
+// Decode strictly before hashing or parsing the versioned curriculum source.
+const source=new TextDecoder("utf-8",{fatal:true}).decode(await readFile(sourceFile));
 const payload=JSON.parse(source);
 assert.equal(payload.schema_version,1);
 assert.equal(payload.status,"editorial_draft");
@@ -57,20 +61,33 @@ function safeSlug(v){
     "Unsafe course or lesson slug");
   return v;
 }
-function safeLine(v){
-  assert.ok(typeof v==="string" && v.trim()!=="" && v.length<=200 && !/[\r\n]/.test(v),
-    "Title must fit in one line");
-  return v.trim().replace(/[|]/g,"\\|");
-}
-function safeBody(v){
-  assert.ok(typeof v==="string" && v.length<=30000 && v.trim().split(/\s+/).length>=95,
-    "A lesson must contain substantive editorial draft text");
-  for(const heading of ["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"]){
-    assert.ok(v.includes("\n\n"+heading+"\n"),"Missing lesson section "+heading);
+// ERD-R14: validate the ENTIRE late-source lesson list before creating any
+// course file. A malicious or broken last lesson must not leave a misleading
+// partial package with earlier courses rendered successfully.
+function preflightReviewSource(courses){
+  const courseIds=new Set(), lessonIds=new Set();
+  let total=0;
+  for(const course of courses){
+    const courseSlug=safeSlug(course.slug);
+    assert.ok(!courseIds.has(courseSlug),"Duplicate course slug");
+    courseIds.add(courseSlug);
+    safeLine(course.title);
+    assert.ok(["metodologia","negocios","sistemas"].includes(course.category));
+    assert.ok(Array.isArray(course.lessons)&&course.lessons.length>=1&&course.lessons.length<=15,
+      "Invalid lesson count");
+    for(const lesson of course.lessons){
+      const id=courseSlug+"/"+safeSlug(lesson.slug);
+      assert.ok(!lessonIds.has(id),"Duplicate course+lesson identity");
+      lessonIds.add(id);
+      safeLine(lesson.title);
+      safeBody(lesson.body);
+      total++;
+    }
   }
-  assert.doesNotMatch(v,/<script|javascript:|<\//i);
-  return v.trim();
+  assert.equal(total,35,"Expected exactly 35 existing drafts");
 }
+preflightReviewSource(payload.courses);
+
 const indexes=[],reviewRows=[],hashes=[],seenCourse=new Set(),seenLesson=new Set();
 const lessonsDir=resolve(dest,"cursos");
 await mkdir(lessonsDir,{recursive:true});

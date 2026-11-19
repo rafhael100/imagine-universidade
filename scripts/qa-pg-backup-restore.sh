@@ -10,6 +10,34 @@ if [ "${POSTGRES_DB:-}" != "uni_ci" ] ||
   exit 2
 fi
 
+# libpq environment variables can silently redirect psql/pg_dump to a remote
+# database even when -U/-d are fixed. Reject them BEFORE the first query.
+for client_var in PGHOST PGHOSTADDR PGPORT PGSERVICE PGSERVICEFILE PGUSER \
+  PGDATABASE PGPASSWORD PGPASSFILE PGOPTIONS PGSSLMODE PGSSLROOTCERT \
+  PGCONNECT_TIMEOUT; do
+  if printenv "$client_var" >/dev/null 2>&1; then
+    echo "FAIL: forbidden libpq override $client_var" >&2
+    exit 2
+  fi
+done
+# Bind every psql/pg_dump/pg_restore/create/drop operation to the socket of
+# the disposable PG18 container. Never fall back to TCP.
+test -S /var/run/postgresql/.s.PGSQL.5432 || {
+  echo "FAIL: expected local PostgreSQL socket missing." >&2
+  exit 2
+}
+PGHOST=/var/run/postgresql
+PGPORT=5432
+export PGHOST PGPORT
+local_origin="$(psql -X -q -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci \
+  -c "SELECT CASE WHEN inet_server_addr() IS NULL
+    AND current_database()='uni_ci' AND current_user='uni_ci'
+    THEN 'local_synthetic' ELSE 'unsafe' END")"
+test "$local_origin" = "local_synthetic" || {
+  echo "FAIL: PostgreSQL connection is not local synthetic uni_ci." >&2
+  exit 2
+}
+
 pg_major="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c 'SHOW server_version_num')"
 case "$pg_major" in
   18*) ;;

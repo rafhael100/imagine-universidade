@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
 import {lstat,mkdir,readFile,readdir,writeFile} from "node:fs/promises";
-import {resolve} from "node:path";
+import {dirname,resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 
@@ -19,6 +19,24 @@ assert.equal(args.length,2,"Usage: --out <explicit temporary directory>");
 assert.equal(args[0],"--out","Missing --out");
 assert.ok(typeof args[1]==="string"&&args[1].trim()!=="","Missing output path");
 const dest=resolve(args[1]);
+// C187: reject a linked ancestor BEFORE mkdir(). Checking only the final
+// destination is insufficient: /tmp/link-to-other-directory/new-package
+// otherwise writes outside the path an operator believes they selected.
+async function assertNoLinkedAncestors(path){
+  for(let cursor=path;;cursor=dirname(cursor)){
+    try{
+      const stat=await lstat(cursor);
+      assert.ok(!stat.isSymbolicLink(),
+        "Review package destination path has a symlink ancestor");
+      assert.ok(stat.isDirectory(),
+        "Review package destination path has a non-directory ancestor");
+    }catch(error){
+      if(error?.code!=="ENOENT")throw error;
+    }
+    if(cursor===dirname(cursor))break;
+  }
+}
+await assertNoLinkedAncestors(dest);
 // A second run must never destroy an editor's CSV, observations or evidence.
 // Accept a fresh destination or an existing EMPTY, non-symlink directory.
 await mkdir(dest,{recursive:true});

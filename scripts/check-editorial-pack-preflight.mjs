@@ -48,7 +48,26 @@ try{
       name+" must leave no partial course files or CSV behind");
     scenarios++;
   }
-  assert.equal(scenarios,5);
+  // ERD-R17: damaged UTF-8 was previously decoded with U+FFFD by fs.readFile
+  // before the source hash. Inject an invalid continuation byte into the last
+  // lesson and prove the generator refuses it without writing partial output.
+  const damaged=structuredClone(source);
+  damaged.courses.at(-1).lessons.at(-1).body+=" FIM-UTF8-EXCLUSIVO";
+  const damagedBytes=Buffer.from(JSON.stringify(damaged),"utf8");
+  const tail=Buffer.from("FIM-UTF8-EXCLUSIVO","utf8");
+  const offset=damagedBytes.lastIndexOf(tail);
+  assert.ok(offset>=0,"Expected unique marker in the last lesson");
+  damagedBytes[offset]=0xC3; // The next ASCII byte is not a UTF-8 continuation.
+  await writeFile(join(temp,"content","mvp-cursos-v1.json"),damagedBytes);
+  const corruptDest=join(temp,"output-utf8-invalid");
+  const corrupt=spawnSync(process.execPath,[
+    join(temp,"scripts","build-editorial-review-pack.mjs"),"--out",corruptDest
+  ],{encoding:"utf8",timeout:20000});
+  assert.notEqual(corrupt.status,0,"invalid UTF-8 source bytes must be rejected");
+  assert.deepEqual(await readdir(corruptDest),[],
+    "invalid UTF-8 source bytes must not create a partial package");
+  scenarios++;
+  assert.equal(scenarios,6);
   console.log("PASS ERD-R14/R15: "+scenarios+
     " late-source negative scenarios leave zero partial output files; no publish or signoff.");
 }finally{

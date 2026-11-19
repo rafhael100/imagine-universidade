@@ -50,12 +50,26 @@ assert.throws(()=>safeBody(swapped),/reordered editorial lesson sections/);
 const duplicated=body+"\n\nEXEMPLO FICTÍCIO\nRepetição enganosa.";
 assert.throws(()=>safeBody(duplicated),/duplicated or reordered editorial lesson sections/);
 negative+=2;
+// ERD-R23: active markup in a human-review Markdown file could fetch remote
+// resources or impersonate an official approval outside the offline editor.
+const activeMarkup=[
+  '<img src="https://example.invalid/tracker" alt="material">',
+  '![material](https://example.invalid/media.png)',
+  '[Abrir](https://example.invalid/phishing)',
+  '[anexo]: https://example.invalid/hidden',
+  '![material][external]'
+];
+for(const fragment of activeMarkup){
+  assert.throws(()=>safeLine("Título "+fragment),/interactive Markdown\/HTML/u);
+  assert.throws(()=>safeBody(body+"\n\n"+fragment),/interactive Markdown\/HTML/u);
+  negative+=2;
+}
 assert.equal(safeLine("Aula sobre inclusão | prática"),"Aula sobre inclusão \\| prática");
 assert.equal(safeBody(body),body.trim());
 assert.throws(()=>safeLine("Aula\nCabeçalho"),/Title must fit/);
 assert.throws(()=>safeBody("Texto breve"),/substantive editorial draft/);
 positive+=2;negative+=2;
-assert.equal(negative,42);
+assert.equal(negative,52);
 console.log("PASS ERD-R12/R13: "+lessons+
   " actual lessons, "+positive+" positive and "+negative+
   " negative checks; all editorial statuses remain unauthenticated.");

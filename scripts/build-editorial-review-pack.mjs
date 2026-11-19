@@ -12,6 +12,7 @@ import {dirname,resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 import {safeBody, safeLine} from "./editorial-text-safety.mjs";
+import {auditEditorialLessonStructure} from "./audit-editorial-lesson-structure.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -93,7 +94,14 @@ function preflightReviewSource(courses){
   }
   assert.equal(total,35,"Expected exactly 35 existing drafts");
 }
-preflightReviewSource(payload.courses);
+// ERD-R22: run the complete curriculum audit in the generator itself.
+ // Previously a direct invocation could produce a review package despite a
+ // one-word final section (the total lesson still exceeded 95 words).
+ // Check every lesson before emitting any output file.
+ const structuralAudit=auditEditorialLessonStructure(payload);
+ assert.equal(structuralAudit.structured_sections,140);
+ assert.equal(structuralAudit.release_decision,"HOLD_NO_GO");
+ preflightReviewSource(payload.courses);
 
 const indexes=[],reviewRows=[],hashes=[],seenCourse=new Set(),seenLesson=new Set();
 const lessonsDir=resolve(dest,"cursos");

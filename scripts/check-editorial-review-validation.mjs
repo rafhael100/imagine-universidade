@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
-import {mkdtemp,readFile,rm,writeFile} from "node:fs/promises";
+import {mkdtemp,readFile,rm,symlink,writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -154,7 +154,29 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,53);
+  // ERD-R46: the old CLI followed both file and ancestor symlinks.
+  // First prove an actual original CSV is accepted, then require both links
+  // to be refused before any file bytes can be read.
+  const csvCli=fileURLToPath(new URL("./validate-editorial-review.mjs",import.meta.url));
+  const plainCsv=spawnSync(process.execPath,[csvCli,"--csv",join(dir,"revisao.csv")],
+    {cwd:root,encoding:"utf8"});
+  assert.equal(plainCsv.status,0,plainCsv.stderr||plainCsv.stdout);
+  scenarios++;
+  const linkToCsv=join(dir,"csv-symlink.csv");
+  await symlink(join(dir,"revisao.csv"),linkToCsv);
+  const viaCsvLink=spawnSync(process.execPath,[csvCli,"--csv",linkToCsv],
+    {cwd:root,encoding:"utf8"});
+  assert.notEqual(viaCsvLink.status,0,"File symlink must fail closed");
+  assert.match(viaCsvLink.stderr,/Review CSV path must not contain symlinks/u);
+  scenarios++;
+  const linkedParent=join(dir,"linked-parent");
+  await symlink(dir,linkedParent,"dir");
+  const viaAncestor=spawnSync(process.execPath,[csvCli,"--csv",join(linkedParent,"revisao.csv")],
+    {cwd:root,encoding:"utf8"});
+  assert.notEqual(viaAncestor.status,0,"Ancestor symlink must fail closed");
+  assert.match(viaAncestor.stderr,/Review CSV path must not contain symlinks/u);
+  scenarios++;
+  assert.equal(scenarios,56);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

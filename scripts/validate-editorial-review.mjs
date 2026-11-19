@@ -7,9 +7,10 @@
  *   node scripts/validate-editorial-review.mjs --csv /path/revisao.csv
  */
 import assert from "node:assert/strict";
-import {open,readFile} from "node:fs/promises";
+import {constants} from "node:fs";
+import {lstat,open,readFile} from "node:fs/promises";
 import {createHash} from "node:crypto";
-import {resolve} from "node:path";
+import {dirname,resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 
 function parseCsv(text){
@@ -119,14 +120,33 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
   assert.equal(process.argv.length,4);
   // The browser already checks byte size before reading; mirror the same
   // limit in the CLI to avoid allocating arbitrarily large CSV inputs.
-  const handle=await open(process.argv[3],"r");
+  // ERD-R46: do not follow a review CSV symlink, including an ancestor alias.
+  // The previous handle.stat() followed the link and accepted its target.
+  // No credentials or customer data should ever be read by this offline CLI.
+  const inputPath=resolve(process.argv[3]);
+  for(let cursor=inputPath;;cursor=dirname(cursor)){
+    const entry=await lstat(cursor);
+    assert.ok(!entry.isSymbolicLink(),"Review CSV path must not contain symlinks");
+    assert.ok(cursor===inputPath?entry.isFile():entry.isDirectory(),
+      "Review CSV requires a regular file with real directory ancestors");
+    if(cursor===dirname(cursor))break;
+  }
+  // ERD-R47: an input that grows after stat() must not allocate unbounded
+  // memory. O_NOFOLLOW also closes the final-file symlink substitution race.
+  const handle=await open(inputPath,constants.O_RDONLY|constants.O_NOFOLLOW);
   let csv;
   try{
     const stat=await handle.stat();
     assert.ok(stat.isFile()&&stat.size<=1_000_000,"Review CSV exceeds 1 MB byte limit");
-    const bytes=await handle.readFile();
-    assert.ok(bytes.byteLength<=1_000_000,"Review CSV grew past 1 MB during read");
-    csv=new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+    const bytes=Buffer.alloc(1_000_001);
+    let total=0;
+    while(total<bytes.length){
+      const {bytesRead}=await handle.read(bytes,total,bytes.length-total,null);
+      if(bytesRead===0)break;
+      total+=bytesRead;
+    }
+    assert.ok(total<=1_000_000,"Review CSV grew past 1 MB during read");
+    csv=new TextDecoder("utf-8",{fatal:true}).decode(bytes.subarray(0,total));
   }finally{await handle.close();}
   const source=await readFile(new URL("../content/mvp-cursos-v1.json",import.meta.url),"utf8");
   console.log(JSON.stringify(inspectEditorialReview(csv,source),null,2));

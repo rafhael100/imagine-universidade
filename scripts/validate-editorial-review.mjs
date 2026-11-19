@@ -76,7 +76,8 @@ export function inspectEditorialReview(csvText,sourceText){
     // CSV exports may be opened by reviewers in Excel/LibreOffice. An
     // externally edited CSV must not bypass the offline UI's formula fence.
     const unsafeCell = value => /^\s*[=+\-@]/u.test(value)
-      || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u.test(value);
+      || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u.test(value)
+      || /[\u200e\u200f\u2028-\u202e\u2066-\u2069]/u.test(value);
     assert.ok(typeof notes==="string" && notes.length<=2000 && !unsafeCell(notes),
       "Unsafe or oversized editorial notes: "+key);
     assert.ok(!unsafeCell(reviewer) && !/[\r\n\u2028\u2029]/u.test(reviewer),

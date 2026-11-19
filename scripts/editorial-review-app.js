@@ -122,18 +122,24 @@
     updateReviewResults();
     message("Alterações apenas na memória. Exporte o CSV antes de sair.");
   }
+  // Invisible direction overrides can visually spoof an otherwise valid reviewer,
+  // note or exported CSV. Keep the local editor aligned with the CLI validator.
+  function unsafeDisplayControl(value){
+    return /[\u200e\u200f\u2028-\u202e\u2066-\u2069]/u.test(value);
+  }
   function valid(row,id){
     if(!["PENDING_HUMAN_REVIEW","NEEDS_CHANGES","CLAIMED_HUMAN_APPROVED"].includes(row.status))
       throw Error("Situação inválida: "+id);
     if(row.notes.length>2000||/^\s*[=+\-@]/u.test(row.notes))
       throw Error("Observações incorretas ou iniciadas como fórmula: "+id);
-    if(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u.test(row.notes))
-      throw Error("Caracteres de controle nas observações: "+id);
+    if(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u.test(row.notes)||unsafeDisplayControl(row.notes))
+      throw Error("Caracteres de controle ou direção invisível nas observações: "+id);
     if(row.status==="PENDING_HUMAN_REVIEW"){
       if(row.reviewer||row.evidence)throw Error("Apague nome/evidência do registro pendente: "+id);
     }else{
       if(row.reviewer.trim().length<3||row.reviewer.length>120||
-        /[\r\n]/u.test(row.reviewer)||/^\s*[=+\-@]/u.test(row.reviewer))
+        /[\r\n]/u.test(row.reviewer)||unsafeDisplayControl(row.reviewer)||
+        /^\s*[=+\-@]/u.test(row.reviewer))
         throw Error("Informe revisor válido: "+id);
       if(!/^https:\/\/github\.com\/rafhael100\/imagine-universidade\/(?:issues|pull)\/[1-9]\d*(?:#issuecomment-[1-9]\d*)?$/iu.test(row.evidence))
         throw Error("Informe issue/PR de evidência da Universidade: "+id);

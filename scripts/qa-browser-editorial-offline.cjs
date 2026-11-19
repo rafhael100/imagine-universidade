@@ -260,7 +260,32 @@ module.exports=async function({browser,out,check}){
     );
     check((await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
       "C170 remote pending notes conflict with reviewed lesson without silent data loss");
+    // An externally edited CSV must not smuggle visual spoofing controls past
+    // the canonical validator, nor alter any of the previously merged reviews.
+    const unicodeCsvPath=path.join(dir,"revisao-direcao-invisivel.csv");
+    fs.writeFileSync(unicodeCsvPath,csv.replace(
+      "Revisar métricas e clareza do exemplo fictício.",
+      "Observação\u202Evisualmente invertida"),"utf8");
+    await importedPage.locator("#import").setInputFiles(unicodeCsvPath);
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Importação recusada"),
+      null,{timeout:10000}
+    );
+    check((await importedPage.locator("#message").innerText()).includes("direção invisível") &&
+      (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
+      "C172 Unicode-bidi CSV is rejected before atomic merge without losing local reviews");
     await importedPage.close();
+
+    await page.locator("#notes").fill("Anotação\u202Einvertida");
+    await page.locator("#export").click();
+    check((await page.locator("#message").innerText()).includes("direção invisível"),
+      "C172 offline CSV export blocks invisible direction controls in notes");
+    await page.locator("#notes").fill("Observação temporária segura");
+    await page.locator("#reviewer").fill("Equipe\u202EFalsa");
+    await page.locator("#export").click();
+    check((await page.locator("#message").innerText()).includes("revisor válido"),
+      "C172 offline CSV export blocks invisible reviewer spoofing");
+    await page.locator("#reviewer").fill("Equipe Editorial QA");
 
     await page.locator("#notes").fill("=HYPERLINK(\"https://example.invalid\")");
     await page.locator("#export").click();

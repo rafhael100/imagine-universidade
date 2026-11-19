@@ -80,16 +80,24 @@ try{
   rejects("spreadsheet formula using @ in notes",alter(csv,1,6,"@SUM(2,2)"));
   rejects("oversized editorial notes",alter(csv,1,6,"z".repeat(2001)));
   rejects("control character inside notes",alter(csv,1,6,"Inadequado\u0007"));
+  rejects("bidirectional override inside notes",alter(csv,1,6,"Texto\u202Einvertido"));
+  rejects("bidirectional isolate inside notes",alter(csv,1,6,"Texto\u2067isolado"));
+  rejects("left-to-right mark inside notes",alter(csv,1,6,"Texto\u200eoculto"));
   const named=alter(alter(alter(csv,1,3,"NEEDS_CHANGES"),1,4,"Equipe de QA"),1,5,ref);
   rejects("spreadsheet formula in reviewer",alter(named,1,4,"@cmd"));
   rejects("newline in reviewer",alter(named,1,4,"Revisora\nFalsa"));
+  rejects("bidirectional override in reviewer",alter(named,1,4,"Revisor\u202EFalso"));
+  rejects("Unicode line separator in reviewer",alter(named,1,4,"Revisor\u2028Falso"));
   accepts("valid multiline review notes",alter(csv,1,6,"Revisão clara,\ncom texto em duas linhas."),s=>{
     assert.equal(s.pending,35);
     assert.equal(s.publishable,false);
   });
+  accepts("ordinary Portuguese diacritics remain allowed",
+    alter(csv,1,6,"Revisão pedagógica: ações, métrica e inclusão."),s=>
+      assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,23);
+  assert.equal(scenarios,29);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

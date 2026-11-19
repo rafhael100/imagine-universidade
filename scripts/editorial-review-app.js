@@ -6,7 +6,7 @@
   const state=new Map(items.map(item=>[item.course_slug+"/"+item.lesson_slug,{
     status:"PENDING_HUMAN_REVIEW",reviewer:"",evidence:"",notes:""
   }]));
-  let current=0,dirty=false;
+  let current=0,dirty=false,importing=false;
   const key=item=>item.course_slug+"/"+item.lesson_slug;
   const courses=[...new Set(items.map(item=>item.course_slug))];
   function message(value,error=false){
@@ -267,6 +267,16 @@
   }
   async function importCsv(file){
     if(!file)return;
+    if(importing){
+      message("Outra importação já está em andamento.",true);
+      return;
+    }
+    // Capture the selected operation BEFORE file I/O: a mode switch during
+    // an awaited read must not turn a merge into a destructive replacement.
+    const mode=$("import-mode").value;
+    importing=true;
+    $("import").disabled=true;
+    $("import-mode").disabled=true;
     try{
       if(file.size>1000000)throw Error("CSV excede 1 MB.");
       // File.text() can silently replace damaged UTF-8 with U+FFFD.
@@ -290,7 +300,6 @@
         next.set(id,item);
       }
       if(next.size!==35)throw Error("CSV incompleto.");
-      const mode=$("import-mode").value;
       if(mode==="replace"){
         // A clean editor may still have a valid prior CSV or an accidental
         // mode selection. Always ask before discarding a differing draft.
@@ -356,7 +365,12 @@
         " aula(s) incorporada(s). Exporte o CSV; nenhum aceite foi autenticado.");
     }catch(error){
       message("Importação recusada: "+String(error.message),true);
-    }finally{$("import").value="";}
+    }finally{
+      importing=false;
+      $("import-mode").disabled=false;
+      $("import").disabled=false;
+      $("import").value="";
+    }
   }
   $("review-search").addEventListener("input",updateReviewResults);
   $("review-filter").addEventListener("change",updateReviewResults);

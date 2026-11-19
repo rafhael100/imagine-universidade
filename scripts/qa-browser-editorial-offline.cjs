@@ -401,6 +401,47 @@ module.exports=async function({browser,out,check}){
       "C178 invalid UTF-8 is rejected before atomic merge; local reviews remain");
     await importedPage.close();
 
+    // C179: simulate a slow file read to prove that import mode cannot be
+    // switched while reading or raced with a second import.
+    const lockedPage=await browserContext.newPage();
+    lockedPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await lockedPage.goto(url,{waitUntil:"load"});
+    await lockedPage.evaluate(()=>{
+      const original=File.prototype.arrayBuffer;
+      window.__uniResumeCsv=null;
+      File.prototype.arrayBuffer=function(){
+        return new Promise((resolve,reject)=>{
+          window.__uniResumeCsv=()=>original.call(this).then(resolve,reject);
+        });
+      };
+    });
+    await lockedPage.locator("#import").setInputFiles(csvPath);
+    await lockedPage.waitForFunction(()=>typeof window.__uniResumeCsv==="function",
+      null,{timeout:10000});
+    check(await lockedPage.locator("#import").isDisabled()&&
+      await lockedPage.locator("#import-mode").isDisabled(),
+      "C179 in-flight import locks file and mode controls");
+    await lockedPage.evaluate(()=>{
+      document.getElementById("import").dispatchEvent(new Event("change",{bubbles:true}));
+    });
+    check((await lockedPage.locator("#message").innerText()).includes("Outra importação"),
+      "C179 duplicate import events are refused during an unfinished read");
+    // Programmatic value change is more adversarial than a disabled UI.
+    await lockedPage.evaluate(()=>{
+      document.getElementById("import-mode").value="replace";
+      window.__uniResumeCsv();
+    });
+    await lockedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("mesclagem"),
+      null,{timeout:10000});
+    check((await lockedPage.locator("#summary").innerText()).includes("1 pedem ajustes")&&
+      (await lockedPage.locator("#status").inputValue())==="NEEDS_CHANGES",
+      "C179 mode snapshot stays merge despite a forced value change during I/O");
+    check(!(await lockedPage.locator("#import").isDisabled())&&
+      !(await lockedPage.locator("#import-mode").isDisabled()),
+      "C179 controls unlock after import finishes");
+    await lockedPage.close();
+
     await page.locator("#notes").fill("Observação\u200boculta");
     await page.locator("#export").click();
     check((await page.locator("#message").innerText()).includes("direção invisível"),

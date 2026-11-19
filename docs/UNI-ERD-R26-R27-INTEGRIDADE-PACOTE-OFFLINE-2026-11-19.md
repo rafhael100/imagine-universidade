@@ -32,6 +32,10 @@ Use apenas um destino vazio para gerar um pacote novo. Não utilize um destino c
 
 Quando a fonte versionada está disponível, a opção --source compara também os bytes reais do JSON original com o SHA-256 declarado no pacote. Um teste aceita a fonte intacta; outros dois recusam uma fonte alterada e um link simbólico. A verificação de um pacote recebido sem cópia do repositório permanece possível com --dir, mas não autentica sua procedência.
 
+## ERD-R29 — verificação antes da leitura do manifesto
+
+Uma troca do manifesto de origem por link simbólico era detectada durante a enumeração final, mas seu conteúdo já teria sido lido antecipadamente. Agora a verificação valida o arquivo real por lstat **antes da primeira leitura**, impedindo seguir um link arbitrário. A suíte inclui regressão para esse caso.
+
 ## Limite de confiança: checksum não é assinatura
 
 O manifesto detecta corrupção acidental, mas **não prova origem, identidade, autoria, signoff ou segurança contra falsificação**: um agente mal-intencionado pode recalcular todos os hashes após alterar arquivos. Não existe assinatura criptográfica, chave, carimbo confiável ou homologação. As 35 aulas permanecem PENDING_HUMAN_REVIEW.

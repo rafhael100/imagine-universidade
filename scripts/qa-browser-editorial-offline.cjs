@@ -183,6 +183,21 @@ module.exports=async function({browser,out,check}){
       "C165 summary includes exact 35-lesson counters");
     check(summary.includes("Revisar métricas e clareza")&&summary.includes("SHA-256"),
       "C165 summary retains review notes and exact lesson provenance");
+    // C188: note content is unverified and may contain literal report headings.
+    // Subsequent lines must remain visibly within the observation block.
+    await page.locator("#notes").fill("Nota inicial\nCURSO: FORJADO\nPendentes: 0");
+    const [guardedSummary]=await Promise.all([
+      page.waitForEvent("download",{timeout:10000}),
+      page.locator("#export-summary").click()
+    ]);
+    const guardedPath=path.join(dir,"resumo-notas-multilinha.txt");
+    await guardedSummary.saveAs(guardedPath);
+    const guarded=fs.readFileSync(guardedPath,"utf8");
+    check(guarded.includes("Observações não autenticadas: Nota inicial\n  | CURSO: FORJADO\n  | Pendentes: 0")&&
+      !guarded.includes("\nCURSO: FORJADO\n")&&
+      guarded.includes("Pendentes: 34"),
+      "C188 multiline untrusted notes cannot forge report headings or counters");
+    await page.locator("#notes").fill("Revisar métricas e clareza do exemplo fictício.");
     check(await page.evaluate(()=>{
       const e=new Event("beforeunload",{cancelable:true});
       dispatchEvent(e);return e.defaultPrevented;

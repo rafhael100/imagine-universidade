@@ -226,6 +226,11 @@
         rows.push({item,record});
       }
       const total=(status)=>rows.filter(x=>x.record.status===status).length;
+      // Prefix every continuation of an untrusted multiline note. Otherwise
+      // a reviewer could visually spoof a report heading or aggregate count.
+      const displayNote=note=>note.replace(/\r\n?/gu,"\n").split("\n")
+        .map((line,i)=>(i===0?"Observações não autenticadas: ":"  | ")+line)
+        .join("\n");
       const lines=[
         "UNIVERSIDADE IMAGINE — RELATÓRIO EDITORIAL OFFLINE",
         "HOLD_NO_GO — NÃO É APROVAÇÃO NEM PUBLICAÇÃO",
@@ -254,7 +259,7 @@
           );
           if(record.reviewer)lines.push("Revisor informado (não autenticado): "+record.reviewer);
           if(record.evidence)lines.push("Evidência informada (não conferida): "+record.evidence);
-          if(record.notes)lines.push("Observações: "+record.notes);
+          if(record.notes)lines.push(displayNote(record.notes));
           lines.push("");
         }
       }

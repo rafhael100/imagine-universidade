@@ -13,11 +13,22 @@ function verifyVisibleText(value, label) {
     "Unsafe invisible/control Unicode in " + label);
 }
 
+// ERD-R23: Markdown is consumed by external editors/renderers. A plain
+// content draft must never silently embed a remote image or interactive link,
+// even if HTML <script> and javascript: payloads were already rejected.
+// Preserve readable Portuguese prose and ordinary punctuation.
+function assertNoActiveMarkup(value,label) {
+  assert.doesNotMatch(value,
+    /<\/?[a-z][^>]*>|<(?:https?:\/\/|mailto:)[^>]*>|!?(?:\[[^\]\r\n]*\]\([^\)\r\n]*\))|!\[[^\]\r\n]*\]\[[^\]\r\n]*\]|^\s*\[[^\]\r\n]+\]:\s*\S+|<!--|-->/imu,
+    "Unexpected interactive Markdown/HTML in "+label);
+}
+
 export function safeLine(value) {
   assert.ok(typeof value === "string" && value.trim() !== "" &&
     value.length <= 200 && !/[\r\n]/u.test(value),
     "Title must fit in one line");
   verifyVisibleText(value, "editorial title");
+  assertNoActiveMarkup(value, "editorial title");
   return value.trim().replace(/[|]/g, "\\|");
 }
 
@@ -26,6 +37,7 @@ export function safeBody(value) {
     value.trim().split(/\s+/u).length >= 95,
     "A lesson must contain substantive editorial draft text");
   verifyVisibleText(value, "editorial lesson body");
+  assertNoActiveMarkup(value, "editorial lesson body");
   // Checking mere presence accepts missing order and repeated headings. A
   // handoff that changes the four-part lesson sequence can mislead reviewers
   // even when the total word count and individual section markers look valid.

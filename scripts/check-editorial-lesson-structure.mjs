@@ -37,6 +37,15 @@ rejects("exercise replaced by placeholder",s=>{
   l.body=l.body.replace(/APLICAÇÃO OPCIONAL\n[\s\S]*?\n\nCUIDADO IMPORTANTE/u,"APLICAÇÃO OPCIONAL\nx\n\nCUIDADO IMPORTANTE");
 });
 rejects("blank title",s=>{s.courses[0].lessons[0].title="";});
+rejects("duplicated complete lesson",s=>{
+  s.courses[0].lessons[1].body=s.courses[0].lessons[0].body;
+});
+rejects("duplicated lesson with whitespace changes",s=>{
+  s.courses[0].lessons[1].body=s.courses[0].lessons[0].body.replaceAll("\n\n","\n\n\n");
+});
+rejects("bidi control in course name",s=>{s.courses[0].title+="\u202e";});
+rejects("zero width character in pedagogy",s=>{s.courses[0].lessons[0].body+="\u200b";});
+rejects("bidi isolate in lesson title",s=>{s.courses[0].lessons[0].title+="\u2066";});
 console.log("PASS 35-lesson structural audit; 140 pedagogical sections; "+negative+
   " negative regressions; "+summary.style_findings.length+
   " nonblocking style flags. HUMAN APPROVAL NOT VERIFIED.");

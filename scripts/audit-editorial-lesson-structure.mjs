@@ -11,17 +11,24 @@ import {pathToFileURL} from "node:url";
 const headings=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
 const slugPattern=/^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const sectionSeparators=/\n\n(EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE)\n/gu;
+// Reject format/bidi and C0/C1 controls in titles and pedagogy. LF remains valid.
+const unsafeControls=/[\p{Cf}\u034f\u180e\u2028\u2029\ufe00-\ufe0f\u{e0100}-\u{e01ef}\x00-\x08\x0b\x0c\x0d\x0e-\x1f\x7f-\x9f]/u;
+const fingerprint=body=>body.normalize("NFKC").replace(/\s+/gu," ").trim().toLocaleLowerCase("pt-BR");
+function checkReadable(value,label){
+  assert.ok(!unsafeControls.test(value),"Invisible/control character in "+label);
+}
 export function auditEditorialLessonStructure(source){
   assert.equal(source?.schema_version,1,"Unrecognized curriculum schema");
   assert.equal(source?.status,"editorial_draft","Only unapproved curriculum is audited");
   assert.equal(source?.audience,"authorized_imagine_clients_only","Audience policy changed");
   assert.ok(Array.isArray(source.courses)&&source.courses.length===10,"Exactly ten draft courses required");
-  const courseIds=new Set(),lessonIds=new Set(),styleFlags=[];
+  const courseIds=new Set(),lessonIds=new Set(),bodyFingerprints=new Map(),styleFlags=[];
   for(const course of source.courses){
     assert.ok(typeof course.slug==="string"&&slugPattern.test(course.slug),"Invalid course slug");
     assert.ok(!courseIds.has(course.slug),"Duplicate course slug: "+course.slug);
     courseIds.add(course.slug);
     assert.ok(typeof course.title==="string"&&course.title.trim().length>4,"Missing course title");
+    checkReadable(course.title,"course "+course.slug);
     assert.ok(Array.isArray(course.lessons)&&course.lessons.length>0,"Course has no lessons");
     for(const lesson of course.lessons){
       assert.ok(typeof lesson.slug==="string"&&slugPattern.test(lesson.slug),"Invalid lesson slug");
@@ -30,6 +37,12 @@ export function auditEditorialLessonStructure(source){
       lessonIds.add(id);
       assert.ok(typeof lesson.title==="string"&&lesson.title.trim().length>4,"Missing lesson title: "+id);
       assert.ok(typeof lesson.body==="string","Missing lesson body: "+id);
+      checkReadable(lesson.title,"lesson title "+id);
+      checkReadable(lesson.body,"lesson body "+id);
+      const bodyKey=fingerprint(lesson.body);
+      assert.ok(!bodyFingerprints.has(bodyKey),
+        "Duplicated lesson body: "+bodyFingerprints.get(bodyKey)+" / "+id);
+      bodyFingerprints.set(bodyKey,id);
       const matches=[...lesson.body.matchAll(sectionSeparators)].map(match=>match[1]);
       assert.deepEqual(matches,headings,"Missing or reordered pedagogical section: "+id);
       const parts=lesson.body.split(sectionSeparators).filter((_,index)=>index%2===0);

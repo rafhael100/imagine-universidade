@@ -4,6 +4,7 @@ import {lstat,readFile,readdir,writeFile} from "node:fs/promises";
 import {dirname,join,resolve} from "node:path";
 import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 import {buildEditorialReviewQueue} from "./build-editorial-review-queue.mjs";
+import {renderEditorialCourseMarkdown,renderEditorialReadme} from "./editorial-source-review-render.mjs";
 
 // ERD-R26: detect accidental corruption of an offline, UNSIGNED review handoff.
 // Checksums are NOT signatures, reviewer identity or release authorization.
@@ -192,6 +193,32 @@ export async function verifyEditorialSourceBinding(directory,sourceFile){
     "Review course metadata differs from versioned curriculum");
   assert.deepEqual(reviewManifest.lessons,expectedLessons,
     "Review lesson identities/checksums diverge from versioned curriculum");
+  // ERD-R41: reject forged top-level approvals and unknown metadata even
+  // when all the individual lesson hashes are sound and the UNSIGNED
+  // checksum list was recalculated. Match the generator's canonical bytes.
+  const canonicalReviewManifest={
+    schema_version:1,source_path:"content/mvp-cursos-v1.json",
+    source_sha256:verified.source_sha256,status:"PENDING_HUMAN_REVIEW",
+    publishable:false,course_count:expectedCourses.length,
+    lesson_count:expectedLessons.length,courses:expectedCourses,lessons:expectedLessons
+  };
+  assert.equal(await readFile(manifestPath,"utf8"),
+    JSON.stringify(canonicalReviewManifest,null,2)+"\n",
+    "Review manifest differs from canonical versioned source");
+  // ERD-R39/R40: --source must bind every human-facing artifact, not just
+  // machine metadata, CSV, HTML and review queue. A rehashed Markdown course
+  // or onboarding README could falsely claim approval or alter lesson text.
+  for(const [index,course] of source.courses.entries()){
+    const expected=renderEditorialCourseMarkdown(course,index);
+    assert.deepEqual(expected.hashes,
+      expectedLessons.filter(lesson=>lesson.course_slug===course.slug),
+      "Source-bound course renderer must agree with lesson manifest");
+    assert.equal(await readFile(join(resolve(directory),expectedCourses[index].file),"utf8"),
+      expected.markdown,"Course review Markdown differs from versioned source");
+  }
+  assert.equal(await readFile(join(resolve(directory),"LEIA-PRIMEIRO.md"),"utf8"),
+    renderEditorialReadme(expectedCourses,verified.source_sha256),
+    "Review instructions differ from versioned source");
   // ERD-R34: an internally rehashed CSV could masquerade as a reviewer
   // decision even while the JSON manifest still matches the source. The
   // original, *unedited* handoff must have one pending row per source lesson.

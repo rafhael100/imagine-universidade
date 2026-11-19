@@ -12,7 +12,7 @@ const temp=await mkdtemp(join(tmpdir(),"uni-editorial-preflight-"));
 const scripts=["build-editorial-review-pack.mjs","editorial-review-html.mjs",
   "editorial-review-app.js","editorial-text-safety.mjs",
   "audit-editorial-lesson-structure.mjs","build-editorial-review-queue.mjs",
-  "editorial-package-integrity.mjs"];
+  "editorial-package-integrity.mjs","editorial-source-review-render.mjs"];
 let scenarios=0;
 try{
   await mkdir(join(temp,"scripts"));

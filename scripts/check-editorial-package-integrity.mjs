@@ -228,7 +228,32 @@ try{
   await clonedRehashedFileCase("queue-fake-status", "FILA-REVISAO-35.md",md=>
     md.replace("PENDING_HUMAN_REVIEW","APPROVED"),
     /Offline editorial queue differs from versioned source/u);
-  assert.equal(negatives,38);
+  // ERD-R41: a root-level 'release decision' can be forged while the
+  // checksums and nested course/lesson metadata remain otherwise correct.
+  await clonedRehashedCase("source-fake-go",m=>{
+    m.release_decision="GO";
+  },/Review manifest differs from canonical versioned source/u,{sourceBound:true});
+  await clonedRehashedCase("source-fake-approval",m=>{
+    m.editorial_signoff="approved-by-example";
+  },/Review manifest differs from canonical versioned source/u,{sourceBound:true});
+  await clonedRehashedCase("source-unknown-root-key",m=>{
+    m.release_authorized_at="2026-11-19";
+  },/Review manifest differs from canonical versioned source/u,{sourceBound:true});
+  // ERD-R39/R40: every rehashed human-facing document must still match
+  // the exact versioned curriculum and renderer when --source is provided.
+  await clonedRehashedFileCase("course-fake-approval",baseline.files.find(x=>x.path.startsWith("cursos/")).path,md=>
+    md.replace("status PENDENTE","status APROVADO"),
+    /Course review Markdown differs from versioned source/u);
+  await clonedRehashedFileCase("course-added-passage",baseline.files.find(x=>x.path.startsWith("cursos/")).path,md=>
+    md+"\n## Conteúdo fictício não revisado\n",
+    /Course review Markdown differs from versioned source/u);
+  await clonedRehashedFileCase("readme-fake-release","LEIA-PRIMEIRO.md",md=>
+    md.replace("NÃO É APROVAÇÃO NEM PUBLICAÇÃO","APROVADO PARA PUBLICAÇÃO"),
+    /Review instructions differ from versioned source/u);
+  await clonedRehashedFileCase("readme-fake-source","LEIA-PRIMEIRO.md",md=>
+    md.replace(baseline.source_sha256,"f".repeat(64)),
+    /Review instructions differ from versioned source/u);
+  assert.equal(negatives,45);
   console.log("PASS ERD-R27: original 15-file package verified; "+negatives+
     " tamper/path/symlink negatives; UNSIGNED/HOLD_NO_GO, no human approval.");
 }finally{

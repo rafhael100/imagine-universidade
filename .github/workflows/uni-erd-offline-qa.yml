@@ -81,8 +81,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/uni-erd-node" "$RUNNER_TEMP/uni-erd-evidence"
           cd "$RUNNER_TEMP/uni-erd-node"
           npm init -y >/dev/null
-          npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2 >/dev/null
-          npx playwright install --with-deps chromium >/dev/null
+          # A prior Chromium job timed out inside installation without logs.
+          # Bound each external phase; fail closed before consuming 25 minutes.
+          timeout -k 5s 180s npm install --no-audit --no-fund \
+            playwright@1.58.2 @axe-core/playwright@4.10.2
+          timeout -k 5s 180s npx playwright install-deps chromium
+          timeout -k 5s 240s npx playwright install chromium
       - name: Exercise real Chromium, keyboard and WCAG checks using synthetic fixtures
         shell: bash
         run: |

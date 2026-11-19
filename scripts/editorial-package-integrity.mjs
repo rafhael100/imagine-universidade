@@ -193,6 +193,18 @@ export async function verifyEditorialSourceBinding(directory,sourceFile){
     "Review course metadata differs from versioned curriculum");
   assert.deepEqual(reviewManifest.lessons,expectedLessons,
     "Review lesson identities/checksums diverge from versioned curriculum");
+  // ERD-R41: reject forged top-level approvals and unknown metadata even
+  // when all the individual lesson hashes are sound and the UNSIGNED
+  // checksum list was recalculated. Match the generator's canonical bytes.
+  const canonicalReviewManifest={
+    schema_version:1,source_path:"content/mvp-cursos-v1.json",
+    source_sha256:verified.source_sha256,status:"PENDING_HUMAN_REVIEW",
+    publishable:false,course_count:expectedCourses.length,
+    lesson_count:expectedLessons.length,courses:expectedCourses,lessons:expectedLessons
+  };
+  assert.equal(await readFile(manifestPath,"utf8"),
+    JSON.stringify(canonicalReviewManifest,null,2)+"\n",
+    "Review manifest differs from canonical versioned source");
   // ERD-R39/R40: --source must bind every human-facing artifact, not just
   // machine metadata, CSV, HTML and review queue. A rehashed Markdown course
   // or onboarding README could falsely claim approval or alter lesson text.

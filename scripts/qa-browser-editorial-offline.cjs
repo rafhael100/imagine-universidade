@@ -51,6 +51,22 @@ module.exports=async function({browser,out,check}){
       "C158 navigation preserves a local unfinished human review");
     check((await page.locator("#summary").innerText()).includes("1 pedem ajustes"),
       "C158 UI labels the review as needs changes, not approved");
+    await page.locator("#review-filter").selectOption("NEEDS_CHANGES");
+    check(await page.locator("#review-results .review-result").count()===1,
+      "C163 status filter returns only the lesson marked for adjustments");
+    check((await page.locator("#review-search-count").innerText()).includes("1 aulas"),
+      "C163 status filter has explicit live result count");
+    await page.locator("#review-search").fill("VISITAS");
+    check(await page.locator("#review-results .review-result").count()===1,
+      "C163 case-insensitive search respects current review status");
+    await page.locator("#review-search").fill("inexistente");
+    check(await page.locator("#review-results .review-result").count()===0,
+      "C163 missing terms produce no invented matches");
+    await page.locator("#review-search").fill("");
+    await page.locator("#review-filter").selectOption("ALL");
+    check(await page.locator("#review-results").isHidden(),
+      "C163 empty search and all-status filter do not clutter the editor");
+
     check((await page.locator("#courses .course-item").first().innerText()).includes("3 pendentes / 4"),
       "C160 first course shows accurate unfinished lesson count");
     await page.locator("#next-pending").click();

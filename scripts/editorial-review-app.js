@@ -28,6 +28,37 @@
     $("next-pending").disabled=stats.PENDING_HUMAN_REVIEW===0;
     $("next-adjustment").disabled=stats.NEEDS_CHANGES===0;
   }
+  function normalizeSearch(value){
+    return value.normalize("NFKD").replace(/\p{M}/gu,"").toLocaleLowerCase("pt-BR").trim();
+  }
+  function updateReviewResults(){
+    const term=normalizeSearch($("review-search").value);
+    const status=$("review-filter").value;
+    const matches=[];
+    items.forEach((lesson,i)=>{
+      if(status!=="ALL"&&state.get(key(lesson)).status!==status)return;
+      const searchable=normalizeSearch(lesson.course_title+" "+lesson.lesson_title);
+      if(term!==""&&!searchable.includes(term))return;
+      matches.push([i,lesson]);
+    });
+    const active=term!==""||status!=="ALL",holder=$("review-results");
+    holder.hidden=!active;
+    holder.replaceChildren();
+    $("review-search-count").textContent=active
+      ?matches.length+" aulas encontradas neste filtro"
+      :"Digite para localizar uma aula ou selecione uma situação.";
+    if(!active)return;
+    for(const [i,lesson] of matches){
+      const b=document.createElement("button");
+      b.className="review-result";
+      b.type="button";
+      b.dataset.lessonIndex=String(i);
+      b.textContent=lesson.course_title+" · "+lesson.lesson_title;
+      b.setAttribute("aria-current",i===current?"true":"false");
+      b.addEventListener("click",()=>choose(i));
+      holder.append(b);
+    }
+  }
   function render(){
     const lesson=items[current],row=state.get(key(lesson));
     const nav=$("courses");
@@ -65,6 +96,7 @@
     $("previous").disabled=current===0;
     $("next").disabled=current===items.length-1;
     counts();
+    updateReviewResults();
   }
   function choose(i){
     if(!Number.isInteger(i)||i<0||i>=items.length)return;
@@ -87,6 +119,7 @@
     row.evidence=$("evidence").value;
     row.notes=$("notes").value;
     dirty=true;counts();
+    updateReviewResults();
     message("Alterações apenas na memória. Exporte o CSV antes de sair.");
   }
   function valid(row,id){
@@ -190,6 +223,8 @@
       message("Importação recusada: "+String(error.message),true);
     }finally{$("import").value="";}
   }
+  $("review-search").addEventListener("input",updateReviewResults);
+  $("review-filter").addEventListener("change",updateReviewResults);
   $("lessons").addEventListener("change",e=>choose(Number(e.target.value)));
   $("previous").addEventListener("click",()=>choose(current-1));
   $("next").addEventListener("click",()=>choose(current+1));

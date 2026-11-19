@@ -131,9 +131,24 @@ module.exports=async function({browser,out,check}){
       "C192 singular result count is accessible and correct in Portuguese");
     await page.locator("#review-search").fill("VISITAS");
     const countEvents=await page.evaluate(()=>window.__uniNavMutations.search);
+    // ERD-R04: similar queries should retain identical result button nodes.
+    // Otherwise an active keyboard target is thrown out of the DOM.
+    await page.evaluate(()=>{
+      const holder=document.getElementById("review-results");
+      window.__uniStableResult=holder.querySelector(".review-result");
+      window.__uniResultChanges=0;
+      new MutationObserver(records=>{
+        window.__uniResultChanges+=records.filter(r=>r.type==="childList").length;
+      }).observe(holder,{childList:true});
+    });
     await page.locator("#review-search").fill("VISITA");
     check(await page.evaluate(()=>window.__uniNavMutations.search)===countEvents,
       "C177 unchanged result count avoids duplicate aria-live announcements");
+    check(await page.evaluate(async()=>{
+      await Promise.resolve();
+      return window.__uniResultChanges===0&&
+        document.querySelector("#review-results .review-result")===window.__uniStableResult;
+    }),"ERD-R04 matching result identities preserve DOM nodes while typing");
     check(await page.locator("#review-results .review-result").count()===1,
       "C163 case-insensitive search respects current review status");
     await page.locator("#review-search").fill("inexistente");

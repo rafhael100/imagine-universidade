@@ -562,6 +562,16 @@ module.exports=async function({browser,out,check}){
     await page.locator("#export").click();
     check((await page.locator("#message").innerText()).includes("direção invisível"),
       "C190 Unicode Cf soft hyphen blocks offline CSV export");
+    // C191: C1 characters are not covered by Unicode Cf.
+    for(const cp of [0x85,0x9b]){
+      await page.locator("#notes").evaluate((el,code)=>{
+        el.value="Observação"+String.fromCharCode(code)+"oculta";
+        el.dispatchEvent(new Event("input",{bubbles:true}));
+      },cp);
+      await page.locator("#export").click();
+      check((await page.locator("#message").innerText()).includes("controle ou direção invisível"),
+        "C191 C1 notes rejected before CSV export U+"+cp.toString(16));
+    }
     await page.locator("#notes").fill("Anotação\u202Einvertida");
     await page.locator("#export").click();
     check((await page.locator("#message").innerText()).includes("direção invisível"),
@@ -575,6 +585,13 @@ module.exports=async function({browser,out,check}){
     await page.locator("#export").click();
     check((await page.locator("#message").innerText()).includes("revisor válido"),
       "C190 invisible Arabic mark blocks reviewer spoofing in browser");
+    await page.locator("#reviewer").evaluate(el=>{
+      el.value="Equipe"+String.fromCharCode(0x85)+"Editorial";
+      el.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    await page.locator("#export").click();
+    check((await page.locator("#message").innerText()).includes("revisor válido"),
+      "C191 C1 next-line reviewer rejected before CSV export");
     await page.locator("#reviewer").fill("Equipe Editorial QA");
 
     await page.locator("#notes").fill("=HYPERLINK(\"https://example.invalid\")");

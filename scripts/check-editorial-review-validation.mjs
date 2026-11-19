@@ -97,6 +97,8 @@ try{
   rejects("zero-width space inside notes",alter(csv,1,6,"Texto\u200boculto"));
   rejects("word joiner inside notes",alter(csv,1,6,"Texto\u2060oculto"));
   rejects("internal BOM inside notes",alter(csv,1,6,"Texto\ufeffoculto"));
+  rejects("C1 next-line note",alter(csv,1,6,"Texto\u0085cabeçalho forjado"));
+  rejects("C1 CSI in notes",alter(csv,1,6,"Texto\u009bcódigo"));
   rejects("soft hyphen inside notes",alter(csv,1,6,"Texto\u00ADoculto"));
   rejects("Arabic letter mark inside notes",alter(csv,1,6,"Texto\u061Coculto"));
   rejects("combining grapheme joiner inside notes",alter(csv,1,6,"Texto\u034Foculto"));
@@ -137,6 +139,8 @@ try{
   rejects("word joiner reviewer spoofing",alter(named,1,4,"Revisor\u2060Falso"));
   rejects("ASCII BEL in reviewer",alter(named,1,4,"Equipe\u0007Falsa"));
   rejects("ASCII DEL in reviewer",alter(named,1,4,"Equipe\u007fFalsa"));
+  rejects("C1 next-line reviewer",alter(named,1,4,"Equipe\u0085Falsa"));
+  rejects("C1 CSI reviewer",alter(named,1,4,"Equipe\u009bFalsa"));
   rejects("soft hyphen inside reviewer",alter(named,1,4,"Equipe\u00ADFalsa"));
   rejects("Arabic letter mark inside reviewer",alter(named,1,4,"Equipe\u061CFalsa"));
   rejects("combining grapheme joiner inside reviewer",alter(named,1,4,"Equipe\u034FFalsa"));
@@ -150,7 +154,7 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,49);
+  assert.equal(scenarios,53);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

@@ -169,13 +169,14 @@
       throw Error("Situação inválida: "+id);
     if(row.notes.length>2000||/^\s*[=+\-@]/u.test(row.notes))
       throw Error("Observações incorretas ou iniciadas como fórmula: "+id);
-    if(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u.test(row.notes)||unsafeDisplayControl(row.notes))
+    // C191: C1 NEL/CSI can spoof report boundaries.
+    if(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/u.test(row.notes)||unsafeDisplayControl(row.notes))
       throw Error("Caracteres de controle ou direção invisível nas observações: "+id);
     if(row.status==="PENDING_HUMAN_REVIEW"){
       if(row.reviewer||row.evidence)throw Error("Apague nome/evidência do registro pendente: "+id);
     }else{
       if(row.reviewer.trim().length<3||row.reviewer.length>120||
-        /[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u.test(row.reviewer)||unsafeDisplayControl(row.reviewer)||
+        /[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/u.test(row.reviewer)||unsafeDisplayControl(row.reviewer)||
         /^\s*[=+\-@]/u.test(row.reviewer))
         throw Error("Informe revisor válido: "+id);
       if(!/^https:\/\/github\.com\/rafhael100\/imagine-universidade\/(?:issues|pull)\/[1-9]\d*(?:#issuecomment-[1-9]\d*)?$/iu.test(row.evidence))

@@ -79,8 +79,9 @@ export function inspectEditorialReview(csvText,sourceText){
       "Unsupported review status: "+key);
     // CSV exports may be opened by reviewers in Excel/LibreOffice. An
     // externally edited CSV must not bypass the offline UI's formula fence.
+    // C191: reject C1 NEL/CSI controls in reviewer and notes.
     const unsafeCell = value => /^\s*[=+\-@]/u.test(value)
-      || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u.test(value)
+      || /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/u.test(value)
       || /[\p{Cf}\u034f\u180e\u2028\u2029\ufe00-\ufe0f\u{e0100}-\u{e01ef}]/u.test(value);
     assert.ok(typeof notes==="string" && notes.length<=2000 && !unsafeCell(notes),
       "Unsafe or oversized editorial notes: "+key);

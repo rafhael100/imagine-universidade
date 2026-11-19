@@ -1,0 +1,57 @@
+name: UNI ERD R26 R27 offline package integrity QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r26-pack-integrity-2026-11-19
+    paths:
+      - '.github/workflows/uni-erd-r26-pack-integrity-qa.yml'
+      - 'scripts/editorial-package-integrity.mjs'
+      - 'scripts/check-editorial-package-integrity.mjs'
+      - 'scripts/verify-editorial-package-integrity.mjs'
+      - 'scripts/build-editorial-review-pack.mjs'
+      - 'scripts/check-editorial-review-pack.mjs'
+      - 'scripts/check-editorial-pack-preflight.mjs'
+      - 'scripts/build-editorial-review-queue.mjs'
+      - 'scripts/audit-editorial-lesson-structure.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R26-R27-INTEGRIDADE-PACOTE-OFFLINE-2026-11-19.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r26-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-offline-package-integrity:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout isolated exact branch SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node QA with disposable synthetic content only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r26-pack-integrity-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          node --version
+          for f in scripts/editorial-package-integrity.mjs scripts/check-editorial-package-integrity.mjs scripts/verify-editorial-package-integrity.mjs scripts/build-editorial-review-pack.mjs scripts/check-editorial-review-pack.mjs scripts/check-editorial-pack-preflight.mjs; do
+            node --check "$f"
+          done
+          node scripts/check-editorial-lesson-structure.mjs
+          node scripts/check-editorial-text-safety.mjs
+          node scripts/check-editorial-pack-preflight.mjs
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-queue.mjs
+          node scripts/check-editorial-package-integrity.mjs
+          node scripts/check-editorial-review-validation.mjs
+          node scripts/check-release-gate-policy.mjs
+          node -e 'const g=require("./ops/release-gates.json"); if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(x=>x.status!=="NOT_VERIFIED"))process.exit(1)'
+          echo 'PASS synthetic-only unsigned package integrity; 35 lessons remain unapproved; 13 gates remain NOT_VERIFIED'

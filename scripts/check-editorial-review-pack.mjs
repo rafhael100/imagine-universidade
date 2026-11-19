@@ -6,6 +6,7 @@ import {lstat,mkdtemp,readFile,readdir,rm,symlink,writeFile} from "node:fs/promi
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
+import {verifyEditorialPackage} from "./editorial-package-integrity.mjs";
 
 const repoRoot=fileURLToPath(new URL("../",import.meta.url));
 const sourcePath=fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -21,6 +22,9 @@ try{
     "--out",tmp
   ],{encoding:"utf8",cwd:repoRoot,env:{...process.env,NODE_ENV:"test"}});
   assert.equal(exec.status,0,exec.stderr||exec.stdout);
+  const integrity=await verifyEditorialPackage(tmp);
+  assert.equal(integrity.files.length,15,"The complete handoff must be hash-bound");
+  assert.equal(integrity.release_decision,"HOLD_NO_GO");
   const produced=JSON.parse(await readFile(join(tmp,"manifesto-revisao.json"),"utf8"));
   assert.equal(produced.schema_version,1);
   assert.equal(produced.source_sha256,sourceHash);

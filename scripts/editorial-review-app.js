@@ -250,8 +250,6 @@
     if(!file)return;
     try{
       if(file.size>1000000)throw Error("CSV excede 1 MB.");
-      if(dirty&&!window.confirm("Importar substituirá as observações não exportadas. Continuar?"))
-        return;
       const parsed=parseCsv(await file.text());
       const header=["course_slug","lesson_slug","content_sha256","review_status",
         "reviewer","evidence_ref","notes"];
@@ -269,11 +267,48 @@
         next.set(id,item);
       }
       if(next.size!==35)throw Error("CSV incompleto.");
-      // All-or-nothing: a malformed file never replaces one existing row.
-      for(const [id,item] of next)state.set(id,item);
-      dirty=true;
-      render();
-      message("CSV carregado localmente. Nenhuma aprovação humana foi autenticada.");
+      const mode=$("import-mode").value;
+      if(mode==="replace"){
+        // Validate the ENTIRE input before asking to discard existing work.
+        if(dirty&&!window.confirm("Substituir todas as 35 linhas? Revisões locais não exportadas serão perdidas."))
+          return;
+        for(const [id,item] of next)state.set(id,item);
+        dirty=true;render();
+        message("CSV carregado por substituição. Nenhuma aprovação foi autenticada.");
+        return;
+      }
+      if(mode!=="merge")throw Error("Modo de importação inválido.");
+      const proposed=new Map();
+      let updated=0;
+      for(const [id,incoming] of next){
+        const currentRow=state.get(id);
+        if(!currentRow)throw Error("Aula inexistente na sessão: "+id);
+        let chosen=currentRow;
+        if(currentRow.status==="PENDING_HUMAN_REVIEW"){
+          if(incoming.status!=="PENDING_HUMAN_REVIEW"){
+            chosen=incoming;
+          }else if(currentRow.notes===""&&incoming.notes!==""){
+            chosen=incoming;
+          }else if(currentRow.notes!==""&&incoming.notes!==""
+            &&currentRow.notes!==incoming.notes){
+            throw Error("Conflito entre observações pendentes: "+id);
+          }
+        }else if(incoming.status!=="PENDING_HUMAN_REVIEW"){
+          if(JSON.stringify(currentRow)!==JSON.stringify(incoming))
+            throw Error("Conflito entre revisões já preenchidas: "+id);
+        }
+        proposed.set(id,chosen);
+        if(JSON.stringify(currentRow)!==JSON.stringify(chosen))updated++;
+      }
+      // All-or-nothing. No record changes until the entire merge succeeded.
+      if(updated===0){
+        message("CSV sem novidades; nenhuma revisão foi substituída.");
+        return;
+      }
+      for(const [id,item] of proposed)state.set(id,item);
+      dirty=true;render();
+      message("CSV carregado por mesclagem: "+updated+
+        " aula(s) incorporada(s). Exporte o CSV; nenhum aceite foi autenticado.");
     }catch(error){
       message("Importação recusada: "+String(error.message),true);
     }finally{$("import").value="";}

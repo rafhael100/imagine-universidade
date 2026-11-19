@@ -176,6 +176,44 @@ module.exports=async function({browser,out,check}){
     check(await importedPage.locator("#status").inputValue()==="NEEDS_CHANGES" &&
       (await importedPage.locator("#notes").inputValue()).includes("Revisar métricas"),
       "C159 failed import leaves the previously reviewed data intact");
+    check(await importedPage.locator("#import-mode").inputValue()==="merge",
+      "C167 merging another person's CSV is the conservative default");
+    const originalCsv=fs.readFileSync(path.join(dir,"revisao.csv"),"utf8");
+    const second=originalCsv.trimEnd().split("\n");
+    const pendingTail='"PENDING_HUMAN_REVIEW","","",""';
+    check(second[2].includes(pendingTail),"C167 second lesson is pending in the original package");
+    second[2]=second[2].replace(pendingTail,
+      '"NEEDS_CHANGES","Equipe de QA","https://github.com/rafhael100/imagine-universidade/issues/12","Revisar segunda aula"');
+    const peerPath=path.join(dir,"revisao-outra-pessoa.csv");
+    fs.writeFileSync(peerPath,second.join("\n")+"\n","utf8");
+    await importedPage.locator("#import").setInputFiles(peerPath);
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("mesclagem"),
+      null,{timeout:10000});
+    check((await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
+      "C167 two independent non-conflicting reviews combine without dropping either");
+    check((await importedPage.locator("#notes").inputValue()).includes("Revisar métricas"),
+      "C167 merge keeps the first reviewer local observation");
+    await importedPage.locator("#next").click();
+    check((await importedPage.locator("#notes").inputValue()).includes("Revisar segunda aula"),
+      "C167 merge imports the second independent review");
+    await importedPage.locator("#previous").click();
+    const conflictPath=path.join(dir,"revisao-conflitante.csv");
+    fs.writeFileSync(conflictPath,csv.replace(
+      "Revisar métricas e clareza do exemplo fictício.","Mudança divergente de outro revisor"),"utf8");
+    await importedPage.locator("#import").setInputFiles(conflictPath);
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Conflito"),
+      null,{timeout:10000});
+    check((await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes")&&
+      (await importedPage.locator("#notes").inputValue()).includes("Revisar métricas"),
+      "C167 conflicting full CSV is rejected atomically, preserving both reviews");
+    await importedPage.locator("#import-mode").selectOption("replace");
+    let asked=false;
+    importedPage.once("dialog",async dialog=>{asked=true;await dialog.dismiss();});
+    await importedPage.locator("#import").setInputFiles(path.join(dir,"revisao.csv"));
+    check(asked && (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
+      "C167 user can cancel explicit full replacement without losing work");
     await importedPage.close();
 
     await page.locator("#notes").fill("=HYPERLINK(\"https://example.invalid\")");

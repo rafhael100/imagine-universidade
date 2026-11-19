@@ -46,7 +46,10 @@ assert.ok(destinationStat.isDirectory()&&!destinationStat.isSymbolicLink(),
   "Review package destination must be a real directory, not a symlink");
 assert.deepEqual(await readdir(dest),[],
   "Review package destination must be empty to preserve existing reviews");
-const source=await readFile(sourceFile,"utf8");
+// ERD-R16: fs.readFile(..., "utf8") silently replaces damaged UTF-8 with
+// U+FFFD. Never publish a human-review package from silently corrupted bytes.
+// Decode strictly before hashing or parsing the versioned curriculum source.
+const source=new TextDecoder("utf-8",{fatal:true}).decode(await readFile(sourceFile));
 const payload=JSON.parse(source);
 assert.equal(payload.schema_version,1);
 assert.equal(payload.status,"editorial_draft");

@@ -384,6 +384,9 @@ module.exports=async function({browser,out,check}){
     check(cleanPrompt.includes("Substituir 1 de 35")&&
       (await cleanReplacement.locator("#summary").innerText()).includes("35 pendentes"),
       "C174 clean editor requires explicit confirmation before replacing even one row");
+    check(cleanPrompt.includes("Aulas divergentes (até 5):")&&
+      /\n  - [^\r\n]+\/[^\r\n]+/u.test(cleanPrompt),
+      "C194 replacement dialog identifies which lesson rows will be overwritten");
     cleanReplacement.once("dialog",async dialog=>{await dialog.accept();});
     await cleanReplacement.locator("#import").setInputFiles(csvPath);
     await cleanReplacement.waitForFunction(

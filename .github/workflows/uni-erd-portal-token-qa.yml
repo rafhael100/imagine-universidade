@@ -1,0 +1,77 @@
+name: UNI ERD R10 Portal credential boundary (synthetic)
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r10-portal-token-2026-11-19
+    paths:
+      - '.github/workflows/uni-erd-portal-token-qa.yml'
+      - 'app/Domain/Access/PortalAccessGate.php'
+      - 'tests/Unit/PortalAccessGateTest.php'
+      - 'composer.json'
+      - 'composer.lock'
+      - 'ops/release-gates.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-portal-token-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  portal-fail-closed:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    steps:
+      - name: Checkout only the synthetic draft candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Enforce isolated review boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r10-portal-token-2026-11-19"
+          test "$APP_ENV" = "testing"
+          test ! -e .env
+          test ! -e .env.production
+          test -f composer.lock
+      - name: PHP 8.3 for synthetic PHPUnit
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, dom, xml, pdo_sqlite, sqlite3, openssl, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Lint guarded Portal credential boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l app/Domain/Access/PortalAccessGate.php
+          php -l tests/Unit/PortalAccessGateTest.php
+          php -l app/Domain/Access/UnavailablePortalAuthority.php
+          php scripts/check-portal-context.php
+          node -e 'const g=require("./ops/release-gates.json"); const s=Object.values(g.blocking_evidence); if(s.length!==13||s.some(x=>x.status!=="NOT_VERIFIED")||g.release_decision!=="HOLD_NO_GO")process.exit(1)'
+      - name: Install pinned QA dependencies without plugins or scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          timeout -k 5s 360s composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+      - name: Real PHPUnit domain test suite with synthetic tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+          vendor/bin/phpunit --testsuite Unit
+          echo 'PASS Unit test-only: no active-service proof, SSO, grants, deploy or customers'

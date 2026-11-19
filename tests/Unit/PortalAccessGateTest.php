@@ -169,6 +169,16 @@ final class PortalAccessGateTest extends TestCase
         self::assertSame('expired', $result->reasonCode);
     }
 
+    public function test_printable_ascii_opaque_session_token_is_still_accepted_in_synthetic_unit_test(): void
+    {
+        $grant = PortalGrant::allow(
+            'synthetic-company', 'synthetic-person', PortalAccessGate::VIEW, 1, self::NOW + 30
+        );
+        self::assertTrue($this->gate($grant)->authorize(
+            'token-ABC_123.+/=:~', 'synthetic-company', PortalAccessGate::VIEW, self::NOW
+        )->allowed);
+    }
+
     public function test_authority_budget_outside_safe_range_is_rejected(): void
     {
         foreach ([0, -1, 5001] as $budget) {
@@ -203,6 +213,12 @@ final class PortalAccessGateTest extends TestCase
             [str_repeat('x', 4097), 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
             ["synthetic\ncredential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
             ["synthetic\x00credential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic credential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic\x85credential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic\x9bcredential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic\u{200B}credential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic\u{202E}credential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
+            ["synthetic\xFFcredential", 'synthetic-company', PortalAccessGate::VIEW, self::NOW],
             ['synthetic-credential', str_repeat('c', 81), PortalAccessGate::VIEW, self::NOW],
             ['synthetic-credential', "synthetic\rcompany", PortalAccessGate::VIEW, self::NOW],
             ['synthetic-credential', 'synthetic-company', PortalAccessGate::VIEW, 0],

@@ -12,6 +12,8 @@ import {dirname,resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 import {safeBody, safeLine} from "./editorial-text-safety.mjs";
+import {auditEditorialLessonStructure} from "./audit-editorial-lesson-structure.mjs";
+import {buildEditorialReviewQueue} from "./build-editorial-review-queue.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -93,7 +95,14 @@ function preflightReviewSource(courses){
   }
   assert.equal(total,35,"Expected exactly 35 existing drafts");
 }
-preflightReviewSource(payload.courses);
+// ERD-R22: run the complete curriculum audit in the generator itself.
+ // Previously a direct invocation could produce a review package despite a
+ // one-word final section (the total lesson still exceeded 95 words).
+ // Check every lesson before emitting any output file.
+ const structuralAudit=auditEditorialLessonStructure(payload);
+ assert.equal(structuralAudit.structured_sections,140);
+ assert.equal(structuralAudit.release_decision,"HOLD_NO_GO");
+ preflightReviewSource(payload.courses);
 
 const indexes=[],reviewRows=[],hashes=[],seenCourse=new Set(),seenLesson=new Set();
 const lessonsDir=resolve(dest,"cursos");
@@ -147,6 +156,12 @@ for(const [courseIndex,course] of payload.courses.entries()){
 }
 assert.equal(lessonCount,35,"Expected exactly 35 existing drafts");
 const sourceHash=sha256(sourceBytes);
+// ERD-R25: deliver the prioritised, non-authorising review checklist in the
+// same human handoff as the CSV and offline HTML. No network or customer data.
+const reviewQueue=buildEditorialReviewQueue(payload,sourceBytes);
+assert.equal(reviewQueue.source_sha256,sourceHash);
+assert.equal(reviewQueue.queue.length,35);
+assert.equal(reviewQueue.release_decision,"HOLD_NO_GO");
 const doc=[
   "# Universidade Imagine — pacote de revisão editorial",
   "",
@@ -167,6 +182,7 @@ const doc=[
   "## Etapas para a equipe editorial",
   "",
   "Abra revisao-navegavel.html para navegar pelos 10 cursos e 35 aulas offline.",
+  "Abra FILA-REVISAO-35.md para priorizar 24 possíveis repetições estilísticas, sem autenticar aceite.",
   "Exporte o CSV; o registro nunca confirma identidade ou aprova publicação.",
   "",
   "1. Ler todos os textos em \`cursos/\` e registrar observações em \`revisao.csv\`.",
@@ -177,6 +193,7 @@ const doc=[
   "",
 ].join("\n");
 await writeFile(resolve(dest,"LEIA-PRIMEIRO.md"),doc,"utf8");
+await writeFile(resolve(dest,"FILA-REVISAO-35.md"),reviewQueue.markdown,"utf8");
 function csvField(v){
   return '"'+String(v).replaceAll('"','""')+'"';
 }

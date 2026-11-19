@@ -10,7 +10,8 @@ const root=fileURLToPath(new URL("../",import.meta.url));
 const source=JSON.parse(await readFile(new URL("../content/mvp-cursos-v1.json",import.meta.url),"utf8"));
 const temp=await mkdtemp(join(tmpdir(),"uni-editorial-preflight-"));
 const scripts=["build-editorial-review-pack.mjs","editorial-review-html.mjs",
-  "editorial-review-app.js","editorial-text-safety.mjs"];
+  "editorial-review-app.js","editorial-text-safety.mjs",
+  "audit-editorial-lesson-structure.mjs","build-editorial-review-queue.mjs"];
 let scenarios=0;
 try{
   await mkdir(join(temp,"scripts"));
@@ -43,6 +44,29 @@ try{
     }],
     ["last course repeats first identity",d=>{
       lastCourse(d).slug=d.courses[0].slug;
+    }],
+    // ERD-R22: this passed the previous total-word-count-only gate.
+    // The final caution section is reduced to a single word.
+    ["last lesson incomplete caution despite substantive total text",d=>{
+      const l=lastLesson(d);
+      l.body=l.body.replace(/(\n\nCUIDADO IMPORTANTE\n)[\s\S]*$/u,"$1Breve.");
+    }],
+    // ERD-R23: malicious markup in a legitimate-looking last lesson must not
+    // produce any review files, even when all 35 identities still match.
+    ["last lesson remote HTML image",d=>{
+      lastLesson(d).body+='\n\n<img src="https://example.invalid/track">';
+    }],
+    ["last lesson Markdown remote image",d=>{
+      lastLesson(d).body+='\n\n![Exemplo](https://example.invalid/pixel.png)';
+    }],
+    ["last lesson Markdown remote link",d=>{
+      lastLesson(d).body+='\n\n[Guia](https://example.invalid/guia)';
+    }],
+    ["last lesson reference link target",d=>{
+      lastLesson(d).body+='\n\n[guia]: https://example.invalid/guia';
+    }],
+    ["last lesson reference image",d=>{
+      lastLesson(d).body+='\n\n![Figura][fonte]';
     }]
   ];
   for(const [name,poison] of probes){
@@ -93,8 +117,8 @@ try{
   assert.deepEqual(await readdir(bomDest),[],
     "BOM source must not produce partial review output");
   scenarios++;
-  assert.equal(scenarios,9);
-  console.log("PASS ERD-R14/R18: "+scenarios+
+  assert.equal(scenarios,15);
+  console.log("PASS ERD-R14/R18/R22/R23: "+scenarios+
     " late-source negative scenarios leave zero partial output files; no publish or signoff.");
 }finally{
   await rm(temp,{recursive:true,force:true});

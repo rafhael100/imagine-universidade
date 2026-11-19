@@ -13,6 +13,10 @@
     $("confirm-export").disabled=true;
   }
   function confirmExport(){
+    if(importing){
+      message("Conclua a importação antes de confirmar o salvamento.",true);
+      return;
+    }
     if(exportPendingSnapshot===null||JSON.stringify([...state])!==exportPendingSnapshot){
       invalidateExportAcknowledgement();
       message("O rascunho mudou desde a exportação. Exporte o CSV novamente.",true);
@@ -137,6 +141,13 @@
     message("Não há aulas nesta situação para navegar.");
   }
   function update(){
+    // C185: prevent an in-flight file read from racing with edits, even if a
+    // script dispatches input events on disabled form fields.
+    if(importing){
+      render();
+      message("Importação em andamento: edição bloqueada até concluir.");
+      return;
+    }
     const row=state.get(key(items[current]));
     row.status=$("status").value;
     row.reviewer=$("reviewer").value;
@@ -171,6 +182,10 @@
   }
   const csv=v=>'"'+String(v).replaceAll('"','""')+'"';
   function exportCsv(){
+    if(importing){
+      message("Conclua a importação antes de exportar.",true);
+      return;
+    }
     try{
       const rows=[["course_slug","lesson_slug","content_sha256","review_status",
         "reviewer","evidence_ref","notes"]];
@@ -197,6 +212,10 @@
     }catch(error){message(String(error.message),true);}
   }
   function exportSummary(){
+    if(importing){
+      message("Conclua a importação antes de gerar o resumo.",true);
+      return;
+    }
     try{
       // A summary is NOT a durable substitute for the editable CSV.
       // Keep dirty=true until the user explicitly exports the CSV.
@@ -293,9 +312,14 @@
     // Capture the selected operation BEFORE file I/O: a mode switch during
     // an awaited read must not turn a merge into a destructive replacement.
     const mode=$("import-mode").value;
+    const editors=["status","reviewer","evidence","notes"];
+    const confirmationWasEnabled=!$("confirm-export").disabled;
     importing=true;
     $("import").disabled=true;
     $("import-mode").disabled=true;
+    for(const id of editors)$(id).disabled=true;
+    for(const id of ["export","export-summary","confirm-export"])$(id).disabled=true;
+    message("Importação em andamento; edição e exportação temporariamente bloqueadas.");
     try{
       if(file.size>1000000)throw Error("CSV excede 1 MB.");
       // File.text() can silently replace damaged UTF-8 with U+FFFD.
@@ -388,6 +412,12 @@
       importing=false;
       $("import-mode").disabled=false;
       $("import").disabled=false;
+      for(const id of editors)$(id).disabled=false;
+      $("export").disabled=false;
+      $("export-summary").disabled=false;
+      // A rejected or unchanged CSV must not destroy an existing acknowledgment.
+      $("confirm-export").disabled=!(confirmationWasEnabled&&
+        exportPendingSnapshot!==null&&JSON.stringify([...state])===exportPendingSnapshot);
       $("import").value="";
     }
   }

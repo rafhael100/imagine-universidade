@@ -256,6 +256,32 @@ module.exports=async function({browser,out,check}){
     check(await importedPage.locator("#status").inputValue()==="NEEDS_CHANGES" &&
       (await importedPage.locator("#notes").inputValue()).includes("Revisar métricas"),
       "C159 failed import leaves the previously reviewed data intact");
+    // C186: a malformed import cannot invalidate a previously exported
+    // snapshot or erase human notes when nothing was actually imported.
+    const ackPage=await browserContext.newPage();
+    ackPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await ackPage.goto(url,{waitUntil:"load"});
+    await ackPage.locator("#notes").fill("Revisão local para conservar após falha");
+    const [ackDownload]=await Promise.all([
+      ackPage.waitForEvent("download",{timeout:10000}),
+      ackPage.locator("#export").click()
+    ]);
+    await ackDownload.saveAs(path.join(dir,"revisao-antes-import-invalido.csv"));
+    check(await ackPage.locator("#confirm-export").isEnabled(),
+      "C186 acknowledgment offered for previously exported CSV");
+    await ackPage.locator("#import").setInputFiles(invalidCsvPath);
+    await ackPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Importação recusada"),
+      null,{timeout:10000});
+    check(await ackPage.locator("#confirm-export").isEnabled()&&
+      (await ackPage.locator("#notes").inputValue()).includes("Revisão local"),
+      "C186 rejected CSV restores download acknowledgment and original notes");
+    await ackPage.locator("#confirm-export").click();
+    check(!(await ackPage.evaluate(()=>{
+      const event=new Event("beforeunload",{cancelable:true});
+      dispatchEvent(event);return event.defaultPrevented;
+    })),"C186 original saved CSV may still be acknowledged after failed import");
+    await ackPage.close();
     check(await importedPage.locator("#import-mode").inputValue()==="merge",
       "C167 merging another person's CSV is the conservative default");
     const originalCsv=fs.readFileSync(path.join(dir,"revisao.csv"),"utf8");
@@ -450,6 +476,23 @@ module.exports=async function({browser,out,check}){
     check(await lockedPage.locator("#import").isDisabled()&&
       await lockedPage.locator("#import-mode").isDisabled(),
       "C179 in-flight import locks file and mode controls");
+    check(await lockedPage.locator("#status").isDisabled()&&
+      await lockedPage.locator("#reviewer").isDisabled()&&
+      await lockedPage.locator("#evidence").isDisabled()&&
+      await lockedPage.locator("#notes").isDisabled(),
+      "C185 delayed CSV read locks all editorial editing fields");
+    check(await lockedPage.locator("#export").isDisabled()&&
+      await lockedPage.locator("#export-summary").isDisabled()&&
+      await lockedPage.locator("#confirm-export").isDisabled(),
+      "C186 import also locks export/summary/save acknowledgment");
+    await lockedPage.evaluate(()=>{
+      const notes=document.getElementById("notes");
+      notes.value="Anotação forçada durante importação";
+      notes.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    check((await lockedPage.locator("#notes").inputValue())===""&&
+      (await lockedPage.locator("#summary").innerText()).includes("35 pendentes"),
+      "C185 programmatically forced input is rejected without corrupting draft");
     await lockedPage.evaluate(()=>{
       document.getElementById("import").dispatchEvent(new Event("change",{bubbles:true}));
     });
@@ -469,6 +512,11 @@ module.exports=async function({browser,out,check}){
     check(!(await lockedPage.locator("#import").isDisabled())&&
       !(await lockedPage.locator("#import-mode").isDisabled()),
       "C179 controls unlock after import finishes");
+    check(!(await lockedPage.locator("#notes").isDisabled())&&
+      !(await lockedPage.locator("#status").isDisabled())&&
+      !(await lockedPage.locator("#export").isDisabled())&&
+      !(await lockedPage.locator("#export-summary").isDisabled()),
+      "C185/C186 editing and export controls unlock after import completes");
     // C180: the same 1 MB byte boundary also holds in the browser.
     const oversizedPath=path.join(dir,"revisao-maior-1mb.csv");
     fs.writeFileSync(oversizedPath,Buffer.alloc(1000001,0x20));

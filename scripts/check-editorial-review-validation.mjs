@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
-import {mkdtemp,readFile,rm} from "node:fs/promises";
+import {mkdtemp,readFile,rm,writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
@@ -98,6 +98,23 @@ try{
   rejects("word joiner inside notes",alter(csv,1,6,"Texto\u2060oculto"));
   rejects("internal BOM inside notes",alter(csv,1,6,"Texto\ufeffoculto"));
   rejects("zero-width formula prefix",alter(csv,1,6,"\u200b=HYPERLINK(1)"));
+  // Invalid UTF-8 within an otherwise valid pending note must fail on bytes.
+  const poisoned=csv.replace('"PENDING_HUMAN_REVIEW","","",""',
+    '"PENDING_HUMAN_REVIEW","","","~"');
+  assert.notEqual(poisoned,csv,"Invalid UTF-8 fixture must alter a pending note");
+  const bytes=Buffer.from(poisoned,"utf8");
+  const marker=bytes.indexOf(Buffer.from(',"~"\n'));
+  assert.ok(marker>=0,"Expected pending note marker");
+  bytes[marker+2]=0xc3; // Incomplete UTF-8 before closing quote.
+  const malformedPath=join(dir,"invalid-utf8.csv");
+  await writeFile(malformedPath,bytes);
+  const strict=spawnSync(process.execPath,[
+    fileURLToPath(new URL("./validate-editorial-review.mjs",import.meta.url)),
+    "--csv",malformedPath
+  ],{cwd:root,encoding:"utf8"});
+  assert.notEqual(strict.status,0,"Invalid UTF-8 must fail before CSV schema check");
+  assert.match(strict.stderr,/encoded data was not valid|utf-8/iu);
+  scenarios++;
   const named=alter(alter(alter(csv,1,3,"NEEDS_CHANGES"),1,4,"Equipe de QA"),1,5,ref);
   rejects("spreadsheet formula in reviewer",alter(named,1,4,"@cmd"));
   rejects("newline in reviewer",alter(named,1,4,"Revisora\nFalsa"));
@@ -114,7 +131,7 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,37);
+  assert.equal(scenarios,38);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

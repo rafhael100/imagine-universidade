@@ -116,7 +116,8 @@ export function inspectEditorialReview(csvText,sourceText){
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   assert.equal(process.argv[2],"--csv","Usage: --csv <review spreadsheet>");
   assert.equal(process.argv.length,4);
-  const csv=await readFile(process.argv[3],"utf8");
+  // Reject invalid UTF-8 instead of silently substituting replacement glyphs.
+  const csv=new TextDecoder("utf-8",{fatal:true}).decode(await readFile(process.argv[3]));
   const source=await readFile(new URL("../content/mvp-cursos-v1.json",import.meta.url),"utf8");
   console.log(JSON.stringify(inspectEditorialReview(csv,source),null,2));
 }

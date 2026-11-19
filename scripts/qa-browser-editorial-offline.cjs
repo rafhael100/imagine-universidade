@@ -94,6 +94,29 @@ module.exports=async function({browser,out,check}){
     });
     check(changed.summary>=2&&changed.message===0,
       "C176 actual status changes still update the live summary without repetitive message");
+    // C177: mutation counts prove that stable navigation labels stay quiet.
+    await page.evaluate(()=>{
+      window.__uniNavMutations={courses:0,search:0};
+      const mutations=window.__uniNavMutations;
+      new MutationObserver(rows=>{mutations.courses+=rows.length;}).observe(
+        document.getElementById("courses"),{childList:true,characterData:true,subtree:true});
+      new MutationObserver(rows=>{mutations.search+=rows.length;}).observe(
+        document.getElementById("review-search-count"),{childList:true,characterData:true,subtree:true});
+    });
+    await page.locator("#notes").dispatchEvent("input");
+    await page.locator("#notes").dispatchEvent("input");
+    const quietNav=await page.evaluate(async()=>{
+      await Promise.resolve();return {...window.__uniNavMutations};
+    });
+    check(quietNav.courses===0&&quietNav.search===0,
+      "C177 repeated notes do not rewrite course labels or live search count");
+    await page.locator("#status").selectOption("PENDING_HUMAN_REVIEW");
+    await page.locator("#status").selectOption("NEEDS_CHANGES");
+    const navChanged=await page.evaluate(async()=>{
+      await Promise.resolve();return {...window.__uniNavMutations};
+    });
+    check(navChanged.courses>=2,
+      "C177 genuine pending-count changes still update course navigation");
     await page.locator("#next").click();
     await page.locator("#previous").click();
     check(await page.locator("#status").inputValue()==="NEEDS_CHANGES" &&
@@ -107,6 +130,10 @@ module.exports=async function({browser,out,check}){
     check((await page.locator("#review-search-count").innerText()).includes("1 aulas"),
       "C163 status filter has explicit live result count");
     await page.locator("#review-search").fill("VISITAS");
+    const countEvents=await page.evaluate(()=>window.__uniNavMutations.search);
+    await page.locator("#review-search").fill("VISITA");
+    check(await page.evaluate(()=>window.__uniNavMutations.search)===countEvents,
+      "C177 unchanged result count avoids duplicate aria-live announcements");
     check(await page.locator("#review-results .review-result").count()===1,
       "C163 case-insensitive search respects current review status");
     await page.locator("#review-search").fill("inexistente");
@@ -358,6 +385,20 @@ module.exports=async function({browser,out,check}){
     check((await importedPage.locator("#message").innerText()).includes("aspas fechadas") &&
       (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
       "C173 noncanonical CSV quote is refused atomically even when parsed text would match");
+    // C178: corrupt bytes must not become replacement characters in notes.
+    const invalidEncoding=Buffer.from(csv,"utf8");
+    const noteAt=invalidEncoding.indexOf(Buffer.from("Revisar métricas"));
+    check(noteAt>=0,"C178 tampering targets an existing valid review note");
+    invalidEncoding[noteAt]=0xc3;
+    const utf8Path=path.join(dir,"revisao-utf8-invalido.csv");
+    fs.writeFileSync(utf8Path,invalidEncoding);
+    await importedPage.locator("#import").setInputFiles(utf8Path);
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("UTF-8 válido"),
+      null,{timeout:10000}
+    );
+    check((await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
+      "C178 invalid UTF-8 is rejected before atomic merge; local reviews remain");
     await importedPage.close();
 
     await page.locator("#notes").fill("Observação\u200boculta");

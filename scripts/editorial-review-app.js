@@ -27,7 +27,9 @@
       const slug=button.dataset.courseSlug;
       const rows=items.filter(item=>item.course_slug===slug);
       const pending=rows.filter(item=>state.get(key(item)).status==="PENDING_HUMAN_REVIEW").length;
-      button.textContent=rows[0].course_title+" ("+pending+" pendentes / "+rows.length+")";
+      const label=rows[0].course_title+" ("+pending+" pendentes / "+rows.length+")";
+      // Do not rewrite the navigation label on every keystroke.
+      if(button.textContent!==label)button.textContent=label;
     }
     $("next-pending").disabled=stats.PENDING_HUMAN_REVIEW===0;
     $("next-adjustment").disabled=stats.NEEDS_CHANGES===0;
@@ -48,9 +50,12 @@
     const active=term!==""||status!=="ALL",holder=$("review-results");
     holder.hidden=!active;
     holder.replaceChildren();
-    $("review-search-count").textContent=active
+    const countLabel=active
       ?matches.length+" aulas encontradas neste filtro"
       :"Digite para localizar uma aula ou selecione uma situação.";
+    // Only actual changes should enter this aria-live region.
+    if($("review-search-count").textContent!==countLabel)
+      $("review-search-count").textContent=countLabel;
     if(!active)return;
     for(const [i,lesson] of matches){
       const b=document.createElement("button");
@@ -264,7 +269,11 @@
     if(!file)return;
     try{
       if(file.size>1000000)throw Error("CSV excede 1 MB.");
-      const parsed=parseCsv(await file.text());
+      // File.text() can silently replace damaged UTF-8 with U+FFFD.
+      let decoded;
+      try{decoded=new TextDecoder("utf-8",{fatal:true}).decode(await file.arrayBuffer());}
+      catch{throw Error("CSV deve usar UTF-8 válido; arquivo não foi importado.");}
+      const parsed=parseCsv(decoded);
       const header=["course_slug","lesson_slug","content_sha256","review_status",
         "reviewer","evidence_ref","notes"];
       if(parsed.length!==36||JSON.stringify(parsed[0])!==JSON.stringify(header))

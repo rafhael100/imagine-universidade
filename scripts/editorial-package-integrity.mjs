@@ -150,7 +150,45 @@ export async function verifyEditorialSourceBinding(directory,sourceFile){
   const stat=await lstat(absolute);
   assert.ok(stat.isFile()&&!stat.isSymbolicLink(),
     "Original curriculum source must be a regular non-symlink file");
-  assert.equal(hash(await readFile(absolute)),verified.source_sha256,
+  const sourceBytes=await readFile(absolute);
+  assert.equal(hash(sourceBytes),verified.source_sha256,
     "Original curriculum bytes differ from the package source SHA-256");
+  // ERD-R32: hash equality alone does not prove that a review manifest's
+  // individual lesson identities or hashes were derived from that source.
+  // An unsigned pack can be rehashed after editing just its metadata.
+  // With --source, recompute each course and lesson identity from the pinned
+  // original bytes, including source order and the exact pedagogical body.
+  assert.ok(!(sourceBytes[0]===0xEF&&sourceBytes[1]===0xBB&&sourceBytes[2]===0xBF),
+    "Original curriculum source must not contain UTF-8 BOM");
+  const source=JSON.parse(new TextDecoder("utf-8",{fatal:true,ignoreBOM:true})
+    .decode(sourceBytes));
+  assert.ok(Array.isArray(source.courses),"Original curriculum must list courses");
+  const expectedCourses=source.courses.map((course,index)=>({
+    course_slug:course.slug,
+    title:course.title,
+    category:course.category,
+    lessons:course.lessons.length,
+    file:`cursos/${String(index+1).padStart(2,"0")}-${course.slug}.md`
+  }));
+  const expectedLessons=source.courses.flatMap(course=>course.lessons.map(lesson=>({
+    course_slug:course.slug,
+    lesson_slug:lesson.slug,
+    content_sha256:hash(JSON.stringify({
+      course_slug:course.slug,course_title:course.title,category:course.category,
+      lesson_slug:lesson.slug,lesson_title:lesson.title,body:lesson.body
+    })),
+    review_status:"PENDING_HUMAN_REVIEW",
+    reviewed_by:null,
+    review_evidence:null
+  })));
+  const manifestPath=join(resolve(directory),"manifesto-revisao.json");
+  const manifestStat=await lstat(manifestPath);
+  assert.ok(manifestStat.isFile()&&!manifestStat.isSymbolicLink(),
+    "Source review manifest must remain a regular non-symlink file");
+  const reviewManifest=JSON.parse(await readFile(manifestPath,"utf8"));
+  assert.deepEqual(reviewManifest.courses,expectedCourses,
+    "Review course metadata differs from versioned curriculum");
+  assert.deepEqual(reviewManifest.lessons,expectedLessons,
+    "Review lesson identities/checksums diverge from versioned curriculum");
   return verified;
 }

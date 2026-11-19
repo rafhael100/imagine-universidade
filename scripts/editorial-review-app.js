@@ -72,23 +72,39 @@
     });
     const active=term!==""||status!=="ALL",holder=$("review-results");
     holder.hidden=!active;
-    holder.replaceChildren();
     const countLabel=active
       ?(matches.length===1?"1 aula encontrada neste filtro":matches.length+" aulas encontradas neste filtro")
       :"Digite para localizar uma aula ou selecione uma situação.";
     // Only actual changes should enter this aria-live region.
     if($("review-search-count").textContent!==countLabel)
       $("review-search-count").textContent=countLabel;
-    if(!active)return;
-    for(const [i,lesson] of matches){
-      const b=document.createElement("button");
-      b.className="review-result";
-      b.type="button";
-      b.dataset.lessonIndex=String(i);
-      b.textContent=lesson.course_title+" · "+lesson.lesson_title;
-      b.setAttribute("aria-current",i===current?"true":"false");
-      b.addEventListener("click",()=>choose(i));
-      holder.append(b);
+    if(!active){
+      if(holder.childElementCount)holder.replaceChildren();
+      return;
+    }
+    // ERD-R04: do not destroy identical result buttons on each keystroke.
+    // Keeping their DOM identity preserves keyboard focus and avoids noisy
+    // re-announcements while the search result identities remain unchanged.
+    const buttons=[...holder.querySelectorAll(".review-result")];
+    const sameResults=buttons.length===matches.length&&
+      buttons.every((button,j)=>button.dataset.lessonIndex===String(matches[j][0]));
+    if(!sameResults){
+      holder.replaceChildren();
+      for(const [i,lesson] of matches){
+        const b=document.createElement("button");
+        b.className="review-result";
+        b.type="button";
+        b.dataset.lessonIndex=String(i);
+        b.textContent=lesson.course_title+" · "+lesson.lesson_title;
+        b.addEventListener("click",()=>choose(i));
+        holder.append(b);
+      }
+    }
+    // Selection can change without changing the result identities.
+    for(const button of holder.querySelectorAll(".review-result")){
+      const selected=button.dataset.lessonIndex===String(current);
+      if(button.getAttribute("aria-current")!==(selected?"true":"false"))
+        button.setAttribute("aria-current",selected?"true":"false");
     }
   }
   function render(){

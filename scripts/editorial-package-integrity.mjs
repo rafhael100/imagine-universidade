@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
 import {lstat,readFile,readdir,writeFile} from "node:fs/promises";
 import {dirname,join,resolve} from "node:path";
+import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
+import {buildEditorialReviewQueue} from "./build-editorial-review-queue.mjs";
 
 // ERD-R26: detect accidental corruption of an offline, UNSIGNED review handoff.
 // Checksums are NOT signatures, reviewer identity or release authorization.
@@ -207,5 +209,16 @@ export async function verifyEditorialSourceBinding(directory,sourceFile){
   ].map(row=>row.map(csvField).join(",")).join("\n")+"\n";
   assert.equal(await readFile(csvPath,"utf8"),expectedCsv,
     "Review CSV differs from original pending-only handoff");
+  // ERD-R36/R37: a rehashed local HTML or queue can mislead reviewers or
+  // execute a different offline script while preserving every source hash.
+  // The source-bound verification therefore checks the exact deterministic
+  // bytes emitted by the *current versioned* review UI and queue renderers.
+  const expectedHtml=renderOfflineReviewPage(source,expectedLessons);
+  assert.equal(await readFile(join(resolve(directory),"revisao-navegavel.html"),"utf8"),
+    expectedHtml,"Offline review HTML differs from versioned source and UI");
+  const expectedQueue=buildEditorialReviewQueue(source,sourceBytes);
+  assert.equal(expectedQueue.release_decision,"HOLD_NO_GO");
+  assert.equal(await readFile(join(resolve(directory),"FILA-REVISAO-35.md"),"utf8"),
+    expectedQueue.markdown,"Offline editorial queue differs from versioned source");
   return verified;
 }

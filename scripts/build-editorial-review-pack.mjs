@@ -14,6 +14,7 @@ import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 import {safeBody, safeLine} from "./editorial-text-safety.mjs";
 import {auditEditorialLessonStructure} from "./audit-editorial-lesson-structure.mjs";
 import {buildEditorialReviewQueue} from "./build-editorial-review-queue.mjs";
+import {sealEditorialPackage} from "./editorial-package-integrity.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -207,4 +208,7 @@ const machine={schema_version:1,source_path:"content/mvp-cursos-v1.json",
   source_sha256:sourceHash,status:"PENDING_HUMAN_REVIEW",publishable:false,
   course_count:indexes.length,lesson_count:lessonCount,courses:indexes,lessons:hashes};
 await writeFile(resolve(dest,"manifesto-revisao.json"),JSON.stringify(machine,null,2)+"\n","utf8");
+// ERD-R26: record byte-level checksums of the complete UNSIGNED offline handoff.
+// A checksum is corruption detection, NOT an authenticated human approval.
+await sealEditorialPackage(dest);
 console.log("PASS editorial handoff: 10 courses/35 full-text lessons; per-lesson content hashes, pending human review, no publication.");

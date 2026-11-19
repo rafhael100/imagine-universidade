@@ -145,6 +145,21 @@ module.exports=async function({browser,out,check}){
     await page.locator("#review-filter").selectOption("ALL");
     check(await page.locator("#review-results").isHidden(),
       "C163 empty search and all-status filter do not clutter the editor");
+    // ERD-R01: find notes/reviewers in this local, offline session; preserve
+    // existing status filtering and do not display private notes in buttons.
+    await page.locator("#review-search").fill("metricas");
+    check(await page.locator("#review-results .review-result").count()===1 &&
+      (await page.locator("#review-results .review-result").first().innerText()).includes("Visitas"),
+      "ERD-R01 unaccented search finds an accented editorial note");
+    await page.locator("#review-search").fill("equipe editorial qa");
+    check(await page.locator("#review-results .review-result").count()===1,
+      "ERD-R01 reviewer drafts are searchable without showing reviewer in result label");
+    await page.locator("#review-filter").selectOption("PENDING_HUMAN_REVIEW");
+    check(await page.locator("#review-results .review-result").count()===0,
+      "ERD-R01 draft search still respects selected review status");
+    await page.locator("#review-filter").selectOption("ALL");
+    await page.locator("#review-search").fill("");
+
 
     check((await page.locator("#courses .course-item").first().innerText()).includes("3 pendentes / 4"),
       "C160 first course shows accurate unfinished lesson count");
@@ -369,6 +384,9 @@ module.exports=async function({browser,out,check}){
     check(cleanPrompt.includes("Substituir 1 de 35")&&
       (await cleanReplacement.locator("#summary").innerText()).includes("35 pendentes"),
       "C174 clean editor requires explicit confirmation before replacing even one row");
+    check(cleanPrompt.includes("Aulas divergentes (até 5):")&&
+      /\n  - [^\r\n]+\/[^\r\n]+/u.test(cleanPrompt),
+      "ERD-R02 replacement dialog identifies which lesson rows will be overwritten");
     cleanReplacement.once("dialog",async dialog=>{await dialog.accept();});
     await cleanReplacement.locator("#import").setInputFiles(csvPath);
     await cleanReplacement.waitForFunction(

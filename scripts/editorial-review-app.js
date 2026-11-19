@@ -62,7 +62,11 @@
     const matches=[];
     items.forEach((lesson,i)=>{
       if(status!=="ALL"&&state.get(key(lesson)).status!==status)return;
-      const searchable=normalizeSearch(lesson.course_title+" "+lesson.lesson_title);
+      // ERD-R01: local-only search includes the reviewer draft, without rendering
+      // untrusted notes in result labels or sending them to a server.
+      const draft=state.get(key(lesson));
+      const searchable=normalizeSearch(lesson.course_title+" "+lesson.lesson_title+
+        " "+draft.notes+" "+draft.reviewer);
       if(term!==""&&!searchable.includes(term))return;
       matches.push([i,lesson]);
     });
@@ -354,8 +358,9 @@
       if(mode==="replace"){
         // A clean editor may still have a valid prior CSV or an accidental
         // mode selection. Always ask before discarding a differing draft.
-        const differences=[...next].filter(([id,item])=>
-          JSON.stringify(state.get(id))!==JSON.stringify(item)).length;
+        const changedIds=[...next].filter(([id,item])=>
+          JSON.stringify(state.get(id))!==JSON.stringify(item)).map(([id])=>id);
+        const differences=changedIds.length;
         if(differences===0){
           message("CSV idêntico: sem diferenças para substituir. Rascunho preservado.");
           return;
@@ -363,7 +368,10 @@
         const warning="Substituir "+differences+" de 35 aula(s) pelo CSV recebido? "+
           "Esta ação descarta qualquer revisão local divergente."+
           (dirty?" Há alterações locais ainda não exportadas.":"")+
-          " Nenhum aceite será autenticado.";
+          " Nenhum aceite será autenticado."+ 
+          "\n\nAulas divergentes (até 5):\n"+
+          changedIds.slice(0,5).map(id=>"  - "+id).join("\n")+
+          (differences>5?"\n  ... e mais "+(differences-5)+" aula(s).":"");
         if(!window.confirm(warning)){
           message("Substituição cancelada; revisões existentes preservadas.");
           return;

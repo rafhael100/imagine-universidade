@@ -86,7 +86,7 @@ export function renderOfflineReviewPage(payload,hashes){
     "<p id='summary' role='status' aria-live='polite'></p>",
     "<p id='message' role='status' aria-live='polite'></p>",
     "<section aria-label='Localizador editorial'>",
-    "<label for='review-search'>Buscar curso ou aula</label>",
+    "<label for='review-search'>Buscar curso, aula, observação ou revisor</label>",
     "<input id='review-search' type='search' maxlength='120' autocomplete='off' placeholder='Ex.: Visitas, Lead, IA'>",
     "<label for='review-filter'>Filtrar por situação</label>",
     "<select id='review-filter'>",

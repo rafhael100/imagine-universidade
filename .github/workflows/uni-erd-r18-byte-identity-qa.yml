@@ -1,4 +1,4 @@
-name: UNI ERD R18-R19 raw-byte editorial source QA
+name: UNI ERD R18-R21 editorial integrity QA
 
 on:
   push:
@@ -10,6 +10,7 @@ on:
       - 'scripts/check-editorial-review-pack.mjs'
       - 'scripts/check-editorial-pack-preflight.mjs'
       - 'scripts/editorial-text-safety.mjs'
+      - 'scripts/check-editorial-text-safety.mjs'
       - 'scripts/editorial-review-html.mjs'
       - 'scripts/editorial-review-app.js'
       - 'content/mvp-cursos-v1.json'
@@ -49,6 +50,7 @@ jobs:
           node --check scripts/check-editorial-pack-preflight.mjs
           node --check scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-text-safety.mjs
+          node scripts/audit-editorial-lesson-structure.mjs
           node scripts/check-editorial-pack-preflight.mjs
           node scripts/check-editorial-review-pack.mjs
           node scripts/check-editorial-review-validation.mjs

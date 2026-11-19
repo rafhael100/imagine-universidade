@@ -40,7 +40,26 @@ export async function calculateEditorialPackageIntegrity(directory,{sealed=false
   const manifestStat=await lstat(manifestPath);
   assert.ok(manifestStat.isFile()&&!manifestStat.isSymbolicLink(),
     "Source review manifest must be a regular non-symlink file");
-  const sourceManifest=JSON.parse(await readFile(manifestPath,"utf8"));
+  // ERD-R42/R43: an UNSIGNED but rehashed manifest must not smuggle extra
+  // approval keys or duplicate JSON members that another reader could parse
+  // differently. Only our generated, unique-key canonical JSON is accepted.
+  const manifestBytes=await readFile(manifestPath);
+  assert.ok(!(manifestBytes[0]===0xef&&manifestBytes[1]===0xbb&&manifestBytes[2]===0xbf),
+    "Review manifest must not contain UTF-8 BOM");
+  const manifestText=new TextDecoder("utf-8",{fatal:true,ignoreBOM:true}).decode(manifestBytes);
+  const sourceManifest=JSON.parse(manifestText);
+  assert.equal(manifestText,JSON.stringify(sourceManifest,null,2)+"\n",
+    "Review manifest must be canonical JSON without duplicate keys");
+  function requireExactFields(record,fields,label){
+    assert.ok(record&&typeof record==="object"&&!Array.isArray(record),
+      label+" must be an object");
+    assert.deepEqual(Object.keys(record).sort(),[...fields].sort(),
+      "Unexpected "+label+" fields");
+  }
+  requireExactFields(sourceManifest,[
+    "schema_version","source_path","source_sha256","status","publishable",
+    "course_count","lesson_count","courses","lessons"
+  ],"review manifest");
   assert.equal(sourceManifest.schema_version,1);
   assert.equal(sourceManifest.source_path,"content/mvp-cursos-v1.json",
     "Review source path must be the pinned versioned curriculum");
@@ -56,6 +75,8 @@ export async function calculateEditorialPackageIntegrity(directory,{sealed=false
   // proves neither authorisation nor provenance; these are schema invariants.
   const coursePaths=[],courseSlugs=new Set(),lessonCounts=new Map();
   for(const [index,course] of sourceManifest.courses.entries()){
+    requireExactFields(course,["course_slug","title","category","lessons","file"],
+      "course review manifest");
     assert.ok(typeof course.course_slug==="string"&&
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(course.course_slug)&&course.course_slug.length<=120,
       "Invalid course identity in review manifest");
@@ -81,6 +102,10 @@ export async function calculateEditorialPackageIntegrity(directory,{sealed=false
   assert.equal(new Set(coursePaths).size,10,"Duplicate course review file");
   const lessonIds=new Set();
   for(const lesson of sourceManifest.lessons){
+    requireExactFields(lesson,[
+      "course_slug","lesson_slug","content_sha256","review_status",
+      "reviewed_by","review_evidence"
+    ],"lesson review manifest");
     assert.ok(courseSlugs.has(lesson.course_slug),
       "Lesson references an unknown course");
     assert.ok(typeof lesson.lesson_slug==="string"&&
@@ -138,7 +163,16 @@ export async function sealEditorialPackage(directory){
 }
 export async function verifyEditorialPackage(directory){
   const expected=await calculateEditorialPackageIntegrity(directory,{sealed:true});
-  const stored=JSON.parse(await readFile(join(resolve(directory),INTEGRITY_FILE),"utf8"));
+  // ERD-R44: seals also contain a human-readable HOLD_NO_GO decision. Refuse
+  // duplicate members/BOM/noncanonical bytes instead of trusting JSON.parse
+  // last-key-wins semantics, even when the 15 file hashes are unchanged.
+  const sealBytes=await readFile(join(resolve(directory),INTEGRITY_FILE));
+  assert.ok(!(sealBytes[0]===0xef&&sealBytes[1]===0xbb&&sealBytes[2]===0xbf),
+    "Integrity manifest must not contain UTF-8 BOM");
+  const sealText=new TextDecoder("utf-8",{fatal:true,ignoreBOM:true}).decode(sealBytes);
+  const stored=JSON.parse(sealText);
+  assert.equal(sealText,JSON.stringify(stored,null,2)+"\n",
+    "Integrity manifest must be canonical JSON without duplicate keys");
   assert.deepEqual(stored,expected,
     "Offline package differs from recorded checksums; preserve it and investigate");
   return expected;

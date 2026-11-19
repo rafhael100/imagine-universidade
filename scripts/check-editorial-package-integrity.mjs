@@ -26,13 +26,16 @@ async function clonedCase(name,change){
 // ERD-R31: prove malformed editorial metadata is refused EVEN when an
 // operator/attacker updates the UNSIGNED checksum record consistently.
 // This is schema validation, not proof of the package's trusted origin.
-async function clonedRehashedCase(name,modify,expectedError,{sourceBound=false}={}){
+async function clonedRehashedCase(name,modify,expectedError,{sourceBound=false,raw=false}={}){
   const folder=join(temp,"rehashed-"+name);
   await cp(original,folder,{recursive:true});
   const path=join(folder,"manifesto-revisao.json");
-  const manifest=JSON.parse(await readFile(path,"utf8"));
-  modify(manifest);
-  const bytes=Buffer.from(JSON.stringify(manifest,null,2)+"\n","utf8");
+  const inputText=await readFile(path,"utf8");
+  const manifest=JSON.parse(inputText);
+  // ERD-R43: raw mutation can insert duplicate JSON keys or invalid BOM;
+  // rehashing proves this is a schema refusal, not a checksum mismatch.
+  const changedText=raw?modify(inputText):(modify(manifest),JSON.stringify(manifest,null,2)+"\n");
+  const bytes=Buffer.from(changedText,"utf8");
   await writeFile(path,bytes);
   const integrityPath=join(folder,INTEGRITY_FILE);
   const integrity=JSON.parse(await readFile(integrityPath,"utf8"));
@@ -53,6 +56,19 @@ async function clonedRehashedCase(name,modify,expectedError,{sourceBound=false}=
     await assert.rejects(verifyEditorialPackage(folder),expectedError,
       "A rehashed but contradictory manifest must be rejected: "+name);
   }
+  negatives++;
+}
+// ERD-R44: the seal itself is unsigned, but must remain unambiguous.
+async function clonedSealCase(name,mutate,expectedError){
+  const folder=join(temp,"seal-"+name);
+  await cp(original,folder,{recursive:true});
+  const sealPath=join(folder,INTEGRITY_FILE);
+  const originalText=await readFile(sealPath,"utf8");
+  const changedText=mutate(originalText);
+  assert.notEqual(changedText,originalText,"Seal mutation must change bytes");
+  await writeFile(sealPath,changedText,"utf8");
+  await assert.rejects(verifyEditorialPackage(folder),expectedError,
+    "A rehashed or ambiguous integrity seal must be rejected: "+name);
   negatives++;
 }
 // ERD-R35/R38: amend an exported file, then update its UNSIGNED checksum.
@@ -230,15 +246,46 @@ try{
     /Offline editorial queue differs from versioned source/u);
   // ERD-R41: a root-level 'release decision' can be forged while the
   // checksums and nested course/lesson metadata remain otherwise correct.
+  // ERD-R42: these three spoofed approval keys used to pass --dir, only
+  // failing the optional --source. Fail closed at the basic schema boundary.
   await clonedRehashedCase("source-fake-go",m=>{
     m.release_decision="GO";
-  },/Review manifest differs from canonical versioned source/u,{sourceBound:true});
+  },/Unexpected review manifest fields/u);
   await clonedRehashedCase("source-fake-approval",m=>{
     m.editorial_signoff="approved-by-example";
-  },/Review manifest differs from canonical versioned source/u,{sourceBound:true});
+  },/Unexpected review manifest fields/u);
   await clonedRehashedCase("source-unknown-root-key",m=>{
     m.release_authorized_at="2026-11-19";
-  },/Review manifest differs from canonical versioned source/u,{sourceBound:true});
+  },/Unexpected review manifest fields/u);
+  await clonedRehashedCase("extra-course-published-flag",m=>{
+    m.courses[0].publishable=true;
+  },/Unexpected course review manifest fields/u);
+  await clonedRehashedCase("extra-lesson-approval",m=>{
+    m.lessons[0].approved=true;
+  },/Unexpected lesson review manifest fields/u);
+  // ERD-R43: JSON.parse alone keeps the last duplicate key; a second parser
+  // could show the earlier 'APPROVED' or 'publishable: true' value.
+  await clonedRehashedCase("duplicate-publishable-key",rawText=>
+    rawText.replace('"publishable": false,',
+      '"publishable": true,\n  "publishable": false,'),
+    /Review manifest must be canonical JSON without duplicate keys/u,{raw:true});
+  await clonedRehashedCase("duplicate-lesson-review-key",rawText=>
+    rawText.replace('"review_status": "PENDING_HUMAN_REVIEW",',
+      '"review_status": "APPROVED",\n      "review_status": "PENDING_HUMAN_REVIEW",'),
+    /Review manifest must be canonical JSON without duplicate keys/u,{raw:true});
+  await clonedRehashedCase("extra-trailing-newline",rawText=>rawText+"\n",
+    /Review manifest must be canonical JSON without duplicate keys/u,{raw:true});
+  await clonedRehashedCase("source-manifest-bom",rawText=>"\uFEFF"+rawText,
+    /Review manifest must not contain UTF-8 BOM/u,{raw:true});
+  // ERD-R44: a seal with two 'release_decision' members cannot pass --dir.
+  await clonedSealCase("duplicate-release-decision",rawText=>
+    rawText.replace('"release_decision": "HOLD_NO_GO",',
+      '"release_decision": "GO",\n  "release_decision": "HOLD_NO_GO",'),
+    /Integrity manifest must be canonical JSON without duplicate keys/u);
+  await clonedSealCase("noncanonical-seal-whitespace",rawText=>rawText+"\n",
+    /Integrity manifest must be canonical JSON without duplicate keys/u);
+  await clonedSealCase("seal-with-bom",rawText=>"\uFEFF"+rawText,
+    /Integrity manifest must not contain UTF-8 BOM/u);
   // ERD-R39/R40: every rehashed human-facing document must still match
   // the exact versioned curriculum and renderer when --source is provided.
   await clonedRehashedFileCase("course-fake-approval",baseline.files.find(x=>x.path.startsWith("cursos/")).path,md=>
@@ -253,8 +300,8 @@ try{
   await clonedRehashedFileCase("readme-fake-source","LEIA-PRIMEIRO.md",md=>
     md.replace(baseline.source_sha256,"f".repeat(64)),
     /Review instructions differ from versioned source/u);
-  assert.equal(negatives,45);
-  console.log("PASS ERD-R27: original 15-file package verified; "+negatives+
+  assert.equal(negatives,54);
+  console.log("PASS ERD-R42-R44: original 15-file package verified; "+negatives+
     " tamper/path/symlink negatives; UNSIGNED/HOLD_NO_GO, no human approval.");
 }finally{
   await rm(temp,{recursive:true,force:true});

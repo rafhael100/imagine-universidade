@@ -1,0 +1,56 @@
+name: UNI ERD R42 R45 canonical offline handoff QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r42-schema-canonical-a11y-2026-11-19
+    paths:
+      - '.github/workflows/uni-erd-r42-r45-canonical-a11y-qa.yml'
+      - 'scripts/editorial-package-integrity.mjs'
+      - 'scripts/check-editorial-package-integrity.mjs'
+      - 'scripts/editorial-review-html.mjs'
+      - 'scripts/check-editorial-offline-review.mjs'
+      - 'scripts/editorial-review-app.js'
+      - 'scripts/build-editorial-review-pack.mjs'
+      - 'scripts/editorial-source-review-render.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R42-R45-SCHEMA-CANONICAL-A11Y-2026-11-19.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r42-r45-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  qa-synthetic-offline:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact commit without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate 35 lessons, portable UI, immutable metadata and 13 gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r42-schema-canonical-a11y-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          node --version
+          node --check scripts/editorial-package-integrity.mjs
+          node --check scripts/check-editorial-package-integrity.mjs
+          node --check scripts/editorial-review-html.mjs
+          node --check scripts/check-editorial-offline-review.mjs
+          node scripts/check-editorial-lesson-structure.mjs
+          node scripts/check-editorial-text-safety.mjs
+          node scripts/check-editorial-pack-preflight.mjs
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-offline-review.mjs
+          node scripts/check-editorial-package-integrity.mjs
+          node scripts/check-release-gate-policy.mjs
+          node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(x=>x.status!=="NOT_VERIFIED"))process.exit(1)'
+          echo 'PASS synthetic-only: 54 negatives; 35 lessons pending; accessible skip link; 13 gates NOT_VERIFIED'

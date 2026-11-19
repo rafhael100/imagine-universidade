@@ -19,6 +19,10 @@ try{
   const csv=readFileSync(join(dir,"revisao.csv"),"utf8");
   pass(html.includes('lang="pt-BR"')&&html.includes("NÃO É APROVAÇÃO"),"review labels");
   pass(html.includes("Visitas → Leads → Clientes")&&html.includes("35 aulas"),"full source");
+  pass(html.includes("class='skip-link' href='#title'")&&
+    html.includes("id='title' tabindex='-1'")&&
+    html.includes(".skip-link:focus-visible"),
+    "ERD-R45 keyboard skip link reaches the focusable lesson heading");
   pass(html.includes("CLAIMED_HUMAN_APPROVED"),"claim is not authenticated");
   pass(html.includes("value='merge'")&&html.includes("value='replace'"),
     "safe merge is the default and replacement is explicit");

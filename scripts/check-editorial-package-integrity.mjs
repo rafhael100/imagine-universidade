@@ -7,7 +7,7 @@ import {cp,mkdtemp,readFile,rm,symlink,unlink,writeFile} from "node:fs/promises"
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
-import {INTEGRITY_FILE,verifyEditorialPackage} from "./editorial-package-integrity.mjs";
+import {INTEGRITY_FILE,verifyEditorialPackage,verifyEditorialSourceBinding} from "./editorial-package-integrity.mjs";
 
 const root=fileURLToPath(new URL("../",import.meta.url));
 const executable=fileURLToPath(new URL("./build-editorial-review-pack.mjs",import.meta.url));
@@ -33,6 +33,21 @@ try{
   assert.equal(baseline.release_decision,"HOLD_NO_GO");
   assert.equal(baseline.purpose,"UNSIGNED_OFFLINE_EDITORIAL_HANDOFF");
   assert.equal(new Set(baseline.files.map(x=>x.path)).size,15);
+  // ERD-R28: protect against a stale/altered source revision even when the
+  // exported handoff itself still matches its own unsigned checksums.
+  const originalSource=join(root,"content","mvp-cursos-v1.json");
+  await verifyEditorialSourceBinding(original,originalSource);
+  const changedSource=join(temp,"changed-source.json");
+  const sourceBytes=await readFile(originalSource);
+  await writeFile(changedSource,Buffer.concat([sourceBytes,Buffer.from("\n")]));
+  await assert.rejects(verifyEditorialSourceBinding(original,changedSource),
+    /Original curriculum bytes differ/u);
+  negatives++;
+  const sourceAlias=join(temp,"linked-source.json");
+  await symlink(originalSource,sourceAlias);
+  await assert.rejects(verifyEditorialSourceBinding(original,sourceAlias),
+    /non-symlink/u);
+  negatives++;
   for(const name of ["revisao.csv","revisao-navegavel.html","FILA-REVISAO-35.md"]){
     await clonedCase(name.replace(/\W/gu,"-"),async folder=>{
       const target=join(folder,name);
@@ -84,7 +99,7 @@ try{
   await symlink(original,linked,"dir");
   await assert.rejects(verifyEditorialPackage(linked));
   negatives++;
-  assert.equal(negatives,13);
+  assert.equal(negatives,15);
   console.log("PASS ERD-R27: original 15-file package verified; "+negatives+
     " tamper/path/symlink negatives; UNSIGNED/HOLD_NO_GO, no human approval.");
 }finally{

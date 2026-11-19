@@ -131,9 +131,24 @@ module.exports=async function({browser,out,check}){
       "C192 singular result count is accessible and correct in Portuguese");
     await page.locator("#review-search").fill("VISITAS");
     const countEvents=await page.evaluate(()=>window.__uniNavMutations.search);
+    // ERD-R04: similar queries should retain identical result button nodes.
+    // Otherwise an active keyboard target is thrown out of the DOM.
+    await page.evaluate(()=>{
+      const holder=document.getElementById("review-results");
+      window.__uniStableResult=holder.querySelector(".review-result");
+      window.__uniResultChanges=0;
+      new MutationObserver(records=>{
+        window.__uniResultChanges+=records.filter(r=>r.type==="childList").length;
+      }).observe(holder,{childList:true});
+    });
     await page.locator("#review-search").fill("VISITA");
     check(await page.evaluate(()=>window.__uniNavMutations.search)===countEvents,
       "C177 unchanged result count avoids duplicate aria-live announcements");
+    check(await page.evaluate(async()=>{
+      await Promise.resolve();
+      return window.__uniResultChanges===0&&
+        document.querySelector("#review-results .review-result")===window.__uniStableResult;
+    }),"ERD-R04 matching result identities preserve DOM nodes while typing");
     check(await page.locator("#review-results .review-result").count()===1,
       "C163 case-insensitive search respects current review status");
     await page.locator("#review-search").fill("inexistente");
@@ -145,6 +160,68 @@ module.exports=async function({browser,out,check}){
     await page.locator("#review-filter").selectOption("ALL");
     check(await page.locator("#review-results").isHidden(),
       "C163 empty search and all-status filter do not clutter the editor");
+    // ERD-R01: find notes/reviewers in this local, offline session; preserve
+    // existing status filtering and do not display private notes in buttons.
+    await page.locator("#review-search").fill("metricas");
+    // Other lessons legitimately contain "métricas" in their titles; the
+    // assertion must prove the annotated lesson is included, not that it is
+    // the sole result across the whole 35-lesson curriculum.
+    const metricsLabels=await page.locator("#review-results .review-result").allTextContents();
+    check(metricsLabels.some(label=>label.includes("Visitas: ser encontrado é o primeiro passo")),
+      "ERD-R01 unaccented search includes the lesson with accented editorial note");
+    await page.locator("#review-search").fill("equipe editorial qa");
+    check(await page.locator("#review-results .review-result").count()===1&&
+      !(await page.locator("#review-results .review-result").first().innerText()).includes("Equipe Editorial QA"),
+      "ERD-R01 reviewer drafts are searchable without showing reviewer in result label");
+    await page.locator("#review-filter").selectOption("PENDING_HUMAN_REVIEW");
+    check(await page.locator("#review-results .review-result").count()===0,
+      "ERD-R01 draft search still respects selected review status");
+    await page.locator("#review-filter").selectOption("ALL");
+    await page.locator("#review-search").fill("");
+
+
+    // ERD-R05: keyboard can enter, traverse and leave the results without
+    // changing any review state. Enter still activates the selected lesson.
+    check(await page.locator("#review-search").getAttribute("aria-controls")==="review-results" &&
+      await page.locator("#review-filter").getAttribute("aria-controls")==="review-results" &&
+      await page.locator("#review-results").getAttribute("role")==="group",
+      "ERD-R05 search and filter identify the labelled result group");
+    await page.locator("#review-filter").selectOption("PENDING_HUMAN_REVIEW");
+    check(await page.locator("#review-results .review-result").count()===34,
+      "ERD-R05 keyboard test uses exact 34 pending draft lessons");
+    await page.locator("#review-search").focus();
+    await page.keyboard.press("ArrowDown");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="1"),
+      "ERD-R05 ArrowDown enters the first pending search result");
+    await page.keyboard.press("ArrowDown");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="2"),
+      "ERD-R05 ArrowDown advances to the following result");
+    await page.keyboard.press("Home");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="1"),
+      "ERD-R05 Home returns to the first result");
+    await page.keyboard.press("End");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="34"),
+      "ERD-R05 End goes to the final pending result");
+    await page.keyboard.press("Escape");
+    check(await page.evaluate(()=>
+      document.activeElement.id==="review-search"),
+      "ERD-R05 Escape returns to the search input without deleting its value");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowUp");
+    check(await page.evaluate(()=>
+      document.activeElement.id==="review-search"),
+      "ERD-R05 ArrowUp from first result restores search focus");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    check((await page.locator("#title").innerText()).includes("Leads:")&&
+      await page.evaluate(()=>document.activeElement.id==="title"),
+      "ERD-R05 Enter opens selected lesson and places focus on its heading");
+    await page.locator("#previous").click();
+    await page.locator("#review-filter").selectOption("ALL");
 
     check((await page.locator("#courses .course-item").first().innerText()).includes("3 pendentes / 4"),
       "C160 first course shows accurate unfinished lesson count");
@@ -369,6 +446,12 @@ module.exports=async function({browser,out,check}){
     check(cleanPrompt.includes("Substituir 1 de 35")&&
       (await cleanReplacement.locator("#summary").innerText()).includes("35 pendentes"),
       "C174 clean editor requires explicit confirmation before replacing even one row");
+    const firstLessonInCsv=csv.replace(/^\uFEFF/u,"").split(/\r?\n/u)[1]
+      .match(/^"([^"]+)","([^"]+)"/u);
+    check(Boolean(firstLessonInCsv),"ERD-R03 exported CSV has a canonical first lesson ID");
+    check(cleanPrompt.includes("Aulas divergentes (até 5):")&&
+      cleanPrompt.includes("\n  - "+firstLessonInCsv[1]+"/"+firstLessonInCsv[2]),
+      "ERD-R03 replacement dialog identifies the exact CSV lesson key, not any arbitrary slash");
     cleanReplacement.once("dialog",async dialog=>{await dialog.accept();});
     await cleanReplacement.locator("#import").setInputFiles(csvPath);
     await cleanReplacement.waitForFunction(

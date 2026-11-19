@@ -1,0 +1,105 @@
+name: UNI ERD offline draft QA (no deploy)
+
+# Only the isolated review branch: never runs the Portal/private-production pipeline.
+on:
+  push:
+    branches:
+      - review/uni-erd-r01-r02-offline-2026-11-19
+    paths:
+      - '.github/workflows/uni-erd-offline-qa.yml'
+      - 'scripts/**'
+      - 'content/**'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-offline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  editorial-static:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Read-only checkout of the draft candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Guard laboratory branch, no credentials or production
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r01-r02-offline-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          test -f content/mvp-cursos-v1.json
+          test -f ops/release-gates.json
+      - name: Syntax, 35-lesson editorial integrity, and 13 release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          node --check scripts/editorial-review-app.js
+          node --check scripts/editorial-review-html.mjs
+          node --check scripts/qa-browser-editorial-offline.cjs
+          node scripts/check-editorial-review-pack.mjs
+          node scripts/check-editorial-review-validation.mjs
+          node scripts/check-editorial-offline-review.mjs
+          node scripts/check-editorial-lesson-structure.mjs
+          node scripts/audit-editorial-lesson-structure.mjs
+          node scripts/check-university-readiness-pack.mjs
+          node -e 'const g=require("./ops/release-gates.json");const s=Object.values(g.blocking_evidence);if(s.length!==13||s.some(v=>v.status!=="NOT_VERIFIED")||g.release_decision!=="HOLD_NO_GO")process.exit(1)'
+          echo 'PASS draft-only static/editorial checks; 13 gates remain blocked'
+
+  editorial-chromium:
+    needs: editorial-static
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - name: Read-only checkout of the exact candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Guard isolated synthetic browser without production credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r01-r02-offline-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          test -f scripts/qa-browser-editorial-offline.cjs
+      - name: Install ephemeral Chromium QA dependencies in runner temp
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uni-erd-node" "$RUNNER_TEMP/uni-erd-evidence"
+          cd "$RUNNER_TEMP/uni-erd-node"
+          npm init -y >/dev/null
+          # A prior Chromium job timed out inside installation without logs.
+          # Bound each external phase; fail closed before consuming 25 minutes.
+          timeout -k 5s 180s npm install --no-audit --no-fund \
+            playwright@1.58.2 @axe-core/playwright@4.10.2
+          timeout -k 5s 180s npx playwright install-deps chromium
+          timeout -k 5s 240s npx playwright install chromium
+      - name: Exercise real Chromium, keyboard and WCAG checks using synthetic fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-erd-node/node_modules" \
+          UNI_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-erd-evidence" \
+            node scripts/qa-browser-synthetic.cjs
+          echo 'PASS synthetic browser QA only; no grant, deploy or publication'
+      - name: Retain synthetic screenshots and accessibility evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uni-erd-offline-chromium-evidence
+          path: ${{ runner.temp }}/uni-erd-evidence/
+          if-no-files-found: error
+          retention-days: 7

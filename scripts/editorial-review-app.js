@@ -62,29 +62,49 @@
     const matches=[];
     items.forEach((lesson,i)=>{
       if(status!=="ALL"&&state.get(key(lesson)).status!==status)return;
-      const searchable=normalizeSearch(lesson.course_title+" "+lesson.lesson_title);
+      // ERD-R01: local-only search includes the reviewer draft, without rendering
+      // untrusted notes in result labels or sending them to a server.
+      const draft=state.get(key(lesson));
+      const searchable=normalizeSearch(lesson.course_title+" "+lesson.lesson_title+
+        " "+draft.notes+" "+draft.reviewer);
       if(term!==""&&!searchable.includes(term))return;
       matches.push([i,lesson]);
     });
     const active=term!==""||status!=="ALL",holder=$("review-results");
     holder.hidden=!active;
-    holder.replaceChildren();
     const countLabel=active
       ?(matches.length===1?"1 aula encontrada neste filtro":matches.length+" aulas encontradas neste filtro")
       :"Digite para localizar uma aula ou selecione uma situação.";
     // Only actual changes should enter this aria-live region.
     if($("review-search-count").textContent!==countLabel)
       $("review-search-count").textContent=countLabel;
-    if(!active)return;
-    for(const [i,lesson] of matches){
-      const b=document.createElement("button");
-      b.className="review-result";
-      b.type="button";
-      b.dataset.lessonIndex=String(i);
-      b.textContent=lesson.course_title+" · "+lesson.lesson_title;
-      b.setAttribute("aria-current",i===current?"true":"false");
-      b.addEventListener("click",()=>choose(i));
-      holder.append(b);
+    if(!active){
+      if(holder.childElementCount)holder.replaceChildren();
+      return;
+    }
+    // ERD-R04: do not destroy identical result buttons on each keystroke.
+    // Keeping their DOM identity preserves keyboard focus and avoids noisy
+    // re-announcements while the search result identities remain unchanged.
+    const buttons=[...holder.querySelectorAll(".review-result")];
+    const sameResults=buttons.length===matches.length&&
+      buttons.every((button,j)=>button.dataset.lessonIndex===String(matches[j][0]));
+    if(!sameResults){
+      holder.replaceChildren();
+      for(const [i,lesson] of matches){
+        const b=document.createElement("button");
+        b.className="review-result";
+        b.type="button";
+        b.dataset.lessonIndex=String(i);
+        b.textContent=lesson.course_title+" · "+lesson.lesson_title;
+        b.addEventListener("click",()=>choose(i));
+        holder.append(b);
+      }
+    }
+    // Selection can change without changing the result identities.
+    for(const button of holder.querySelectorAll(".review-result")){
+      const selected=button.dataset.lessonIndex===String(current);
+      if(button.getAttribute("aria-current")!==(selected?"true":"false"))
+        button.setAttribute("aria-current",selected?"true":"false");
     }
   }
   function render(){
@@ -354,8 +374,9 @@
       if(mode==="replace"){
         // A clean editor may still have a valid prior CSV or an accidental
         // mode selection. Always ask before discarding a differing draft.
-        const differences=[...next].filter(([id,item])=>
-          JSON.stringify(state.get(id))!==JSON.stringify(item)).length;
+        const changedIds=[...next].filter(([id,item])=>
+          JSON.stringify(state.get(id))!==JSON.stringify(item)).map(([id])=>id);
+        const differences=changedIds.length;
         if(differences===0){
           message("CSV idêntico: sem diferenças para substituir. Rascunho preservado.");
           return;
@@ -363,7 +384,10 @@
         const warning="Substituir "+differences+" de 35 aula(s) pelo CSV recebido? "+
           "Esta ação descarta qualquer revisão local divergente."+
           (dirty?" Há alterações locais ainda não exportadas.":"")+
-          " Nenhum aceite será autenticado.";
+          " Nenhum aceite será autenticado."+ 
+          "\n\nAulas divergentes (até 5):\n"+
+          changedIds.slice(0,5).map(id=>"  - "+id).join("\n")+
+          (differences>5?"\n  ... e mais "+(differences-5)+" aula(s).":"");
         if(!window.confirm(warning)){
           message("Substituição cancelada; revisões existentes preservadas.");
           return;
@@ -431,6 +455,37 @@
   }
   $("review-search").addEventListener("input",updateReviewResults);
   $("review-filter").addEventListener("change",updateReviewResults);
+  // ERD-R05: keyboard access to the actual result buttons. Arrow keys never
+  // modify draft data, and native Enter/Space activation remains intact.
+  const resultButtons=()=>[...$("review-results").querySelectorAll("button.review-result")];
+  $("review-search").addEventListener("keydown",event=>{
+    if(event.key!=="ArrowDown")return;
+    const buttons=resultButtons();
+    if(!buttons.length)return;
+    event.preventDefault();
+    buttons[0].focus();
+  });
+  $("review-results").addEventListener("keydown",event=>{
+    const buttons=resultButtons(),index=buttons.indexOf(event.target);
+    if(index<0)return;
+    if(event.key==="Escape"){
+      event.preventDefault();
+      $("review-search").focus();
+    }else if(event.key==="ArrowUp"){
+      event.preventDefault();
+      if(index===0)$("review-search").focus();
+      else buttons[index-1].focus();
+    }else if(event.key==="ArrowDown"){
+      event.preventDefault();
+      buttons[Math.min(index+1,buttons.length-1)].focus();
+    }else if(event.key==="Home"){
+      event.preventDefault();
+      buttons[0].focus();
+    }else if(event.key==="End"){
+      event.preventDefault();
+      buttons[buttons.length-1].focus();
+    }
+  });
   $("lessons").addEventListener("change",e=>choose(Number(e.target.value)));
   $("previous").addEventListener("click",()=>choose(current-1));
   $("next").addEventListener("click",()=>choose(current+1));

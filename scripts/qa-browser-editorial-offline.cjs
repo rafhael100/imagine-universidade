@@ -177,6 +177,49 @@ module.exports=async function({browser,out,check}){
     await page.locator("#review-search").fill("");
 
 
+    // ERD-R05: keyboard can enter, traverse and leave the results without
+    // changing any review state. Enter still activates the selected lesson.
+    check(await page.locator("#review-search").getAttribute("aria-controls")==="review-results" &&
+      await page.locator("#review-filter").getAttribute("aria-controls")==="review-results" &&
+      await page.locator("#review-results").getAttribute("role")==="group",
+      "ERD-R05 search and filter identify the labelled result group");
+    await page.locator("#review-filter").selectOption("PENDING_HUMAN_REVIEW");
+    check(await page.locator("#review-results .review-result").count()===34,
+      "ERD-R05 keyboard test uses exact 34 pending draft lessons");
+    await page.locator("#review-search").focus();
+    await page.keyboard.press("ArrowDown");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="1"),
+      "ERD-R05 ArrowDown enters the first pending search result");
+    await page.keyboard.press("ArrowDown");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="2"),
+      "ERD-R05 ArrowDown advances to the following result");
+    await page.keyboard.press("Home");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="1"),
+      "ERD-R05 Home returns to the first result");
+    await page.keyboard.press("End");
+    check(await page.evaluate(()=>
+      document.activeElement.dataset.lessonIndex==="34"),
+      "ERD-R05 End goes to the final pending result");
+    await page.keyboard.press("Escape");
+    check(await page.evaluate(()=>
+      document.activeElement.id==="review-search"),
+      "ERD-R05 Escape returns to the search input without deleting its value");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowUp");
+    check(await page.evaluate(()=>
+      document.activeElement.id==="review-search"),
+      "ERD-R05 ArrowUp from first result restores search focus");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    check((await page.locator("#title").innerText()).includes("Leads:")&&
+      await page.evaluate(()=>document.activeElement.id==="title"),
+      "ERD-R05 Enter opens selected lesson and places focus on its heading");
+    await page.locator("#previous").click();
+    await page.locator("#review-filter").selectOption("ALL");
+
     check((await page.locator("#courses .course-item").first().innerText()).includes("3 pendentes / 4"),
       "C160 first course shows accurate unfinished lesson count");
     await page.locator("#next-pending").click();

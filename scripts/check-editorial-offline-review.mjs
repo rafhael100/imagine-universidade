@@ -6,6 +6,7 @@ import {readFileSync,mkdtempSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
+import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
 
 const dir=mkdtempSync(join(tmpdir(),"uni-editorial-qa-"));
 let checks=0;
@@ -40,6 +41,18 @@ try{
     const hash=createHash("sha256").update(value,"utf8").digest("base64");
     pass(html.includes("'sha256-"+hash+"'"),"CSP hash exact");
   }
+  // C182: 35 total records cannot conceal a duplicate identity and a
+  // silently missing lesson in the generated Map / reviewer draft.
+  const sourcePayload=JSON.parse(readFileSync(new URL("../content/mvp-cursos-v1.json",import.meta.url),"utf8"));
+  const manifestHashes=JSON.parse(readFileSync(join(dir,"manifesto-revisao.json"),"utf8")).lessons;
+  const duplicateSource=JSON.parse(JSON.stringify(sourcePayload));
+  duplicateSource.courses[0].lessons[1]={...duplicateSource.courses[0].lessons[0]};
+  assert.throws(()=>renderOfflineReviewPage(duplicateSource,manifestHashes),
+    /Duplicate lesson identity in review source/u);
+  checks++;
+  assert.throws(()=>renderOfflineReviewPage(sourcePayload,[...manifestHashes,manifestHashes[0]]),
+    /Expected exactly 35 immutable manifest records/u);
+  checks++;
   pass(csv.split(/\r?\n/).filter(line=>line.includes("PENDING_HUMAN_REVIEW")).length===35,
     "all 35 original review rows are pending");
   pass(Buffer.byteLength(html,"utf8")<250000,"review page is portable");

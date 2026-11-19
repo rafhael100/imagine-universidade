@@ -39,16 +39,21 @@ export function renderOfflineReviewPage(payload,hashes){
   assert.equal(payload.status,"editorial_draft");
   assert.equal(payload.audience,"authorized_imagine_clients_only");
   assert.equal(payload.courses.length,10);
+  assert.equal(hashes.length,35,"Expected exactly 35 immutable manifest records");
   const checksums=new Map(hashes.map(h=>[h.course_slug+"/"+h.lesson_slug,h.content_sha256]));
+  assert.equal(checksums.size,35,"Duplicate or missing identity in review manifest");
+  const seenLessons=new Set();
   const items=payload.courses.flatMap(course=>course.lessons.map(lesson=>{
     const id=course.slug+"/"+lesson.slug,contentHash=checksums.get(id);
+    assert.ok(!seenLessons.has(id),"Duplicate lesson identity in review source: "+id);
+    seenLessons.add(id);
     assert.match(contentHash||"",/^[a-f0-9]{64}$/);
     return {course_slug:course.slug,course_title:course.title,
       lesson_slug:lesson.slug,lesson_title:lesson.title,
       body:lesson.body,content_sha256:contentHash};
   }));
   assert.equal(items.length,35);
-  assert.equal(checksums.size,35);
+  assert.equal(seenLessons.size,checksums.size,"Source lessons do not match review manifest");
   const data=JSON.stringify(items).replaceAll("<","\\u003c")
     .replaceAll(">","\\u003e").replaceAll("\u2028","\\u2028")
     .replaceAll("\u2029","\\u2029");

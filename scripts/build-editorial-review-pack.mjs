@@ -7,7 +7,7 @@
  */
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import {mkdir,readFile,writeFile} from "node:fs/promises";
+import {lstat,mkdir,readFile,readdir,writeFile} from "node:fs/promises";
 import {resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {renderOfflineReviewPage} from "./editorial-review-html.mjs";
@@ -19,6 +19,14 @@ assert.equal(args.length,2,"Usage: --out <explicit temporary directory>");
 assert.equal(args[0],"--out","Missing --out");
 assert.ok(typeof args[1]==="string"&&args[1].trim()!=="","Missing output path");
 const dest=resolve(args[1]);
+// A second run must never destroy an editor's CSV, observations or evidence.
+// Accept a fresh destination or an existing EMPTY, non-symlink directory.
+await mkdir(dest,{recursive:true});
+const destinationStat=await lstat(dest);
+assert.ok(destinationStat.isDirectory()&&!destinationStat.isSymbolicLink(),
+  "Review package destination must be a real directory, not a symlink");
+assert.deepEqual(await readdir(dest),[],
+  "Review package destination must be empty to preserve existing reviews");
 const source=await readFile(sourceFile,"utf8");
 const payload=JSON.parse(source);
 assert.equal(payload.schema_version,1);
@@ -46,7 +54,6 @@ function safeBody(v){
   return v.trim();
 }
 const indexes=[],reviewRows=[],hashes=[],seenCourse=new Set(),seenLesson=new Set();
-await mkdir(dest,{recursive:true});
 const lessonsDir=resolve(dest,"cursos");
 await mkdir(lessonsDir,{recursive:true});
 let lessonCount=0;

@@ -94,11 +94,17 @@ try{
   rejects("bidirectional override inside notes",alter(csv,1,6,"Texto\u202Einvertido"));
   rejects("bidirectional isolate inside notes",alter(csv,1,6,"Texto\u2067isolado"));
   rejects("left-to-right mark inside notes",alter(csv,1,6,"Texto\u200eoculto"));
+  rejects("zero-width space inside notes",alter(csv,1,6,"Texto\u200boculto"));
+  rejects("word joiner inside notes",alter(csv,1,6,"Texto\u2060oculto"));
+  rejects("internal BOM inside notes",alter(csv,1,6,"Texto\ufeffoculto"));
+  rejects("zero-width formula prefix",alter(csv,1,6,"\u200b=HYPERLINK(1)"));
   const named=alter(alter(alter(csv,1,3,"NEEDS_CHANGES"),1,4,"Equipe de QA"),1,5,ref);
   rejects("spreadsheet formula in reviewer",alter(named,1,4,"@cmd"));
   rejects("newline in reviewer",alter(named,1,4,"Revisora\nFalsa"));
   rejects("bidirectional override in reviewer",alter(named,1,4,"Revisor\u202EFalso"));
   rejects("Unicode line separator in reviewer",alter(named,1,4,"Revisor\u2028Falso"));
+  rejects("zero-width reviewer spoofing",alter(named,1,4,"Revisor\u200bFalso"));
+  rejects("word joiner reviewer spoofing",alter(named,1,4,"Revisor\u2060Falso"));
   accepts("valid multiline review notes",alter(csv,1,6,"Revisão clara,\ncom texto em duas linhas."),s=>{
     assert.equal(s.pending,35);
     assert.equal(s.publishable,false);
@@ -108,7 +114,7 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,31);
+  assert.equal(scenarios,37);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

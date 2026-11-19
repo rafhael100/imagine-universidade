@@ -122,10 +122,10 @@
     updateReviewResults();
     message("Alterações apenas na memória. Exporte o CSV antes de sair.");
   }
-  // Invisible direction overrides can visually spoof an otherwise valid reviewer,
-  // note or exported CSV. Keep the local editor aligned with the CLI validator.
+  // Invisible Unicode format characters, including zero-width space and BOM,
+  // can spoof a reviewer or conceal a spreadsheet formula. Mirror the CLI fence.
   function unsafeDisplayControl(value){
-    return /[\u200e\u200f\u2028-\u202e\u2066-\u2069]/u.test(value);
+    return /[\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/u.test(value);
   }
   function valid(row,id){
     if(!["PENDING_HUMAN_REVIEW","NEEDS_CHANGES","CLAIMED_HUMAN_APPROVED"].includes(row.status))

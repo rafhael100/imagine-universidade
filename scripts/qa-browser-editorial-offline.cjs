@@ -310,6 +310,19 @@ module.exports=async function({browser,out,check}){
     check((await importedPage.locator("#message").innerText()).includes("direção invisível") &&
       (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
       "C172 Unicode-bidi CSV is rejected before atomic merge without losing local reviews");
+    const hiddenCsvPath=path.join(dir,"revisao-zero-width.csv");
+    fs.writeFileSync(hiddenCsvPath,csv.replace(
+      "Revisar métricas e clareza do exemplo fictício.",
+      "\u200b=HYPERLINK(1)"),"utf8");
+    await importedPage.locator("#import").setInputFiles(hiddenCsvPath);
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Importação recusada"),
+      null,{timeout:10000}
+    );
+    check((await importedPage.locator("#message").innerText()).includes("direção invisível") &&
+      (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
+      "C175 hidden zero-width formula is rejected atomically before a CSV merge");
+
     const malformedCsvPath=path.join(dir,"revisao-aspas-nao-canonicas.csv");
     const malformedCsv=csv.replace('"PENDING_HUMAN_REVIEW"','"PENDING_HUMAN_"REVIEW');
     fs.writeFileSync(malformedCsvPath,malformedCsv,"utf8");
@@ -322,6 +335,11 @@ module.exports=async function({browser,out,check}){
       (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
       "C173 noncanonical CSV quote is refused atomically even when parsed text would match");
     await importedPage.close();
+
+    await page.locator("#notes").fill("Observação\u200boculta");
+    await page.locator("#export").click();
+    check((await page.locator("#message").innerText()).includes("direção invisível"),
+      "C175 offline export blocks zero-width note characters before CSV download");
 
     await page.locator("#notes").fill("Anotação\u202Einvertida");
     await page.locator("#export").click();

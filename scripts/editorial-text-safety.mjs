@@ -26,9 +26,14 @@ export function safeBody(value) {
     value.trim().split(/\s+/u).length >= 95,
     "A lesson must contain substantive editorial draft text");
   verifyVisibleText(value, "editorial lesson body");
-  for (const heading of ["EXEMPLO FICTÍCIO", "APLICAÇÃO OPCIONAL", "CUIDADO IMPORTANTE"]) {
-    assert.ok(value.includes("\n\n" + heading + "\n"), "Missing lesson section " + heading);
-  }
+  // Checking mere presence accepts missing order and repeated headings. A
+  // handoff that changes the four-part lesson sequence can mislead reviewers
+  // even when the total word count and individual section markers look valid.
+  const headings=["EXEMPLO FICTÍCIO","APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
+  const found=[...value.matchAll(/\n\n(EXEMPLO FICTÍCIO|APLICAÇÃO OPCIONAL|CUIDADO IMPORTANTE)\n/gu)]
+    .map(match=>match[1]);
+  assert.deepEqual(found,headings,
+    "Missing, duplicated or reordered editorial lesson sections");
   assert.doesNotMatch(value, /<script|javascript:|<\//i);
   return value.trim();
 }

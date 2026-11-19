@@ -32,6 +32,15 @@ try{
     ["last lesson short body",d=>{
       lastLesson(d).body="Texto de aula incompleto.";
     }],
+    ["last lesson headings swapped",d=>{
+      const l=lastLesson(d);
+      l.body=l.body.replace("\n\nEXEMPLO FICTÍCIO\n","\n\n__SECTION_SLOT__\n")
+        .replace("\n\nAPLICAÇÃO OPCIONAL\n","\n\nEXEMPLO FICTÍCIO\n")
+        .replace("\n\n__SECTION_SLOT__\n","\n\nAPLICAÇÃO OPCIONAL\n");
+    }],
+    ["last lesson repeated heading",d=>{
+      lastLesson(d).body+="\n\nEXEMPLO FICTÍCIO\nCabeçalho duplicado.";
+    }],
     ["last course repeats first identity",d=>{
       lastCourse(d).slug=d.courses[0].slug;
     }]
@@ -67,8 +76,25 @@ try{
   assert.deepEqual(await readdir(corruptDest),[],
     "invalid UTF-8 source bytes must not create a partial package");
   scenarios++;
-  assert.equal(scenarios,6);
-  console.log("PASS ERD-R14/R15: "+scenarios+
+  // ERD-R18: JSON with UTF-8 BOM was silently accepted by TextDecoder while
+  // the published "source file SHA-256" hashed BOM-stripped text, not bytes.
+  // Keep a human-review manifest bound to the exact bytes from the repository.
+  const bomSource=Buffer.concat([
+    Buffer.from([0xEF,0xBB,0xBF]),Buffer.from(JSON.stringify(source),"utf8")
+  ]);
+  await writeFile(join(temp,"content","mvp-cursos-v1.json"),bomSource);
+  const bomDest=join(temp,"output-utf8-bom");
+  const bomRun=spawnSync(process.execPath,[
+    join(temp,"scripts","build-editorial-review-pack.mjs"),"--out",bomDest
+  ],{encoding:"utf8",timeout:20000});
+  assert.notEqual(bomRun.status,0,"UTF-8 BOM must be rejected before generation");
+  assert.match(bomRun.stderr,/must not contain UTF-8 BOM/u,
+    "Failure must distinguish BOM from unrelated corruption");
+  assert.deepEqual(await readdir(bomDest),[],
+    "BOM source must not produce partial review output");
+  scenarios++;
+  assert.equal(scenarios,9);
+  console.log("PASS ERD-R14/R18: "+scenarios+
     " late-source negative scenarios leave zero partial output files; no publish or signoff.");
 }finally{
   await rm(temp,{recursive:true,force:true});

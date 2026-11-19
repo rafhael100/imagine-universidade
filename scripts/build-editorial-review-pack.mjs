@@ -49,7 +49,14 @@ assert.deepEqual(await readdir(dest),[],
 // ERD-R16: fs.readFile(..., "utf8") silently replaces damaged UTF-8 with
 // U+FFFD. Never publish a human-review package from silently corrupted bytes.
 // Decode strictly before hashing or parsing the versioned curriculum source.
-const source=new TextDecoder("utf-8",{fatal:true}).decode(await readFile(sourceFile));
+// The source SHA in the manifest promises identity with the exact bytes on
+// disk. TextDecoder normally strips UTF-8 BOM, which would produce a different
+// digest while still permitting the package to be built from altered bytes.
+// Refuse BOM instead of silently normalizing the source before hashing.
+const sourceBytes=await readFile(sourceFile);
+assert.ok(!(sourceBytes[0]===0xEF && sourceBytes[1]===0xBB && sourceBytes[2]===0xBF),
+  "Review source must not contain UTF-8 BOM");
+const source=new TextDecoder("utf-8",{fatal:true,ignoreBOM:true}).decode(sourceBytes);
 const payload=JSON.parse(source);
 assert.equal(payload.schema_version,1);
 assert.equal(payload.status,"editorial_draft");
@@ -139,7 +146,7 @@ for(const [courseIndex,course] of payload.courses.entries()){
     lessons:course.lessons.length,file:"cursos/"+filename});
 }
 assert.equal(lessonCount,35,"Expected exactly 35 existing drafts");
-const sourceHash=sha256(source);
+const sourceHash=sha256(sourceBytes);
 const doc=[
   "# Universidade Imagine — pacote de revisão editorial",
   "",

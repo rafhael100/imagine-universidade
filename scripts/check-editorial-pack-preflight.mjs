@@ -50,6 +50,23 @@ try{
     ["last lesson incomplete caution despite substantive total text",d=>{
       const l=lastLesson(d);
       l.body=l.body.replace(/(\n\nCUIDADO IMPORTANTE\n)[\s\S]*$/u,"$1Breve.");
+    }],
+    // ERD-R23: malicious markup in a legitimate-looking last lesson must not
+    // produce any review files, even when all 35 identities still match.
+    ["last lesson remote HTML image",d=>{
+      lastLesson(d).body+='\n\n<img src="https://example.invalid/track">';
+    }],
+    ["last lesson Markdown remote image",d=>{
+      lastLesson(d).body+='\n\n![Exemplo](https://example.invalid/pixel.png)';
+    }],
+    ["last lesson Markdown remote link",d=>{
+      lastLesson(d).body+='\n\n[Guia](https://example.invalid/guia)';
+    }],
+    ["last lesson reference link target",d=>{
+      lastLesson(d).body+='\n\n[guia]: https://example.invalid/guia';
+    }],
+    ["last lesson reference image",d=>{
+      lastLesson(d).body+='\n\n![Figura][fonte]';
     }]
   ];
   for(const [name,poison] of probes){
@@ -100,8 +117,8 @@ try{
   assert.deepEqual(await readdir(bomDest),[],
     "BOM source must not produce partial review output");
   scenarios++;
-  assert.equal(scenarios,10);
-  console.log("PASS ERD-R14/R18/R22: "+scenarios+
+  assert.equal(scenarios,15);
+  console.log("PASS ERD-R14/R18/R22/R23: "+scenarios+
     " late-source negative scenarios leave zero partial output files; no publish or signoff.");
 }finally{
   await rm(temp,{recursive:true,force:true});

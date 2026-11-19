@@ -116,6 +116,7 @@ jobs:
           php scripts/check-learning-mock.php
           node ops/staging/check-release-gates.mjs
           bash -n ops/staging/inventory-readonly.sh
+          sh -n scripts/qa-pg-backup-restore.sh
           node ops/staging/check-inventory.mjs
           node ops/staging/check-compose-static.mjs
           bash ops/staging/check-compose-syntax.sh

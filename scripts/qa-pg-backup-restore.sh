@@ -148,6 +148,40 @@ test "$(data_hash uni_ci)" = "$before_data" || {
   exit 2
 }
 echo "PASS: PG18 restored all public data and relational structure; clone-only tamper detected."
+# Negative schema controls run only against the expendable clone. Ensure the
+# fingerprint detects a changed row-security flag AND a dropped auxiliary index.
+rls="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c \
+  "SELECT relrowsecurity FROM pg_class
+   WHERE oid='public.educational_portal_replay_nonces'::regclass")"
+case "$rls" in
+  f) changed_rls="ENABLE"; original_rls="DISABLE" ;;
+  t) changed_rls="DISABLE"; original_rls="ENABLE" ;;
+  *) echo "FAIL: unknown clone RLS state." >&2; exit 2 ;;
+esac
+psql -X -q -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" \
+  -c "ALTER TABLE public.educational_portal_replay_nonces $changed_rls ROW LEVEL SECURITY" >/dev/null
+test "$(schema_hash "$restore_db")" != "$before_schema" || {
+  echo "FAIL: changed clone RLS flag escaped the schema fingerprint." >&2
+  exit 2
+}
+psql -X -q -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" \
+  -c "ALTER TABLE public.educational_portal_replay_nonces $original_rls ROW LEVEL SECURITY" >/dev/null
+test "$(schema_hash "$restore_db")" = "$before_schema" || {
+  echo "FAIL: reestablishing clone RLS did not restore structure." >&2
+  exit 2
+}
+psql -X -q -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" \
+  -c "DROP INDEX public.edu_portal_nonce_expiry_idx" >/dev/null
+test "$(schema_hash "$restore_db")" != "$before_schema" || {
+  echo "FAIL: dropped clone nonce-expiration index escaped fingerprint." >&2
+  exit 2
+}
+test "$(schema_hash uni_ci)" = "$before_schema" || {
+  echo "FAIL: source schema unexpectedly changed during clone-only tests." >&2
+  exit 2
+}
+echo "PASS: RLS toggle and dropped expiry index are detected in restored copy; original schema unchanged."
+
 
 
 echo "PASS: PostgreSQL18 snapshot restored into synthetic isolated database; 10 courses, 35 lessons, no client progress; content fingerprint matches."

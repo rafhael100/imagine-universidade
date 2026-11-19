@@ -1,4 +1,4 @@
-# UNI ERD-R18–R19 — vínculo por bytes do pacote editorial (DRAFT)
+# UNI ERD-R18–R21 — integridade de bytes e estrutura da revisão (DRAFT)
 
 Data: 2026-11-19. Base de laboratório: PR #92, commit `aeac208368df3ce15485341d92dd2a1f36c0489a`. Sem merge, deploy, SSO, grants ou dados de clientes.
 
@@ -33,7 +33,14 @@ node scripts/check-editorial-review-validation.mjs
 node scripts/check-release-gate-policy.mjs
 ```
 
-A saída do teste de pré-validação deve informar **7 cenários negativos**, incluindo 1 cenário de BOM e 1 de UTF-8 inválido, sem saída parcial. Os testes positivos devem preservar 10 cursos, 35 aulas, hashes individuais e `PENDING_HUMAN_REVIEW`. A pipeline correta será verificada somente contra a **SHA exata** desta PR.
+A saída do teste de pré-validação deve informar **9 cenários negativos**, incluindo BOM, UTF-8 inválido e duas mutações tardias de seção pedagógica, sem saída parcial. Os testes positivos devem preservar 10 cursos, 35 aulas, hashes individuais e `PENDING_HUMAN_REVIEW`. A pipeline correta será verificada somente contra a **SHA exata** desta PR.
+
+## Continuação ERD-R20–R21
+
+- **ERD-R20:** a antiga validação dos títulos de seção verificava apenas presença individual e podia aceitar uma aula com ordem invertida ou cabeçalho pedagógico repetido. Agora exige, exatamente uma vez e na sequência, `EXEMPLO FICTÍCIO`, `APLICAÇÃO OPCIONAL` e `CUIDADO IMPORTANTE`.
+- **ERD-R20:** dois testes negativos exercitam a aula real com os títulos trocados e outro título repetido; o total passa a **42 verificações negativas** de texto, sem alterar nenhuma aula da fonte.
+- **ERD-R21:** dois testes de falha tardia injetam essas mutações na última aula do catálogo. O pacote deve falhar antes da primeira gravação e deixar a saída vazia. Com a proteção UTF-8 anterior, a suíte de pré-validação sobe de **7 para 9** cenários.
+- A auditoria estrutural independente dos 35 textos continua apenas técnica; não atesta coerência do conteúdo ou signoff humano.
 
 ## Limites e gates
 

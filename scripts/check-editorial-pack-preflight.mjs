@@ -32,6 +32,15 @@ try{
     ["last lesson short body",d=>{
       lastLesson(d).body="Texto de aula incompleto.";
     }],
+    ["last lesson headings swapped",d=>{
+      const l=lastLesson(d);
+      l.body=l.body.replace("\n\nEXEMPLO FICTÍCIO\n","\n\n__SECTION_SLOT__\n")
+        .replace("\n\nAPLICAÇÃO OPCIONAL\n","\n\nEXEMPLO FICTÍCIO\n")
+        .replace("\n\n__SECTION_SLOT__\n","\n\nAPLICAÇÃO OPCIONAL\n");
+    }],
+    ["last lesson repeated heading",d=>{
+      lastLesson(d).body+="\n\nEXEMPLO FICTÍCIO\nCabeçalho duplicado.";
+    }],
     ["last course repeats first identity",d=>{
       lastCourse(d).slug=d.courses[0].slug;
     }]
@@ -84,7 +93,7 @@ try{
   assert.deepEqual(await readdir(bomDest),[],
     "BOM source must not produce partial review output");
   scenarios++;
-  assert.equal(scenarios,7);
+  assert.equal(scenarios,9);
   console.log("PASS ERD-R14/R18: "+scenarios+
     " late-source negative scenarios leave zero partial output files; no publish or signoff.");
 }finally{

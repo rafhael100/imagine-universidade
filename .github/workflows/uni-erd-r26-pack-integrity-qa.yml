@@ -16,6 +16,7 @@ on:
       - 'scripts/audit-editorial-lesson-structure.mjs'
       - 'content/mvp-cursos-v1.json'
       - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R26-R27-INTEGRIDADE-PACOTE-OFFLINE-2026-11-19.md'
 
 permissions:
   contents: read

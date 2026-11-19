@@ -15,6 +15,7 @@ import {safeBody, safeLine} from "./editorial-text-safety.mjs";
 import {auditEditorialLessonStructure} from "./audit-editorial-lesson-structure.mjs";
 import {buildEditorialReviewQueue} from "./build-editorial-review-queue.mjs";
 import {sealEditorialPackage} from "./editorial-package-integrity.mjs";
+import {renderEditorialCourseMarkdown,renderEditorialReadme} from "./editorial-source-review-render.mjs";
 
 const sha256 = data => createHash("sha256").update(data).digest("hex");
 const sourceFile = fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
@@ -113,45 +114,17 @@ for(const [courseIndex,course] of payload.courses.entries()){
   const courseSlug=safeSlug(course.slug);
   assert.ok(!seenCourse.has(courseSlug),"Duplicate course slug");
   seenCourse.add(courseSlug);
-  assert.ok(["metodologia","negocios","sistemas"].includes(course.category));
-  const title=safeLine(course.title);
-  assert.ok(Array.isArray(course.lessons) && course.lessons.length>=1 && course.lessons.length<=15,
-    "Invalid lesson count");
-  const lines=[
-    "# "+title,
-    "",
-    "**Revisão humana obrigatória · curso "+String(courseIndex+1).padStart(2,"0")+" · status PENDENTE**",
-    "",
-    "Este arquivo contém um rascunho, não é publicação nem aceite.",
-    "",
-    "Checklist do curso: [ ] clareza pedagógica  [ ] adequação ao público  [ ] terminologia Imagine  [ ] acessibilidade  [ ] privacidade e segurança.",
-    "",
-  ];
-  for(const [lessonIndex,lesson] of course.lessons.entries()){
-    const lessonSlug=safeSlug(lesson.slug);
-    const fullId=courseSlug+"/"+lessonSlug;
+  const rendered=renderEditorialCourseMarkdown(course,courseIndex);
+  for(const entry of rendered.hashes){
+    const fullId=entry.course_slug+"/"+entry.lesson_slug;
     assert.ok(!seenLesson.has(fullId),"Duplicate course+lesson identity");
     seenLesson.add(fullId);
-    const lessonTitle=safeLine(lesson.title),body=safeBody(lesson.body);
-    const checksum=sha256(JSON.stringify({course_slug:courseSlug,course_title:course.title,
-      category:course.category,lesson_slug:lessonSlug,lesson_title:lesson.title,body:lesson.body}));
-    hashes.push({course_slug:courseSlug,lesson_slug:lessonSlug,content_sha256:checksum,
-      review_status:"PENDING_HUMAN_REVIEW",reviewed_by:null,review_evidence:null});
-    reviewRows.push([courseSlug,lessonSlug,checksum,"PENDING_HUMAN_REVIEW","","",""]);
-    lines.push("## "+String(lessonIndex+1)+". "+lessonTitle,"",
-      "**ID:** "+fullId+" · **SHA-256:** \`"+checksum+"\` · **Status:** PENDENTE","","",
-      body,"",
-      "### Avaliação editorial (preencher somente por pessoa responsável)","",
-      "- [ ] Exatidão e clareza verificadas",
-      "- [ ] Exemplo realmente fictício, sem dados identificáveis",
-      "- [ ] Atividade opcional coerente e sem promessas de resultado",
-      "- [ ] Linguagem, limites e privacidade revisados",
-      "- [ ] Aprovação humana registrada fora deste arquivo com vínculo ao hash",
-      "","---","");
-    lessonCount++;
+    hashes.push(entry);
   }
+  reviewRows.push(...rendered.reviewRows);
+  lessonCount+=rendered.hashes.length;
   const filename=String(courseIndex+1).padStart(2,"0")+"-"+courseSlug+".md";
-  await writeFile(resolve(lessonsDir,filename),lines.join("\n"),"utf8");
+  await writeFile(resolve(lessonsDir,filename),rendered.markdown,"utf8");
   indexes.push({course_slug:courseSlug,title:course.title,category:course.category,
     lessons:course.lessons.length,file:"cursos/"+filename});
 }
@@ -163,36 +136,7 @@ const reviewQueue=buildEditorialReviewQueue(payload,sourceBytes);
 assert.equal(reviewQueue.source_sha256,sourceHash);
 assert.equal(reviewQueue.queue.length,35);
 assert.equal(reviewQueue.release_decision,"HOLD_NO_GO");
-const doc=[
-  "# Universidade Imagine — pacote de revisão editorial",
-  "",
-  "**NÃO É APROVAÇÃO NEM PUBLICAÇÃO.** Acervo de 10 cursos e 35 aulas ainda sujeito ao aceite humano.",
-  "",
-  "Origem imutável da revisão: \`content/mvp-cursos-v1.json\`",
-  "",
-  "**SHA-256 do arquivo de origem:** \`"+sourceHash+"\`",
-  "",
-  "Uma alteração de texto ou título muda o hash da aula. Aprovações devem mencionar o hash",
-  "exato e a revisão do repositório, e não valem automaticamente para revisões posteriores.",
-  "",
-  "| Curso | Categoria | Aulas | Revisar |",
-  "| --- | --- | ---: | --- |",
-  ...indexes.map(x=>"| "+safeLine(x.title)+" | "+x.category+" | "+x.lessons+
-    " | ["+x.course_slug+"]("+x.file+") |"),
-  "",
-  "## Etapas para a equipe editorial",
-  "",
-  "Abra revisao-navegavel.html para navegar pelos 10 cursos e 35 aulas offline.",
-  "Abra FILA-REVISAO-35.md para priorizar 24 possíveis repetições estilísticas, sem autenticar aceite.",
-  "Exporte o CSV; o registro nunca confirma identidade ou aprova publicação.",
-  "",
-  "1. Ler todos os textos em \`cursos/\` e registrar observações em \`revisao.csv\`.",
-  "2. Confirmar qualidade, atualidade das orientações, revisão de exemplos e ausência de dados pessoais.",
-  "3. Registrar aprovação humana em issue/PR identificável, incluindo SHA-256 da aula e responsável.",
-  "4. Encaminhar o material à revisão independente de privacidade e segurança pertinente.",
-  "5. **Não publicar**: os 13 gates do Portal/Universidade continuam \`HOLD_NO_GO\`.",
-  "",
-].join("\n");
+const doc=renderEditorialReadme(indexes,sourceHash);
 await writeFile(resolve(dest,"LEIA-PRIMEIRO.md"),doc,"utf8");
 await writeFile(resolve(dest,"FILA-REVISAO-35.md"),reviewQueue.markdown,"utf8");
 function csvField(v){

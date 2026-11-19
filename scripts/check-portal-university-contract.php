@@ -313,4 +313,106 @@ $assert($empty->reason === 'contract_no_eligible_service' && $empty->candidateCo
 $assert(!$empty->mayIssuePortalGrant(),
     'empty service portfolio does not issue a Portal grant');
 
+
+/*
+ * C161 — Simulate the actual business lifecycle from one or two services.
+ * All four sources here are STILL caller-constructed synthetic diagnostics.
+ * The University authority remains unavailable/deny-all.
+ */
+$contractFor = static function (
+    string $reference,
+    UniversityContractStatus $status,
+    int $revision,
+    bool $eligible = true,
+    bool $trial = false,
+) use ($tenant, $now): UniversityContractSnapshot {
+    return new UniversityContractSnapshot(
+        $reference, $tenant, PortfolioProduct::Onepage, $status,
+        $eligible, $trial, $revision, $now - 5, $now + 30,
+    );
+};
+$revisionFor = static function (array $revisions, array $revoked = []) use ($tenant, $now): UniversityServiceRevisionSnapshot {
+    return new UniversityServiceRevisionSnapshot(
+        $tenant, $revisions, $revoked, $now - 5, $now + 30,
+    );
+};
+$coverageForService = static function (
+    string $reference,
+    int $revision,
+) use ($tenant, $now, $sku): UniversityServiceCoverageSnapshot {
+    return new UniversityServiceCoverageSnapshot(
+        $reference, $tenant, PortfolioProduct::Onepage, $sku,
+        $revision, 4, $now - 60, $now + 60,
+        $now - 5, $now + 30, UniversityCoverageBasis::RecurringContractWindow,
+    );
+};
+
+foreach ([
+    'cancelled' => [UniversityContractStatus::Cancelled, true, false],
+    'suspended' => [UniversityContractStatus::Suspended, true, false],
+    'preparing' => [UniversityContractStatus::Preparing, true, false],
+    'trial_status' => [UniversityContractStatus::Trial, true, false],
+    'active_trial_only' => [UniversityContractStatus::Active, true, true],
+    'active_not_eligible' => [UniversityContractStatus::Active, false, false],
+] as $scenario => [$status, $eligible, $trialOnly]) {
+    $sources = $validSources;
+    $sources['contracts'] = [$contractFor($service, $status, 7, $eligible, $trialOnly)];
+    $sources['coverage'] = [];
+    $actual = $preflightFrom($sources)->inspect($tenant, $now);
+    $assert($actual->reason === 'contract_no_eligible_service'
+        && $actual->candidateCount === 0,
+        "nonactive/noneligible lifecycle {$scenario} cannot leave a qualifying service");
+    $assert(!$actual->mayIssuePortalGrant() && !$actual->provesPaidContract(),
+        "lifecycle {$scenario} cannot grant access or prove payment");
+}
+
+$service2 = 'svc-landing-synthetic';
+$active2 = $contractFor($service2, UniversityContractStatus::Active, 3);
+$cancelled1 = $contractFor($service, UniversityContractStatus::Cancelled, 8);
+$revocation2 = $revisionFor([$service => 8, $service2 => 3]);
+
+$oneRemaining = $validSources;
+$oneRemaining['contracts'] = [$cancelled1, $active2];
+$oneRemaining['revisions'] = $revocation2;
+$oneRemaining['coverage'] = [$coverageForService($service2, 3)];
+$one = $preflightFrom($oneRemaining)->inspect($tenant, $now);
+$assert($one->reason === 'candidate_pending_official_authority' && $one->candidateCount === 1,
+    'one remaining active service stays a diagnostic candidate, not a payment proof');
+$assert(!$one->mayIssuePortalGrant() && !$one->provesPaidContract(),
+    'one remaining service never issues operational grant');
+
+$lastCancelled = $oneRemaining;
+$lastCancelled['contracts'] = [$cancelled1, $contractFor($service2, UniversityContractStatus::Cancelled, 4)];
+$lastCancelled['revisions'] = $revisionFor([$service => 8, $service2 => 4]);
+$lastCancelled['coverage'] = [];
+$last = $preflightFrom($lastCancelled)->inspect($tenant, $now);
+$assert($last->reason === 'contract_no_eligible_service' && $last->candidateCount === 0,
+    'cancelling the LAST eligible service removes every candidate');
+$assert(!$last->mayIssuePortalGrant(), 'last cancellation never creates a grant');
+
+$reactivated = $lastCancelled;
+$reactivated['contracts'] = [$cancelled1, $contractFor($service2, UniversityContractStatus::Active, 5)];
+$reactivated['revisions'] = $revisionFor([$service => 8, $service2 => 5]);
+$reactivated['coverage'] = [$coverageForService($service2, 5)];
+$restored = $preflightFrom($reactivated)->inspect($tenant, $now);
+$assert($restored->reason === 'candidate_pending_official_authority' && $restored->candidateCount === 1,
+    'reactivated contract requires NEW matching revision and coverage');
+$assert(!$restored->mayIssuePortalGrant(), 'reactivated synthetic service remains non-authorizing');
+
+$staleRevision = $reactivated;
+$staleRevision['revisions'] = $revisionFor([$service => 8, $service2 => 4]);
+$deniedRevision = $preflightFrom($staleRevision)->inspect($tenant, $now);
+$assert($deniedRevision->reason !== 'candidate_pending_official_authority'
+    && $deniedRevision->candidateCount === 0,
+    'replay of old revision must block a reactivated service');
+$assert(!$deniedRevision->mayIssuePortalGrant(), 'old revision never grants access');
+
+$explicitRevocation = $reactivated;
+$explicitRevocation['revisions'] = $revisionFor([$service => 8, $service2 => 5], [$service2]);
+$deniedRevoked = $preflightFrom($explicitRevocation)->inspect($tenant, $now);
+$assert($deniedRevoked->reason === 'contract_revoked_active_service'
+    && $deniedRevoked->candidateCount === 0,
+    'independent revoked active service must veto the entire candidate');
+$assert(!$deniedRevoked->mayIssuePortalGrant(), 'revocation veto never grants access');
+
 echo "PASS: {$checked} actual Portal/Universidade cross-repo compatibility and deny-all checks; no grants or network.\n";

@@ -112,7 +112,24 @@ module.exports=async function({browser,out,check}){
     await page.locator("#review-search").fill("inexistente");
     check(await page.locator("#review-results .review-result").count()===0,
       "C163 missing terms produce no invented matches");
+    await page.evaluate(()=>{
+      window.__uniSearchAnnouncements=0;
+      new MutationObserver(()=>{window.__uniSearchAnnouncements++;}).observe(
+        document.getElementById("review-search-count"),
+        {childList:true,characterData:true,subtree:true});
+    });
+    await page.locator("#review-search").fill("inexistente outro");
+    const stableSearch=await page.evaluate(async()=>{
+      await Promise.resolve();return window.__uniSearchAnnouncements;
+    });
+    check(stableSearch===0,
+      "C177 different missing terms with same count do not repeat search live announcement");
     await page.locator("#review-search").fill("");
+    const changedSearch=await page.evaluate(async()=>{
+      await Promise.resolve();return window.__uniSearchAnnouncements;
+    });
+    check(changedSearch>=1,
+      "C177 a genuinely changed search result count still updates the live region");
     await page.locator("#review-filter").selectOption("ALL");
     check(await page.locator("#review-results").isHidden(),
       "C163 empty search and all-status filter do not clutter the editor");

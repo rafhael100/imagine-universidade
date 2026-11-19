@@ -48,9 +48,13 @@
     const active=term!==""||status!=="ALL",holder=$("review-results");
     holder.hidden=!active;
     holder.replaceChildren();
-    $("review-search-count").textContent=active
+    const countLabel=active
       ?matches.length+" aulas encontradas neste filtro"
       :"Digite para localizar uma aula ou selecione uma situação.";
+    // The search count is an aria-live status. Different search strings may
+    // have the same result count; do not re-announce an unchanged number.
+    if($("review-search-count").textContent!==countLabel)
+      $("review-search-count").textContent=countLabel;
     if(!active)return;
     for(const [i,lesson] of matches){
       const b=document.createElement("button");

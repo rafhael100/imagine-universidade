@@ -16,6 +16,8 @@ on:
       - 'scripts/check-editorial-package-integrity.mjs'
       - 'content/mvp-cursos-v1.json'
       - 'ops/release-gates.json'
+      - 'ops/staging/check-release-gates.mjs'
+      - 'app/Providers/AppServiceProvider.php'
       - 'docs/UNI-ERD-R50-R51-SEARCH-STATUS-A11Y-2026-11-19.md'
 
 permissions:
@@ -53,6 +55,7 @@ jobs:
           node scripts/check-editorial-offline-review.mjs
           node scripts/check-editorial-package-integrity.mjs
           node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
           node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(x=>x.status!=="NOT_VERIFIED"))process.exit(1)'
           echo 'PASS synthetics: review labels; 35 lessons; all thirteen gates still NOT_VERIFIED.'
 

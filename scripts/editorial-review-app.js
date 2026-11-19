@@ -19,6 +19,14 @@
     $("summary").textContent=stats.PENDING_HUMAN_REVIEW+" pendentes · "+
       stats.NEEDS_CHANGES+" pedem ajustes · "+stats.CLAIMED_HUMAN_APPROVED+
       " declarações humanas NÃO autenticadas";
+    for(const button of $("courses").querySelectorAll(".course-item")){
+      const slug=button.dataset.courseSlug;
+      const rows=items.filter(item=>item.course_slug===slug);
+      const pending=rows.filter(item=>state.get(key(item)).status==="PENDING_HUMAN_REVIEW").length;
+      button.textContent=rows[0].course_title+" ("+pending+" pendentes / "+rows.length+")";
+    }
+    $("next-pending").disabled=stats.PENDING_HUMAN_REVIEW===0;
+    $("next-adjustment").disabled=stats.NEEDS_CHANGES===0;
   }
   function render(){
     const lesson=items[current],row=state.get(key(lesson));
@@ -29,8 +37,10 @@
       const button=document.createElement("button");
       button.type="button";
       button.className="course-item";
-      button.textContent=items[first].course_title+" ("+
-        items.filter(item=>item.course_slug===slug).length+")";
+      button.dataset.courseSlug=slug;
+      const rows=items.filter(item=>item.course_slug===slug);
+      const pending=rows.filter(item=>state.get(key(item)).status==="PENDING_HUMAN_REVIEW").length;
+      button.textContent=items[first].course_title+" ("+pending+" pendentes / "+rows.length+")";
       button.setAttribute("aria-current",slug===lesson.course_slug?"true":"false");
       button.addEventListener("click",()=>choose(first));
       nav.append(button);
@@ -59,6 +69,16 @@
   function choose(i){
     if(!Number.isInteger(i)||i<0||i>=items.length)return;
     current=i;render();$("title").focus();
+  }
+  function jumpToStatus(wanted){
+    for(let n=1;n<=items.length;n++){
+      const idx=(current+n)%items.length;
+      if(state.get(key(items[idx])).status===wanted){
+        choose(idx);
+        return;
+      }
+    }
+    message("Não há aulas nesta situação para navegar.");
   }
   function update(){
     const row=state.get(key(items[current]));
@@ -173,6 +193,8 @@
   $("lessons").addEventListener("change",e=>choose(Number(e.target.value)));
   $("previous").addEventListener("click",()=>choose(current-1));
   $("next").addEventListener("click",()=>choose(current+1));
+  $("next-pending").addEventListener("click",()=>jumpToStatus("PENDING_HUMAN_REVIEW"));
+  $("next-adjustment").addEventListener("click",()=>jumpToStatus("NEEDS_CHANGES"));
   ["status","reviewer","evidence","notes"].forEach(id=>$(id).addEventListener("input",update));
   $("export").addEventListener("click",exportCsv);
   $("import").addEventListener("change",e=>{void importCsv(e.target.files[0]);});

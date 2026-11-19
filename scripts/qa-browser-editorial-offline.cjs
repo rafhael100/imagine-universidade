@@ -51,6 +51,15 @@ module.exports=async function({browser,out,check}){
       "C158 navigation preserves a local unfinished human review");
     check((await page.locator("#summary").innerText()).includes("1 pedem ajustes"),
       "C158 UI labels the review as needs changes, not approved");
+    check((await page.locator("#courses .course-item").first().innerText()).includes("3 pendentes / 4"),
+      "C160 first course shows accurate unfinished lesson count");
+    await page.locator("#next-pending").click();
+    check((await page.locator("#title").innerText()).includes("Leads:"),
+      "C160 next pending skips a lesson already marked for adjustments");
+    await page.locator("#next-adjustment").click();
+    check((await page.locator("#title").innerText()).includes("Visitas:"),
+      "C160 next adjustment wraps to the currently changed lesson");
+
 
     const [download]=await Promise.all([
       page.waitForEvent("download",{timeout:10000}),

@@ -230,17 +230,21 @@
     const raw=text.replace(/^\uFEFF/u,"");
     const delimiter=raw.split(/\r?\n/u,1)[0].includes('";"')?";":",";
     const rows=[];
-    let row=[],field="",quoted=false,atStart=true;
+    let row=[],field="",quoted=false,atStart=true,closedQuote=false;
     for(let i=0;i<raw.length;i++){
       const ch=raw[i];
+      // RFC 4180: after the closing quote only a delimiter or row break is legal.
+      // Previously, '"ABC"DEF' could silently be interpreted as 'ABCDEF'.
+      if(!quoted&&closedQuote&&ch!==delimiter&&ch!=='\n'&&ch!=='\r')
+        throw Error("Texto após aspas fechadas no CSV.");
       if(quoted){
         if(ch==='"'){
           if(raw[i+1]==='"'){field+='"';i++;}
-          else quoted=false;
+          else {quoted=false;closedQuote=true;}
         }else field+=ch;
       }else if(ch==='"'&&atStart){quoted=true;atStart=false;}
-      else if(ch===delimiter){row.push(field);field="";atStart=true;}
-      else if(ch==='\n'){row.push(field);rows.push(row);row=[];field="";atStart=true;}
+      else if(ch===delimiter){row.push(field);field="";atStart=true;closedQuote=false;}
+      else if(ch==='\n'){row.push(field);rows.push(row);row=[];field="";atStart=true;closedQuote=false;}
       else if(ch==='\r'){
         if(raw[i+1]!=='\n')throw Error("Quebra de linha CSV inválida.");
       }else{

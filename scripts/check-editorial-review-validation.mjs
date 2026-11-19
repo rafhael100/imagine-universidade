@@ -65,6 +65,17 @@ try{
   });
   const excel="\uFEFF"+csv.replaceAll('","','";"');
   accepts("Brazilian Excel CSV with semicolon and BOM",excel,s=>assert.equal(s.pending,35));
+  // Both malformed inputs used to parse as identical valid values because
+  // non-delimiter data after a quoted field was appended silently.
+  const badStatus=csv.replace('"PENDING_HUMAN_REVIEW"','"PENDING_HUMAN_"REVIEW');
+  assert.notEqual(badStatus,csv,"Malformed status fixture must change the CSV");
+  rejects("text after closing quote in review status",badStatus);
+  const firstDataLine=csv.split("\n")[1];
+  const firstSlug=firstDataLine.slice(1,firstDataLine.indexOf('"',1));
+  assert.ok(firstSlug.length>4);
+  const badSlug=csv.replace('"'+firstSlug+'"','"'+firstSlug.slice(0,3)+'"'+firstSlug.slice(3));
+  assert.notEqual(badSlug,csv,"Malformed slug fixture must change the CSV");
+  rejects("text after closing quote in lesson identity",badSlug);
   rejects("stale content digest",alter(csv,1,2,"0".repeat(64)));
   rejects("fake unknown course",alter(csv,1,0,"fake-course"));
   const duplicateReviewLines=csv.trimEnd().split("\n");
@@ -97,7 +108,7 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,29);
+  assert.equal(scenarios,31);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

@@ -17,18 +17,22 @@ function parseCsv(text){
   text=text.replace(/^\uFEFF/,""); // Excel UTF-8 export can add BOM
   const header=text.split(/\r?\n/,1)[0];
   const delimiter=header.includes('";"')?";":","; // Brazilian Excel uses semicolon
-  const rows=[];let row=[],value="",quoted=false,fieldStart=true;
+  const rows=[];let row=[],value="",quoted=false,fieldStart=true,closedQuote=false;
   for(let i=0;i<text.length;i++){
     const ch=text[i];
+    // Noncanonical text after the terminating quote must not be silently
+    // joined to an otherwise valid identity/status field.
+    if(!quoted&&closedQuote&&ch!==delimiter&&ch!=='\n'&&ch!=='\r')
+      assert.fail("Text after closing CSV quote");
     if(quoted){
       if(ch==='"'){
         if(text[i+1]==='"'){value+='"';i++;}
-        else quoted=false;
+        else {quoted=false;closedQuote=true;}
       }else value+=ch;
     }else if(ch==='"'&&fieldStart){quoted=true;fieldStart=false;}
-    else if(ch===delimiter){row.push(value);value="";fieldStart=true;}
+    else if(ch===delimiter){row.push(value);value="";fieldStart=true;closedQuote=false;}
     else if(ch==='\n'){
-      row.push(value);rows.push(row);row=[];value="";fieldStart=true;
+      row.push(value);rows.push(row);row=[];value="";fieldStart=true;closedQuote=false;
     }else if(ch==='\r'){
       assert.equal(text[i+1],'\n',"Carriage return must precede newline");
     }else{

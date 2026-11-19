@@ -274,6 +274,17 @@ module.exports=async function({browser,out,check}){
     check((await importedPage.locator("#message").innerText()).includes("direção invisível") &&
       (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
       "C172 Unicode-bidi CSV is rejected before atomic merge without losing local reviews");
+    const malformedCsvPath=path.join(dir,"revisao-aspas-nao-canonicas.csv");
+    const malformedCsv=csv.replace('"PENDING_HUMAN_REVIEW"','"PENDING_HUMAN_"REVIEW');
+    fs.writeFileSync(malformedCsvPath,malformedCsv,"utf8");
+    await importedPage.locator("#import").setInputFiles(malformedCsvPath);
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Importação recusada"),
+      null,{timeout:10000}
+    );
+    check((await importedPage.locator("#message").innerText()).includes("aspas fechadas") &&
+      (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
+      "C173 noncanonical CSV quote is refused atomically even when parsed text would match");
     await importedPage.close();
 
     await page.locator("#notes").fill("Anotação\u202Einvertida");

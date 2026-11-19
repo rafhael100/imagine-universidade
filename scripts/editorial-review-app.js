@@ -147,7 +147,7 @@
       if(row.reviewer||row.evidence)throw Error("Apague nome/evidência do registro pendente: "+id);
     }else{
       if(row.reviewer.trim().length<3||row.reviewer.length>120||
-        /[\r\n]/u.test(row.reviewer)||unsafeDisplayControl(row.reviewer)||
+        /[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u.test(row.reviewer)||unsafeDisplayControl(row.reviewer)||
         /^\s*[=+\-@]/u.test(row.reviewer))
         throw Error("Informe revisor válido: "+id);
       if(!/^https:\/\/github\.com\/rafhael100\/imagine-universidade\/(?:issues|pull)\/[1-9]\d*(?:#issuecomment-[1-9]\d*)?$/iu.test(row.evidence))

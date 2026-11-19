@@ -154,6 +154,20 @@ module.exports=async function({browser,out,check}){
       "C160 next adjustment wraps to the currently changed lesson");
 
 
+    // C183: pasted ASCII controls in the reviewer field used to escape the
+    // browser's export fence, producing CSV rejected by the canonical CLI.
+    // Test both BEL and DEL while retaining the existing human draft.
+    for(const control of [7,127]){
+      await page.locator("#reviewer").evaluate((el,code)=>{
+        el.value="Equipe"+String.fromCharCode(code)+" Editorial";
+        el.dispatchEvent(new Event("input",{bubbles:true}));
+      },control);
+      await page.locator("#export").click();
+      check((await page.locator("#message").innerText()).includes("Informe revisor válido"),
+        "C183 reviewer control character rejected before CSV export");
+    }
+    await page.locator("#reviewer").fill("Equipe Editorial QA");
+
     const [summaryDownload]=await Promise.all([
       page.waitForEvent("download",{timeout:10000}),
       page.locator("#export-summary").click()

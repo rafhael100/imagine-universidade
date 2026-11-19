@@ -131,6 +131,8 @@ try{
   rejects("Unicode line separator in reviewer",alter(named,1,4,"Revisor\u2028Falso"));
   rejects("zero-width reviewer spoofing",alter(named,1,4,"Revisor\u200bFalso"));
   rejects("word joiner reviewer spoofing",alter(named,1,4,"Revisor\u2060Falso"));
+  rejects("ASCII BEL in reviewer",alter(named,1,4,"Equipe\u0007Falsa"));
+  rejects("ASCII DEL in reviewer",alter(named,1,4,"Equipe\u007fFalsa"));
   accepts("valid multiline review notes",alter(csv,1,6,"Revisão clara,\ncom texto em duas linhas."),s=>{
     assert.equal(s.pending,35);
     assert.equal(s.publishable,false);
@@ -140,7 +142,7 @@ try{
       assert.equal(s.pending,35));
   rejects("one missing lesson review",csv.trimEnd().split("\n").slice(0,-1).join("\n")+"\n");
   rejects("duplicated lesson review",csv+csv.trimEnd().split("\n")[1]+"\n");
-  assert.equal(scenarios,39);
+  assert.equal(scenarios,41);
   console.log("PASS editorial signoff validation: "+scenarios+" scenarios, 35 hashes checked, NO_GO even if every row claims approval.");
 }finally{
   await rm(dir,{recursive:true,force:true});

@@ -70,6 +70,30 @@ module.exports=async function({browser,out,check}){
     await page.locator("#reviewer").fill("Equipe Editorial QA");
     await page.locator("#evidence").fill("https://github.com/rafhael100/imagine-universidade/issues/12");
     await page.locator("#notes").fill("Revisar métricas e clareza do exemplo fictício.");
+    // C176: only real status/count changes should announce to a screen
+    // reader. Repeated note-input events must not rewrite unchanged live regions.
+    await page.evaluate(()=>{
+      window.__uniLiveMutations={summary:0,message:0};
+      const counts=window.__uniLiveMutations;
+      new MutationObserver(()=>{counts.summary++;}).observe(
+        document.getElementById("summary"),{childList:true,characterData:true,subtree:true});
+      new MutationObserver(()=>{counts.message++;}).observe(
+        document.getElementById("message"),{childList:true,characterData:true,subtree:true});
+    });
+    await page.locator("#notes").dispatchEvent("input");
+    await page.locator("#notes").dispatchEvent("input");
+    const stable=await page.evaluate(async()=>{
+      await Promise.resolve();return {...window.__uniLiveMutations};
+    });
+    check(stable.summary===0&&stable.message===0,
+      "C176 unchanged notes do not redundantly announce identical live-region text");
+    await page.locator("#status").selectOption("CLAIMED_HUMAN_APPROVED");
+    await page.locator("#status").selectOption("NEEDS_CHANGES");
+    const changed=await page.evaluate(async()=>{
+      await Promise.resolve();return {...window.__uniLiveMutations};
+    });
+    check(changed.summary>=2&&changed.message===0,
+      "C176 actual status changes still update the live summary without repetitive message");
     await page.locator("#next").click();
     await page.locator("#previous").click();
     check(await page.locator("#status").inputValue()==="NEEDS_CHANGES" &&

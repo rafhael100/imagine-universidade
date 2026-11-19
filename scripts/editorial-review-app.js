@@ -10,15 +10,19 @@
   const key=item=>item.course_slug+"/"+item.lesson_slug;
   const courses=[...new Set(items.map(item=>item.course_slug))];
   function message(value,error=false){
-    $("message").textContent=value;
-    $("message").classList.toggle("error",error);
+    const target=$("message");
+    // This is an aria-live region: reassigning the identical text on every
+    // keystroke causes duplicate announcements for assistive technology.
+    if(target.textContent!==value)target.textContent=value;
+    target.classList.toggle("error",error);
   }
   function counts(){
     const stats={PENDING_HUMAN_REVIEW:0,NEEDS_CHANGES:0,CLAIMED_HUMAN_APPROVED:0};
     for(const row of state.values())stats[row.status]++;
-    $("summary").textContent=stats.PENDING_HUMAN_REVIEW+" pendentes · "+
+    const summary=stats.PENDING_HUMAN_REVIEW+" pendentes · "+
       stats.NEEDS_CHANGES+" pedem ajustes · "+stats.CLAIMED_HUMAN_APPROVED+
       " declarações humanas NÃO autenticadas";
+    if($("summary").textContent!==summary)$("summary").textContent=summary;
     for(const button of $("courses").querySelectorAll(".course-item")){
       const slug=button.dataset.courseSlug;
       const rows=items.filter(item=>item.course_slug===slug);

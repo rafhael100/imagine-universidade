@@ -7,6 +7,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const {spawnSync}=require("node:child_process");
 const {pathToFileURL}=require("node:url");
+const AxeBuilder=require("@axe-core/playwright").default;
 
 module.exports=async function({browser,out,check}){
   const repo=path.resolve(__dirname,"..");
@@ -35,10 +36,35 @@ module.exports=async function({browser,out,check}){
       "C158 full real draft lesson shown, no public API");
     check((await page.locator("#title").innerText()).includes("Visitas:"),
       "C158 selected first lesson matches the source");
+    // Scan the actual generated file:// review page, not a mocked DOM.
+    const axe=await new AxeBuilder({page})
+      .withTags(["wcag2a","wcag2aa","wcag21a","wcag21aa"]).analyze();
+    const major=axe.violations.filter(v=>v.impact==="serious"||v.impact==="critical");
+    fs.writeFileSync(path.join(out,"editorial-review-offline-axe.json"),JSON.stringify({
+      violations:axe.violations.map(v=>({
+        id:v.id,impact:v.impact,targets:v.nodes.map(n=>n.target)
+      }))
+    },null,2));
+    check(major.length===0,"C164 offline editor has no serious/critical WCAG 2.1 A/AA failures: "+
+      major.map(v=>v.id+":"+v.nodes.map(n=>n.target.join(",")).join("|")).join(";"));
+    for(const width of [320,390,768,1440]){
+      await page.setViewportSize({width,height:800});
+      const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1);
+      check(!overflow,"C164 offline reviewer fits viewport "+width+"px without overflow");
+    }
+    await page.setViewportSize({width:390,height:800});
     await page.locator("#next").click();
     check((await page.locator("#title").innerText()).includes("Leads:"),
       "C158 next lesson is usable without server");
     await page.locator("#previous").click();
+    await page.locator("#next").focus();
+    await page.keyboard.press("Enter");
+    check((await page.locator("#title").innerText()).includes("Leads:"),
+      "C164 keyboard Enter navigates to next lesson");
+    await page.locator("#previous").focus();
+    await page.keyboard.press("Enter");
+    check((await page.locator("#title").innerText()).includes("Visitas:"),
+      "C164 keyboard Enter returns to first lesson");
 
     await page.locator("#status").selectOption("NEEDS_CHANGES");
     await page.locator("#reviewer").fill("Equipe Editorial QA");

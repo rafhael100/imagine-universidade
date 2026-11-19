@@ -163,9 +163,12 @@ module.exports=async function({browser,out,check}){
     // ERD-R01: find notes/reviewers in this local, offline session; preserve
     // existing status filtering and do not display private notes in buttons.
     await page.locator("#review-search").fill("metricas");
-    check(await page.locator("#review-results .review-result").count()===1 &&
-      (await page.locator("#review-results .review-result").first().innerText()).includes("Visitas"),
-      "ERD-R01 unaccented search finds an accented editorial note");
+    // Other lessons legitimately contain "métricas" in their titles; the
+    // assertion must prove the annotated lesson is included, not that it is
+    // the sole result across the whole 35-lesson curriculum.
+    const metricsLabels=await page.locator("#review-results .review-result").allTextContents();
+    check(metricsLabels.some(label=>label.includes("Visitas: ser encontrado é o primeiro passo")),
+      "ERD-R01 unaccented search includes the lesson with accented editorial note");
     await page.locator("#review-search").fill("equipe editorial qa");
     check(await page.locator("#review-results .review-result").count()===1&&
       !(await page.locator("#review-results .review-result").first().innerText()).includes("Equipe Editorial QA"),

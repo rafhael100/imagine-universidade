@@ -33,6 +33,10 @@ try{
 
   pass(html.includes("id='review-search'")&&html.includes("id='review-filter'"),
     "offline editor offers literal search and status filters");
+  pass(html.includes("Situação: ")&&html.includes("Requer ajustes")&&
+    html.includes("Aceite declarado (não autenticado)")&&
+    html.includes("if(button.textContent!==nextLabel)button.textContent=nextLabel"),
+    "ERD-R50 search results expose live non-authenticated review status without replacing focused buttons");
 
   pass(html.includes("id='import'")&&html.includes("Importação recusada"),
     "safe CSV reimport offered and errors reported");

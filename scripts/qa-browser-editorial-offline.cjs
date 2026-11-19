@@ -36,6 +36,25 @@ module.exports=async function({browser,out,check}){
       "C158 full real draft lesson shown, no public API");
     check((await page.locator("#title").innerText()).includes("Visitas:"),
       "C158 selected first lesson matches the source");
+    // ERD-R51: search results must expose status, update in place, and
+    // explicitly reject false implications of authenticated approval.
+    await page.locator("#review-search").fill("Visitas");
+    const statusResult=page.locator("#review-results .review-result").first();
+    check((await statusResult.innerText()).includes("Situação: Pendente"),
+      "ERD-R51 initial search result announces its pending editorial state");
+    await page.evaluate(()=>{
+      window.__uniStatusResultNode=document.querySelector("#review-results .review-result");
+    });
+    await page.locator("#status").selectOption("NEEDS_CHANGES");
+    check((await statusResult.innerText()).includes("Situação: Requer ajustes")&&
+      await page.evaluate(()=>document.querySelector("#review-results .review-result")===
+        window.__uniStatusResultNode),
+      "ERD-R51 status label updates without replacing the search button");
+    await page.locator("#status").selectOption("CLAIMED_HUMAN_APPROVED");
+    check((await statusResult.innerText()).includes("Aceite declarado (não autenticado)"),
+      "ERD-R51 claimed human approval remains explicitly unauthenticated");
+    await page.locator("#status").selectOption("PENDING_HUMAN_REVIEW");
+    await page.locator("#review-search").fill("");
     // Scan the actual generated file:// review page, not a mocked DOM.
     const axe=await new AxeBuilder({page})
       .withTags(["wcag2a","wcag2aa","wcag21a","wcag21aa"]).analyze();

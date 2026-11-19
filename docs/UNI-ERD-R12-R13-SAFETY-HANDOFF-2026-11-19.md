@@ -31,7 +31,7 @@ Na versão original do gerador, um título ou corpo inválido encontrado **somen
 
 A nova função `preflightReviewSource(payload.courses)` percorre **todos** os cursos e suas aulas, valida identidade e unicidade de slugs, categoria, tamanho, título e corpo antes de criar qualquer arquivo de conteúdo. A pré-validação não altera texto, hashes ou situação editorial.
 
-O teste executável `scripts/check-editorial-pack-preflight.mjs` usa uma cópia temporária e descartável da fonte para simular cinco falhas tardias: corpo com controle bidi, título C1, título com newline, aula final muito curta e curso final com slug duplicado. Cada falha exige saída diferente de zero e **zero arquivos** no diretório de saída recém-criado. Tudo ocorre fora da fonte original e sem servidor, banco, credenciais ou publicação.
+O teste executável `scripts/check-editorial-pack-preflight.mjs` usa uma cópia temporária e descartável da fonte para simular cinco falhas tardias de estrutura e uma falha de codificação UTF-8: corpo com controle bidi, título C1, título com newline, aula final muito curta e curso final com slug duplicado. Cada falha exige saída diferente de zero e **zero arquivos** no diretório de saída recém-criado. Tudo ocorre fora da fonte original e sem servidor, banco, credenciais ou publicação.
 
 ```bash
 node --check scripts/check-editorial-pack-preflight.mjs
@@ -39,6 +39,12 @@ node scripts/check-editorial-pack-preflight.mjs
 ```
 
 O limite restante é operacional: a proteção contra alterações concorrentes de arquivos de sistema entre a pré-validação e a escrita dependeria de garantias adicionais de filesystem. Nesta PR, a fonte curricular permanece um arquivo versionado do checkout descartável, e o destino é exclusivamente temporário/vazio.
+
+## Fonte UTF-8 estrita (ERD-R16/R17)
+
+O `readFile(path,"utf8")` de Node.js substitui bytes inválidos pelo caractere U+FFFD sem falhar, possibilitando que um documento de revisão fosse gerado a partir de uma cópia silenciosamente corrompida do texto. O gerador agora lê o Buffer da fonte e usa `new TextDecoder("utf-8",{fatal:true})` antes de JSON, hashing ou exportação.
+
+Uma regressão complementar insere byte UTF-8 inválido no corpo da **última aula**, diretamente no arquivo temporário, e exige falha com **zero arquivos escritos**. A fonte real e os 35 hashes não são alterados. O conjunto do pré-voo cobre agora **seis** cenários negativos.
 
 ## Dependências de liberação
 

@@ -61,6 +61,15 @@
   function normalizeSearch(value){
     return value.normalize("NFKD").replace(/\p{M}/gu,"").toLocaleLowerCase("pt-BR").trim();
   }
+  // ERD-R50: distinguish backlog states in every local search result.
+  // Never present a mere declaration as authenticated editorial approval.
+  const reviewStatusLabels={
+    PENDING_HUMAN_REVIEW:"Pendente",
+    NEEDS_CHANGES:"Requer ajustes",
+    CLAIMED_HUMAN_APPROVED:"Aceite declarado (não autenticado)"
+  };
+  const reviewResultLabel=lesson=>lesson.course_title+" · "+lesson.lesson_title+
+    " · Situação: "+reviewStatusLabels[state.get(key(lesson)).status];
   function updateReviewResults(){
     const term=normalizeSearch($("review-search").value);
     const status=$("review-filter").value;
@@ -100,13 +109,17 @@
         b.className="review-result";
         b.type="button";
         b.dataset.lessonIndex=String(i);
-        b.textContent=lesson.course_title+" · "+lesson.lesson_title;
+        b.textContent=reviewResultLabel(lesson);
         b.addEventListener("click",()=>choose(i));
         holder.append(b);
       }
     }
     // Selection can change without changing the result identities.
     for(const button of holder.querySelectorAll(".review-result")){
+      const lesson=items[Number(button.dataset.lessonIndex)];
+      // Keep button identity and focus while refreshing its live draft state.
+      const nextLabel=reviewResultLabel(lesson);
+      if(button.textContent!==nextLabel)button.textContent=nextLabel;
       const selected=button.dataset.lessonIndex===String(current);
       if(button.getAttribute("aria-current")!==(selected?"true":"false"))
         button.setAttribute("aria-current",selected?"true":"false");

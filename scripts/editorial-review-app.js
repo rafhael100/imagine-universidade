@@ -270,8 +270,10 @@
       const mode=$("import-mode").value;
       if(mode==="replace"){
         // Validate the ENTIRE input before asking to discard existing work.
-        if(dirty&&!window.confirm("Substituir todas as 35 linhas? Revisões locais não exportadas serão perdidas."))
+        if(dirty&&!window.confirm("Substituir todas as 35 linhas? Revisões locais não exportadas serão perdidas.")){
+          message("Substituição cancelada; revisões existentes preservadas.");
           return;
+        }
         for(const [id,item] of next)state.set(id,item);
         dirty=true;render();
         message("CSV carregado por substituição. Nenhuma aprovação foi autenticada.");
@@ -286,6 +288,8 @@
         let chosen=currentRow;
         if(currentRow.status==="PENDING_HUMAN_REVIEW"){
           if(incoming.status!=="PENDING_HUMAN_REVIEW"){
+            if(currentRow.notes!==""&&currentRow.notes!==incoming.notes)
+              throw Error("Conflito entre observação pendente e revisão recebida: "+id);
             chosen=incoming;
           }else if(currentRow.notes===""&&incoming.notes!==""){
             chosen=incoming;

@@ -212,9 +212,28 @@ module.exports=async function({browser,out,check}){
     let asked=false;
     importedPage.once("dialog",async dialog=>{asked=true;await dialog.dismiss();});
     await importedPage.locator("#import").setInputFiles(path.join(dir,"revisao.csv"));
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Substituição cancelada"),
+      null,{timeout:10000}
+    );
     check(asked && (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
-      "C167 user can cancel explicit full replacement without losing work");
+      "C168 user can cancel explicit full replacement without losing work");
     await importedPage.close();
+
+    const partialPage=await browserContext.newPage();
+    partialPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await partialPage.goto(url,{waitUntil:"load"});
+    await partialPage.locator("#notes").fill("Anotação preliminar ainda não exportada");
+    await partialPage.locator("#import").setInputFiles(csvPath);
+    await partialPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Conflito"),
+      null,{timeout:10000}
+    );
+    check((await partialPage.locator("#notes").inputValue())==="Anotação preliminar ainda não exportada",
+      "C168 pending local notes cannot be erased by a completed imported review");
+    check((await partialPage.locator("#summary").innerText()).includes("35 pendentes"),
+      "C168 pending review conflict refuses the entire import without partial application");
+    await partialPage.close();
 
     await page.locator("#notes").fill("=HYPERLINK(\"https://example.invalid\")");
     await page.locator("#export").click();

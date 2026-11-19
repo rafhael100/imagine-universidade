@@ -40,12 +40,22 @@ for(const lone of ["\uD800","\uDC00"]){
   assert.throws(()=>safeBody(body+lone),undefined,"unpaired surrogate in body");
   negative+=2;
 }
+// ERD-R20: presence alone is insufficient. Ordering and uniqueness of the
+// three required headings are part of the reviewer-visible lesson contract.
+const swapped=body.replace("\n\nEXEMPLO FICTÍCIO\n","\n\n__SECTION_SLOT__\n")
+  .replace("\n\nAPLICAÇÃO OPCIONAL\n","\n\nEXEMPLO FICTÍCIO\n")
+  .replace("\n\n__SECTION_SLOT__\n","\n\nAPLICAÇÃO OPCIONAL\n");
+assert.notEqual(swapped,body);
+assert.throws(()=>safeBody(swapped),/reordered editorial lesson sections/);
+const duplicated=body+"\n\nEXEMPLO FICTÍCIO\nRepetição enganosa.";
+assert.throws(()=>safeBody(duplicated),/duplicated or reordered editorial lesson sections/);
+negative+=2;
 assert.equal(safeLine("Aula sobre inclusão | prática"),"Aula sobre inclusão \\| prática");
 assert.equal(safeBody(body),body.trim());
 assert.throws(()=>safeLine("Aula\nCabeçalho"),/Title must fit/);
 assert.throws(()=>safeBody("Texto breve"),/substantive editorial draft/);
 positive+=2;negative+=2;
-assert.equal(negative,40);
+assert.equal(negative,42);
 console.log("PASS ERD-R12/R13: "+lessons+
   " actual lessons, "+positive+" positive and "+negative+
   " negative checks; all editorial statuses remain unauthenticated.");

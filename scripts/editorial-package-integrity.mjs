@@ -89,3 +89,17 @@ export async function verifyEditorialPackage(directory){
     "Offline package differs from recorded checksums; preserve it and investigate");
   return expected;
 }
+
+// ERD-R28: optional cross-check against the versioned original source when
+// its file is available (e.g. in CI/repo review). This is still NOT a signature.
+export async function verifyEditorialSourceBinding(directory,sourceFile){
+  const verified=await verifyEditorialPackage(directory);
+  const absolute=resolve(sourceFile);
+  await requireRealDirectory(dirname(absolute));
+  const stat=await lstat(absolute);
+  assert.ok(stat.isFile()&&!stat.isSymbolicLink(),
+    "Original curriculum source must be a regular non-symlink file");
+  assert.equal(hash(await readFile(absolute)),verified.source_sha256,
+    "Original curriculum bytes differ from the package source SHA-256");
+  return verified;
+}

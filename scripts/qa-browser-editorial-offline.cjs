@@ -112,7 +112,7 @@ module.exports=async function({browser,out,check}){
     const summary=fs.readFileSync(summaryPath,"utf8");
     check(summaryDownload.suggestedFilename()==="resumo-revisao.txt" &&
       summary.includes("HOLD_NO_GO")&&summary.includes("não autenticado")&&
-      summary.includes("Precisa")===false,
+      summary.includes("NÃO É APROVAÇÃO NEM PUBLICAÇÃO"),
       "C165 local handoff exports plain-text review without claiming release");
     check(summary.includes("Pendentes: 34")&&summary.includes("Precisam ajustes: 1"),
       "C165 summary includes exact 35-lesson counters");

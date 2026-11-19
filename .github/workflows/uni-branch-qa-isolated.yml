@@ -120,6 +120,7 @@ jobs:
           node ops/staging/check-compose-static.mjs
           bash ops/staging/check-compose-syntax.sh
           node scripts/check-release-gate-policy.mjs
+          node scripts/check-main-governance-parity.mjs
           node scripts/check-university-readiness-pack.mjs
           node scripts/check-write-fence.mjs
           node scripts/check-ui-contract.mjs

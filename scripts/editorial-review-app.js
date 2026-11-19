@@ -287,6 +287,10 @@
         if(!currentRow)throw Error("Aula inexistente na sessão: "+id);
         let chosen=currentRow;
         if(currentRow.status==="PENDING_HUMAN_REVIEW"){
+          // Pending fields may still hold unexported, invalid reviewer input.
+          // Never overwrite these local buffers through a merge.
+          if(currentRow.reviewer!==""||currentRow.evidence!=="")
+            throw Error("Conflito: campos locais pendentes ainda preenchidos: "+id);
           if(incoming.status!=="PENDING_HUMAN_REVIEW"){
             if(currentRow.notes!==""&&currentRow.notes!==incoming.notes)
               throw Error("Conflito entre observação pendente e revisão recebida: "+id);
@@ -300,6 +304,8 @@
         }else if(incoming.status!=="PENDING_HUMAN_REVIEW"){
           if(JSON.stringify(currentRow)!==JSON.stringify(incoming))
             throw Error("Conflito entre revisões já preenchidas: "+id);
+        }else if(incoming.notes!==""&&incoming.notes!==currentRow.notes){
+          throw Error("Conflito: observação pendente remota difere da revisão existente: "+id);
         }
         proposed.set(id,chosen);
         if(JSON.stringify(currentRow)!==JSON.stringify(chosen))updated++;

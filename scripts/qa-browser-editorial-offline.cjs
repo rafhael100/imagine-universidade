@@ -165,7 +165,7 @@ module.exports=async function({browser,out,check}){
     const firstHash=csv.match(/[a-f0-9]{64}/u)?.[0];
     check(Boolean(firstHash),"C159 exported review contains a lesson content checksum");
     fs.writeFileSync(invalidCsvPath,csv.replace(firstHash,"0".repeat(64)),"utf8");
-    importedPage.once("dialog",dialog=>dialog.accept());
+    // Invalid files must fail BEFORE any confirmation dialog exists.
     await importedPage.locator("#import").setInputFiles(invalidCsvPath);
     await importedPage.waitForFunction(
       ()=>document.getElementById("message").textContent.includes("Importação recusada"),
@@ -233,7 +233,35 @@ module.exports=async function({browser,out,check}){
       "C168 pending local notes cannot be erased by a completed imported review");
     check((await partialPage.locator("#summary").innerText()).includes("35 pendentes"),
       "C168 pending review conflict refuses the entire import without partial application");
+    await partialPage.locator("#reviewer").fill("Anotação de responsável ainda pendente");
+    await partialPage.locator("#import").setInputFiles(csvPath);
+    await partialPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Conflito"),
+      null,{timeout:10000}
+    );
+    check((await partialPage.locator("#reviewer").inputValue()).includes("ainda pendente")&&
+      (await partialPage.locator("#summary").innerText()).includes("35 pendentes"),
+      "C170 local pending reviewer field is never overwritten by a merged CSV");
     await partialPage.close();
+
+    // A PENDING row with remote notes cannot silently be discarded when the
+    // local lesson was already reviewed.
+    const remotePending=originalCsv.trimEnd().split("\n");
+    const tail='"PENDING_HUMAN_REVIEW","","",""';
+    check(remotePending[1].includes(tail),"C170 original first review row is pending");
+    remotePending[1]=remotePending[1].replace(tail,
+      '"PENDING_HUMAN_REVIEW","","","Comentário remoto não incorporado"');
+    const remotePath=path.join(dir,"revisao-pendente-remota.csv");
+    fs.writeFileSync(remotePath,remotePending.join("\n")+"\n","utf8");
+    await importedPage.locator("#import-mode").selectOption("merge");
+    await importedPage.locator("#import").setInputFiles(remotePath);
+    await importedPage.waitForFunction(
+      ()=>document.getElementById("message").textContent.includes("Conflito"),
+      null,{timeout:10000}
+    );
+    check((await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
+      "C170 remote pending notes conflict with reviewed lesson without silent data loss");
+    await importedPage.close();
 
     await page.locator("#notes").fill("=HYPERLINK(\"https://example.invalid\")");
     await page.locator("#export").click();

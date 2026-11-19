@@ -76,6 +76,7 @@ export function renderOfflineReviewPage(payload,hashes){
     "<main><p class='warning'><strong>REVISÃO PENDENTE — NÃO É APROVAÇÃO NEM PUBLICAÇÃO.</strong>",
     " Qualquer status de aceite preenchido é somente uma declaração não autenticada.</p>",
     "<div class='toolbar'><button id='export' type='button' class='primary'>Exportar revisão CSV</button>",
+    "<button id='confirm-export' type='button' disabled>Confirmei que revisao.csv foi salvo</button>",
     "<button id='export-summary' type='button'>Baixar resumo de pendências</button>",
     "<label for='import-mode'>Como importar outro CSV</label>",
     "<select id='import-mode'><option value='merge'>Mesclar sem apagar revisões existentes</option>",

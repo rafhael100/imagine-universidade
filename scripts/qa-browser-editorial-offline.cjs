@@ -200,6 +200,21 @@ module.exports=async function({browser,out,check}){
     check(csv.includes("NEEDS_CHANGES")&&csv.includes("Equipe Editorial QA")&&
       csv.includes("PENDING_HUMAN_REVIEW"),
       "C158 CSV contains reviewed row and pending other rows");
+    // C184: browser download events are not durable-write receipts.
+    const warnsBeforeExit=()=>page.evaluate(()=>{
+      const e=new Event("beforeunload",{cancelable:true});
+      dispatchEvent(e);return e.defaultPrevented;
+    });
+    check(await page.locator("#confirm-export").isEnabled()&&await warnsBeforeExit(),
+      "C184 requested CSV download still warns until the human checks saved file");
+    await page.locator("#confirm-export").click();
+    check(await page.locator("#confirm-export").isDisabled()&&!(await warnsBeforeExit()),
+      "C184 explicit acknowledgment clears only local unsaved-work warning");
+    await page.locator("#notes").fill("Nova alteração depois do download confirmado");
+    check(await page.locator("#confirm-export").isDisabled()&&await warnsBeforeExit(),
+      "C184 a subsequent edit invalidates prior save acknowledgment");
+    await page.locator("#notes").fill("Revisar métricas e clareza do exemplo fictício.");
+
     const validated=spawnSync(process.execPath,[
       path.join(repo,"scripts/validate-editorial-review.mjs"),"--csv",csvPath
     ],{cwd:repo,encoding:"utf8",timeout:20000});

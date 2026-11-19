@@ -22,6 +22,8 @@ try{
   pass(html.includes("CLAIMED_HUMAN_APPROVED"),"claim is not authenticated");
   pass(html.includes("value='merge'")&&html.includes("value='replace'"),
     "safe merge is the default and replacement is explicit");
+  pass(html.includes("id='confirm-export'")&&html.includes("Confirmei que revisao.csv foi salvo"),
+    "download acknowledgment requires explicit human confirmation");
   pass(html.includes("id='export-summary'") && html.includes("resumo-revisao.txt"),
     "local human handoff report does not depend on any server");
 

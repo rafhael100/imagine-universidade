@@ -6,7 +6,22 @@
   const state=new Map(items.map(item=>[item.course_slug+"/"+item.lesson_slug,{
     status:"PENDING_HUMAN_REVIEW",reviewer:"",evidence:"",notes:""
   }]));
-  let current=0,dirty=false,importing=false;
+  let current=0,dirty=false,importing=false,exportPendingSnapshot=null;
+  // An initiated browser download does not prove that the file reached disk.
+  function invalidateExportAcknowledgement(){
+    exportPendingSnapshot=null;
+    $("confirm-export").disabled=true;
+  }
+  function confirmExport(){
+    if(exportPendingSnapshot===null||JSON.stringify([...state])!==exportPendingSnapshot){
+      invalidateExportAcknowledgement();
+      message("O rascunho mudou desde a exportação. Exporte o CSV novamente.",true);
+      return;
+    }
+    dirty=false;
+    invalidateExportAcknowledgement();
+    message("Salvamento confirmado por você nesta sessão. Isso não autentica aprovação.");
+  }
   const key=item=>item.course_slug+"/"+item.lesson_slug;
   const courses=[...new Set(items.map(item=>item.course_slug))];
   function message(value,error=false){
@@ -127,7 +142,7 @@
     row.reviewer=$("reviewer").value;
     row.evidence=$("evidence").value;
     row.notes=$("notes").value;
-    dirty=true;counts();
+    dirty=true;invalidateExportAcknowledgement();counts();
     updateReviewResults();
     message("Alterações apenas na memória. Exporte o CSV antes de sair.");
   }
@@ -173,8 +188,12 @@
       link.href=url;link.download="revisao.csv";
       document.body.append(link);link.click();link.remove();
       setTimeout(()=>URL.revokeObjectURL(url),2000);
-      dirty=false;
-      message("CSV exportado. Declarações NÃO são aprovação verificada ou publicação.");
+      // Do not clear the unsaved-work guard until the reviewer personally
+      // confirms that revisao.csv exists on their device.
+      exportPendingSnapshot=JSON.stringify([...state]);
+      dirty=true;
+      $("confirm-export").disabled=false;
+      message("Download solicitado. Confira revisao.csv no dispositivo e confirme o salvamento.");
     }catch(error){message(String(error.message),true);}
   }
   function exportSummary(){
@@ -318,7 +337,7 @@
           return;
         }
         for(const [id,item] of next)state.set(id,item);
-        dirty=true;render();
+        dirty=true;invalidateExportAcknowledgement();render();
         message("CSV carregado por substituição: "+differences+
           " aula(s) alterada(s). Nenhuma aprovação foi autenticada.");
         return;
@@ -360,7 +379,7 @@
         return;
       }
       for(const [id,item] of proposed)state.set(id,item);
-      dirty=true;render();
+      dirty=true;invalidateExportAcknowledgement();render();
       message("CSV carregado por mesclagem: "+updated+
         " aula(s) incorporada(s). Exporte o CSV; nenhum aceite foi autenticado.");
     }catch(error){
@@ -381,6 +400,7 @@
   $("next-adjustment").addEventListener("click",()=>jumpToStatus("NEEDS_CHANGES"));
   ["status","reviewer","evidence","notes"].forEach(id=>$(id).addEventListener("input",update));
   $("export").addEventListener("click",exportCsv);
+  $("confirm-export").addEventListener("click",confirmExport);
   $("export-summary").addEventListener("click",exportSummary);
   $("import").addEventListener("change",e=>{void importCsv(e.target.files[0]);});
   window.addEventListener("beforeunload",e=>{

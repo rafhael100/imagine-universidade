@@ -5,7 +5,7 @@ on:
     branches:
       - review/uni-erd-r39-source-docs-2026-11-19
     paths:
-      - '.github/workflows/uni-erd-r39-review-manifest-qa.yml'
+      - '.github/workflows/uni-erd-r39-source-documents-qa.yml'
       - 'scripts/editorial-package-integrity.mjs'
       - 'scripts/editorial-source-review-render.mjs'
       - 'scripts/check-editorial-package-integrity.mjs'

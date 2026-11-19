@@ -9,8 +9,10 @@ import {fileURLToPath} from "node:url";
 
 const repoRoot=fileURLToPath(new URL("../",import.meta.url));
 const sourcePath=fileURLToPath(new URL("../content/mvp-cursos-v1.json",import.meta.url));
-const source=await readFile(sourcePath,"utf8");
-const sourceHash=createHash("sha256").update(source).digest("hex");
+// Audit raw bytes, not a UTF-8 string decoded with normalization/BOM removal.
+const sourceBytes=await readFile(sourcePath);
+const source=sourceBytes.toString("utf8");
+const sourceHash=createHash("sha256").update(sourceBytes).digest("hex");
 const manifest=JSON.parse(source);
 const tmp=await mkdtemp(join(tmpdir(),"uni-editorial-draft-review-"));
 try{
@@ -73,8 +75,8 @@ try{
   assert.equal(csv.trim().split("\n").length,36,"exactly one row per lesson plus header");
   assert.equal((csv.match(/PENDING_HUMAN_REVIEW/g)||[]).length,35);
   assert.ok(!(csv.includes("VERIFIED")||csv.includes("APPROVED")),"package cannot grant an approval");
-  assert.equal(createHash("sha256").update(await readFile(sourcePath,"utf8")).digest("hex"),
-    sourceHash,"generator may never modify original editorial fixture");
+  assert.equal(createHash("sha256").update(await readFile(sourcePath)).digest("hex"),
+    sourceHash,"generator may never modify original editorial source bytes");
   // C181: reopening the same output path must refuse to overwrite actual
   // human work instead of resetting every status to PENDING.
   const editedCsv=csv.replace('"PENDING_HUMAN_REVIEW"','"NEEDS_CHANGES"');

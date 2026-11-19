@@ -26,7 +26,7 @@ async function clonedCase(name,change){
 // ERD-R31: prove malformed editorial metadata is refused EVEN when an
 // operator/attacker updates the UNSIGNED checksum record consistently.
 // This is schema validation, not proof of the package's trusted origin.
-async function clonedRehashedCase(name,modify,expectedError){
+async function clonedRehashedCase(name,modify,expectedError,{sourceBound=false}={}){
   const folder=join(temp,"rehashed-"+name);
   await cp(original,folder,{recursive:true});
   const path=join(folder,"manifesto-revisao.json");
@@ -41,8 +41,18 @@ async function clonedRehashedCase(name,modify,expectedError){
   item.bytes=bytes.length;
   item.sha256=createHash("sha256").update(bytes).digest("hex");
   await writeFile(integrityPath,JSON.stringify(integrity,null,2)+"\n","utf8");
-  await assert.rejects(verifyEditorialPackage(folder),expectedError,
-    "A rehashed but contradictory manifest must be rejected: "+name);
+  if(sourceBound){
+    // Integrity is self-consistent and well formed, but lesson metadata must
+    // still match the exact versioned curriculum when --source is provided.
+    const selfConsistent=await verifyEditorialPackage(folder);
+    assert.equal(selfConsistent.files.length,15);
+    await assert.rejects(
+      verifyEditorialSourceBinding(folder,join(root,"content","mvp-cursos-v1.json")),
+      expectedError,"Source binding must reject a rehashed fork: "+name);
+  }else{
+    await assert.rejects(verifyEditorialPackage(folder),expectedError,
+      "A rehashed but contradictory manifest must be rejected: "+name);
+  }
   negatives++;
 }
 try{
@@ -158,7 +168,21 @@ try{
   await clonedRehashedCase("fake-approval-evidence",m=>{
     m.lessons[0].review_evidence="fake-signoff";
   },/must not claim human approval evidence/u);
-  assert.equal(negatives,26);
+  // ERD-R33: these are valid-looking rehashed manifests. They pass --dir,
+  // but must fail the stronger --source comparison against canonical bytes.
+  await clonedRehashedCase("source-course-title",m=>{
+    m.courses[0].title="Título fictício adulterado";
+  },/Review course metadata differs/u,{sourceBound:true});
+  await clonedRehashedCase("source-lesson-hash",m=>{
+    m.lessons[0].content_sha256="f".repeat(64);
+  },/Review lesson identities\/checksums diverge/u,{sourceBound:true});
+  await clonedRehashedCase("source-lesson-identity",m=>{
+    m.lessons[0].lesson_slug="identidade-ficticia";
+  },/Review lesson identities\/checksums diverge/u,{sourceBound:true});
+  await clonedRehashedCase("source-lesson-order",m=>{
+    [m.lessons[0],m.lessons[1]]=[m.lessons[1],m.lessons[0]];
+  },/Review lesson identities\/checksums diverge/u,{sourceBound:true});
+  assert.equal(negatives,30);
   console.log("PASS ERD-R27: original 15-file package verified; "+negatives+
     " tamper/path/symlink negatives; UNSIGNED/HOLD_NO_GO, no human approval.");
 }finally{

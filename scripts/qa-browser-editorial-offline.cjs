@@ -218,7 +218,6 @@ module.exports=async function({browser,out,check}){
     );
     check(asked && (await importedPage.locator("#summary").innerText()).includes("2 pedem ajustes"),
       "C168 user can cancel explicit full replacement without losing work");
-    await importedPage.close();
 
     const partialPage=await browserContext.newPage();
     partialPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
@@ -236,7 +235,7 @@ module.exports=async function({browser,out,check}){
     await partialPage.locator("#reviewer").fill("Anotação de responsável ainda pendente");
     await partialPage.locator("#import").setInputFiles(csvPath);
     await partialPage.waitForFunction(
-      ()=>document.getElementById("message").textContent.includes("Conflito"),
+      ()=>document.getElementById("message").textContent.includes("campos locais pendentes"),
       null,{timeout:10000}
     );
     check((await partialPage.locator("#reviewer").inputValue()).includes("ainda pendente")&&

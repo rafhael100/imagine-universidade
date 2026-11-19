@@ -87,7 +87,7 @@ export function renderOfflineReviewPage(payload,hashes){
     "<label for='import'>Importar CSV anterior</label><input id='import' type='file' accept='.csv,text/csv'>",
     "<span id='position' class='muted'></span></div>",
     "<p id='summary' role='status' aria-live='polite'></p>",
-    "<p id='message' role='status' aria-live='polite'></p>",
+    "<p id='message' role='status' aria-live='polite' aria-atomic='true'></p>",
     "<section aria-label='Localizador editorial'>",
     "<label for='review-search'>Buscar curso, aula, observação ou revisor</label>",
     "<input id='review-search' type='search' maxlength='120' autocomplete='off' aria-controls='review-results' aria-describedby='review-search-count' placeholder='Ex.: Visitas, Lead, IA'>",

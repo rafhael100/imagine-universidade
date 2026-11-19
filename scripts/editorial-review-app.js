@@ -32,6 +32,11 @@
     const target=$("message");
     // This is an aria-live region: reassigning the identical text on every
     // keystroke causes duplicate announcements for assistive technology.
+    // ERD-R48: errors need assertive announcements; normal state changes
+    // remain polite to avoid repeated interruptions for screen reader users.
+    const role=error?"alert":"status",live=error?"assertive":"polite";
+    if(target.getAttribute("role")!==role)target.setAttribute("role",role);
+    if(target.getAttribute("aria-live")!==live)target.setAttribute("aria-live",live);
     if(target.textContent!==value)target.textContent=value;
     target.classList.toggle("error",error);
   }

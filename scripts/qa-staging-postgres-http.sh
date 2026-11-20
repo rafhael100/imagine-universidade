@@ -15,7 +15,8 @@ trap stageFailure ERR
 [[ "${CI:-}" == "true" && "${GITHUB_ACTIONS:-}" == "true" ]] || fail "CI only"
 if [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" &&
-     ( "${GITHUB_REF:-}" == "refs/heads/fix/uni-c108-private-flow-2026-11-17" ||\n       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-private-health-runtime-2026-11-20" ) ]] ||
+     ( "${GITHUB_REF:-}" == "refs/heads/fix/uni-c108-private-flow-2026-11-17" ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-private-health-runtime-2026-11-20" ) ]] ||
     fail "push QA only on authorized review branch"
 elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" ]] ||

@@ -9,7 +9,7 @@ import {createHash} from "node:crypto";
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {pathToFileURL} from "node:url";
-import {humanRubric} from "./build-editorial-human-checklist.mjs";
+import {humanRubric,buildHumanEditorialChecklist} from "./build-editorial-human-checklist.mjs";
 import {buildEditorialNavigationManifest} from "./build-editorial-navigation-manifest.mjs";
 
 const sha256=value=>createHash("sha256").update(value,"utf8").digest("hex");
@@ -48,6 +48,40 @@ export function renderEditorialReadingTranscript(source){
     "35 aulas / 10 cursos / 210 perguntas de leitura humana. Portal #886 continua bloqueado.",
     ""
   ];
+  // R204–R205: early, text-only curricular coverage map for reviewers.
+  // Heuristic flags are not findings; no local completion state is accepted.
+  const checklist=buildHumanEditorialChecklist(source);
+  assert.equal(checklist.total_courses,10);
+  assert.equal(checklist.total_lessons,35);
+  assert.equal(checklist.editorial_signoff_verified,false);
+  assert.equal(checklist.release_decision,"HOLD_NO_GO");
+  const coverage=new Map(checklist.lessons.map(row=>[row.id,row]));
+  assert.equal(coverage.size,35,"Review coverage identities must be unique");
+  lines.push("MAPA DE LEITURA E COBERTURA (triagem, não é avaliação)",
+    "Os quatro blocos de cada aula são verificados estruturalmente; TODOS ainda exigem revisão humana.");
+  let mapPosition=0;
+  for(const [courseIndex,course] of source.courses.entries()){
+    lines.push("MAPA-CURSO "+(courseIndex+1)+"/10: "+safeLine(course.title)+
+      " | "+course.lessons.length+" aulas");
+    for(const lesson of course.lessons){
+      mapPosition++;
+      const id=course.slug+"/"+lesson.slug;
+      const report=coverage.get(id);
+      assert.ok(report,"Missing rubric coverage for "+id);
+      assert.equal(report.human_review,"PENDING_HUMAN_REVIEW");
+      assert.equal(report.authenticated_signoff,false);
+      assert.equal(report.human_evidence,null);
+      assert.equal(report.section_words.length,4);
+      assert.ok(report.section_words.every(n=>Number.isInteger(n)&&n>0));
+      const flags=report.possible_risks.length?
+        report.possible_risks.join(", "):"nenhum sinal automático";
+      lines.push("MAPA-AULA "+mapPosition+"/35: "+safeLine(lesson.title)+
+        " | "+id+" | 4 seções | "+report.section_words.reduce((a,b)=>a+b,0)+
+        " palavras nas seções | sinais para leitura: "+safeLine(flags));
+    }
+  }
+  assert.equal(mapPosition,35);
+  lines.push("FIM DO MAPA — 35 aulas sem aceite. Ausência de sinais não significa aprovação.","");
   const seen=new Set();
   let lessonNumber=0,questions=0;
   for(const [courseIndex,course] of source.courses.entries()){

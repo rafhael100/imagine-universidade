@@ -31,7 +31,7 @@ deny("position outside range",r=>{r.items[0].original_position=36;});
 deny("noninteger destination",r=>{r.items[0].original_position=1.5;});
 deny("wrong flagged count",r=>{r.flagged_lessons++;});
 deny("wrong unflagged count",r=>{r.unflagged_lessons++;});
-deny("unflagged risk silently removed",r=>{r.items[0].possible_risks=[];});
+deny("risk list tampered without updating counts",r=>{r.items[0].possible_risks = r.items[0].possible_risks.length ? [] : ["synthetic-check"];});
 deny("reordered priority queue",r=>{[r.items[0],r.items[1]]=[r.items[1],r.items[0]];});
 deny("missing section word count",r=>{r.items[0].section_words.pop();});
 deny("tampered human review",r=>{r.items[0].review_status="CLAIMED_HUMAN_APPROVED";});

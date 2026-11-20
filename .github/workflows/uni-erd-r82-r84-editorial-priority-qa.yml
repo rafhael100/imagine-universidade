@@ -1,0 +1,64 @@
+name: UNI ERD R82 R84 synthetic editorial priority QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r82-r84-editorial-priority-2026-11-20
+    paths:
+      - 'scripts/build-editorial-review-priority.mjs'
+      - 'scripts/check-editorial-review-priority.mjs'
+      - 'scripts/build-editorial-human-checklist.mjs'
+      - 'scripts/verify-editorial-human-artifacts.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - '.github/workflows/uni-erd-r82-r84-editorial-priority-qa.yml'
+      - 'docs/UNI-ERD-R82-R84-FILA-REVISAO-2026-11-20.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r82-r84-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  synthetic-priority-review:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact source SHA, no retained credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify editorial queue, source and all release blockers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r82-r84-editorial-priority-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/build-editorial-review-priority.mjs
+          node --check scripts/check-editorial-review-priority.mjs
+          node scripts/check-editorial-human-checklist.mjs
+          node scripts/check-verify-editorial-human-artifacts.mjs
+          node scripts/check-editorial-review-priority.mjs
+          node scripts/check-editorial-package-integrity.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(v=>v.status!=="NOT_VERIFIED"))process.exit(1)'
+          node scripts/build-editorial-review-priority.mjs --json > "$RUNNER_TEMP/uni-35-lesson-priority.json"
+          node scripts/build-editorial-review-priority.mjs --markdown > "$RUNNER_TEMP/uni-35-lesson-priority.md"
+          test "$(grep -Ec '^[|] [0-9]+ [|]' "$RUNNER_TEMP/uni-35-lesson-priority.md")" -eq 35
+          node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/uni-35-lesson-priority.json","utf8"));if(j.items.length!==35||j.human_rubric_checks!==210||j.release_decision!=="HOLD_NO_GO"||j.items.some(x=>x.authenticated_signoff))process.exit(1)'
+          echo "PASS: synthetic risk reading order and 35 drafts; no editorial signoff."
+      - name: Preserve human-reading queue, never a permission ledger
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uni-r82-r84-editorial-reading-priority-synthetic
+          path: |
+            ${{ runner.temp }}/uni-35-lesson-priority.json
+            ${{ runner.temp }}/uni-35-lesson-priority.md
+          if-no-files-found: error
+          retention-days: 7

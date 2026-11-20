@@ -1,0 +1,64 @@
+name: UNI P0 private health transitions (disposable Docker only)
+
+on:
+  push:
+    branches:
+      - review/uni-p0-private-health-runtime-2026-11-20
+    paths:
+      - .github/workflows/uni-p0-private-health-transitions.yml
+      - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-staging-private-http-probe.php
+      - ops/staging/Dockerfile.php
+      - ops/staging/Dockerfile.nginx
+      - ops/staging/nginx.conf
+      - ops/staging/compose.yaml
+      - docs/UNI-P0-PRIVATE-HEALTH-TRANSITIONS-2026-11-20.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-private-health-transition-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  health-transition:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout isolated SHA, never store credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated branch, no secrets, syntax and deny-all
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-p0-private-health-runtime-2026-11-20"
+          test "$GITHUB_EVENT_NAME" = "push"
+          test ! -e .env && test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          test -f composer.lock
+          bash -n scripts/qa-staging-postgres-http.sh
+          node ops/staging/check-release-gates.mjs
+          node ops/staging/check-compose-static.mjs
+      - name: Build disposable candidate images locally, no registry push
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test "$(docker context show)" = default
+          tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker build --file ops/staging/Dockerfile.php --tag "${tag}-php" .
+          docker build --file ops/staging/Dockerfile.nginx --tag "${tag}-nginx" .
+      - name: Reproduce live healthy/unhealthy/recovery + deny-all under PG18
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          bash scripts/qa-staging-postgres-http.sh "${tag}-php" "${tag}-nginx"
+      - name: Report limited scope
+        run: echo 'Disposable health transitions only; no private VPS, real Portal, release approval or deployment.'

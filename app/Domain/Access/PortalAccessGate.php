@@ -66,8 +66,18 @@ final readonly class PortalAccessGate
         $checkedAt = $nowEpoch + intdiv($elapsedNs + 999_999_999, 1_000_000_000);
 
         if (!$grant->allowed) {
-            // Não converter uma negação/inconsistência da autoridade em concessão.
-            return PortalGrant::deny($grant->reasonCode ?: 'access_denied');
+            // The authority is an external trust boundary. Never echo raw
+            // upstream diagnostics, control bytes or success-looking reasons
+            // into application responses/audit logs.
+            $reason = $grant->reasonCode;
+            if (
+                preg_match('/\A[a-z][a-z0-9_]{0,63}\z/D', $reason) !== 1 ||
+                in_array($reason, ['authorized', 'allow', 'allowed', 'success', 'ok'], true)
+            ) {
+                $reason = 'access_denied';
+            }
+
+            return PortalGrant::deny($reason);
         }
 
         if ($grant->companyId !== $companyId) {

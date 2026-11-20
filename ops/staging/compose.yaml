@@ -66,6 +66,14 @@ services:
     mem_limit: 256m
     pids_limit: 64
     depends_on: [app]
+    # Lab/private staging health only. Probe crosses Nginx -> PHP-FPM -> Laravel.
+    # A healthy /up is not Portal permission, SQL readiness or release approval.
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up']
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - university_front
     restart: 'no'

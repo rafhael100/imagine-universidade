@@ -1,0 +1,36 @@
+name: UNI ERD R209 R213 Integrated offline QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r209-r213-integrated-offline-ci-2026-11-20
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r209-r213-integrated-offline
+  cancel-in-progress: false
+
+jobs:
+  editorial-portal-release-fence:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: SHA-pinned 21-check offline regression + 13 NOT_VERIFIED gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r209-r213-integrated-offline-ci-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          command -v php >/dev/null
+          node --check scripts/check-integrated-offline-qa.mjs
+          node --check scripts/check-integrated-offline-qa-plan.mjs
+          node scripts/check-integrated-offline-qa-plan.mjs
+          node scripts/check-integrated-offline-qa.mjs
+          test -z "$(git status --porcelain)"

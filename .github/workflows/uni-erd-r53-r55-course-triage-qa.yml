@@ -1,0 +1,118 @@
+name: UNI ERD R53 R55 offline search state accessibility QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r53-course-triage-2026-11-19
+    paths:
+      - '.github/workflows/uni-erd-r53-r55-offline-status-a11y-qa.yml'
+      - 'scripts/validate-editorial-review.mjs'
+      - 'scripts/check-editorial-review-validation.mjs'
+      - 'scripts/editorial-review-app.js'
+      - 'scripts/editorial-review-html.mjs'
+      - 'scripts/check-editorial-offline-review.mjs'
+      - 'scripts/qa-browser-editorial-offline.cjs'
+      - 'scripts/editorial-package-integrity.mjs'
+      - 'scripts/check-editorial-package-integrity.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'ops/staging/check-release-gates.mjs'
+      - 'app/Providers/AppServiceProvider.php'
+      - 'docs/UNI-ERD-R53-R54-TRIAGEM-POR-CURSO-2026-11-19.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r53-r55-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  offline-handoff:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact candidate without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run offline synthetic tests and check all thirteen gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r53-course-triage-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          node --version
+          node --check scripts/validate-editorial-review.mjs
+          node --check scripts/check-editorial-review-validation.mjs
+          node --check scripts/editorial-review-app.js
+          node --check scripts/qa-browser-editorial-offline.cjs
+          node --check scripts/editorial-review-html.mjs
+          node --check scripts/check-editorial-offline-review.mjs
+          node scripts/check-editorial-lesson-structure.mjs
+          node scripts/check-editorial-review-validation.mjs
+          node scripts/check-editorial-offline-review.mjs
+          node scripts/check-editorial-package-integrity.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(x=>x.status!=="NOT_VERIFIED"))process.exit(1)'
+          echo 'PASS synthetics: course triage; 35 lessons; all thirteen gates still NOT_VERIFIED.'
+
+  editorial-chromium:
+    needs: offline-handoff
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - name: Checkout exact candidate without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install temporary, isolated Chromium dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r53-course-triage-2026-11-19"
+          test ! -e .env && test ! -e .env.production
+          mkdir -p "$RUNNER_TEMP/uni-qa-deps" "$RUNNER_TEMP/uni-qa-evidence"
+          cd "$RUNNER_TEMP/uni-qa-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          # Ubuntu GitHub-hosted runners provide Google Chrome. Installing
+          # Playwright OS deps via apt can stall on the package mirror even
+          # though the browser library packages are already present.
+          # Prefer the installed Chrome channel; no apt, no production hosts.
+          command -v google-chrome
+          google-chrome --version
+      - name: Exercise real file-only Chromium and WCAG checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-qa-deps/node_modules" UNI_BROWSER_EVIDENCE="$RUNNER_TEMP/uni-qa-evidence" node - <<'JS'
+          const {chromium}=require("playwright");
+          // Browser QA never calls a production endpoint.
+          const out=process.env.UNI_BROWSER_EVIDENCE;
+          (async()=>{
+            const browser=await chromium.launch({headless:true,channel:"chrome"});
+            let count=0;
+            try {
+              await require("./scripts/qa-browser-editorial-offline.cjs")({
+                browser,out,check:(ok,label)=>{if(!ok)throw Error(label);count++;}
+              });
+              if(count<80)throw Error("Unexpectedly few browser checks: "+count);
+              console.log("PASS isolated Chromium and WCAG synthetic tests: "+count);
+            } finally {await browser.close();}
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - name: Preserve screenshots and synthetic accessibility evidence
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uni-erd-r53-r55-synthetic-a11y
+          path: ${{ runner.temp }}/uni-qa-evidence/
+          if-no-files-found: error
+          retention-days: 7

@@ -43,6 +43,12 @@ try{
     html.includes("35 registros válidos para exportação CSV")&&
     html.includes("lastAuditErrorIndex=errors[0].index"),
     "R62 local 35-row audit, accessible summary and first-invalid navigation without signoff");
+  pass(html.includes("id='audit-errors'")&&
+    html.includes("className=\"audit-error\"")&&
+    html.includes('button.textContent=String(error.index+1)')&&
+    html.includes('list.append(button)')&&
+    html.includes('list.hidden=true;'),
+    "R65 all invalid records listed as keyboard buttons using only textContent");
   pass(html.includes("value='merge'")&&html.includes("value='replace'"),
     "safe merge is the default and replacement is explicit");
   pass(html.includes("id='confirm-export'")&&html.includes("Confirmei que revisao.csv foi salvo"),

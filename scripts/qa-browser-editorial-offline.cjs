@@ -79,6 +79,71 @@ module.exports=async function({browser,out,check}){
       "R57 global pending navigation remains available for the other courses");
     await coursePage.close();
 
+    // R59: course-local adjustment navigation must never leave its course.
+    const adjustmentPage=await browserContext.newPage();
+    adjustmentPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await adjustmentPage.goto(url,{waitUntil:"load"});
+    check(await adjustmentPage.locator("#next-adjustment-course").isDisabled(),
+      "R59 local adjustment jump initially disabled with zero adjustment targets");
+    await adjustmentPage.locator("#status").selectOption("NEEDS_CHANGES");
+    check(await adjustmentPage.locator("#next-adjustment-course").isDisabled(),
+      "R59 current changed lesson alone does not create another adjustment target");
+    await adjustmentPage.locator("#next").click();
+    await adjustmentPage.locator("#status").selectOption("NEEDS_CHANGES");
+    check(await adjustmentPage.locator("#next-adjustment-course").isEnabled(),
+      "R59 second changed lesson enables course-local adjustment navigation");
+    await adjustmentPage.locator("#previous").click();
+    await adjustmentPage.locator("#next-adjustment-course").click();
+    check((await adjustmentPage.locator("#title").innerText()).includes("Leads:")&&
+      await adjustmentPage.evaluate(()=>document.activeElement.id==="title")&&
+      (await adjustmentPage.locator("#course-title").innerText())===
+        (await adjustmentPage.locator("#courses .course-item").first().innerText()).split(" (")[0],
+      "R59 adjustment jump opens the next changed lesson in the same course and focuses heading");
+    await adjustmentPage.close();
+
+    // R60: changing a filter while an existing result has keyboard focus
+    // must restore that focus to the surviving result or the search input.
+    const focusPage=await browserContext.newPage();
+    focusPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await focusPage.goto(url,{waitUntil:"load"});
+    await focusPage.locator("#status").selectOption("NEEDS_CHANGES");
+    await focusPage.locator("#review-search").fill("e");
+    await focusPage.locator("#review-filter").selectOption("PENDING_HUMAN_REVIEW");
+    check(await focusPage.locator("#review-results .review-result").count()>0,
+      "R60 pending search includes a keyboard-focusable result");
+    const survivingResult=focusPage.locator("#review-results .review-result").first();
+    const survivingIndex=await survivingResult.getAttribute("data-lesson-index");
+    await survivingResult.focus();
+    await focusPage.evaluate(()=>{
+      const filter=document.getElementById("review-filter");
+      filter.value="ALL";filter.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+    check(await focusPage.evaluate(expected=>{
+      const active=document.activeElement;
+      return active.classList.contains("review-result")&&
+        active.dataset.lessonIndex===expected;
+    },survivingIndex),
+    "R60 changing a visible result set restores focused lesson rather than document body");
+    await focusPage.evaluate(()=>{
+      const filter=document.getElementById("review-filter");
+      filter.value="NEEDS_CHANGES";filter.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+    check(await focusPage.evaluate(()=>document.activeElement.id==="review-search"),
+      "R60 removing the focused result returns keyboard focus to search input");
+    await focusPage.locator("#review-results .review-result").first().focus();
+    await focusPage.locator("#review-search").evaluate(input=>{
+      input.value="";
+      input.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    await focusPage.evaluate(()=>{
+      const filter=document.getElementById("review-filter");
+      filter.value="ALL";filter.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+    check(await focusPage.locator("#review-results").isHidden()&&
+      await focusPage.evaluate(()=>document.activeElement.id==="review-search"),
+      "R60 hiding the entire result group never strands keyboard focus");
+    await focusPage.close();
+
     // ERD-R51: search results must expose status, update in place, and
     // explicitly reject false implications of authenticated approval.
     await page.locator("#review-search").fill("Visitas");

@@ -1,0 +1,94 @@
+name: UNI ERD R96 R99 source-bound HTML Chromium QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r96-r99-chromium-passive-html-2026-11-20
+    paths:
+      - 'scripts/qa-browser-priority-html.cjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/verify-editorial-priority-html.mjs'
+      - 'scripts/check-verify-editorial-priority-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - '.github/workflows/uni-erd-r96-r99-chromium-passive-qa.yml'
+      - 'docs/UNI-ERD-R96-R99-CHROMIUM-HTML-PASSIVO-2026-11-20.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r96-r99-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-bound-and-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact SHA without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate source-bound HTML and all gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r96-r99-chromium-passive-html-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/qa-browser-priority-html.cjs
+          node scripts/check-editorial-priority-html.mjs
+          node scripts/check-verify-editorial-priority-html.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(x=>x.status!=="NOT_VERIFIED"))process.exit(1)'
+          node scripts/render-editorial-priority-html.mjs > "$RUNNER_TEMP/uni-r96-r99-verified.html"
+          node scripts/verify-editorial-priority-html.mjs "$RUNNER_TEMP/uni-r96-r99-verified.html"
+          echo "Source-bound HTML and 13 gates verified, release still HOLD."
+
+  chromium-passive-html:
+    needs: source-bound-and-gates
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - name: Checkout exact SHA without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build verified local HTML and install ephemeral browser libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r96-r99-chromium-passive-html-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node scripts/render-editorial-priority-html.mjs > "$RUNNER_TEMP/uni-r96-r99-verified.html"
+          node scripts/verify-editorial-priority-html.mjs "$RUNNER_TEMP/uni-r96-r99-verified.html"
+          mkdir -p "$RUNNER_TEMP/uni-qa-deps"
+          cd "$RUNNER_TEMP/uni-qa-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          command -v google-chrome
+          google-chrome --version
+      - name: Run real Chrome keyboard, mobile and WCAG 2.1 regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-qa-deps/node_modules" \
+          node scripts/qa-browser-priority-html.cjs "$RUNNER_TEMP/uni-r96-r99-verified.html"
+      - name: Retain synthetic screenshots
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uni-r96-r99-passive-html-browser
+          path: |
+            ${{ runner.temp }}/uni-r96-r99-desktop.png
+            ${{ runner.temp }}/uni-r96-r99-mobile.png
+          if-no-files-found: error
+          retention-days: 7

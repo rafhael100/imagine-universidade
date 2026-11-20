@@ -60,7 +60,7 @@ export function renderReviewPriorityHtml(report){
     '<nav aria-label="Índice de aulas"><h2>Escolha uma aula para leitura</h2><ol class="grid">'
   ];
   const allIds=new Set();
-  for(const row of report.items){
+  for(const [i,row] of report.items.entries()){
     assert.equal(row.authenticated_signoff,false);
     assert.equal(row.review_status,"PENDING_HUMAN_REVIEW");
     assert.ok(Number.isInteger(row.original_position)&&row.original_position>=1&&row.original_position<=35);
@@ -68,13 +68,19 @@ export function renderReviewPriorityHtml(report){
     assert.match(row.content_sha256,/^[a-f0-9]{64}$/u);
     assert.ok(!allIds.has(row.id),"Repeated review identity");
     allIds.add(row.id);
-    lines.push('<li><a href="#aula-'+row.original_position+'">'+escaped(row.course_title)+" — "+escaped(row.lesson_title)+"</a></li>");
+    // The queue is NOT the curriculum: both positions must be spoken by
+    // screen readers and visibly shown so reviewers do not confuse order.
+    lines.push('<li><a href="#aula-'+row.original_position+'">Fila '+(i+1)+
+      ' de 35 · aula '+row.original_position+' de 35 no currículo · '+
+      escaped(row.course_title)+" — "+escaped(row.lesson_title)+"</a></li>");
   }
   lines.push("</ol></nav>",'<section aria-label="Conferência integral das aulas">');
   for(const [i,row] of report.items.entries()){
     lines.push(
       '<article id="aula-'+row.original_position+'" tabindex="-1" aria-labelledby="titulo-'+row.original_position+'">',
-      '<h2 id="titulo-'+row.original_position+'">Aula '+(i+1)+' de 35 — '+escaped(row.lesson_title)+"</h2>",
+      '<h2 id="titulo-'+row.original_position+'">Fila '+(i+1)+
+        ' de 35 · aula '+row.original_position+' no currículo — '+
+        escaped(row.lesson_title)+"</h2>",
       "<p>Posição no currículo: "+row.original_position+" de 35 · posição na fila: "+(i+1)+" de 35</p>",
       "<dl>",
       "<dt>Curso</dt><dd>"+escaped(row.course_title)+"</dd>",

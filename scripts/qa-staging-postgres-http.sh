@@ -198,6 +198,14 @@ echo "PASS synthetic health healthy -> unhealthy -> healthy; private routes rema
 # authorization bypass or disclose SQL exceptions. Use only the disposable
 # Docker volume and already verified synthetic data; this is NOT a backup or
 # release rollback rehearsal.
+stagingPgStage=postgres_outage_baseline
+# Snapshot the post-HTTP value immediately before stopping PostgreSQL:
+# normal denied web requests may still create ephemeral database sessions,
+# so a count captured BEFORE those requests is not a recovery baseline.
+preOutageSessionCount="$(docker exec "$db" psql -X -U uni_ci_migration_owner \
+  -d uni_staging_ci_only -v ON_ERROR_STOP=1 -tA \
+  -c 'SELECT COUNT(*) FROM public.sessions')"
+[[ "$preOutageSessionCount" =~ ^[0-9]+$ ]] || fail "pre-outage SQL session baseline invalid"
 stagingPgStage=postgres_outage
 docker stop -t 2 "$db" >/dev/null
 stagingPgStage=postgres_outage_private_deny
@@ -215,7 +223,7 @@ while ((SECONDS < recoverDeadline)); do
         "$db" psql -X -w -h db -p 5432 -U uni_ci_migration_owner \
         -d uni_staging_ci_only -v ON_ERROR_STOP=1 -tA \
         -c 'SELECT COUNT(*) FROM public.sessions' 2>/dev/null)" \
-     && [[ "$recoveredSql" == "$sessionCount" ]]; then
+     && [[ "$recoveredSql" == "$preOutageSessionCount" ]]; then
     recovered=1; break
   fi
   sleep 1

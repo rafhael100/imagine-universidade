@@ -1,0 +1,51 @@
+name: UNI ERD R116 R119 readable curriculum order QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r116-r119-readable-curriculum-order-2026-11-20
+    paths:
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/check-priority-readable-order.mjs'
+      - 'scripts/check-editorial-priority-html.mjs'
+      - 'scripts/check-verify-editorial-priority-html.mjs'
+      - 'scripts/verify-editorial-review-handoff.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - '.github/workflows/uni-erd-r116-r119-curriculum-order-qa.yml'
+      - 'docs/UNI-ERD-R116-R119-NAVEGACAO-FILA-CURRICULO-2026-11-20.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r116-r119-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  labels-anchor-and-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact SHA without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify queue / curriculum navigation and false-release guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r116-r119-readable-curriculum-order-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-priority-html.mjs
+          node --check scripts/check-priority-readable-order.mjs
+          node scripts/check-priority-readable-order.mjs
+          node scripts/check-editorial-priority-html.mjs
+          node scripts/check-verify-editorial-priority-html.mjs
+          node scripts/check-verify-editorial-review-handoff.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+          echo "PASS: descriptive original-curriculum and priority-queue labels, 35 passive anchors, 13 gates blocked."

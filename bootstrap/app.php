@@ -34,6 +34,23 @@ return Application::configure(basePath: dirname(__DIR__))
                 ProtectPrivateUniversityResponses::matches($request) || $request->expectsJson()
         );
 
+        // A database-backed Laravel session can fail before the university
+        // grant middleware executes. Fail CLOSED without exposing SQL or a
+        // stack trace. Do not change handling for paths outside this private
+        // boundary; a 503 is not a login, grant or successful response.
+        $exceptions->render(
+            static function (\Illuminate\Database\QueryException|\PDOException $error, Request $request): ?Response {
+                if (!ProtectPrivateUniversityResponses::matches($request)) {
+                    return null;
+                }
+
+                return ProtectPrivateUniversityResponses::apply(
+                    response()->json(['error' => 'service_unavailable'], 503)
+                        ->header('Retry-After', '5')
+                );
+            }
+        );
+
         // Also cover exceptions rendered by the HTTP kernel outside any
         // middleware slice, without changing status codes or Retry-After.
         $exceptions->respond(

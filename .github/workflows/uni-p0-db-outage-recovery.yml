@@ -1,0 +1,69 @@
+name: UNI P0 PostgreSQL outage and private deny (synthetic only)
+
+on:
+  push:
+    branches:
+      - review/uni-p0-db-outage-failclosed-2026-11-20
+    paths:
+      - .github/workflows/uni-p0-db-outage-recovery.yml
+      - bootstrap/app.php
+      - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-staging-pg-pre-migrate.php
+      - scripts/qa-p0-db-outage-probe.php
+      - scripts/qa-staging-private-http-probe.php
+      - ops/staging/Dockerfile.php
+      - ops/staging/Dockerfile.nginx
+      - ops/staging/nginx.conf
+      - ops/staging/compose.yaml
+      - docs/UNI-P0-DB-OUTAGE-FAIL-CLOSED-2026-11-20.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-private-pg-outage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-outage:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout isolated SHA, never store credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated branch, no secrets, syntax and deny-all
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-p0-db-outage-failclosed-2026-11-20"
+          test "$GITHUB_EVENT_NAME" = "push"
+          test ! -e .env && test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          test -f composer.lock
+          bash -n scripts/qa-staging-postgres-http.sh
+          php -l scripts/qa-p0-db-outage-probe.php
+          php -l bootstrap/app.php
+          node ops/staging/check-release-gates.mjs
+          node ops/staging/check-compose-static.mjs
+      - name: Build disposable candidate images locally, no registry push
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test "$(docker context show)" = default
+          tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker build --file ops/staging/Dockerfile.php --tag "${tag}-php" .
+          docker build --file ops/staging/Dockerfile.nginx --tag "${tag}-nginx" .
+      - name: Exercise PG18 database outage, recovery and private-deny under Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          bash scripts/qa-staging-postgres-http.sh "${tag}-php" "${tag}-nginx"
+      - name: Report limited scope
+        run: echo 'Synthetic PostgreSQL outage only; not backup, rollback, private VPS, Portal or release approval.'

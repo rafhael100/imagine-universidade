@@ -1,0 +1,62 @@
+name: UNI ERD R85 R87 accessible passive review QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r85-r87-accessible-handoff-2026-11-20
+    paths:
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/check-editorial-priority-html.mjs'
+      - 'scripts/build-editorial-review-priority.mjs'
+      - 'scripts/check-editorial-review-priority.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - '.github/workflows/uni-erd-r85-r87-accessible-qa.yml'
+      - 'docs/UNI-ERD-R85-R87-HTML-ACESSIVEL-2026-11-20.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r85-r87-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  passive-html-qa:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact commit without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test accessible content, escape and fail-closed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r85-r87-accessible-handoff-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-priority-html.mjs
+          node --check scripts/check-editorial-priority-html.mjs
+          node scripts/check-editorial-human-checklist.mjs
+          node scripts/check-verify-editorial-human-artifacts.mjs
+          node scripts/check-editorial-review-priority.mjs
+          node scripts/check-editorial-priority-html.mjs
+          node scripts/check-editorial-package-integrity.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(v=>v.status!=="NOT_VERIFIED"))process.exit(1)'
+          node scripts/render-editorial-priority-html.mjs > "$RUNNER_TEMP/uni-35-lesson-accessible-review.html"
+          test "$(grep -c '<article id="aula-' "$RUNNER_TEMP/uni-35-lesson-accessible-review.html")" -eq 35
+          test "$(grep -c '<h3>Perguntas para leitura' "$RUNNER_TEMP/uni-35-lesson-accessible-review.html")" -eq 35
+          echo "PASS: passive, source-generated HTML draft. No authenticated editorial approval."
+      - name: Preserve static offline HTML for a human to inspect
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: uni-r85-r87-accessible-human-review-html
+          path: ${{ runner.temp }}/uni-35-lesson-accessible-review.html
+          if-no-files-found: error
+          retention-days: 7

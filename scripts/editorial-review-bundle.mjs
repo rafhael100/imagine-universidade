@@ -2,7 +2,7 @@
 /** UNI ERD-R120/R121: synthetic 35-lesson review bundle, never editorial signoff. */
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import {readFileSync, lstatSync, openSync, closeSync, fstatSync, constants} from "node:fs";
+import {readFileSync, lstatSync, readdirSync, openSync, closeSync, fstatSync, constants} from "node:fs";
 import {resolve,join} from "node:path";
 import {pathToFileURL} from "node:url";
 import {TextDecoder} from "node:util";
@@ -80,6 +80,12 @@ export function verifyBundleDirectory(directory){
   const path=resolve(directory);
   const stat=lstatSync(path);
   assert.ok(stat.isDirectory()&&!stat.isSymbolicLink(),"Bundle directory must not be symlink");
+  // A copied handoff is a single package. Unknown attachments (including
+  // .env or a fabricated APPROVED.txt) must never be silently accepted.
+  const actualNames=readdirSync(path).sort();
+  const expectedNames=["manifest.json",...Object.values(fileNames)].sort();
+  assert.deepEqual(actualNames,expectedNames,
+    "Bundle directory contains missing or unexpected files");
   const manifest=readBoundedFile(path,"manifest.json",16*1024);
   const artifacts=Object.fromEntries(
     Object.entries(fileNames).map(([format,name])=>[format,readBoundedFile(path,name,1024*1024)]));

@@ -19,6 +19,10 @@
     lastAuditErrorIndex=null;
     $("audit-first-error").disabled=true;
     if($("audit-result").textContent!=="")$("audit-result").textContent="";
+    // R65: never leave a stale invalid-record list after an edit/import.
+    const list=$("audit-errors");
+    if(list.childElementCount)list.replaceChildren();
+    list.hidden=true;
   }
   function confirmExport(){
     if(importing){
@@ -317,6 +321,9 @@
       return;
     }
     const errors=[];
+    const list=$("audit-errors");
+    list.replaceChildren();
+    list.hidden=true;
     items.forEach((item,index)=>{
       try{valid(state.get(key(item)),key(item));}
       catch(error){errors.push({index,reason:String(error.message)});}
@@ -329,6 +336,18 @@
       message("Validação local concluída. Exporte o CSV para preservar a revisão.");
       return;
     }
+    // R65: enumerate all 35 potential failures as keyboard-operable,
+    // text-only buttons. Do not interpolate reviewer notes as HTML.
+    for(const error of errors){
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="audit-error";
+      button.textContent=String(error.index+1)+"/35 · "+
+        items[error.index].lesson_title+" · "+error.reason;
+      button.addEventListener("click",()=>choose(error.index));
+      list.append(button);
+    }
+    list.hidden=false;
     lastAuditErrorIndex=errors[0].index;
     $("audit-first-error").disabled=false;
     $("audit-result").textContent=errors.length+

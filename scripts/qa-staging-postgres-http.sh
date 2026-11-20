@@ -16,7 +16,8 @@ trap stageFailure ERR
 if [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" &&
      ( "${GITHUB_REF:-}" == "refs/heads/fix/uni-c108-private-flow-2026-11-17" ||
-       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-private-health-runtime-2026-11-20" ) ]] ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-private-health-runtime-2026-11-20" ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-db-outage-failclosed-2026-11-20" ) ]] ||
     fail "push QA only on authorized review branch"
 elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" ]] ||
@@ -192,5 +193,40 @@ docker run --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
 echo "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority."
+
+# P0 independent failure domain: a stopped PostgreSQL must never become an
+# authorization bypass or disclose SQL exceptions. Use only the disposable
+# Docker volume and already verified synthetic data; this is NOT a backup or
+# release rollback rehearsal.
+stagingPgStage=postgres_outage
+docker stop -t 2 "$db" >/dev/null
+stagingPgStage=postgres_outage_private_deny
+docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
+  "$phpImage" php < scripts/qa-p0-db-outage-probe.php
+stagingPgStage=postgres_recovery
+docker start "$db" >/dev/null
+recovered=0
+recoverDeadline=$((SECONDS+75))
+while ((SECONDS < recoverDeadline)); do
+  if recoveredSql="$(timeout --signal=TERM --kill-after=1s 3s \
+      docker exec --env PGPASSWORD=FAKE_OWNER_CI_ONLY \
+        --env PGCONNECT_TIMEOUT=2 --env PGOPTIONS='-c statement_timeout=2000' \
+        "$db" psql -X -w -h db -p 5432 -U uni_ci_migration_owner \
+        -d uni_staging_ci_only -v ON_ERROR_STOP=1 -tA \
+        -c 'SELECT COUNT(*) FROM public.sessions' 2>/dev/null)" \
+     && [[ "$recoveredSql" == "$sessionCount" ]]; then
+    recovered=1; break
+  fi
+  sleep 1
+done
+unset recoveredSql
+[[ "$recovered" == 1 ]] || fail "authenticated PG18 recovery or persisted session count failed"
+stagingPgStage=postgres_recovery_private_deny
+docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
+  "$phpImage" php < scripts/qa-staging-private-http-probe.php
+echo "PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied."
+
 
 echo "PASS synthetic 3-service staging PG18: owner migrations, separate runtime role, private HTTP and session storage query. No host ports."

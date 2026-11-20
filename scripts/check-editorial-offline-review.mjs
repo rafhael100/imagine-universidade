@@ -35,6 +35,14 @@ try{
     html.includes('if(focusedResult)$("review-search").focus();'),
     "R60 changing or clearing filtered results restores keyboard focus");
 
+  pass(html.includes("id='audit-draft'")&&
+    html.includes("id='audit-first-error'")&&
+    html.includes("id='audit-result' role='status' aria-live='polite'")&&
+    html.includes("function auditDraft()")&&
+    html.includes("function invalidateAudit()")&&
+    html.includes("35 registros válidos para exportação CSV")&&
+    html.includes("lastAuditErrorIndex=errors[0].index"),
+    "R62 local 35-row audit, accessible summary and first-invalid navigation without signoff");
   pass(html.includes("value='merge'")&&html.includes("value='replace'"),
     "safe merge is the default and replacement is explicit");
   pass(html.includes("id='confirm-export'")&&html.includes("Confirmei que revisao.csv foi salvo"),

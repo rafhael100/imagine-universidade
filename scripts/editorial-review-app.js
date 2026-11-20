@@ -7,10 +7,18 @@
     status:"PENDING_HUMAN_REVIEW",reviewer:"",evidence:"",notes:""
   }]));
   let current=0,dirty=false,importing=false,exportPendingSnapshot=null;
+  let lastAuditErrorIndex=null;
   // An initiated browser download does not prove that the file reached disk.
   function invalidateExportAcknowledgement(){
     exportPendingSnapshot=null;
     $("confirm-export").disabled=true;
+  }
+  // ERD-R62: an audit result is a temporary observation of the local draft,
+  // never a persisted editorial signoff. A subsequent edit invalidates it.
+  function invalidateAudit(){
+    lastAuditErrorIndex=null;
+    $("audit-first-error").disabled=true;
+    if($("audit-result").textContent!=="")$("audit-result").textContent="";
   }
   function confirmExport(){
     if(importing){
@@ -270,7 +278,7 @@
     row.reviewer=$("reviewer").value;
     row.evidence=$("evidence").value;
     row.notes=$("notes").value;
-    dirty=true;invalidateExportAcknowledgement();counts();
+    dirty=true;invalidateExportAcknowledgement();invalidateAudit();counts();
     updateReviewResults();
     message("Alterações apenas na memória. Exporte o CSV antes de sair.");
   }
@@ -299,6 +307,34 @@
       if(!/^https:\/\/github\.com\/rafhael100\/imagine-universidade\/(?:issues|pull)\/[1-9]\d*(?:#issuecomment-[1-9]\d*)?$/iu.test(row.evidence))
         throw Error("Informe issue/PR de evidência da Universidade: "+id);
     }
+  }
+  // ERD-R62: validate all 35 records before CSV export, collect failures
+  // without sending notes, names or any draft data over the network.
+  // Only a human-triggered audit changes the live-region summary.
+  function auditDraft(){
+    if(importing){
+      message("Conclua a importação antes de verificar o rascunho.",true);
+      return;
+    }
+    const errors=[];
+    items.forEach((item,index)=>{
+      try{valid(state.get(key(item)),key(item));}
+      catch(error){errors.push({index,reason:String(error.message)});}
+    });
+    if(errors.length===0){
+      lastAuditErrorIndex=null;
+      $("audit-first-error").disabled=true;
+      $("audit-result").textContent=
+        "35 registros válidos para exportação CSV. Isto NÃO autentica aceites nem libera publicação.";
+      message("Validação local concluída. Exporte o CSV para preservar a revisão.");
+      return;
+    }
+    lastAuditErrorIndex=errors[0].index;
+    $("audit-first-error").disabled=false;
+    $("audit-result").textContent=errors.length+
+      " registro(s) com inconsistências locais. Primeira: "+errors[0].reason+
+      ". Corrija os campos e execute a verificação novamente. Nenhum aceite foi autenticado.";
+    message("Verificação local encontrou "+errors.length+" registro(s) com inconsistências.",true);
   }
   const csv=v=>'"'+String(v).replaceAll('"','""')+'"';
   function exportCsv(){
@@ -443,7 +479,7 @@
     $("import").disabled=true;
     $("import-mode").disabled=true;
     for(const id of editors)$(id).disabled=true;
-    for(const id of ["export","export-summary","confirm-export"])$(id).disabled=true;
+    for(const id of ["export","export-summary","confirm-export","audit-draft","audit-first-error"])$(id).disabled=true;
     message("Importação em andamento; edição e exportação temporariamente bloqueadas.");
     try{
       if(file.size>1000000)throw Error("CSV excede 1 MB.");
@@ -490,7 +526,7 @@
           return;
         }
         for(const [id,item] of next)state.set(id,item);
-        dirty=true;invalidateExportAcknowledgement();render();
+        dirty=true;invalidateExportAcknowledgement();invalidateAudit();render();
         message("CSV carregado por substituição: "+differences+
           " aula(s) alterada(s). Nenhuma aprovação foi autenticada.");
         return;
@@ -532,7 +568,7 @@
         return;
       }
       for(const [id,item] of proposed)state.set(id,item);
-      dirty=true;invalidateExportAcknowledgement();render();
+      dirty=true;invalidateExportAcknowledgement();invalidateAudit();render();
       message("CSV carregado por mesclagem: "+updated+
         " aula(s) incorporada(s). Exporte o CSV; nenhum aceite foi autenticado.");
     }catch(error){
@@ -544,6 +580,8 @@
       for(const id of editors)$(id).disabled=false;
       $("export").disabled=false;
       $("export-summary").disabled=false;
+      $("audit-draft").disabled=false;
+      $("audit-first-error").disabled=lastAuditErrorIndex===null;
       // A rejected or unchanged CSV must not destroy an existing acknowledgment.
       $("confirm-export").disabled=!(confirmationWasEnabled&&
         exportPendingSnapshot!==null&&JSON.stringify([...state])===exportPendingSnapshot);
@@ -594,6 +632,10 @@
   $("export").addEventListener("click",exportCsv);
   $("confirm-export").addEventListener("click",confirmExport);
   $("export-summary").addEventListener("click",exportSummary);
+  $("audit-draft").addEventListener("click",auditDraft);
+  $("audit-first-error").addEventListener("click",()=>{
+    if(lastAuditErrorIndex!==null&&!importing)choose(lastAuditErrorIndex);
+  });
   $("import").addEventListener("change",e=>{void importCsv(e.target.files[0]);});
   window.addEventListener("beforeunload",e=>{
     if(dirty){e.preventDefault();e.returnValue="";}

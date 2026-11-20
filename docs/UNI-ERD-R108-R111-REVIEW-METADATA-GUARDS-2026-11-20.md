@@ -7,8 +7,8 @@ O validador de relatório de prioridade validava campos conhecidos, mas tolerava
 
 ## Alterações
 - **R108:** contrato exato de campos do relatório de 35 aulas e de cada linha; chaves faltantes ou extras são erro.
-- **R109:** rejeição dos caracteres Unicode das categorias Cc e Cf em rótulos de curso/aula; lista de códigos heurísticos limitada aos quatro sinais conhecidos, sem duplicação.
-- **R110:** testes negativos contra metadados de falso aceite, falsos grants, controles bidirecionais, títulos com caractere invisível, nova linha embutida, riscos inexistentes e repetidos. Executar tanto HTML quanto Markdown e conferir que recusam o mesmo payload.
+- **R109:** rejeição dos caracteres Unicode das categorias Cc e Cf em rótulos de curso/aula, exceto quebras de linha já normalizadas/escapadas no Markdown e HTML; lista de códigos heurísticos limitada aos quatro sinais conhecidos, sem duplicação.
+- **R110:** testes negativos contra metadados de falso aceite, falsos grants, controles bidirecionais, títulos com caractere invisível, tabulação invisível (novas linhas seguem escapadas pelos renderizadores legados), riscos inexistentes e repetidos. Executar tanto HTML quanto Markdown e conferir que recusam o mesmo payload.
 - **R111:** workflow isolado com checkout da SHA exata, Node sem instalação de terceiros e verificações do manifesto de 13 gates.
 
 ## Reproduzir (somente fonte sintética versionada)

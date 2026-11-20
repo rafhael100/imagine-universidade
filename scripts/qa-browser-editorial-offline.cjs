@@ -242,8 +242,16 @@ module.exports=async function({browser,out,check}){
     await page.locator("#previous").click();
     await page.locator("#review-filter").selectOption("ALL");
 
-    check((await page.locator("#courses .course-item").first().innerText()).includes("3 pendentes / 4"),
-      "C160 first course shows accurate unfinished lesson count");
+    const courseTriageLabel=await page.locator("#courses .course-item").first().innerText();
+    check(courseTriageLabel.includes("3 pendentes / 4")&&
+      courseTriageLabel.includes("1 com ajustes")&&
+      courseTriageLabel.includes("0 declarações não verificadas"),
+      "ERD-R55 course navigation distinguishes pending, fixes and unauthenticated claims");
+    await page.locator("#courses .course-item").first().click();
+    check((await page.locator("#title").innerText()).includes("Leads:")&&
+      await page.evaluate(()=>document.activeElement.id==="title"),
+      "ERD-R55 choosing a course opens the first pending lesson with keyboard focus");
+    await page.locator("#previous").click();
     await page.locator("#next-pending").click();
     check((await page.locator("#title").innerText()).includes("Leads:"),
       "C160 next pending skips a lesson already marked for adjustments");
@@ -251,6 +259,25 @@ module.exports=async function({browser,out,check}){
     check((await page.locator("#title").innerText()).includes("Visitas:"),
       "C160 next adjustment wraps to the currently changed lesson");
 
+
+    // ERD-R55: on a separate synthetic page, exhaust all pending lessons in
+    // the first course. Course navigation must fall back to a needs-change
+    // item, while never treating a declared claim as authenticated approval.
+    const triagePage=await browserContext.newPage();
+    triagePage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await triagePage.goto(url,{waitUntil:"load"});
+    for(let i=0;i<4;i++){
+      await triagePage.locator("#status").selectOption("NEEDS_CHANGES");
+      if(i<3)await triagePage.locator("#next").click();
+    }
+    check((await triagePage.locator("#courses .course-item").first().innerText())
+      .includes("0 pendentes / 4 · 4 com ajustes"),
+      "ERD-R55 all-pending-exhausted course reports four lessons needing changes");
+    await triagePage.locator("#courses .course-item").first().click();
+    check((await triagePage.locator("#title").innerText()).includes("Visitas:")&&
+      await triagePage.evaluate(()=>document.activeElement.id==="title"),
+      "ERD-R55 course selection falls back to first needs-changes lesson");
+    await triagePage.close();
 
     // C183: pasted ASCII controls in the reviewer field used to escape the
     // browser's export fence, producing CSV rejected by the canonical CLI.

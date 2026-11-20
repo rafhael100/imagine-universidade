@@ -33,6 +33,11 @@ try{
 
   pass(html.includes("id='review-search'")&&html.includes("id='review-filter'"),
     "offline editor offers literal search and status filters");
+  pass(html.includes("function courseReviewCounts(slug)")&&
+    html.includes("function firstActionableLesson(slug)")&&
+    html.includes("declarações não verificadas")&&
+    html.includes("choose(firstActionableLesson(slug))"),
+    "ERD-R55 source exposes course review triage and actionable navigation");
   pass(html.includes("Situação: ")&&html.includes("Requer ajustes")&&
     html.includes("Aceite declarado (não autenticado)")&&
     html.includes("if(button.textContent!==nextLabel)button.textContent=nextLabel"),

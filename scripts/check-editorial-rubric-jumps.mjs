@@ -36,7 +36,9 @@ function audit(candidate){
   assert.equal(all.size,35);
   assert.equal((candidate.match(/id="rubrica-aula-\d+"/gu)||[]).length,35);
   assert.equal((candidate.match(/href="#rubrica-aula-\d+"/gu)||[]).length,35);
-  assert.ok(candidate.includes("HOLD_NO_GO")&&candidate.includes("13/13 NOT_VERIFIED"));
+  assert.ok(candidate.includes("<strong>HOLD_NO_GO · SEM ACEITE.</strong>"),
+    "Release banner must remain an explicit denial");
+  assert.ok(candidate.includes("HOLD_NO_GO · 13/13 NOT_VERIFIED"));
   assert.ok(!/<script\b/iu.test(candidate));
   return all.size;
 }

@@ -1,0 +1,42 @@
+name: UNI Editorial Successors Safe QA
+on:
+  push:
+    branches:
+      - review/uni-erd-r219-r222-editorial-jornada-12-15-2026-11-20
+      - review/uni-erd-r223-r226-editorial-metricas-28-31-2026-11-20
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-editorial-successors
+  cancel-in-progress: false
+
+jobs:
+  editorial-and-deny-all:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify commit and no real environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          case "$GITHUB_REF_NAME" in
+            review/uni-erd-r219-r222-editorial-jornada-12-15-2026-11-20|review/uni-erd-r223-r226-editorial-metricas-28-31-2026-11-20) ;;
+            *) exit 1 ;;
+          esac
+          test ! -e .env && test ! -e .env.production
+          command -v node && command -v php
+      - name: Reuse existing editorial, Portal and release-gate checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-editorial-pilot-lessons.mjs
+          node scripts/check-integrated-offline-qa-plan.mjs
+          node scripts/check-integrated-offline-qa.mjs
+          test -z "$(git status --porcelain)"

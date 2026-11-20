@@ -1,0 +1,79 @@
+name: UNI ERD R137 R140 Chromium review queue QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r137-r140-chromium-review-queue-2026-11-20
+    paths:
+      - 'scripts/qa-browser-priority-queue.cjs'
+      - 'scripts/check-editorial-priority-queue-links.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/verify-editorial-priority-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R137-R140-CHROMIUM-QUEUE-2026-11-20.md'
+      - '.github/workflows/uni-erd-r137-r140-chromium-queue-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r137-r140-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-and-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source and 13 gates at exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r137-r140-chromium-review-queue-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/qa-browser-priority-queue.cjs
+          node scripts/check-editorial-priority-queue-links.mjs
+          node scripts/check-verify-editorial-priority-html.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+
+  chromium-keyboard-queue:
+    needs: source-and-gates
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build canonical local-only HTML and install ephemeral browser test tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r137-r140-chromium-review-queue-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node scripts/render-editorial-priority-html.mjs > "$RUNNER_TEMP/uni-r137-queue.html"
+          node scripts/verify-editorial-priority-html.mjs "$RUNNER_TEMP/uni-r137-queue.html"
+          mkdir -p "$RUNNER_TEMP/uni-qa-deps"
+          cd "$RUNNER_TEMP/uni-qa-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          command -v google-chrome
+      - name: Exercise 68 keyboard transitions and WCAG 2.1 mobile quality
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-qa-deps/node_modules" \
+          node scripts/qa-browser-priority-queue.cjs "$RUNNER_TEMP/uni-r137-queue.html"
+          test -z "$(git status --porcelain)"

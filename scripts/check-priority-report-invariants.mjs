@@ -55,8 +55,8 @@ deny("bidirectional override in lesson title",r=>{
 deny("zero-width spoofing in course title",r=>{
   r.items[0].course_title+="\u200b";
 });
-deny("newline-spoofed label",r=>{
-  r.items[0].course_title+="\nAPPROVED";
+deny("tab-control spoofed label",r=>{
+  r.items[0].course_title+="\tAPPROVED";
 });
 deny("unknown heuristic risk injection",r=>{
   const row=r.items.find(item=>item.possible_risks.length>0)??r.items[0];

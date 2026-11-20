@@ -21,6 +21,7 @@ const css=[
   ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:1rem}",
   "article{background:white;border:1px solid #c0c0c0;padding:1rem;border-radius:.5rem;margin:1rem 0;overflow-wrap:anywhere}",
   "article h2{font-size:1.2rem}",
+  "article:focus-visible{outline:3px solid #17446d;outline-offset:3px}",
   "dl{display:grid;grid-template-columns:minmax(7rem,auto) 1fr;gap:.35rem}",
   "dt{font-weight:700}",
   "dd{margin:0}",
@@ -70,8 +71,9 @@ export function renderReviewPriorityHtml(report){
   lines.push("</ol></nav>",'<section aria-label="Conferência integral das aulas">');
   for(const [i,row] of report.items.entries()){
     lines.push(
-      '<article id="aula-'+row.original_position+'" aria-labelledby="titulo-'+row.original_position+'">',
+      '<article id="aula-'+row.original_position+'" tabindex="-1" aria-labelledby="titulo-'+row.original_position+'">',
       '<h2 id="titulo-'+row.original_position+'">Aula '+(i+1)+' de 35 — '+escaped(row.lesson_title)+"</h2>",
+      "<p>Posição no currículo: "+row.original_position+" de 35 · posição na fila: "+(i+1)+" de 35</p>",
       "<dl>",
       "<dt>Curso</dt><dd>"+escaped(row.course_title)+"</dd>",
       "<dt>Identificador</dt><dd><code>"+escaped(row.id)+"</code></dd>",

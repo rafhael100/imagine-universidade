@@ -5,7 +5,7 @@ on:
     branches:
       - review/uni-p0-db-outage-failclosed-2026-11-20
     paths:
-      - .github/workflows/uni-p0-private-health-transitions.yml
+      - .github/workflows/uni-p0-db-outage-recovery.yml
       - scripts/qa-staging-postgres-http.sh
       - scripts/qa-staging-pg-pre-migrate.php
       - scripts/qa-p0-db-outage-probe.php

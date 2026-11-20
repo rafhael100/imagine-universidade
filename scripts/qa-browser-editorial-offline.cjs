@@ -79,6 +79,50 @@ module.exports=async function({browser,out,check}){
       "R57 global pending navigation remains available for the other courses");
     await coursePage.close();
 
+    // R63: explicit local validation audits all 35 rows without granting
+    // signoff. Test real keyboard focus, stale-feedback invalidation and a
+    // cross-course first-error jump in the generated file:// page.
+    const auditPage=await browserContext.newPage();
+    auditPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await auditPage.goto(url,{waitUntil:"load"});
+    check(await auditPage.locator("#audit-first-error").isDisabled(),
+      "R63 first-invalid navigation starts disabled without a current audit");
+    await auditPage.locator("#audit-draft").click();
+    check((await auditPage.locator("#audit-result").innerText()).includes(
+      "35 registros válidos para exportação CSV")&&
+      (await auditPage.locator("#audit-result").innerText()).includes("NÃO autentica"),
+      "R63 clean draft is exportable but cannot be misrepresented as human signoff");
+    await auditPage.locator("#status").selectOption("NEEDS_CHANGES");
+    await auditPage.locator("#audit-draft").click();
+    check((await auditPage.locator("#audit-result").innerText()).includes(
+      "1 registro(s) com inconsistências")&&
+      await auditPage.locator("#audit-first-error").isEnabled(),
+      "R63 invalid reviewer/evidence flagged before CSV export");
+    await auditPage.locator("#courses .course-item").nth(1).click();
+    await auditPage.locator("#audit-first-error").click();
+    check((await auditPage.locator("#title").innerText()).includes("Visitas:")&&
+      await auditPage.evaluate(()=>document.activeElement.id==="title"),
+      "R63 first-invalid jump crosses course boundaries and focuses lesson heading");
+    await auditPage.locator("#reviewer").fill("Equipe Editorial QA");
+    await auditPage.locator("#evidence").fill(
+      "https://github.com/rafhael100/imagine-universidade/issues/12");
+    check((await auditPage.locator("#audit-result").innerText())===""&&
+      await auditPage.locator("#audit-first-error").isDisabled(),
+      "R63 editing any audited row invalidates old findings and navigation");
+    await auditPage.locator("#audit-draft").click();
+    check((await auditPage.locator("#audit-result").innerText()).includes(
+      "35 registros válidos para exportação CSV"),
+      "R63 corrected draft returns to valid CSV shape without approving lessons");
+    await auditPage.locator("#notes").fill("Observação sintética adicional");
+    check((await auditPage.locator("#audit-result").innerText())===""&&
+      await auditPage.locator("#audit-first-error").isDisabled(),
+      "R63 note changes invalidate an earlier clean audit");
+    const auditA11y=await new AxeBuilder({page:auditPage})
+      .withTags(["wcag2a","wcag2aa","wcag21a","wcag21aa"]).analyze();
+    check(!auditA11y.violations.some(v=>v.impact==="serious"||v.impact==="critical"),
+      "R63 audited editor has no serious/critical WCAG 2.1 A/AA violations");
+    await auditPage.close();
+
     // R59: course-local adjustment navigation must never leave its course.
     const adjustmentPage=await browserContext.newPage();
     adjustmentPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));

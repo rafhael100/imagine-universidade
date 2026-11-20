@@ -24,6 +24,17 @@ try{
     html.includes(".skip-link:focus-visible"),
     "ERD-R45 keyboard skip link reaches the focusable lesson heading");
   pass(html.includes("CLAIMED_HUMAN_APPROVED"),"claim is not authenticated");
+  pass(html.includes("id='next-adjustment-course'")&&
+    html.includes("function hasAnotherAdjustmentInCourse()")&&
+    html.includes("function jumpToNextAdjustmentInCourse()")&&
+    html.includes('"NEEDS_CHANGES"'),
+    "R59 adjusted-lesson navigation is course-scoped and never grants access");
+  pass(html.includes('const focusedResult=holder.contains(document.activeElement)')&&
+    html.includes('const focusedLessonIndex=focusedResult?.dataset.lessonIndex;')&&
+    html.includes('(survivor||$("review-search")).focus();')&&
+    html.includes('if(focusedResult)$("review-search").focus();'),
+    "R60 changing or clearing filtered results restores keyboard focus");
+
   pass(html.includes("value='merge'")&&html.includes("value='replace'"),
     "safe merge is the default and replacement is explicit");
   pass(html.includes("id='confirm-export'")&&html.includes("Confirmei que revisao.csv foi salvo"),

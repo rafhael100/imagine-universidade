@@ -11,6 +11,8 @@ O healthcheck adicionado em #151 só foi verificado estaticamente por `docker co
 3. Reinicia somente o mesmo contêiner descartável, exige retorno a `healthy` e repete a prova HTTP de rotas Cliente/Admin negadas com headers Portal forjados, mantendo default `UnavailablePortalAuthority`.
 4. O teardown já existente apaga contêineres/rede/volume isolados; **não** há porta no host, tokens reais, publicação, alteração da VPS ou migração fora do banco `uni_staging_ci_only`.
 
+**Pré-migração obrigatória:** antes da primeira DDL, `qa-staging-pg-pre-migrate.php` lê a configuração **efetiva** Laravel de `database.default` e `database.connections.pgsql` e autentica uma consulta SQL na mesma rede local `db:5432` conferindo banco/usuário/porta de migração sintéticos. Se qualquer checagem falha, o ensaio encerra sem iniciar migrações. A prova preexistente por `psql` isolado não é considerada substituta da configuração Laravel.
+
 O job isolado executa apenas ao receber push nesta branch, valida branch, contexto Docker local, ausência de arquivos de ambiente, composer.lock e 13 gates. A construção usa imagens públicas em runner efêmero; **não é prova de digest imutável de release**. Verificar a conclusão do workflow contra a HEAD exata, inclusive caso fique pendente/vermelho.
 
 ## Limites e próxima fila única

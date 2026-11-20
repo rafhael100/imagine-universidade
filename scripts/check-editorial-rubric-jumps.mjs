@@ -30,7 +30,9 @@ function audit(candidate){
     assert.ok(article.indexOf(jump)<article.indexOf(target),"Jump must precede rubric");
     assert.ok(article.indexOf(target)<article.indexOf(
       '<h3>Perguntas para leitura (não são aceite)</h3>'));
-    assert.ok(article.indexOf('Texto integral para revisão')<article.indexOf(target));
+    const textPos=article.indexOf('Texto integral para revisão');
+    assert.ok(textPos>=0&&textPos<article.indexOf(target),
+      'Full lesson text heading must precede review rubric');
     assert.equal((article.match(/<li>Precisão factual:/gu)||[]).length,1);
   }
   assert.equal(all.size,35);

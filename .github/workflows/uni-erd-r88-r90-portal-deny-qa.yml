@@ -1,0 +1,50 @@
+name: UNI ERD R88 R90 Portal default denial QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r88-r90-portal-default-denial-2026-11-20
+    paths:
+      - 'scripts/check-portal-default-deny.php'
+      - 'app/Providers/AppServiceProvider.php'
+      - 'app/Domain/Access/PortalAuthority.php'
+      - 'app/Domain/Access/PortalGrant.php'
+      - 'app/Domain/Access/PortalAccessGate.php'
+      - 'app/Domain/Access/UnavailablePortalAuthority.php'
+      - 'ops/release-gates.json'
+      - '.github/workflows/uni-erd-r88-r90-portal-deny-qa.yml'
+      - 'docs/UNI-ERD-R88-R90-PORTAL-DEFAULT-NO-GRANT-2026-11-20.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r88-r90-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  portal-deny-no-real-credentials:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact SHA without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify PHP runtime deny-all and release gate policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r88-r90-portal-default-denial-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          php -v
+          php -l scripts/check-portal-default-deny.php
+          php -l app/Providers/AppServiceProvider.php
+          php -l app/Domain/Access/UnavailablePortalAuthority.php
+          php scripts/check-portal-default-deny.php
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(v=>v.status!=="NOT_VERIFIED"))process.exit(1)'
+          echo "PASS: PHP default authority denies view/manage, 13 gates remain blocked."

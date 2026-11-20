@@ -1,0 +1,53 @@
+name: UNI ERD R108 R111 strict offline review metadata QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r108-r111-report-schema-bidi-2026-11-20
+    paths:
+      - 'scripts/validate-editorial-priority-report.mjs'
+      - 'scripts/check-priority-report-invariants.mjs'
+      - 'scripts/build-editorial-review-priority.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/check-editorial-review-priority.mjs'
+      - 'scripts/check-editorial-priority-html.mjs'
+      - 'scripts/check-verify-editorial-priority-html.mjs'
+      - 'scripts/check-release-gate-policy.mjs'
+      - 'ops/release-gates.json'
+      - '.github/workflows/uni-erd-r108-r111-strict-review-metadata-qa.yml'
+      - 'docs/UNI-ERD-R108-R111-REVIEW-METADATA-GUARDS-2026-11-20.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r108-r111-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  reject-unauthenticated-approval-metadata:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact SHA without retaining credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check SHA, syntax and adversarial report mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r108-r111-report-schema-bidi-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/validate-editorial-priority-report.mjs
+          node --check scripts/check-priority-report-invariants.mjs
+          node scripts/check-priority-report-invariants.mjs
+          node scripts/check-editorial-review-priority.mjs
+          node scripts/check-editorial-priority-html.mjs
+          node scripts/check-verify-editorial-priority-html.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+          echo "PASS: immutable review schema, no extra approval metadata, no invisible title controls; gates remain HOLD_NO_GO."

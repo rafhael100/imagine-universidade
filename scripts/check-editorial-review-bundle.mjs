@@ -68,6 +68,16 @@ try{
   for(const [format,name] of Object.entries(fileNames))
     writeFileSync(join(dir,name),original.artifacts[format]);
   assert.equal(verifyBundleDirectory(dir).lessons,35);
+  writeFileSync(join(dir,"APPROVED.txt"),"Synthetic approval claim: not authentic");
+  deny("fabricated signoff companion file",()=>verifyBundleDirectory(dir));
+  rmSync(join(dir,"APPROVED.txt"));
+  writeFileSync(join(dir,".env"),"SYNTHETIC_EXAMPLE=not_a_secret");
+  deny("unexpected hidden file",()=>verifyBundleDirectory(dir));
+  rmSync(join(dir,".env"));
+  symlinkSync(join(dir,"report.json"),join(dir,"extra-review.json"));
+  deny("unexpected symlink alias",()=>verifyBundleDirectory(dir));
+  rmSync(join(dir,"extra-review.json"));
+  assert.equal(verifyBundleDirectory(dir).formats,3);
   rmSync(join(dir,"report.md"));
   symlinkSync(join(dir,"report.json"),join(dir,"report.md"));
   deny("symlink to report",()=>verifyBundleDirectory(dir));

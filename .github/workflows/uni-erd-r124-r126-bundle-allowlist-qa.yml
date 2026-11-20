@@ -1,0 +1,54 @@
+name: UNI ERD R124 R126 review bundle strict allowlist QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r124-r126-bundle-allowlist-2026-11-20
+    paths:
+      - 'scripts/editorial-review-bundle.mjs'
+      - 'scripts/check-editorial-review-bundle.mjs'
+      - 'scripts/build-editorial-review-priority.mjs'
+      - 'scripts/verify-editorial-review-handoff.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R124-R126-ALLOWLIST-2026-11-20.md'
+      - '.github/workflows/uni-erd-r124-r126-bundle-allowlist-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r124-r126-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-source-bound-offline-bundle:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact SHA without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify canonical bundle, three handoffs and fail-closed gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r124-r126-bundle-allowlist-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/editorial-review-bundle.mjs
+          node --check scripts/check-editorial-review-bundle.mjs
+          node scripts/check-editorial-review-bundle.mjs
+          mkdir -p "$RUNNER_TEMP/uni-review-bundle"
+          node scripts/build-editorial-review-priority.mjs --json > "$RUNNER_TEMP/uni-review-bundle/report.json"
+          node scripts/build-editorial-review-priority.mjs --markdown > "$RUNNER_TEMP/uni-review-bundle/report.md"
+          node scripts/render-editorial-priority-html.mjs > "$RUNNER_TEMP/uni-review-bundle/report.html"
+          node scripts/editorial-review-bundle.mjs > "$RUNNER_TEMP/uni-review-bundle/manifest.json"
+          node scripts/editorial-review-bundle.mjs "$RUNNER_TEMP/uni-review-bundle"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+          echo "PASS: synthetic 35-lesson review bundle; 13 release gates remain blocked."

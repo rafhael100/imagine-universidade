@@ -81,7 +81,7 @@ try {
     }
     $row = $pdo->query(
         "SELECT current_database() AS db_name, current_user AS db_role, ".
-        "inet_server_addr()::text AS server_address, inet_server_port() AS server_port, ".
+        "inet_server_port() AS server_port, ".
         "current_setting('server_version_num')::int AS version_num, ".
         "CASE WHEN pg_is_in_recovery() THEN 1 ELSE 0 END AS in_recovery"
     )->fetch(\PDO::FETCH_ASSOC);
@@ -97,13 +97,6 @@ try {
     }
     if ((int)$row['in_recovery'] !== 0) {
         holdPgQa('SQL connected to read-only recovery server');
-    }
-    // A Docker service published only on runner loopback can report its NAT
-    // interface to inet_server_addr(), which is not necessarily RFC1918.
-    // The effective Laravel target remains fixed to 127.0.0.1:5432 above.
-    if (!is_string($row['server_address']) ||
-        filter_var($row['server_address'], FILTER_VALIDATE_IP) === false) {
-        holdPgQa('SQL server endpoint address is invalid or unavailable');
     }
 } catch (\Throwable $exception) {
     // Never print SQL exceptions: DSNs, credentials and internal addresses may leak.

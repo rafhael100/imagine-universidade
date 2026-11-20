@@ -10,6 +10,7 @@ on:
       - scripts/qa-staging-postgres-http.sh
       - scripts/qa-staging-pg-pre-migrate.php
       - scripts/qa-staging-private-http-probe.php
+      - scripts/qa-p0-db-health-probe.php
       - ops/staging/Dockerfile.php
       - ops/staging/Dockerfile.nginx
       - ops/staging/compose.yaml
@@ -47,6 +48,7 @@ jobs:
           test "$(docker context show)" = default
           bash -n scripts/qa-staging-postgres-http.sh
           php -l app/Providers/AppServiceProvider.php
+          php -l scripts/qa-p0-db-health-probe.php
           node ops/staging/check-release-gates.mjs
           node ops/staging/check-compose-static.mjs
       - name: Build disposable images from source and composer.lock

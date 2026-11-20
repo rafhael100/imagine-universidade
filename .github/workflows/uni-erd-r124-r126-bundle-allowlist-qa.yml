@@ -3,7 +3,7 @@ name: UNI ERD R124 R126 review bundle strict allowlist QA
 on:
   push:
     branches:
-      - review/uni-erd-r124-r126-handoff-bundle-digests-2026-11-20
+      - review/uni-erd-r124-r126-bundle-allowlist-2026-11-20
     paths:
       - 'scripts/editorial-review-bundle.mjs'
       - 'scripts/check-editorial-review-bundle.mjs'
@@ -13,7 +13,7 @@ on:
       - 'content/mvp-cursos-v1.json'
       - 'ops/release-gates.json'
       - 'docs/UNI-ERD-R124-R126-ALLOWLIST-2026-11-20.md'
-      - '.github/workflows/uni-erd-r124-r126-review-bundle-qa.yml'
+      - '.github/workflows/uni-erd-r124-r126-bundle-allowlist-qa.yml'
 
 permissions:
   contents: read
@@ -37,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$GITHUB_REF_NAME" = "review/uni-erd-r124-r126-handoff-bundle-digests-2026-11-20"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r124-r126-bundle-allowlist-2026-11-20"
           test ! -e .env && test ! -e .env.production
           node --check scripts/editorial-review-bundle.mjs
           node --check scripts/check-editorial-review-bundle.mjs

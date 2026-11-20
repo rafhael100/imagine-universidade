@@ -6,6 +6,7 @@ on:
       - review/uni-p0-db-outage-failclosed-2026-11-20
     paths:
       - .github/workflows/uni-p0-db-outage-recovery.yml
+      - bootstrap/app.php
       - scripts/qa-staging-postgres-http.sh
       - scripts/qa-staging-pg-pre-migrate.php
       - scripts/qa-p0-db-outage-probe.php
@@ -46,6 +47,7 @@ jobs:
           test -f composer.lock
           bash -n scripts/qa-staging-postgres-http.sh
           php -l scripts/qa-p0-db-outage-probe.php
+          php -l bootstrap/app.php
           node ops/staging/check-release-gates.mjs
           node ops/staging/check-compose-static.mjs
       - name: Build disposable candidate images locally, no registry push

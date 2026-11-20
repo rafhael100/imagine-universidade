@@ -11,6 +11,7 @@ on:
       - ops/staging/check-compose-environment.mjs
       - bootstrap/app.php
       - ops/staging/nginx.conf
+      - docs/UNI-P0-PRIVATE-HEALTH-READINESS-2026-11-20.md
 
 permissions:
   contents: read

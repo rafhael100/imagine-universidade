@@ -8,6 +8,7 @@ on:
       - review/uni-erd-r230-r233-editorial-visitas-16-19-2026-11-20
       - review/uni-erd-r234-r237-editorial-leads-20-23-2026-11-20
       - review/uni-erd-r238-r241-editorial-clientes-24-27-2026-11-20
+      - review/uni-erd-r242-r244-editorial-base-1-3-2026-11-20
 
 permissions:
   contents: read
@@ -31,7 +32,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           case "$GITHUB_REF_NAME" in
-            review/uni-erd-r219-r222-editorial-jornada-12-15-2026-11-20|review/uni-erd-r223-r226-editorial-metricas-28-31-2026-11-20|review/uni-erd-r227-r229-editorial-ia-33-35-2026-11-20|review/uni-erd-r230-r233-editorial-visitas-16-19-2026-11-20|review/uni-erd-r234-r237-editorial-leads-20-23-2026-11-20|review/uni-erd-r238-r241-editorial-clientes-24-27-2026-11-20) ;;
+            review/uni-erd-r219-r222-editorial-jornada-12-15-2026-11-20|review/uni-erd-r223-r226-editorial-metricas-28-31-2026-11-20|review/uni-erd-r227-r229-editorial-ia-33-35-2026-11-20|review/uni-erd-r230-r233-editorial-visitas-16-19-2026-11-20|review/uni-erd-r234-r237-editorial-leads-20-23-2026-11-20|review/uni-erd-r238-r241-editorial-clientes-24-27-2026-11-20|review/uni-erd-r242-r244-editorial-base-1-3-2026-11-20) ;;
             *) exit 1 ;;
           esac
           test ! -e .env && test ! -e .env.production

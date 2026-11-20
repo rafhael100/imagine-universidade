@@ -31,7 +31,11 @@ const deny=(label,bytes,expectedSource=source)=>{
   rejected++;
 };
 deny("extra approval claim",Buffer.from(html.replace("HOLD_NO_GO","GO")));
-deny("one corrupted lesson",Buffer.from(html.replace("Uma visita ocorre","Uma VISITA ocorre")));
+// Source-bound mutation: do not rely on a phrase from a particular lesson revision.
+const firstLessonExcerpt=escapeReviewText(source.courses[0].lessons[0].body.split("\n")[0].slice(0,45));
+assert.ok(firstLessonExcerpt.length>=20&&html.includes(firstLessonExcerpt),
+  "First lesson excerpt must appear in the HTML before corruption test");
+deny("one corrupted lesson",Buffer.from(html.replace(firstLessonExcerpt,firstLessonExcerpt+" [adulterado]")));
 deny("injected remote link",Buffer.from(html.replace("</body></html>",
   '<a href="https://example.org">externo</a></body></html>')));
 deny("missing source section",Buffer.from(html.replace(

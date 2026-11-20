@@ -60,7 +60,7 @@ for(const [name,changed] of [
 ]){
   assert.notEqual(changed,html,"Mutation ineffective: "+name);
   assert.throws(()=>verifyEditorialFulltextHtml(Buffer.from(changed),source));
-  assert.throws(()=>audit(changed));
+  assert.throws(()=>audit(changed),undefined,"Semantic audit accepted "+name);
   rejected++;
 }
 assert.equal(rejected,6);

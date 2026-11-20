@@ -32,7 +32,10 @@ function assertExactKeys(object, keys, label) {
 function assertReadableLabel(value, label) {
   assert.ok(typeof value === "string" && value.trim().length > 0,
     label + " must be non-empty text");
-  assert.ok(!/[\p{Cc}\p{Cf}]/u.test(value),
+  // Existing renderers normalize newlines in lesson titles to a single space.
+  // Preserve that tested contract; reject other controls and all format marks.
+  const normalized = value.replace(/[\r\n]/gu, "");
+  assert.ok(!/[\p{Cc}\p{Cf}]/u.test(normalized),
     label + " contains a control or invisible direction/format character");
 }
 

@@ -1,0 +1,54 @@
+name: UNI ERD R104 R107 Priority report and anchors QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r104-r107-priority-report-integrity-2026-11-20
+    paths:
+      - 'scripts/validate-editorial-priority-report.mjs'
+      - 'scripts/check-priority-report-invariants.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/build-editorial-review-priority.mjs'
+      - 'scripts/build-editorial-human-checklist.mjs'
+      - 'scripts/check-editorial-priority-html.mjs'
+      - 'scripts/check-verify-editorial-priority-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - '.github/workflows/uni-erd-r104-r107-priority-report-qa.yml'
+      - 'docs/UNI-ERD-R104-R107-RELATORIO-EDITORIAL-INTEGRIDADE-2026-11-20.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r104-r107-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  review-report-deny-regression:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact SHA, no persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test both offline renderers and preserved 13-gate HOLD
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r104-r107-priority-report-integrity-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/validate-editorial-priority-report.mjs
+          node --check scripts/check-priority-report-invariants.mjs
+          node --check scripts/render-editorial-priority-html.mjs
+          node --check scripts/build-editorial-review-priority.mjs
+          node scripts/check-priority-report-invariants.mjs
+          node scripts/check-editorial-review-priority.mjs
+          node scripts/check-editorial-priority-html.mjs
+          node scripts/check-verify-editorial-priority-html.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          echo "PASS: 35 unique anchors, ordered review queue, no human signoff, no Portal grants."

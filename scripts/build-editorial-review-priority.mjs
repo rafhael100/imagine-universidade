@@ -8,6 +8,7 @@ import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {buildHumanEditorialChecklist} from "./build-editorial-human-checklist.mjs";
+import {validatePriorityReport} from "./validate-editorial-priority-report.mjs";
 
 export function buildEditorialReviewPriority(source){
   const base=buildHumanEditorialChecklist(source);
@@ -55,6 +56,7 @@ const escapeCell=value=>String(value)
   .replace(/\]/gu,"\\]").replace(/\x60/gu,"\\`");
 
 export function renderReviewPriorityMarkdown(report){
+  validatePriorityReport(report);
   assert.equal(report?.release_decision,"HOLD_NO_GO");
   assert.equal(report?.approval_authority,"NONE");
   assert.equal(report?.human_review_authenticated,false);

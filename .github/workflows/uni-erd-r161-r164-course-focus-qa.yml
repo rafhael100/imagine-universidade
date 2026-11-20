@@ -1,0 +1,87 @@
+name: UNI ERD R161 R164 Course heading focus QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r161-r164-course-return-focus-2026-11-20
+    paths:
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/verify-editorial-fulltext-html.mjs'
+      - 'scripts/check-editorial-curricular-index.mjs'
+      - 'scripts/check-editorial-course-return-focus.mjs'
+      - 'scripts/qa-browser-course-return-focus.cjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R161-R164-FOCO-RETORNO-CURSO-2026-11-20.md'
+      - '.github/workflows/uni-erd-r161-r164-course-focus-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r161-r164-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static-and-release-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Test exact SHA, source bindings, course heading and 13 gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r161-r164-course-return-focus-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-fulltext-html.mjs
+          node --check scripts/check-editorial-curricular-index.mjs
+          node --check scripts/check-editorial-course-return-focus.mjs
+          node --check scripts/qa-browser-course-return-focus.cjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-editorial-course-quicknav.mjs
+          node scripts/check-editorial-curricular-index.mjs
+          node scripts/check-editorial-course-sequence.mjs
+          node scripts/check-editorial-course-return-focus.mjs
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r161-return-focus.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r161-return-focus.html"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+
+  chrome-return-focus:
+    needs: static-and-release-gates
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Generate validated artifact and install ephemeral QA dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r161-r164-course-return-focus-2026-11-20"
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r161-return-focus.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r161-return-focus.html"
+          mkdir -p "$RUNNER_TEMP/uni-r161-qa-deps"
+          cd "$RUNNER_TEMP/uni-r161-qa-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          command -v google-chrome
+      - name: Test 35 keyboard returns, WCAG and no HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-r161-qa-deps/node_modules" \
+          node scripts/qa-browser-course-return-focus.cjs "$RUNNER_TEMP/uni-r161-return-focus.html"
+          test -z "$(git status --porcelain)"

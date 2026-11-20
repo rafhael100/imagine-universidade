@@ -114,7 +114,9 @@ export function renderEditorialFulltextHtml(source){
         ' de 35</a></li>';
     }).join("\n");
     const id="curriculo-curso-"+(courseIndex+1);
-    return '<section aria-labelledby="'+id+'"><h3 id="'+id+'">'+
+    // R161: heading must accept native fragment focus on keyboard return.
+    // tabindex=-1 does not add ten extra stops to the normal Tab sequence.
+    return '<section aria-labelledby="'+id+'"><h3 id="'+id+'" tabindex="-1">'+
       escapeReviewText(course.title)+'</h3><ol>'+lessons+'</ol></section>';
   }).join("\n");
   assert.equal(referenced.size,35,"Every lesson must be reachable by course");

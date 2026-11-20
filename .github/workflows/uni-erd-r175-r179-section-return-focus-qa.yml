@@ -1,0 +1,86 @@
+name: UNI ERD R175 R179 Section return focus QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r175-r179-section-return-focus-2026-11-20
+    paths:
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/check-editorial-fulltext-html.mjs'
+      - 'scripts/check-editorial-section-returns.mjs'
+      - 'scripts/qa-browser-editorial-section-returns.cjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R175-R179-RETORNO-SECOES-2026-11-20.md'
+      - '.github/workflows/uni-erd-r175-r179-section-return-focus-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r175-r179-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static-returns-and-release-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check SHA, 140 returns, inherited source-bound tests and gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r175-r179-section-return-focus-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-fulltext-html.mjs
+          node --check scripts/check-editorial-fulltext-html.mjs
+          node --check scripts/check-editorial-section-returns.mjs
+          node --check scripts/qa-browser-editorial-section-returns.cjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-editorial-section-deeplinks.mjs
+          node scripts/check-editorial-section-returns.mjs
+          node scripts/check-editorial-course-return-focus.mjs
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r175-returns.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r175-returns.html"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+
+  chrome-section-returns:
+    needs: static-returns-and-release-gates
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Generate immutable offline HTML and install ephemeral browser tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r175-r179-section-return-focus-2026-11-20"
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r175-returns.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r175-returns.html"
+          mkdir -p "$RUNNER_TEMP/uni-r175-browser-deps"
+          cd "$RUNNER_TEMP/uni-r175-browser-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          command -v google-chrome
+      - name: Verify 140 Enter returns, focused titles, mobile axe and no HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-r175-browser-deps/node_modules" \
+          node scripts/qa-browser-editorial-section-returns.cjs "$RUNNER_TEMP/uni-r175-returns.html"
+          test -z "$(git status --porcelain)"

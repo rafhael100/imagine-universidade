@@ -68,9 +68,37 @@ export function renderEditorialFulltextHtml(source){
   assert.equal(courseNames.size,10,"10 unique course shortcuts required");
   const courseMarker="<p>Ordem: aulas com sinais de atenção primeiro; empates seguem o currículo. Total: 35 aulas, 210 perguntas para revisão humana, 13 gates bloqueados.</p>";
   assert.ok(bodyHtml.includes(courseMarker),"Canonical warning order changed unexpectedly");
+  // R151–R152: expose all 35 lesson destinations by course in *curricular*
+  // order. The document bodies remain in the separate attention-first queue.
+  const byLessonId=new Map(priority.items.map((row,index)=>[
+    row.id,{row,queuePosition:index+1}
+  ]));
+  assert.equal(byLessonId.size,35,"Curricular links need 35 unique identities");
+  const referenced=new Set();
+  const curriculumSections=source.courses.map((course,courseIndex)=>{
+    const lessons=course.lessons.map((lesson,lessonIndex)=>{
+      const identity=course.slug+"/"+lesson.slug;
+      const found=byLessonId.get(identity);
+      assert.ok(found,"Missing curriculum destination");
+      assert.ok(!referenced.has(identity),"Repeated curriculum destination");
+      referenced.add(identity);
+      return '<li><a href="#aula-'+found.row.original_position+'">Aula '+
+        (lessonIndex+1)+' de '+course.lessons.length+': '+
+        escapeReviewText(lesson.title)+' · fila '+found.queuePosition+
+        ' de 35</a></li>';
+    }).join("\n");
+    const id="curriculo-curso-"+(courseIndex+1);
+    return '<section aria-labelledby="'+id+'"><h3 id="'+id+'">'+
+      escapeReviewText(course.title)+'</h3><ol>'+lessons+'</ol></section>';
+  }).join("\n");
+  assert.equal(referenced.size,35,"Every lesson must be reachable by course");
   const html=bodyHtml.replace(courseMarker,courseMarker+"\n"+
     '<nav aria-label="Acesso rápido aos cursos"><h2>Ir diretamente a um curso</h2>'+
-    '<ol class="grid">'+courseLinks+"</ol></nav>");
+    '<ol class="grid">'+courseLinks+"</ol></nav>\n"+
+    '<nav aria-label="Índice curricular de aulas">'+
+    '<h2>35 aulas organizadas por curso</h2>'+
+    '<p>Esta ordem é curricular; a leitura continua na fila de revisão. Nenhuma aula foi aprovada.</p>'+
+    '<div class="grid">'+curriculumSections+'</div></nav>');
 
   assert.ok(html.includes("HOLD_NO_GO")&&html.includes("13/13 NOT_VERIFIED"),
     "Full-text rendering must preserve release guards");

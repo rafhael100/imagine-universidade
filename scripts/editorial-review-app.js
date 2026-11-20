@@ -61,6 +61,12 @@
       item.course_slug===items[current].course_slug&&
       state.get(key(item)).status==="PENDING_HUMAN_REVIEW");
   }
+  // R59: next adjustment must be restricted to the current course.
+  function hasAnotherAdjustmentInCourse(){
+    return items.some((item,i)=>i!==current&&
+      item.course_slug===items[current].course_slug&&
+      state.get(key(item)).status==="NEEDS_CHANGES");
+  }
   function message(value,error=false){
     const target=$("message");
     // This is an aria-live region: reassigning the identical text on every
@@ -89,6 +95,7 @@
     $("next-pending").disabled=stats.PENDING_HUMAN_REVIEW===0;
     $("next-adjustment").disabled=stats.NEEDS_CHANGES===0;
     $("next-pending-course").disabled=!hasAnotherPendingInCourse();
+    $("next-adjustment-course").disabled=!hasAnotherAdjustmentInCourse();
     // R56: expose each lesson's state in the native picker, preserving option
     // identity and not rewriting its accessible name on ordinary note edits.
     for(const option of $("lessons").options){
@@ -227,6 +234,17 @@
       }
     }
     message("Não há outra aula pendente neste curso.");
+  }
+  function jumpToNextAdjustmentInCourse(){
+    const course=items[current].course_slug;
+    for(let n=1;n<items.length;n++){
+      const idx=(current+n)%items.length;
+      if(items[idx].course_slug===course&&
+        state.get(key(items[idx])).status==="NEEDS_CHANGES"){
+        choose(idx);return;
+      }
+    }
+    message("Não há outra aula com ajustes neste curso.");
   }
   function update(){
     // C185: prevent an in-flight file read from racing with edits, even if a
@@ -559,6 +577,7 @@
   $("next").addEventListener("click",()=>choose(current+1));
   $("next-pending").addEventListener("click",()=>jumpToStatus("PENDING_HUMAN_REVIEW"));
   $("next-pending-course").addEventListener("click",jumpToNextPendingInCourse);
+  $("next-adjustment-course").addEventListener("click",jumpToNextAdjustmentInCourse);
   $("next-adjustment").addEventListener("click",()=>jumpToStatus("NEEDS_CHANGES"));
   ["status","reviewer","evidence","notes"].forEach(id=>$(id).addEventListener("input",update));
   $("export").addEventListener("click",exportCsv);

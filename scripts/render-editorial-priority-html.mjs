@@ -7,6 +7,7 @@ import {resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 import {buildEditorialReviewPriority} from "./build-editorial-review-priority.mjs";
 import {humanRubric} from "./build-editorial-human-checklist.mjs";
+import {validatePriorityReport} from "./validate-editorial-priority-report.mjs";
 
 const css=[
   "body{font:1rem/1.6 system-ui,Arial,sans-serif;color:#171b19;background:#fafafa;margin:0}",
@@ -34,6 +35,7 @@ const escaped=s=>String(s).replace(/[\r\n\u2028\u2029]/gu," ")
   .replace(/"/gu,"&quot;").replace(/'/gu,"&#39;");
 
 export function renderReviewPriorityHtml(report){
+  validatePriorityReport(report);
   assert.equal(report?.release_decision,"HOLD_NO_GO");
   assert.equal(report?.human_review_authenticated,false);
   assert.equal(report?.approval_authority,"NONE");

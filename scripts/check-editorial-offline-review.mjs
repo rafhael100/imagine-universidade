@@ -49,6 +49,17 @@ try{
     html.includes('list.append(button)')&&
     html.includes('list.hidden=true;'),
     "R65 all invalid records listed as keyboard buttons using only textContent");
+  pass(html.includes("function focusAuditError(error)")&&
+    html.includes('$(field).setAttribute("aria-invalid","true")')&&
+    html.includes('auditFindings.includes(error)')&&
+    html.includes('function clearAuditFieldHints()')&&
+    html.includes('button.addEventListener("click",()=>focusAuditError(error))'),
+    "R68 invalid field focus is tied to current audit, with stale state cleared");
+  pass(html.includes('$("audit-errors").addEventListener("keydown"')&&
+    html.includes('event.key==="ArrowUp"||event.key==="ArrowDown"')&&
+    html.includes('event.key==="Home"||event.key==="End"')&&
+    html.includes('event.key==="Escape"'),
+    "R69 keyboard movement for all audit findings supports arrows, edges and Escape");
   pass(html.includes("value='merge'")&&html.includes("value='replace'"),
     "safe merge is the default and replacement is explicit");
   pass(html.includes("id='confirm-export'")&&html.includes("Confirmei que revisao.csv foi salvo"),

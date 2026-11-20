@@ -101,8 +101,9 @@ module.exports=async function({browser,out,check}){
     await auditPage.locator("#courses .course-item").nth(1).click();
     await auditPage.locator("#audit-first-error").click();
     check((await auditPage.locator("#title").innerText()).includes("Visitas:")&&
-      await auditPage.evaluate(()=>document.activeElement.id==="title"),
-      "R63 first-invalid jump crosses course boundaries and focuses lesson heading");
+      await auditPage.evaluate(()=>document.activeElement.id==="reviewer")&&
+      await auditPage.locator("#reviewer").getAttribute("aria-invalid")==="true",
+      "R68 first-invalid jump crosses courses and focuses the invalid reviewer field");
     await auditPage.locator("#reviewer").fill("Equipe Editorial QA");
     await auditPage.locator("#evidence").fill(
       "https://github.com/rafhael100/imagine-universidade/issues/12");
@@ -143,8 +144,9 @@ module.exports=async function({browser,out,check}){
     await auditErrors.nth(1).focus();
     await errorsPage.keyboard.press("Enter");
     check((await errorsPage.locator("#title").innerText()).includes("Leads:")&&
-      await errorsPage.evaluate(()=>document.activeElement.id==="title"),
-      "R66 keyboard Enter on an error jumps to the indicated lesson heading");
+      await errorsPage.evaluate(()=>document.activeElement.id==="reviewer")&&
+      await errorsPage.locator("#reviewer").getAttribute("aria-invalid")==="true",
+      "R68 Enter on an audit error focuses and flags its invalid reviewer field");
     await errorsPage.locator("#notes").fill("Texto com <img src=x onerror=alert(1)> literal");
     check(await errorsPage.locator("#audit-errors button").count()===0&&
       await errorsPage.locator("#audit-errors").isHidden(),
@@ -153,6 +155,63 @@ module.exports=async function({browser,out,check}){
     check(await errorsPage.locator("#audit-errors button.audit-error").count()===2&&
       await errorsPage.locator("#audit-errors img").count()===0,
       "R66 error buttons use textContent; unsanitized note text never creates image HTML");
+    // R69: these are ordinary buttons with optional arrow/Home/End/Escape navigation.
+    await errorsPage.locator("#audit-errors button.audit-error").first().focus();
+    await errorsPage.keyboard.press("ArrowDown");
+    check(await errorsPage.evaluate(()=>document.activeElement===
+      document.querySelectorAll("#audit-errors button.audit-error")[1]),
+      "R69 ArrowDown moves to the next audit finding");
+    await errorsPage.keyboard.press("Home");
+    check(await errorsPage.evaluate(()=>document.activeElement===
+      document.querySelectorAll("#audit-errors button.audit-error")[0]),
+      "R69 Home returns to the first finding");
+    await errorsPage.keyboard.press("End");
+    check(await errorsPage.evaluate(()=>document.activeElement===
+      document.querySelectorAll("#audit-errors button.audit-error")[1]),
+      "R69 End reaches the last finding");
+    await errorsPage.keyboard.press("ArrowUp");
+    check(await errorsPage.evaluate(()=>document.activeElement===
+      document.querySelectorAll("#audit-errors button.audit-error")[0]),
+      "R69 ArrowUp moves back a finding");
+    await errorsPage.keyboard.press("Escape");
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="audit-draft"),
+      "R69 Escape exits the error list without touching editorial data");
+    await errorsPage.locator("#audit-errors button.audit-error").first().focus();
+    await errorsPage.keyboard.press("Enter");
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="reviewer"),
+      "R68 invalid reviewer is directly focusable after keyboard activation");
+    await errorsPage.locator("#reviewer").fill("Equipe Editorial QA");
+    check(await errorsPage.locator("#reviewer").getAttribute("aria-invalid")===null&&
+      await errorsPage.locator("#audit-errors button.audit-error").count()===0,
+      "R68 editing invalid input removes stale aria-invalid and the audit list");
+    await errorsPage.locator("#audit-draft").click();
+    await errorsPage.locator("#audit-errors button.audit-error").first().click();
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="evidence")&&
+      await errorsPage.locator("#evidence").getAttribute("aria-invalid")==="true",
+      "R68 after reviewer correction the remaining evidence error receives focus");
+    const focusA11y=await new AxeBuilder({page:errorsPage})
+      .withTags(["wcag2a","wcag2aa","wcag21a","wcag21aa"]).analyze();
+    check(!focusA11y.violations.some(v=>["serious","critical"].includes(v.impact)),
+      "R70 field-specific invalid audit state retains WCAG 2.1 A/AA browser coverage");
+    await errorsPage.locator("#evidence").fill("https://github.com/rafhael100/imagine-universidade/issues/12");
+    await errorsPage.locator("#notes").fill("=SUM(1,2)");
+    await errorsPage.locator("#audit-draft").click();
+    await errorsPage.locator("#audit-first-error").click();
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="notes")&&
+      await errorsPage.locator("#notes").getAttribute("aria-invalid")==="true",
+      "R71 spreadsheet-formula note is rejected and the notes field receives focus");
+    await errorsPage.locator("#notes").fill("");
+    await errorsPage.locator("#status").selectOption("PENDING_HUMAN_REVIEW");
+    await errorsPage.locator("#audit-draft").click();
+    await errorsPage.locator("#audit-first-error").click();
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="reviewer"),
+      "R71 pending rows with a leftover reviewer focus the reviewer field");
+    await errorsPage.locator("#reviewer").fill("");
+    await errorsPage.locator("#audit-draft").click();
+    await errorsPage.locator("#audit-first-error").click();
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="evidence")&&
+      await errorsPage.locator("#evidence").getAttribute("aria-invalid")==="true",
+      "R71 pending rows with only a leftover evidence URL focus evidence");
     await errorsPage.close();
 
     // R59: course-local adjustment navigation must never leave its course.

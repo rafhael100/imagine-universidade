@@ -67,7 +67,9 @@ export function renderEditorialFulltextHtml(source){
       return '<section aria-labelledby="'+sectionIds[index]+'">'+
         '<h4 id="'+sectionIds[index]+'" tabindex="-1">'+
         escapeReviewText(sectionNames[index])+'</h4><p>'+
-        escapeReviewText(content).replace(/\n/gu,"<br>")+'</p></section>';
+        escapeReviewText(content).replace(/\n/gu,"<br>")+'</p>'+
+        '<p class="queue-nav"><a href="#secoes-aula-'+row.original_position+
+        '">Voltar às seções desta aula</a></p></section>';
     }).join("\n");
     // R156–R157: native, source-bound within-course sequence. Never use
     // attention-priority neighbors as if they were curricular neighbors.
@@ -92,7 +94,8 @@ export function renderEditorialFulltextHtml(source){
         '">Voltar ao índice deste curso</a>'
     ].filter(Boolean).join(" ");
     return '<section aria-label="Texto integral da aula em rascunho">'+
-      "<h3>Texto integral para revisão (rascunho não aprovado)</h3>\n"+
+      '<h3 id="secoes-aula-'+row.original_position+'" tabindex="-1">'+
+      'Texto integral para revisão (rascunho não aprovado)</h3>\n'+
       '<nav aria-label="Seções desta aula: '+escapeReviewText(row.lesson_title)+'">'+
       '<ol class="queue-nav">'+sectionNav+'</ol></nav>\n'+
       text+"\n</section>\n"+

@@ -54,6 +54,13 @@
     }
     return indices[0];
   }
+  // R57: continue within the same course without jumping to other courses.
+  // The current lesson is not another pending item.
+  function hasAnotherPendingInCourse(){
+    return items.some((item,i)=>i!==current&&
+      item.course_slug===items[current].course_slug&&
+      state.get(key(item)).status==="PENDING_HUMAN_REVIEW");
+  }
   function message(value,error=false){
     const target=$("message");
     // This is an aria-live region: reassigning the identical text on every
@@ -81,6 +88,15 @@
     }
     $("next-pending").disabled=stats.PENDING_HUMAN_REVIEW===0;
     $("next-adjustment").disabled=stats.NEEDS_CHANGES===0;
+    $("next-pending-course").disabled=!hasAnotherPendingInCourse();
+    // R56: expose each lesson's state in the native picker, preserving option
+    // identity and not rewriting its accessible name on ordinary note edits.
+    for(const option of $("lessons").options){
+      const lesson=items[Number(option.value)];
+      if(!lesson)continue;
+      const label=lessonPickerLabel(lesson);
+      if(option.textContent!==label)option.textContent=label;
+    }
   }
   function normalizeSearch(value){
     return value.normalize("NFKD").replace(/\p{M}/gu,"").toLocaleLowerCase("pt-BR").trim();
@@ -92,6 +108,8 @@
     NEEDS_CHANGES:"Requer ajustes",
     CLAIMED_HUMAN_APPROVED:"Aceite declarado (não autenticado)"
   };
+  const lessonPickerLabel=lesson=>lesson.lesson_title+" · "+
+    reviewStatusLabels[state.get(key(lesson)).status];
   const reviewResultLabel=lesson=>lesson.course_title+" · "+lesson.lesson_title+
     " · Situação: "+reviewStatusLabels[state.get(key(lesson)).status];
   function updateReviewResults(){
@@ -167,7 +185,7 @@
     items.forEach((item,i)=>{
       if(item.course_slug!==lesson.course_slug)return;
       const option=document.createElement("option");
-      option.value=String(i);option.textContent=item.lesson_title;
+      option.value=String(i);option.textContent=lessonPickerLabel(item);
       picker.append(option);
     });
     picker.value=String(current);
@@ -198,6 +216,17 @@
       }
     }
     message("Não há aulas nesta situação para navegar.");
+  }
+  function jumpToNextPendingInCourse(){
+    const course=items[current].course_slug;
+    for(let n=1;n<items.length;n++){
+      const idx=(current+n)%items.length;
+      if(items[idx].course_slug===course&&
+        state.get(key(items[idx])).status==="PENDING_HUMAN_REVIEW"){
+        choose(idx);return;
+      }
+    }
+    message("Não há outra aula pendente neste curso.");
   }
   function update(){
     // C185: prevent an in-flight file read from racing with edits, even if a
@@ -529,6 +558,7 @@
   $("previous").addEventListener("click",()=>choose(current-1));
   $("next").addEventListener("click",()=>choose(current+1));
   $("next-pending").addEventListener("click",()=>jumpToStatus("PENDING_HUMAN_REVIEW"));
+  $("next-pending-course").addEventListener("click",jumpToNextPendingInCourse);
   $("next-adjustment").addEventListener("click",()=>jumpToStatus("NEEDS_CHANGES"));
   ["status","reviewer","evidence","notes"].forEach(id=>$(id).addEventListener("input",update));
   $("export").addEventListener("click",exportCsv);

@@ -1,0 +1,50 @@
+name: UNI ERD R185 R188 Fragment graph QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r185-r188-fragment-graph-2026-11-20
+    paths:
+      - 'scripts/check-editorial-fragment-graph.mjs'
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R185-R188-GRAFO-FRAGMENTOS-2026-11-20.md'
+      - '.github/workflows/uni-erd-r185-r188-fragment-graph-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r185-r188-fragment-graph
+  cancel-in-progress: false
+
+jobs:
+  fragment-graph-and-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate exact commit, complete reader link graph, integrity and 13 gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r185-r188-fragment-graph-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/check-editorial-fragment-graph.mjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-editorial-rubric-jumps.mjs
+          node scripts/check-editorial-section-deeplinks.mjs
+          node scripts/check-editorial-section-returns.mjs
+          node scripts/check-editorial-curricular-index.mjs
+          node scripts/check-editorial-fragment-graph.mjs
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r185-graph.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r185-graph.html"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"

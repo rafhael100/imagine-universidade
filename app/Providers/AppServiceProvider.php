@@ -9,6 +9,9 @@ use App\Domain\Access\PortalAuthority;
 use App\Domain\Access\UnavailablePortalAuthority;
 use App\Domain\Tutor\TutorGateway;
 use App\Domain\Tutor\DisabledTutorGateway;
+use Illuminate\Foundation\Events\DiagnosingHealth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 final class AppServiceProvider extends ServiceProvider
@@ -26,5 +29,20 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // The framework's default /up only proves PHP boot. The staging
+        // session store requires PostgreSQL; health must be negative if the
+        // configured database is unavailable. This never authorizes access.
+        Event::listen(static function (DiagnosingHealth $event): void {
+            try {
+                $row = DB::selectOne('SELECT 1 AS health_ready');
+
+                if ((int) ($row->health_ready ?? 0) !== 1) {
+                    throw new \RuntimeException('health_query_failed');
+                }
+            } catch (\Throwable) {
+                // No DSN, SQLSTATE, connection user or secret in this error.
+                throw new \RuntimeException('health_unavailable');
+            }
+        });
     }
 }

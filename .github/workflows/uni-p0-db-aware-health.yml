@@ -1,0 +1,68 @@
+name: UNI P0 database-aware readiness (synthetic, no deploy)
+
+on:
+  push:
+    branches:
+      - review/uni-p0-db-aware-health-2026-11-20
+    paths:
+      - .github/workflows/uni-p0-db-aware-health.yml
+      - app/Providers/AppServiceProvider.php
+      - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-staging-pg-pre-migrate.php
+      - scripts/qa-staging-private-http-probe.php
+      - scripts/qa-p0-db-health-probe.php
+      - ops/staging/Dockerfile.php
+      - ops/staging/Dockerfile.nginx
+      - ops/staging/compose.yaml
+      - ops/staging/nginx.conf
+      - docs/UNI-P0-DATABASE-READY-2026-11-20.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-p0-db-aware-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  db-readiness:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout exact isolated revision
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify guards, lint and deny-all
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-p0-db-aware-health-2026-11-20"
+          test "$GITHUB_EVENT_NAME" = push
+          test ! -e .env && test ! -e .env.production && test ! -e ops/staging/.env.staging
+          test -f composer.lock
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test "$(docker context show)" = default
+          bash -n scripts/qa-staging-postgres-http.sh
+          php -l app/Providers/AppServiceProvider.php
+          php -l scripts/qa-p0-db-health-probe.php
+          node ops/staging/check-release-gates.mjs
+          node ops/staging/check-compose-static.mjs
+      - name: Build disposable images from source and composer.lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker build -f ops/staging/Dockerfile.php -t "${tag}-php" .
+          docker build -f ops/staging/Dockerfile.nginx -t "${tag}-nginx" .
+      - name: Test DB-dependent healthy-unhealthy-recovery with private deny
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          bash scripts/qa-staging-postgres-http.sh "${tag}-php" "${tag}-nginx"
+      - name: Report scope
+        run: echo 'Disposable PG18, FPM and Nginx health only. No private VPS or Portal authority; HOLD_NO_GO.'

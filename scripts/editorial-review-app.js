@@ -7,16 +7,24 @@
     status:"PENDING_HUMAN_REVIEW",reviewer:"",evidence:"",notes:""
   }]));
   let current=0,dirty=false,importing=false,exportPendingSnapshot=null;
-  let lastAuditErrorIndex=null;
+  let lastAuditErrorIndex=null,auditFindings=[];
   // An initiated browser download does not prove that the file reached disk.
   function invalidateExportAcknowledgement(){
     exportPendingSnapshot=null;
     $("confirm-export").disabled=true;
   }
+  // R68: a field flagged by an earlier audit cannot remain invalid after an
+  // edit, import or a move to another lesson. The current audit is ephemeral.
+  function clearAuditFieldHints(){
+    for(const id of ["status","reviewer","evidence","notes"])
+      $(id).removeAttribute("aria-invalid");
+  }
   // ERD-R62: an audit result is a temporary observation of the local draft,
   // never a persisted editorial signoff. A subsequent edit invalidates it.
   function invalidateAudit(){
     lastAuditErrorIndex=null;
+    auditFindings=[];
+    clearAuditFieldHints();
     $("audit-first-error").disabled=true;
     if($("audit-result").textContent!=="")$("audit-result").textContent="";
     // R65: never leave a stale invalid-record list after an edit/import.
@@ -198,6 +206,7 @@
     }
   }
   function render(){
+    clearAuditFieldHints();
     const lesson=items[current],row=state.get(key(lesson));
     const nav=$("courses");
     nav.replaceChildren();
@@ -312,6 +321,32 @@
         throw Error("Informe issue/PR de evidência da Universidade: "+id);
     }
   }
+  // R68: focus the exact invalid editor control instead of stopping at a
+  // heading; this also announces the reason to a screen reader.
+  function auditFieldFor(error){
+    const reason=error.reason;
+    if(reason.includes("Situação inválida"))return "status";
+    if(reason.includes("Observações")||reason.includes("Caracteres de controle"))return "notes";
+    if(reason.includes("Apague nome/evidência")){
+      const record=state.get(key(items[error.index]));
+      return record.reviewer?"reviewer":"evidence";
+    }
+    if(reason.includes("Informe revisor"))return "reviewer";
+    if(reason.includes("Informe issue/PR"))return "evidence";
+    return null;
+  }
+  function focusAuditError(error){
+    // Reject a stale button callback after the draft has been edited.
+    if(importing||!auditFindings.includes(error))return;
+    choose(error.index);
+    const field=auditFieldFor(error);
+    if(field){
+      $(field).setAttribute("aria-invalid","true");
+      $(field).focus();
+    }
+    message("Inconsistência local: "+error.reason+
+      ". Corrija o campo e verifique novamente; não é aceite autenticado.",true);
+  }
   // ERD-R62: validate all 35 records before CSV export, collect failures
   // without sending notes, names or any draft data over the network.
   // Only a human-triggered audit changes the live-region summary.
@@ -321,6 +356,8 @@
       return;
     }
     const errors=[];
+    auditFindings=[];
+    clearAuditFieldHints();
     const list=$("audit-errors");
     list.replaceChildren();
     list.hidden=true;
@@ -328,6 +365,7 @@
       try{valid(state.get(key(item)),key(item));}
       catch(error){errors.push({index,reason:String(error.message)});}
     });
+    auditFindings=errors;
     if(errors.length===0){
       lastAuditErrorIndex=null;
       $("audit-first-error").disabled=true;
@@ -344,7 +382,7 @@
       button.className="audit-error";
       button.textContent=String(error.index+1)+"/35 · "+
         items[error.index].lesson_title+" · "+error.reason;
-      button.addEventListener("click",()=>choose(error.index));
+      button.addEventListener("click",()=>focusAuditError(error));
       list.append(button);
     }
     list.hidden=false;
@@ -640,6 +678,24 @@
       buttons[buttons.length-1].focus();
     }
   });
+  // R69: move through audit failures without 35 Tab presses. Native Enter
+  // activates the button; Escape returns to the audit command.
+  $("audit-errors").addEventListener("keydown",event=>{
+    const buttons=[...$("audit-errors").querySelectorAll("button.audit-error")];
+    const index=buttons.indexOf(event.target);
+    if(index<0)return;
+    if(event.key==="Escape"){
+      event.preventDefault();
+      $("audit-draft").focus();
+    }else if(event.key==="ArrowUp"||event.key==="ArrowDown"){
+      event.preventDefault();
+      const delta=event.key==="ArrowUp"?-1:1;
+      buttons[Math.max(0,Math.min(index+delta,buttons.length-1))].focus();
+    }else if(event.key==="Home"||event.key==="End"){
+      event.preventDefault();
+      buttons[event.key==="Home"?0:buttons.length-1].focus();
+    }
+  });
   $("lessons").addEventListener("change",e=>choose(Number(e.target.value)));
   $("previous").addEventListener("click",()=>choose(current-1));
   $("next").addEventListener("click",()=>choose(current+1));
@@ -653,7 +709,7 @@
   $("export-summary").addEventListener("click",exportSummary);
   $("audit-draft").addEventListener("click",auditDraft);
   $("audit-first-error").addEventListener("click",()=>{
-    if(lastAuditErrorIndex!==null&&!importing)choose(lastAuditErrorIndex);
+    if(auditFindings.length&&!importing)focusAuditError(auditFindings[0]);
   });
   $("import").addEventListener("change",e=>{void importCsv(e.target.files[0]);});
   window.addEventListener("beforeunload",e=>{

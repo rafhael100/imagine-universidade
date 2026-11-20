@@ -41,6 +41,7 @@ export function renderEditorialFulltextHtml(source){
     const row=priority.items[position++];
     assert.ok(row&&fullSource.has(row.id),"Full-text identity missing");
     const body=fullSource.get(row.id);
+    const rubricId="rubrica-aula-"+row.original_position;
     assert.equal(sha256(body),row.content_sha256,
       "Full-text body diverges from its source-bound SHA-256");
     const paragraphs=body.replace(/\r\n/gu,"\n").split(/\n\n+/u);
@@ -96,11 +97,16 @@ export function renderEditorialFulltextHtml(source){
     return '<section aria-label="Texto integral da aula em rascunho">'+
       '<h3 id="secoes-aula-'+row.original_position+'" tabindex="-1">'+
       'Texto integral para revisão (rascunho não aprovado)</h3>\n'+
+      '<p class="queue-nav"><a href="#'+rubricId+'">'+
+      'Ir às seis perguntas de revisão desta aula</a></p>\n'+
       '<nav aria-label="Seções desta aula: '+escapeReviewText(row.lesson_title)+'">'+
       '<ol class="queue-nav">'+sectionNav+'</ol></nav>\n'+
       text+"\n</section>\n"+
       '<p class="queue-nav"><strong>Navegação por curso:</strong> '+
-      lessonLinks+'</p>\n'+marker;
+      lessonLinks+'</p>\n'+
+      '<p id="'+rubricId+'" tabindex="-1" class="warning">'+
+      'Seis perguntas para leitura humana: não constituem aceite autenticado.</p>\n'+
+      marker;
   });
   assert.equal(position,35,"Every priority article must receive exactly one source body");
 

@@ -35,7 +35,7 @@ export function renderEditorialFulltextHtml(source){
   assert.equal(fullSource.size,35);
   const marker="<h3>Perguntas para leitura (não são aceite)</h3>";
   let position=0;
-  const html=renderReviewPriorityHtml(priority).replaceAll(marker,()=>{
+  const bodyHtml=renderReviewPriorityHtml(priority).replaceAll(marker,()=>{
     const row=priority.items[position++];
     assert.ok(row&&fullSource.has(row.id),"Full-text identity missing");
     const body=fullSource.get(row.id);
@@ -52,6 +52,26 @@ export function renderEditorialFulltextHtml(source){
       text+"\n</section>\n"+marker;
   });
   assert.equal(position,35,"Every priority article must receive exactly one source body");
+
+  // R146: direct native keyboard entry into the *first priority article*
+  // for each course. The queue ordering is not the curriculum ordering.
+  const courseNames=new Set();
+  const courseLinks=source.courses.map(course=>{
+    assert.ok(!courseNames.has(course.slug),"Duplicate course shortcut identity");
+    courseNames.add(course.slug);
+    const target=priority.items.find(row=>row.id.startsWith(course.slug+"/"));
+    assert.ok(target,"Every course needs one reachable lesson");
+    return '<li><a href="#aula-'+target.original_position+'">'+
+      escapeReviewText(course.title)+" · "+course.lessons.length+
+      " aulas · iniciar leitura na fila deste curso</a></li>";
+  }).join("\n");
+  assert.equal(courseNames.size,10,"10 unique course shortcuts required");
+  const courseMarker="<p>Ordem: aulas com sinais de atenção primeiro; empates seguem o currículo. Total: 35 aulas, 210 perguntas para revisão humana, 13 gates bloqueados.</p>";
+  assert.ok(bodyHtml.includes(courseMarker),"Canonical warning order changed unexpectedly");
+  const html=bodyHtml.replace(courseMarker,courseMarker+"\n"+
+    '<nav aria-label="Acesso rápido aos cursos"><h2>Ir diretamente a um curso</h2>'+
+    '<ol class="grid">'+courseLinks+"</ol></nav>");
+
   assert.ok(html.includes("HOLD_NO_GO")&&html.includes("13/13 NOT_VERIFIED"),
     "Full-text rendering must preserve release guards");
   assert.ok(!/<script\b/iu.test(html),"The review handoff is deliberately script-free");

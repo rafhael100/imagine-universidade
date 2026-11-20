@@ -36,6 +36,49 @@ module.exports=async function({browser,out,check}){
       "C158 full real draft lesson shown, no public API");
     check((await page.locator("#title").innerText()).includes("Visitas:"),
       "C158 selected first lesson matches the source");
+    // ERD-R56-R58: browser exercises the actual generated offline picker,
+    // showing review status without mistaking a local claim for signoff.
+    // Isolate the scenario so it cannot alter existing regression fixtures.
+    const coursePage=await browserContext.newPage();
+    coursePage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await coursePage.goto(url,{waitUntil:"load"});
+    const picker=coursePage.locator("#lessons");
+    check((await picker.locator("option").first().textContent()).includes("Pendente"),
+      "R56 initial lesson-picker option explicitly shows pending review");
+    await coursePage.evaluate(()=>{
+      const option=document.querySelector('#lessons option[value="0"]');
+      window.__uniPickerFirst=option;
+      window.__uniPickerRewrites=0;
+      new MutationObserver(rows=>{window.__uniPickerRewrites+=rows.length;}).observe(
+        option,{childList:true,characterData:true,subtree:true});
+    });
+    await coursePage.locator("#notes").fill("Revisão sintética em andamento");
+    check(await coursePage.evaluate(async()=>{
+      await Promise.resolve();return window.__uniPickerRewrites===0;
+    }),"R56 note-only changes do not repeatedly relabel a native option");
+    await coursePage.locator("#status").selectOption("NEEDS_CHANGES");
+    check(await coursePage.evaluate(async()=>{
+      await Promise.resolve();
+      return document.querySelector('#lessons option[value="0"]')===window.__uniPickerFirst&&
+        window.__uniPickerFirst.textContent.includes("Requer ajustes")&&
+        window.__uniPickerRewrites>0;
+    }),"R56 status updates option in place, retaining native picker identity");
+    check(await coursePage.locator("#next-pending-course").isEnabled(),
+      "R57 next pending in current course enabled while another remains");
+    await coursePage.locator("#next-pending-course").click();
+    check((await coursePage.locator("#title").innerText()).includes("Leads:"),
+      "R57 course-local navigation opens next pending lesson");
+    const courseOptions=await picker.locator("option").evaluateAll(nodes=>nodes.map(n=>n.value));
+    for(const value of courseOptions){
+      await picker.selectOption(value);
+      await coursePage.locator("#status").selectOption("NEEDS_CHANGES");
+    }
+    check(await coursePage.locator("#next-pending-course").isDisabled(),
+      "R57 local pending jump disabled after current course has none, without leaving course");
+    check(await coursePage.locator("#next-pending").isEnabled(),
+      "R57 global pending navigation remains available for the other courses");
+    await coursePage.close();
+
     // ERD-R51: search results must expose status, update in place, and
     // explicitly reject false implications of authenticated approval.
     await page.locator("#review-search").fill("Visitas");

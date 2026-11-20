@@ -49,7 +49,7 @@ jobs:
           node -e 'const g=require("./ops/release-gates.json");if(g.release_decision!=="HOLD_NO_GO"||Object.keys(g.blocking_evidence).length!==13||Object.values(g.blocking_evidence).some(v=>v.status!=="NOT_VERIFIED"))process.exit(1)'
           node scripts/build-editorial-review-priority.mjs --json > "$RUNNER_TEMP/uni-35-lesson-priority.json"
           node scripts/build-editorial-review-priority.mjs --markdown > "$RUNNER_TEMP/uni-35-lesson-priority.md"
-          test "$(grep -Ec '^\\| [0-9]+ \\|' "$RUNNER_TEMP/uni-35-lesson-priority.md")" -eq 35
+          test "$(grep -Ec '^[|] [0-9]+ [|]' "$RUNNER_TEMP/uni-35-lesson-priority.md")" -eq 35
           node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/uni-35-lesson-priority.json","utf8"));if(j.items.length!==35||j.human_rubric_checks!==210||j.release_decision!=="HOLD_NO_GO"||j.items.some(x=>x.authenticated_signoff))process.exit(1)'
           echo "PASS: synthetic risk reading order and 35 drafts; no editorial signoff."
       - name: Preserve human-reading queue, never a permission ledger

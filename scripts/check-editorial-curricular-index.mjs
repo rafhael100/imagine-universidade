@@ -14,7 +14,7 @@ const nav=doc.match(/<nav aria-label="Índice curricular de aulas">([\s\S]*?)<\/
 assert.ok(nav,"Curricular navigation landmark must exist");
 assert.ok(nav[1].includes("Nenhuma aula foi aprovada."));
 const sections=[...nav[1].matchAll(
-  /<section aria-labelledby="curriculo-curso-(\d+)"><h3 id="curriculo-curso-\d+">([^<]+)<\/h3><ol>([\s\S]*?)<\/ol><\/section>/gu)];
+  /<section aria-labelledby="curriculo-curso-(\d+)"><h3 id="curriculo-curso-\d+" tabindex="-1">([^<]+)<\/h3><ol>([\s\S]*?)<\/ol><\/section>/gu)];
 assert.equal(sections.length,10,"Ten course sections required");
 const seen=new Set();
 let validated=0;

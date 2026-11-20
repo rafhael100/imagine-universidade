@@ -15,7 +15,8 @@ trap stageFailure ERR
 [[ "${CI:-}" == "true" && "${GITHUB_ACTIONS:-}" == "true" ]] || fail "CI only"
 if [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" &&
-     "${GITHUB_REF:-}" == "refs/heads/fix/uni-c108-private-flow-2026-11-17" ]] ||
+     ( "${GITHUB_REF:-}" == "refs/heads/fix/uni-c108-private-flow-2026-11-17" ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-private-health-runtime-2026-11-20" ) ]] ||
     fail "push QA only on authorized review branch"
 elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" ]] ||
@@ -75,6 +76,25 @@ unset postgresProbe
 [[ "$ready" == 1 ]] || fail "authenticated PostgreSQL TCP query did not become ready"
 
 # DDL is run once by the SEPARATE migration owner, never runtime.
+# Always inspect the Laravel-resolved connection AND authenticated SQL on
+# the disposable network BEFORE the first migration or any SQL DDL.
+stagingPgStage=laravel_sql_preflight
+docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:mode=1777 \
+  --tmpfs /var/www/html/storage:mode=1777 \
+  --tmpfs /var/www/html/bootstrap/cache:mode=1777 \
+  --env APP_ENV=testing --env APP_DEBUG=false \
+  --env APP_KEY='base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
+  --env DB_CONNECTION=pgsql --env DB_HOST=db --env DB_PORT=5432 \
+  --env DB_DATABASE=uni_staging_ci_only \
+  --env DB_USERNAME=uni_ci_migration_owner \
+  --env DB_PASSWORD=FAKE_OWNER_CI_ONLY \
+  --env SESSION_DRIVER=array --env CACHE_STORE=array \
+  "$phpImage" sh -ec \
+  'mkdir -p storage/logs storage/framework/views storage/framework/cache/data storage/framework/sessions;exec php' \
+  < scripts/qa-staging-pg-pre-migrate.php
+
 stagingPgStage=migrations
 docker run --rm --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
@@ -123,7 +143,11 @@ stagingPgStage=web_start
 docker run -d --name "$web" --network "$network" --network-alias web \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   --tmpfs /var/cache/nginx:mode=1777 --tmpfs /var/run:mode=1777 \
-  --tmpfs /tmp:mode=1777 "$nginxImage" nginx -g 'daemon off;' >/dev/null
+  --tmpfs /tmp:mode=1777 \
+  --health-cmd 'wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up' \
+  --health-interval 2s --health-timeout 5s --health-retries 2 \
+  --health-start-period 0s \
+  "$nginxImage" nginx -g 'daemon off;' >/dev/null
 
 # Full HTTP path through nginx -> PHP -> real PG18 sessions, with NO Portal
 # grants enabled. Probe only 403/health, never synthetic grants or payments.
@@ -136,4 +160,37 @@ stagingPgStage=session_storage
 sessionCount="$(docker exec "$db" psql -U uni_ci_migration_owner \
   -d uni_staging_ci_only -tA -c 'SELECT COUNT(*) FROM public.sessions')"
 [[ "$sessionCount" =~ ^[0-9]+$ ]] || fail "session count unavailable"
+# P0 runtime proof: the real Nginx health command must transition
+# healthy -> unhealthy when PHP-FPM is stopped -> healthy after recovery.
+# This is an isolated synthetic runner only, NEVER a staging VPS operation.
+stagingPgStage=health_positive
+wait_web_health() {
+  local expected="$1" observed=""
+  local deadline=$((SECONDS+40))
+  while ((SECONDS < deadline)); do
+    observed="$(timeout 3s docker inspect --format '{{.State.Health.Status}}' "$web" 2>/dev/null)" || return 1
+    [[ "$observed" == "$expected" ]] && return 0
+    sleep 1
+  done
+  return 1
+}
+wait_web_health healthy || fail "real Nginx/FPM/Laravel probe failed to become healthy"
+stagingPgStage=health_negative
+docker stop -t 2 "$app" >/dev/null
+# The probe must fail: static 200 on /up would be a dangerous false positive.
+if timeout 5s docker exec "$web" wget -q -T 3 -O /dev/null \
+  http://127.0.0.1:8080/up >/dev/null 2>&1; then
+  fail "health returned success while PHP-FPM was stopped"
+fi
+wait_web_health unhealthy || fail "health remained positive after PHP-FPM stopped"
+stagingPgStage=health_recovery
+docker start "$app" >/dev/null
+wait_web_health healthy || fail "real Nginx/FPM/Laravel probe did not recover"
+# After recovery, forged Portal headers must still be denied by actual HTTP.
+stagingPgStage=post_recovery_deny_all
+docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
+  "$phpImage" php < scripts/qa-staging-private-http-probe.php
+echo "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority."
+
 echo "PASS synthetic 3-service staging PG18: owner migrations, separate runtime role, private HTTP and session storage query. No host ports."

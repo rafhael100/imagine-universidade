@@ -35,7 +35,7 @@ deny("one corrupted lesson",Buffer.from(html.replace("Uma visita ocorre","Uma VI
 deny("injected remote link",Buffer.from(html.replace("</body></html>",
   '<a href="https://example.org">externo</a></body></html>')));
 deny("missing source section",Buffer.from(html.replace(
-  /<h3 id="secoes-aula-\\d+" tabindex="-1">Texto integral para revisão \\(rascunho não aprovado\\)<\\/h3>/u,'')));
+  /<h3 id="secoes-aula-\d+" tabindex="-1">Texto integral para revisão \(rascunho não aprovado\)<\/h3>/u,'')));
 deny("trailing bytes",Buffer.concat([Buffer.from(html),Buffer.from("X")]));
 deny("UTF-8 BOM",Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),Buffer.from(html)]));
 const changed=structuredClone(source);

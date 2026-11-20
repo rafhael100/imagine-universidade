@@ -86,14 +86,23 @@ try {
         "CASE WHEN pg_is_in_recovery() THEN 1 ELSE 0 END AS in_recovery"
     )->fetch(\PDO::FETCH_ASSOC);
     if (!is_array($row) || $row['db_name'] !== 'uni_ci' ||
-        $row['db_role'] !== 'uni_ci' || (int)$row['server_port'] !== 5432 ||
-        (int)$row['version_num'] < 180000 || (int)$row['version_num'] >= 190000 ||
-        (int)$row['in_recovery'] !== 0 ||
-        !is_string($row['server_address']) ||
+        $row['db_role'] !== 'uni_ci') {
+        holdPgQa('SQL database name or connected role differs from synthetic allowlist');
+    }
+    if ((int)$row['server_port'] !== 5432) {
+        holdPgQa('SQL server port is not the local synthetic port');
+    }
+    if ((int)$row['version_num'] < 180000 || (int)$row['version_num'] >= 190000) {
+        holdPgQa('SQL server version is not PostgreSQL 18');
+    }
+    if ((int)$row['in_recovery'] !== 0) {
+        holdPgQa('SQL connected to read-only recovery server');
+    }
+    if (!is_string($row['server_address']) ||
         filter_var($row['server_address'], FILTER_VALIDATE_IP) === false ||
         filter_var($row['server_address'],
             FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false) {
-        holdPgQa('SQL identity, PostgreSQL version or private endpoint did not match');
+        holdPgQa('SQL server endpoint is not an approved local/private test address');
     }
 } catch (\Throwable $exception) {
     // Never print SQL exceptions: DSNs, credentials and internal addresses may leak.

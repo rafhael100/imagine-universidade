@@ -16,6 +16,10 @@ A base é a HEAD exata `5000a5d32cfe579aad994e091c0374b143928d81`, não a PR his
 4. Reiniciar somente esse contêiner; exigir consulta SQL autenticada e contagem de sessões persistida igual à anterior, então repetir a exigência HTTP de 403 sem autoridade Portal.
 5. Apagar rede, contêineres e volume descartáveis pelo `trap`. Nenhuma migração ou alteração de banco real, sem chaves reais e sem liberação de usuário.
 
+**Falha reproduzida:** [Actions push #44826125212](https://github.com/rafhael100/imagine-universidade/actions/runs/44826125212), HEAD `ba412c7375d800530d12f94a2a2e8ec4a645cab9`, concluiu **failure**: o novo probe detectou status HTTP fora da política 403/503 em `/universidade/private/app` quando o PostgreSQL foi parado. Passaram antes dessa falha as provas SQL pré-migração, a compilação de imagens e a saúde FPM. Não considerar essa SHA aprovada. A hipótese tratada é que sessão database pode falhar antes do middleware `university.grant`.
+
+**Correção candidata isolada:** `bootstrap/app.php` agora trata somente `QueryException`/`PDOException` dentro de rotas privadas como 503 genérico com `Retry-After`, `no-store` e CSP. Não concede grant, não recupera sessões artificialmente e não altera as demais rotas. A prova dinâmica de retorno 403 depois da reconexão permanece obrigatória; verificar a SHA e o status da nova CI.
+
 **Importante:** A resposta de indisponibilidade de banco é um resultado de laboratório a confirmar na SHA da execução. A CI pendente/vermelha representa uma lacuna reprodutível, não um teste aprovado. Reiniciar um contêiner não comprova backup, restauração de snapshot, rollback de versão, RPO/RTO nem disponibilidade da VPS.
 
 ## Gates preservados

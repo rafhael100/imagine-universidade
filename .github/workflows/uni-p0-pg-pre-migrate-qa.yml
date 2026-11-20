@@ -1,0 +1,99 @@
+name: UNI P0 synthetic PostgreSQL pre-migration proof
+
+on:
+  push:
+    branches:
+      - review/uni-p0-pg-before-migrations-2026-11-20
+    paths:
+      - scripts/qa-pg-pre-migrate.php
+      - scripts/check-qa-pg-pre-migrate.mjs
+      - scripts/qa-compose-entrypoint.sh
+      - .github/workflows/uni-p0-pg-pre-migrate-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-p0-pre-migrate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-migration-boundary:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: uni_ci
+          POSTGRES_USER: uni_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U uni_ci -d uni_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      CI: 'true'
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: uni_ci
+      DB_USERNAME: uni_ci
+      DB_PASSWORD: synthetic_ci_only
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    steps:
+      - name: Checkout exact isolated successor without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require isolated review branch and unconfigured checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-p0-pg-before-migrations-2026-11-20"
+          test ! -e .env && test ! -e .env.testing && test ! -e .env.production
+          test ! -e bootstrap/cache/config.php
+          test -f composer.lock
+          bash -n scripts/qa-compose-entrypoint.sh
+      - name: PHP 8.3 and locked Composer runtime
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, pdo_sqlite, mbstring, dom, xml, sodium
+          tools: composer:v2
+          coverage: none
+      - name: Negative connection-override tests before any SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l scripts/qa-pg-pre-migrate.php
+          node scripts/check-qa-pg-pre-migrate.mjs
+      - name: Install exact Composer lock without scripts/plugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          composer validate --no-check-publish
+          composer install --no-interaction --prefer-dist --no-progress --no-plugins --no-scripts
+      - name: Require effective configuration AND authenticated live PG18 SQL before first migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/qa-pg-pre-migrate.php
+      - name: Migrate only synthetic CI database after successful preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          php artisan migrate --database=pgsql --force --no-interaction
+          php artisan migrate:status --database=pgsql
+          php scripts/check-pg-schema.php
+          node ops/staging/check-release-gates.mjs
+          echo 'PASS: synthetic-only local PostgreSQL migration; 13 gates remain HOLD_NO_GO.'

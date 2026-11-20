@@ -47,6 +47,8 @@ vendor/bin/phpunit --testsuite Unit
 vendor/bin/phpunit --testsuite Feature
 
 echo "[QA] Apenas PostgreSQL 18 sintético em 127.0.0.1:5432."
+# Verify the actual Laravel connection and an authenticated local synthetic PG18 SQL query BEFORE DDL.
+php scripts/qa-pg-pre-migrate.php
 php artisan migrate:fresh --database=pgsql --force
 php artisan migrate:status --database=pgsql
 php scripts/check-pg-schema.php

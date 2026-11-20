@@ -216,8 +216,8 @@ wait_web_health unhealthy || fail "Nginx health falsely stayed healthy with Post
 # The failing /up must not reveal SQL, environment or backtraces, even though
 # it is only a private Docker readiness endpoint.
 stagingPgStage=postgres_outage_health_response
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \\
-  --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \\
+docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-p0-db-health-probe.php
 stagingPgStage=postgres_outage_private_deny
 docker run --rm -i --network "$network" --read-only --cap-drop ALL \

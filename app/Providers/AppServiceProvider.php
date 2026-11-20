@@ -37,11 +37,11 @@ final class AppServiceProvider extends ServiceProvider
                 $row = DB::selectOne('SELECT 1 AS health_ready');
 
                 if ((int) ($row->health_ready ?? 0) !== 1) {
-                    throw new \\RuntimeException('health_query_failed');
+                    throw new \RuntimeException('health_query_failed');
                 }
-            } catch (\\Throwable) {
+            } catch (\Throwable) {
                 // No DSN, SQLSTATE, connection user or secret in this error.
-                throw new \\RuntimeException('health_unavailable');
+                throw new \RuntimeException('health_unavailable');
             }
         });
     }

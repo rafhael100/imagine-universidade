@@ -1,0 +1,50 @@
+name: UNI ERD R170 R174 Portal revocation transitions QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r170-r174-portal-revocation-transitions-2026-11-20
+    paths:
+      - 'scripts/check-portal-revocation-transitions.php'
+      - 'docs/UNI-ERD-R170-R174-REVOGACAO-PORTAL-2026-11-20.md'
+      - '.github/workflows/uni-erd-r170-r174-portal-revocation-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r170-r174-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  portal-revocation-transition-contract:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check exact SHA and preserve the original deny-all production code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r170-r174-portal-revocation-transitions-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          git cat-file -e  a93cc0214026c7131d198b5594f78a6257964dd5^{commit}
+          git diff --name-only a93cc0214026c7131d198b5594f78a6257964dd5 "$GITHUB_SHA" | \
+            grep -v -x -e 'scripts/check-portal-revocation-transitions.php' \
+              -e 'docs/UNI-ERD-R170-R174-REVOGACAO-PORTAL-2026-11-20.md' \
+              -e '.github/workflows/uni-erd-r170-r174-portal-revocation-qa.yml' \
+              > "$RUNNER_TEMP/uni-r170-unexpected.txt" || true
+          test ! -s "$RUNNER_TEMP/uni-r170-unexpected.txt"
+          php -l scripts/check-portal-revocation-transitions.php
+          php scripts/check-portal-revocation-transitions.php
+          php scripts/check-portal-authority-negative.php
+          php scripts/check-portal-deny-reason-hygiene.php
+          php scripts/check-portal-default-deny.php
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"

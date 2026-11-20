@@ -1,0 +1,51 @@
+name: UNI ERD R194 R198 Navigation manifest QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r194-r198-navigation-manifest-2026-11-20
+    paths:
+      - 'scripts/build-editorial-navigation-manifest.mjs'
+      - 'scripts/verify-editorial-navigation-manifest.mjs'
+      - 'scripts/check-editorial-navigation-manifest.mjs'
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R194-R198-MANIFESTO-NAVEGACAO-2026-11-20.md'
+      - '.github/workflows/uni-erd-r194-r198-navigation-manifest-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r194-r198-navigation-manifest
+  cancel-in-progress: false
+
+jobs:
+  navigation-source-contract:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Exact SHA, source integrity, negative tests, and release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r194-r198-navigation-manifest-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/build-editorial-navigation-manifest.mjs
+          node --check scripts/verify-editorial-navigation-manifest.mjs
+          node --check scripts/check-editorial-navigation-manifest.mjs
+          node scripts/build-editorial-navigation-manifest.mjs > "$RUNNER_TEMP/uni-r194-navigation.json"
+          node scripts/verify-editorial-navigation-manifest.mjs "$RUNNER_TEMP/uni-r194-navigation.json"
+          node scripts/check-editorial-navigation-manifest.mjs
+          node scripts/check-editorial-fragment-graph.mjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"

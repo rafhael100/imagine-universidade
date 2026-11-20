@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/uni-p0-private-health-transitions.yml
       - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-staging-pg-pre-migrate.php
       - scripts/qa-staging-private-http-probe.php
       - ops/staging/Dockerfile.php
       - ops/staging/Dockerfile.nginx

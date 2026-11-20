@@ -1,0 +1,48 @@
+name: UNI ERD R127 R129 Portal authority negative QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r127-r129-portal-authority-negative-2026-11-20
+    paths:
+      - 'scripts/check-portal-authority-negative.php'
+      - 'scripts/check-portal-default-deny.php'
+      - 'app/Domain/Access/PortalAccessGate.php'
+      - 'app/Domain/Access/PortalGrant.php'
+      - 'app/Domain/Access/UnavailablePortalAuthority.php'
+      - 'app/Providers/AppServiceProvider.php'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R127-R129-PORTAL-NEGATIVAS-2026-11-20.md'
+      - '.github/workflows/uni-erd-r127-r129-portal-authority-negative-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r127-r129-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  synthetic-authority-negative-qa:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout exact SHA without retained credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert Portal authority remains deny-all by default
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r127-r129-portal-authority-negative-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          php -l scripts/check-portal-authority-negative.php
+          php scripts/check-portal-authority-negative.php
+          php scripts/check-portal-default-deny.php
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+          echo "PASS: fail-closed synthetic Portal authority and all release gates blocked."

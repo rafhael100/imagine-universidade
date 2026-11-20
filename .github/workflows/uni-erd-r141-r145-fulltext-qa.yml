@@ -1,0 +1,49 @@
+name: UNI ERD R141 R145 Fulltext offline review QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r141-r145-fulltext-offline-2026-11-20
+    paths:
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/verify-editorial-fulltext-html.mjs'
+      - 'scripts/check-editorial-fulltext-html.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/build-editorial-review-priority.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R141-R145-LEITURA-INTEGRAL-OFFLINE-2026-11-20.md'
+      - '.github/workflows/uni-erd-r141-r145-fulltext-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r141-r145-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-bound-fulltext:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify exact HEAD and offline source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r141-r145-fulltext-offline-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-fulltext-html.mjs
+          node --check scripts/verify-editorial-fulltext-html.mjs
+          node --check scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r141-fulltext.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r141-fulltext.html"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"

@@ -1,0 +1,47 @@
+name: UNI ERD R133 R136 Editorial queue links QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r133-r136-editorial-review-queue-links-2026-11-20
+    paths:
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/check-editorial-priority-queue-links.mjs'
+      - 'scripts/check-verify-editorial-priority-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R133-R136-EDITORIAL-QUEUE-LINKS-2026-11-20.md'
+      - '.github/workflows/uni-erd-r133-r136-editorial-queue-links-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r133-r136-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  editorial-queue-native-navigation:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Exact SHA checkout without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Structural navigation, provenance and all release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r133-r136-editorial-review-queue-links-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-priority-html.mjs
+          node --check scripts/check-editorial-priority-queue-links.mjs
+          node scripts/check-editorial-priority-queue-links.mjs
+          node scripts/check-verify-editorial-priority-html.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+          echo "PASS: 35 lessons queue navigation with HOLD_NO_GO. No signoff."

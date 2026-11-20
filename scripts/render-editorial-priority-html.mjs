@@ -23,6 +23,8 @@ const css=[
   "article{background:white;border:1px solid #c0c0c0;padding:1rem;border-radius:.5rem;margin:1rem 0;overflow-wrap:anywhere}",
   "article h2{font-size:1.2rem}",
   "article:focus-visible{outline:3px solid #17446d;outline-offset:3px}",
+  ".queue-nav{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1rem}",
+  ".queue-nav a{display:inline-block;padding:.3rem .4rem}",
   "dl{display:grid;grid-template-columns:minmax(7rem,auto) 1fr;gap:.35rem}",
   "dt{font-weight:700}",
   "dd{margin:0}",
@@ -76,6 +78,17 @@ export function renderReviewPriorityHtml(report){
   }
   lines.push("</ol></nav>",'<section aria-label="Conferência integral das aulas">');
   for(const [i,row] of report.items.entries()){
+    // Priority order differs from curricular order. Native same-page links
+    // allow sequential keyboard review without JS, storage or external calls.
+    const previous=i>0?report.items[i-1]:null;
+    const next=i+1<report.items.length?report.items[i+1]:null;
+    const queueLinks=[
+      previous?'<a href="#aula-'+previous.original_position+'">Aula anterior na fila: '+
+        'fila '+i+' de 35, aula '+previous.original_position+' no currículo</a>':null,
+      next?'<a href="#aula-'+next.original_position+'">Próxima aula na fila: '+
+        'fila '+(i+2)+' de 35, aula '+next.original_position+' no currículo</a>':null,
+      '<a href="#conteudo">Voltar ao índice</a>'
+    ].filter(Boolean).join(" ");
     lines.push(
       '<article id="aula-'+row.original_position+'" tabindex="-1" aria-labelledby="titulo-'+row.original_position+'">',
       '<h2 id="titulo-'+row.original_position+'">Fila '+(i+1)+
@@ -94,7 +107,7 @@ export function renderReviewPriorityHtml(report){
       "<h3>Perguntas para leitura (não são aceite)</h3><ol>",
       ...humanRubric.map(question=>"<li>"+escaped(question)+"</li>"),
       "</ol>",
-      '<p><a href="#conteudo">Voltar ao início</a></p>',
+      '<p class="queue-nav">'+queueLinks+'</p>',
       "</article>"
     );
   }

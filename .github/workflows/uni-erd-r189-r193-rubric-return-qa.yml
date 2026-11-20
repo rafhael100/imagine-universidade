@@ -1,0 +1,84 @@
+name: UNI ERD R189 R193 Rubric return QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r189-r193-rubric-return-2026-11-20
+    paths:
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/check-editorial-rubric-returns.mjs'
+      - 'scripts/qa-browser-editorial-rubric-returns.cjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R189-R193-RETORNO-RUBRICA-2026-11-20.md'
+      - '.github/workflows/uni-erd-r189-r193-rubric-return-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r189-r193-rubric-returns
+  cancel-in-progress: false
+
+jobs:
+  static-return-and-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Exact SHA and 35 rubric returns, inherited tests and 13 gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r189-r193-rubric-return-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-fulltext-html.mjs
+          node --check scripts/check-editorial-rubric-returns.mjs
+          node --check scripts/qa-browser-editorial-rubric-returns.cjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-editorial-rubric-jumps.mjs
+          node scripts/check-editorial-fragment-graph.mjs
+          node scripts/check-editorial-section-returns.mjs
+          node scripts/check-editorial-rubric-returns.mjs
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r189.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r189.html"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+
+  chrome-rubric-returns:
+    needs: static-return-and-gates
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Generate local HTML and install ephemeral browser tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r189-r193-rubric-return-2026-11-20"
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r189.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r189.html"
+          mkdir -p "$RUNNER_TEMP/uni-r189-browser-deps"
+          cd "$RUNNER_TEMP/uni-r189-browser-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          command -v google-chrome
+      - name: Chrome 35 Enter returns, mobile, axe and no external network
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-r189-browser-deps/node_modules" \
+          node scripts/qa-browser-editorial-rubric-returns.cjs "$RUNNER_TEMP/uni-r189.html"
+          test -z "$(git status --porcelain)"

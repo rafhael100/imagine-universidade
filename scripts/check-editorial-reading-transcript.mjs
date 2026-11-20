@@ -61,7 +61,7 @@ assert.throws(()=>renderEditorialReadingTranscript({...source,status:"published"
 assert.throws(()=>renderEditorialReadingTranscript({...source,audience:"public"}));
 const bidi=structuredClone(source);
 bidi.courses[0].lessons[0].title+="\u202e";
-assert.throws(()=>renderEditorialReadingTranscript(bidi),/bidirectional override/u);
+assert.throws(()=>renderEditorialReadingTranscript(bidi),/Invisible\/control character|bidirectional override/u);
 assert.throws(()=>verifyEditorialReadingTranscript(txt,source),/local bytes/u);
 assert.equal(rejected,12);
 console.log("PASS ERD R199-R202: 10 courses, 35 full texts, 210 reading questions, "+

@@ -123,6 +123,38 @@ module.exports=async function({browser,out,check}){
       "R63 audited editor has no serious/critical WCAG 2.1 A/AA violations");
     await auditPage.close();
 
+    // R66: an accessible audit should offer every invalid record, not only
+    // the first one. Individual buttons must be keyboard-operable and stale
+    // results must disappear as soon as the reviewer edits the draft.
+    const errorsPage=await browserContext.newPage();
+    errorsPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));
+    await errorsPage.goto(url,{waitUntil:"load"});
+    await errorsPage.locator("#status").selectOption("NEEDS_CHANGES");
+    await errorsPage.locator("#next").click();
+    await errorsPage.locator("#status").selectOption("NEEDS_CHANGES");
+    await errorsPage.locator("#audit-draft").click();
+    const auditErrors=errorsPage.locator("#audit-errors button.audit-error");
+    check(await auditErrors.count()===2 &&
+      await errorsPage.locator("#audit-errors").isVisible(),
+      "R66 both invalid records listed individually without any client data");
+    check((await auditErrors.nth(0).innerText()).includes("Visitas:")&&
+      (await auditErrors.nth(1).innerText()).includes("Leads:"),
+      "R66 invalid list matches original source order, not sorted by status");
+    await auditErrors.nth(1).focus();
+    await errorsPage.keyboard.press("Enter");
+    check((await errorsPage.locator("#title").innerText()).includes("Leads:")&&
+      await errorsPage.evaluate(()=>document.activeElement.id==="title"),
+      "R66 keyboard Enter on an error jumps to the indicated lesson heading");
+    await errorsPage.locator("#notes").fill("Texto com <img src=x onerror=alert(1)> literal");
+    check(await errorsPage.locator("#audit-errors button").count()===0&&
+      await errorsPage.locator("#audit-errors").isHidden(),
+      "R66 any edit immediately hides the stale list, without rendering notes as markup");
+    await errorsPage.locator("#audit-draft").click();
+    check(await errorsPage.locator("#audit-errors button.audit-error").count()===2&&
+      await errorsPage.locator("#audit-errors img").count()===0,
+      "R66 error buttons use textContent; unsanitized note text never creates image HTML");
+    await errorsPage.close();
+
     // R59: course-local adjustment navigation must never leave its course.
     const adjustmentPage=await browserContext.newPage();
     adjustmentPage.on("pageerror",error=>errors.push(String(error.message).slice(0,160)));

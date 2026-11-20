@@ -23,13 +23,15 @@ export function renderEditorialFulltextHtml(source){
   assert.equal(source?.courses?.length,10);
   const priority=buildEditorialReviewPriority(source);
   const fullSource=new Map();
-  for(const course of source.courses){
-    for(const lesson of course.lessons){
+  const curriculumById=new Map();
+  for(const [courseIndex,course] of source.courses.entries()){
+    for(const [lessonIndex,lesson] of course.lessons.entries()){
       const id=course.slug+"/"+lesson.slug;
       assert.ok(!fullSource.has(id),"Duplicate full-text lesson identity");
       assert.ok(typeof lesson.body==="string"&&lesson.body.trim().length>0,
         "A source lesson body must be nonempty");
       fullSource.set(id,lesson.body);
+      curriculumById.set(id,{courseIndex,lessonIndex,course});
     }
   }
   assert.equal(fullSource.size,35);
@@ -47,9 +49,33 @@ export function renderEditorialFulltextHtml(source){
       assert.ok(paragraph.trim().length>0,"No empty section in the source");
       return "<p>"+escapeReviewText(paragraph).replace(/\n/gu,"<br>")+"</p>";
     }).join("\n");
+    // R156–R157: native, source-bound within-course sequence. Never use
+    // attention-priority neighbors as if they were curricular neighbors.
+    const located=curriculumById.get(row.id);
+    assert.ok(located,"Missing source-bound curriculum position");
+    const courseLessons=located.course.lessons;
+    const previous=located.lessonIndex>0?courseLessons[located.lessonIndex-1]:null;
+    const next=located.lessonIndex+1<courseLessons.length?
+      courseLessons[located.lessonIndex+1]:null;
+    const findTarget=lesson=>{
+      const identity=located.course.slug+"/"+lesson.slug;
+      const found=priority.items.find(item=>item.id===identity);
+      assert.ok(found,"Missing course neighbor in fulltext report");
+      return found.original_position;
+    };
+    const lessonLinks=[
+      previous?'<a href="#aula-'+findTarget(previous)+'">Anterior neste curso: '+
+        escapeReviewText(previous.title)+'</a>':null,
+      next?'<a href="#aula-'+findTarget(next)+'">Próxima neste curso: '+
+        escapeReviewText(next.title)+'</a>':null,
+      '<a href="#curriculo-curso-'+(located.courseIndex+1)+
+        '">Voltar ao índice deste curso</a>'
+    ].filter(Boolean).join(" ");
     return '<section aria-label="Texto integral da aula em rascunho">'+
       "<h3>Texto integral para revisão (rascunho não aprovado)</h3>\n"+
-      text+"\n</section>\n"+marker;
+      text+"\n</section>\n"+
+      '<p class="queue-nav"><strong>Navegação por curso:</strong> '+
+      lessonLinks+'</p>\n'+marker;
   });
   assert.equal(position,35,"Every priority article must receive exactly one source body");
 

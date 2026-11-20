@@ -1,0 +1,84 @@
+name: UNI ERD R156 R160 Course sequence QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r156-r160-course-sequence-2026-11-20
+    paths:
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/verify-editorial-fulltext-html.mjs'
+      - 'scripts/check-editorial-course-sequence.mjs'
+      - 'scripts/qa-browser-course-sequence.cjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R156-R160-NAVEGACAO-ENTRE-AULAS-2026-11-20.md'
+      - '.github/workflows/uni-erd-r156-r160-course-sequence-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r156-r160-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  static-and-gates:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check SHA, curriculum links, source, gates and negative mutations
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r156-r160-course-sequence-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-fulltext-html.mjs
+          node --check scripts/check-editorial-course-sequence.mjs
+          node --check scripts/qa-browser-course-sequence.cjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-editorial-course-quicknav.mjs
+          node scripts/check-editorial-curricular-index.mjs
+          node scripts/check-editorial-course-sequence.mjs
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r156-course-sequence.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r156-course-sequence.html"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+
+  chromium-course-sequence:
+    needs: static-and-gates
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify HTML and install ephemeral Chrome harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r156-r160-course-sequence-2026-11-20"
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r156-course-sequence.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r156-course-sequence.html"
+          mkdir -p "$RUNNER_TEMP/uni-r156-qa-deps"
+          cd "$RUNNER_TEMP/uni-r156-qa-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          command -v google-chrome
+      - name: Confirm 50 within-course keyboard transitions, WCAG and zero HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-r156-qa-deps/node_modules" \
+          node scripts/qa-browser-course-sequence.cjs "$RUNNER_TEMP/uni-r156-course-sequence.html"
+          test -z "$(git status --porcelain)"

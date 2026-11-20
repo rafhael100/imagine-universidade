@@ -40,5 +40,35 @@ deny("wrong source identity",r=>{r.items[1].id=r.items[0].id;});
 deny("missing item",r=>{r.items.pop();});
 deny("wrong order policy",r=>{r.order_policy="APPROVED_FIRST";});
 deny("forged release",r=>{r.release_decision="GO";});
-console.log("PASS R104/R105: 35 unique anchor targets, 210 reading checks, "+
+
+// Deny extra metadata, including contradictions that legacy readers may ignore.
+deny("root claims a grant while standard fields still deny",r=>{
+  r.mayIssuePortalGrant=true;
+});
+deny("row carries an unexpected authenticated approval",r=>{
+  r.items[0].editorialApproval={signed:true};
+});
+deny("missing required field",r=>{delete r.items[0].section_words;});
+deny("bidirectional override in lesson title",r=>{
+  r.items[0].lesson_title+="\u202eApproved";
+});
+deny("zero-width spoofing in course title",r=>{
+  r.items[0].course_title+="\u200b";
+});
+deny("tab-control spoofed label",r=>{
+  r.items[0].course_title+="\tAPPROVED";
+});
+deny("unknown heuristic risk injection",r=>{
+  const row=r.items.find(item=>item.possible_risks.length>0)??r.items[0];
+  row.possible_risks.push("approved");
+});
+deny("duplicate heuristic risk code",r=>{
+  const row=r.items.find(item=>item.possible_risks.length>0)??r.items[0];
+  row.possible_risks=["introducao-extensa","introducao-extensa"];
+});
+deny("invisible heuristic risk",r=>{
+  const row=r.items.find(item=>item.possible_risks.length>0)??r.items[0];
+  row.possible_risks.push("introducao-extensa\u200b");
+});
+console.log("PASS R104/R111: 35 unique anchor targets, 210 reading checks, "+
   rejected+" negative report mutations rejected by both HTML and Markdown renderers.");

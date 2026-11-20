@@ -39,7 +39,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // stack trace. Do not change handling for paths outside this private
         // boundary; a 503 is not a login, grant or successful response.
         $exceptions->render(
-            static function (\\Illuminate\\Database\\QueryException|\\PDOException $error, Request $request): ?Response {
+            static function (\Illuminate\Database\QueryException|\PDOException $error, Request $request): ?Response {
                 if (!ProtectPrivateUniversityResponses::matches($request)) {
                     return null;
                 }

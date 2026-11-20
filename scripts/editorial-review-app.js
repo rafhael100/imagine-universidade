@@ -28,6 +28,32 @@
   }
   const key=item=>item.course_slug+"/"+item.lesson_slug;
   const courses=[...new Set(items.map(item=>item.course_slug))];
+  // ERD-R53: name all editorial states per course; a declaration is NOT signoff.
+  function courseReviewCounts(slug){
+    const group=items.filter(item=>item.course_slug===slug);
+    const statuses=group.map(item=>state.get(key(item)).status);
+    return {total:group.length,
+      pending:statuses.filter(status=>status==="PENDING_HUMAN_REVIEW").length,
+      changes:statuses.filter(status=>status==="NEEDS_CHANGES").length,
+      claims:statuses.filter(status=>status==="CLAIMED_HUMAN_APPROVED").length};
+  }
+  function courseNavigationLabel(slug){
+    const first=items.find(item=>item.course_slug===slug);
+    const stats=courseReviewCounts(slug);
+    return first.course_title+" ("+stats.pending+" pendentes / "+stats.total+
+      " · "+stats.changes+" com ajustes · "+stats.claims+
+      " declarações não verificadas)";
+  }
+  // ERD-R54: selecting a course starts at the next pending lesson, then
+  // a needs-changes lesson, and only then a non-authenticated claim.
+  function firstActionableLesson(slug){
+    const indices=items.map((item,i)=>item.course_slug===slug?i:-1).filter(i=>i>=0);
+    for(const wanted of ["PENDING_HUMAN_REVIEW","NEEDS_CHANGES"]){
+      const match=indices.find(i=>state.get(key(items[i])).status===wanted);
+      if(match!==undefined)return match;
+    }
+    return indices[0];
+  }
   function message(value,error=false){
     const target=$("message");
     // This is an aria-live region: reassigning the identical text on every
@@ -49,9 +75,7 @@
     if($("summary").textContent!==summary)$("summary").textContent=summary;
     for(const button of $("courses").querySelectorAll(".course-item")){
       const slug=button.dataset.courseSlug;
-      const rows=items.filter(item=>item.course_slug===slug);
-      const pending=rows.filter(item=>state.get(key(item)).status==="PENDING_HUMAN_REVIEW").length;
-      const label=rows[0].course_title+" ("+pending+" pendentes / "+rows.length+")";
+      const label=courseNavigationLabel(slug);
       // Do not rewrite the navigation label on every keystroke.
       if(button.textContent!==label)button.textContent=label;
     }
@@ -130,16 +154,13 @@
     const nav=$("courses");
     nav.replaceChildren();
     for(const slug of courses){
-      const first=items.findIndex(item=>item.course_slug===slug);
       const button=document.createElement("button");
       button.type="button";
       button.className="course-item";
       button.dataset.courseSlug=slug;
-      const rows=items.filter(item=>item.course_slug===slug);
-      const pending=rows.filter(item=>state.get(key(item)).status==="PENDING_HUMAN_REVIEW").length;
-      button.textContent=items[first].course_title+" ("+pending+" pendentes / "+rows.length+")";
+      button.textContent=courseNavigationLabel(slug);
       button.setAttribute("aria-current",slug===lesson.course_slug?"true":"false");
-      button.addEventListener("click",()=>choose(first));
+      button.addEventListener("click",()=>choose(firstActionableLesson(slug)));
       nav.append(button);
     }
     const picker=$("lessons");picker.replaceChildren();

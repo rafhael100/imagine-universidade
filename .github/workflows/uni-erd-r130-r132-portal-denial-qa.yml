@@ -1,0 +1,48 @@
+name: UNI ERD R130 R132 Portal denial reason QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r130-r132-portal-deny-reason-2026-11-20
+    paths:
+      - 'app/Domain/Access/PortalAccessGate.php'
+      - 'scripts/check-portal-deny-reason-hygiene.php'
+      - 'scripts/check-portal-authority-negative.php'
+      - 'scripts/check-portal-default-deny.php'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R130-R132-PORTAL-DENIAL-REASONS-2026-11-20.md'
+      - '.github/workflows/uni-erd-r130-r132-portal-denial-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r130-r132-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deny-reason-boundary:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact synthetic commit without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify safe denial and default deny with 13 gates held
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r130-r132-portal-deny-reason-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          php -l app/Domain/Access/PortalAccessGate.php
+          php -l scripts/check-portal-deny-reason-hygiene.php
+          php scripts/check-portal-deny-reason-hygiene.php
+          php scripts/check-portal-authority-negative.php
+          php scripts/check-portal-default-deny.php
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+          echo "PASS: sanitized Portal denial, default deny, all 13 gates held."

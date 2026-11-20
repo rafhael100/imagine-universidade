@@ -78,12 +78,14 @@ async function main(){
       const style=getComputedStyle(node);
       return node.matches(":focus-visible")&&parseFloat(style.outlineWidth)>=3;
     }),"keyboard-selected review article has visible focus outline");
+    await page.screenshot({path:path.join(runner,"uni-r96-r99-desktop.png")});
     check(await page.locator("article").first().getAttribute("tabindex")==="-1",
       "focus targets are not extra Tab stops");
 
     await page.setViewportSize({width:390,height:844});
     check(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),
       "390px review layout has no horizontal document overflow");
+    await page.screenshot({path:path.join(runner,"uni-r96-r99-mobile.png")});
     check(await page.locator("article").last().isVisible(),
       "final review article remains present on mobile");
 

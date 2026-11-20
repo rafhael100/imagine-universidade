@@ -37,7 +37,7 @@ export function renderEditorialFulltextHtml(source){
   assert.equal(fullSource.size,35);
   const marker="<h3>Perguntas para leitura (não são aceite)</h3>";
   let position=0;
-  const bodyHtml=renderReviewPriorityHtml(priority).replaceAll(marker,()=>{
+  let bodyHtml=renderReviewPriorityHtml(priority).replaceAll(marker,()=>{
     const row=priority.items[position++];
     assert.ok(row&&fullSource.has(row.id),"Full-text identity missing");
     const body=fullSource.get(row.id);
@@ -109,6 +109,18 @@ export function renderEditorialFulltextHtml(source){
       marker;
   });
   assert.equal(position,35,"Every priority article must receive exactly one source body");
+
+  // R189: allow a reviewer to return from the end of the six questions to
+  // the same lesson text, without losing curricular or priority context.
+  let rubricsWithReturns=0;
+  bodyHtml=bodyHtml.replaceAll("</ol>\n<p class=\"queue-nav\">",()=>{
+    const row=priority.items[rubricsWithReturns++];
+    assert.ok(row,"Unexpected rubric position while creating return links");
+    return '</ol>\n<p class="queue-nav"><a href="#secoes-aula-'+
+      row.original_position+'">Voltar ao texto desta aula</a></p>\n'+
+      '<p class="queue-nav">';
+  });
+  assert.equal(rubricsWithReturns,35,"All 35 rubrics require a return to their lesson");
 
   // R146: direct native keyboard entry into the *first priority article*
   // for each course. The queue ordering is not the curriculum ordering.

@@ -1,0 +1,39 @@
+name: UNI ERD R214 R218 Editorial pilot QA
+on:
+  push:
+    branches:
+      - review/uni-erd-r214-r218-piloto-editorial-4-9-32-2026-11-20
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r214-r218-pilot
+  cancel-in-progress: false
+
+jobs:
+  pilot-editorial-safe-regression:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert exact checkout and forbidden env absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r214-r218-piloto-editorial-4-9-32-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          command -v node && command -v php
+      - name: Exact pilot and existing integrated offline QA (no access)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/check-editorial-pilot-lessons.mjs
+          node scripts/check-editorial-pilot-lessons.mjs
+          node scripts/check-integrated-offline-qa-plan.mjs
+          node scripts/check-integrated-offline-qa.mjs
+          test -z "$(git status --porcelain)"

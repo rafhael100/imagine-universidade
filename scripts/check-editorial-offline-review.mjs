@@ -33,6 +33,12 @@ try{
 
   pass(html.includes("id='review-search'")&&html.includes("id='review-filter'"),
     "offline editor offers literal search and status filters");
+  pass(html.includes("lessonPickerLabel(lesson)")&&
+    html.includes("option.textContent!==label")&&
+    html.includes("Próxima pendente deste curso")&&
+    html.includes("function jumpToNextPendingInCourse()")&&
+    html.includes('id=\'next-pending-course\''),
+    "R56-R57 lesson state labels and course-local pending navigation are available");
   pass(html.includes("function courseReviewCounts(slug)")&&
     html.includes("function firstActionableLesson(slug)")&&
     html.includes("declarações não verificadas")&&

@@ -103,6 +103,7 @@ export function renderOfflineReviewPage(payload,hashes){
     "<div class='toolbar'><button id='previous' type='button'>Aula anterior</button>",
     "<button id='next' type='button'>Próxima aula</button>",
     "<button id='next-pending' type='button'>Próxima pendente</button>",
+    "<button id='next-pending-course' type='button'>Próxima pendente deste curso</button>",
     "<button id='next-adjustment' type='button'>Próxima com ajustes</button></div>",
     "<p id='course-title' class='muted'></p><h1 id='title' tabindex='-1'></h1>",
     "<p id='identity' class='muted'></p>",

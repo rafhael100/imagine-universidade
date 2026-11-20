@@ -51,7 +51,10 @@ export function assertQueueLinks(html, report) {
   assert.equal(returns,35);
   assert.equal([...html.matchAll(/href="https?:\/\//gu)].length,0,
     "Review document must not link to external origins");
-  assert.ok(html.includes("HOLD_NO_GO"));
+  assert.ok(html.includes("<strong>HOLD_NO_GO · SEM ACEITE.</strong>"),
+    "Canonical no-signoff warning must remain intact");
+  assert.ok(html.includes("13/13 NOT_VERIFIED"),
+    "All operational gates must remain explicitly blocked");
   assert.ok(html.includes("210 perguntas"));
   assert.ok(!html.includes('href="javascript:'),"No executable links");
   return {lessons:35,previousLinks,nextLinks,returns,release:"HOLD_NO_GO"};

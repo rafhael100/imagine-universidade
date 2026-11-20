@@ -69,11 +69,26 @@ function checkUnavailablePortalBinding(string $source): void
     }
 }
 
+/**
+ * UNI R100: pin the complete production DI provider until a separate,
+ * supervised security review explicitly updates this source fingerprint.
+ * Token scans alone cannot reject unreachable or helper-based overrides.
+ * Git blob SHA-1 is an integrity fingerprint, not a signature or identity.
+ */
+function checkPinnedProductionProvider(string $source): void
+{
+    $actual = sha1('blob '.strlen($source)."\0".$source);
+    if (!hash_equals('bfca33ddefb01a1e7de37d9505fb838fa16920a4', $actual)) {
+        throw new RuntimeException('Production DI provider changed: fail closed for security review');
+    }
+    checkUnavailablePortalBinding($source);
+}
+
 $provider = file_get_contents(__DIR__.'/../app/Providers/AppServiceProvider.php');
 if (!is_string($provider)) {
     throw new RuntimeException('Missing production service provider');
 }
-checkUnavailablePortalBinding($provider);
+checkPinnedProductionProvider($provider);
 
 $binding = '$this->app->bind(PortalAuthority::class, UnavailablePortalAuthority::class);';
 if (substr_count($provider, $binding) !== 1) {
@@ -105,6 +120,32 @@ $deny('tutor secretly enabled', str_replace(
     'DisabledTutorGateway::class', 'EnabledTutorGateway::class', $provider
 ));
 
+// R101: prove three bypasses a token-only scan would miss. Pinning the
+// actual provider bytes catches them before a simulated Portal authority is
+// allowed into the application container.
+$pinRejected = 0;
+$denyPinned = static function (string $label, string $source) use (&$pinRejected): void {
+    checkUnavailablePortalBinding($source); // expected old scanner false-negative
+    try {
+        checkPinnedProductionProvider($source);
+    } catch (RuntimeException) {
+        ++$pinRejected;
+        return;
+    }
+    throw new RuntimeException('Unsafe provider mutation evaded source pin: '.$label);
+};
+$denyPinned('unreachable default binding', str_replace(
+    $binding, 'if (false) { '.$binding.' }', $provider
+));
+$denyPinned('register returns before default binding', str_replace(
+    "public function register(): void\n    {",
+    "public function register(): void\n    {\n        return;", $provider
+));
+$denyPinned('alternate Laravel container helper override', str_replace(
+    $binding, $binding."\n        app()->bind(PortalAuthority::class, CandidatePortalAuthority::class);",
+    $provider
+));
+
 $gate = new PortalAccessGate(new UnavailablePortalAuthority());
 $now = 1794750000;
 $scenarios = 0;
@@ -124,4 +165,5 @@ foreach ([PortalAccessGate::VIEW, PortalAccessGate::MANAGE] as $permission) {
     }
 }
 echo 'PASS R88/R89: '.$scenarios.' default-deny view/manage checks and '.
-    $rejected.' negative DI binding fixtures; no SSO or grant issued.'.PHP_EOL;
+    $rejected.' negative DI binding fixtures and '.$pinRejected.
+    ' scanner-bypass fixtures blocked by production provider pin; no SSO or grant issued.'.PHP_EOL;

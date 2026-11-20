@@ -44,10 +44,30 @@ export function renderEditorialFulltextHtml(source){
     assert.equal(sha256(body),row.content_sha256,
       "Full-text body diverges from its source-bound SHA-256");
     const paragraphs=body.replace(/\r\n/gu,"\n").split(/\n\n+/u);
-    assert.ok(paragraphs.length>=4,"All four pedagogical sections must be readable");
-    const text=paragraphs.map(paragraph=>{
+    // R165: all 35 source drafts have four distinct pedagogical sections.
+    // Keep the literal source labels and make 140 headings/link targets accessible.
+    const sectionNames=["Contexto da aula","EXEMPLO FICTÍCIO",
+      "APLICAÇÃO OPCIONAL","CUIDADO IMPORTANTE"];
+    assert.equal(paragraphs.length,4,"Expected four pedagogical sections");
+    const sectionIds=sectionNames.map((_,index)=>
+      "aula-secao-"+row.original_position+"-"+(index+1));
+    const sectionNav=sectionNames.map((name,index)=>
+      '<li><a href="#'+sectionIds[index]+'">'+escapeReviewText(name)+'</a></li>'
+    ).join("");
+    const text=paragraphs.map((paragraph,index)=>{
       assert.ok(paragraph.trim().length>0,"No empty section in the source");
-      return "<p>"+escapeReviewText(paragraph).replace(/\n/gu,"<br>")+"</p>";
+      let content=paragraph;
+      if(index>0){
+        const prefix=sectionNames[index]+"\n";
+        assert.ok(paragraph.startsWith(prefix),
+          "Pedagogical section label missing or out of order");
+        content=paragraph.slice(prefix.length);
+        assert.ok(content.trim().length>0,"Empty pedagogical section");
+      }
+      return '<section aria-labelledby="'+sectionIds[index]+'">'+
+        '<h4 id="'+sectionIds[index]+'" tabindex="-1">'+
+        escapeReviewText(sectionNames[index])+'</h4><p>'+
+        escapeReviewText(content).replace(/\n/gu,"<br>")+'</p></section>';
     }).join("\n");
     // R156–R157: native, source-bound within-course sequence. Never use
     // attention-priority neighbors as if they were curricular neighbors.
@@ -73,6 +93,8 @@ export function renderEditorialFulltextHtml(source){
     ].filter(Boolean).join(" ");
     return '<section aria-label="Texto integral da aula em rascunho">'+
       "<h3>Texto integral para revisão (rascunho não aprovado)</h3>\n"+
+      '<nav aria-label="Seções desta aula: '+escapeReviewText(row.lesson_title)+'">'+
+      '<ol class="queue-nav">'+sectionNav+'</ol></nav>\n'+
       text+"\n</section>\n"+
       '<p class="queue-nav"><strong>Navegação por curso:</strong> '+
       lessonLinks+'</p>\n'+marker;

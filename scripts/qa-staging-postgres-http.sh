@@ -76,6 +76,25 @@ unset postgresProbe
 [[ "$ready" == 1 ]] || fail "authenticated PostgreSQL TCP query did not become ready"
 
 # DDL is run once by the SEPARATE migration owner, never runtime.
+# Always inspect the Laravel-resolved connection AND authenticated SQL on
+# the disposable network BEFORE the first migration or any SQL DDL.
+stagingPgStage=laravel_sql_preflight
+docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:mode=1777 \
+  --tmpfs /var/www/html/storage:mode=1777 \
+  --tmpfs /var/www/html/bootstrap/cache:mode=1777 \
+  --env APP_ENV=testing --env APP_DEBUG=false \
+  --env APP_KEY='base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
+  --env DB_CONNECTION=pgsql --env DB_HOST=db --env DB_PORT=5432 \
+  --env DB_DATABASE=uni_staging_ci_only \
+  --env DB_USERNAME=uni_ci_migration_owner \
+  --env DB_PASSWORD=FAKE_OWNER_CI_ONLY \
+  --env SESSION_DRIVER=array --env CACHE_STORE=array \
+  "$phpImage" sh -ec \
+  'mkdir -p storage/logs storage/framework/views storage/framework/cache/data storage/framework/sessions;exec php' \
+  < scripts/qa-staging-pg-pre-migrate.php
+
 stagingPgStage=migrations
 docker run --rm --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges \

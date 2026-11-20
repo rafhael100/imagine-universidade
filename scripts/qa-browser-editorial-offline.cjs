@@ -193,6 +193,25 @@ module.exports=async function({browser,out,check}){
       .withTags(["wcag2a","wcag2aa","wcag21a","wcag21aa"]).analyze();
     check(!focusA11y.violations.some(v=>["serious","critical"].includes(v.impact)),
       "R70 field-specific invalid audit state retains WCAG 2.1 A/AA browser coverage");
+    await errorsPage.locator("#evidence").fill("https://github.com/rafhael100/imagine-universidade/issues/12");
+    await errorsPage.locator("#notes").fill("=SUM(1,2)");
+    await errorsPage.locator("#audit-draft").click();
+    await errorsPage.locator("#audit-first-error").click();
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="notes")&&
+      await errorsPage.locator("#notes").getAttribute("aria-invalid")==="true",
+      "R71 spreadsheet-formula note is rejected and the notes field receives focus");
+    await errorsPage.locator("#notes").fill("");
+    await errorsPage.locator("#status").selectOption("PENDING_HUMAN_REVIEW");
+    await errorsPage.locator("#audit-draft").click();
+    await errorsPage.locator("#audit-first-error").click();
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="reviewer"),
+      "R71 pending rows with a leftover reviewer focus the reviewer field");
+    await errorsPage.locator("#reviewer").fill("");
+    await errorsPage.locator("#audit-draft").click();
+    await errorsPage.locator("#audit-first-error").click();
+    check(await errorsPage.evaluate(()=>document.activeElement.id==="evidence")&&
+      await errorsPage.locator("#evidence").getAttribute("aria-invalid")==="true",
+      "R71 pending rows with only a leftover evidence URL focus evidence");
     await errorsPage.close();
 
     // R59: course-local adjustment navigation must never leave its course.

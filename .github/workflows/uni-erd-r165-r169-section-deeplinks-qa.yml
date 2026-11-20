@@ -1,0 +1,88 @@
+name: UNI ERD R165 R169 Section deep links QA
+
+on:
+  push:
+    branches:
+      - review/uni-erd-r165-r169-section-navigation-2026-11-20
+    paths:
+      - 'scripts/render-editorial-fulltext-html.mjs'
+      - 'scripts/render-editorial-priority-html.mjs'
+      - 'scripts/check-editorial-section-deeplinks.mjs'
+      - 'scripts/qa-browser-editorial-sections.cjs'
+      - 'scripts/verify-editorial-fulltext-html.mjs'
+      - 'content/mvp-cursos-v1.json'
+      - 'ops/release-gates.json'
+      - 'docs/UNI-ERD-R165-R169-SECOES-140-ANCORAS-2026-11-20.md'
+      - '.github/workflows/uni-erd-r165-r169-section-deeplinks-qa.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-erd-r165-r169-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-bound-sections:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Assert SHA, 140 section destinations, regressions and release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r165-r169-section-navigation-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          node --check scripts/render-editorial-fulltext-html.mjs
+          node --check scripts/render-editorial-priority-html.mjs
+          node --check scripts/check-editorial-section-deeplinks.mjs
+          node --check scripts/qa-browser-editorial-sections.cjs
+          node scripts/check-editorial-fulltext-html.mjs
+          node scripts/check-editorial-course-quicknav.mjs
+          node scripts/check-editorial-curricular-index.mjs
+          node scripts/check-editorial-course-sequence.mjs
+          node scripts/check-editorial-course-return-focus.mjs
+          node scripts/check-editorial-section-deeplinks.mjs
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r165-sections.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r165-sections.html"
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          test -z "$(git status --porcelain)"
+
+  chrome-section-navigation:
+    needs: source-bound-sections
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      UNI_BROWSER_LAB: synthetic
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Prepare byte-exact offline artifact and isolated browser tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REF_NAME" = "review/uni-erd-r165-r169-section-navigation-2026-11-20"
+          node scripts/render-editorial-fulltext-html.mjs > "$RUNNER_TEMP/uni-r165-sections.html"
+          node scripts/verify-editorial-fulltext-html.mjs "$RUNNER_TEMP/uni-r165-sections.html"
+          mkdir -p "$RUNNER_TEMP/uni-r165-browser-deps"
+          cd "$RUNNER_TEMP/uni-r165-browser-deps"
+          npm init -y >/dev/null
+          timeout -k 5s 180s npm install --no-audit --no-fund playwright@1.58.2 @axe-core/playwright@4.10.2
+          command -v google-chrome
+      - name: Keyboard 140 anchors, mobile WCAG and blocked HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_PATH="$RUNNER_TEMP/uni-r165-browser-deps/node_modules" \
+          node scripts/qa-browser-editorial-sections.cjs "$RUNNER_TEMP/uni-r165-sections.html"
+          test -z "$(git status --porcelain)"

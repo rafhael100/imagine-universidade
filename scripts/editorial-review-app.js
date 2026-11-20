@@ -134,6 +134,11 @@
       matches.push([i,lesson]);
     });
     const active=term!==""||status!=="ALL",holder=$("review-results");
+    // R60: result filtering can detach a focused keyboard target. Capture it
+    // before hiding or replacing children; never leave focus on <body>.
+    const focusedResult=holder.contains(document.activeElement)
+      ?document.activeElement.closest(".review-result"):null;
+    const focusedLessonIndex=focusedResult?.dataset.lessonIndex;
     holder.hidden=!active;
     const countLabel=active
       ?(matches.length===1?"1 aula encontrada neste filtro":matches.length+" aulas encontradas neste filtro")
@@ -143,6 +148,7 @@
       $("review-search-count").textContent=countLabel;
     if(!active){
       if(holder.childElementCount)holder.replaceChildren();
+      if(focusedResult)$("review-search").focus();
       return;
     }
     // ERD-R04: do not destroy identical result buttons on each keystroke.
@@ -161,6 +167,11 @@
         b.textContent=reviewResultLabel(lesson);
         b.addEventListener("click",()=>choose(i));
         holder.append(b);
+      }
+      if(focusedResult){
+        const survivor=[...holder.querySelectorAll(".review-result")]
+          .find(button=>button.dataset.lessonIndex===focusedLessonIndex);
+        (survivor||$("review-search")).focus();
       }
     }
     // Selection can change without changing the result identities.

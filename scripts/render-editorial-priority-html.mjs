@@ -23,7 +23,7 @@ const css=[
   "article{background:white;border:1px solid #c0c0c0;padding:1rem;border-radius:.5rem;margin:1rem 0;overflow-wrap:anywhere}",
   "article h2{font-size:1.2rem}",
   "article:focus-visible{outline:3px solid #17446d;outline-offset:3px}",
-  "article h4:focus-visible{outline:3px solid #17446d;outline-offset:3px}",
+  "article h3:focus-visible,article h4:focus-visible{outline:3px solid #17446d;outline-offset:3px}",
   ".queue-nav{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1rem}",
   ".queue-nav a{display:inline-block;padding:.3rem .4rem}",
   "dl{display:grid;grid-template-columns:minmax(7rem,auto) 1fr;gap:.35rem}",

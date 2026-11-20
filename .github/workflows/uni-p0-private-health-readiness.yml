@@ -1,0 +1,48 @@
+name: UNI P0 private staging health readiness (static only)
+
+on:
+  push:
+    branches:
+      - review/uni-p0-private-health-readiness-2026-11-20
+    paths:
+      - .github/workflows/uni-p0-private-health-readiness.yml
+      - ops/staging/compose.yaml
+      - ops/staging/check-compose-static.mjs
+      - ops/staging/check-compose-environment.mjs
+      - bootstrap/app.php
+      - ops/staging/nginx.conf
+      - docs/UNI-P0-PRIVATE-HEALTH-READINESS-2026-11-20.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-p0-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  private-health-contract:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout isolated SHA (without persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require exact branch and no environment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "review/uni-p0-private-health-readiness-2026-11-20"
+          test ! -e .env && test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          test -f composer.lock
+      - name: Check health signal and eight negative mutations
+        run: node ops/staging/check-compose-static.mjs
+      - name: Resolve Docker Compose syntax with disposable values only
+        run: bash ops/staging/check-compose-syntax.sh
+      - name: Keep all 13 release gates closed and Portal disabled
+        run: node ops/staging/check-release-gates.mjs

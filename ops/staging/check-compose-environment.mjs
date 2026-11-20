@@ -20,6 +20,13 @@ export function validateComposeEnvironment(model){
   for(const service of [app,web,db]){
     assert.ok(!Object.hasOwn(service,"env_file"),"Service env_file is not allowed");
   }
+  // Validate the *resolved* Docker Compose health contract, not just YAML text.
+  // Never use a private Student/Admin route as a health endpoint.
+  assert.ok(record(web.healthcheck)&&Array.isArray(web.healthcheck.test),
+    "Missing resolved private web healthcheck");
+  assert.deepEqual(web.healthcheck.test,[
+    "CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"
+  ],"Web healthcheck must probe only local Laravel /up through Nginx");
   const application=app.environment,database=db.environment;
   assert.ok(record(application)&&record(database),"Missing explicit service environment");
   assert.ok(Object.keys(application).length===appKeys.length&&
@@ -49,7 +56,9 @@ export function checkEnvironmentRegressionCases(){
     SESSION_DRIVER:"database",SESSION_ENCRYPT:"true",SESSION_SECURE_COOKIE:"true",SESSION_HTTP_ONLY:"true",
     SESSION_SAME_SITE:"lax",SESSION_COOKIE:"imagine_universidade_staging_session",LOG_CHANNEL:"stderr",
     LOG_LEVEL:"warning",CACHE_STORE:"array",QUEUE_CONNECTION:"sync",MAIL_MAILER:"array"};
-  const fixture={services:{app:{environment},web:{},db:{environment:{
+  const fixture={services:{app:{environment},
+    web:{healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
+    db:{environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
@@ -66,6 +75,10 @@ export function checkEnvironmentRegressionCases(){
     model=>{model.services.app.environment.DB_DATABASE="another_database";},
     model=>{model.services.web.environment={APP_KEY:"CI_FAKE_KEY"};},
     model=>{model.services.db.environment.EXTRA_SECRET="CI_FAKE_OTHER";},
+    model=>{delete model.services.web.healthcheck;},
+    model=>{model.services.web.healthcheck.test=["CMD-SHELL","true"];},
+    model=>{model.services.web.healthcheck.test=["CMD-SHELL","wget -q -O /dev/null http://example.invalid/up"];},
+    model=>{model.services.web.healthcheck.test=["CMD-SHELL","wget -q -O /dev/null http://127.0.0.1:8080/universidade/private/app"];},
   ];
   for(const alter of invalid){
     const model=structuredClone(fixture);alter(model);

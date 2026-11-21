@@ -1,0 +1,40 @@
+name: UNI P0 PostgreSQL restore socket fence (negative QA only)
+on:
+  push:
+    branches:
+      - review/uni-p0-pg-restore-socket-fence-2026-11-20
+    paths:
+      - .github/workflows/uni-p0-pg-restore-socket-fence.yml
+      - scripts/qa-pg-backup-restore.sh
+      - scripts/check-qa-pg-backup-restore-isolation.mjs
+
+permissions:
+  contents: read
+concurrency:
+  group: uni-p0-restore-socket-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  negative-socket-isolation:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify isolated exact checkout without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-pg-restore-socket-fence-2026-11-20
+          test ! -e .env && test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          sh -n scripts/qa-pg-backup-restore.sh
+      - name: Run only the newly added destructive-target negative guard tests
+        run: node scripts/check-qa-pg-backup-restore-isolation.mjs
+      - name: Preserve release gates
+        run: node ops/staging/check-release-gates.mjs
+      - name: Record evidence boundary
+        run: echo 'No PostgreSQL started, no restore attempted, no VPS, no client data; 13 gates HOLD_NO_GO.'

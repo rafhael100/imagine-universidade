@@ -10,20 +10,40 @@ if [ "${POSTGRES_DB:-}" != "uni_ci" ] ||
   exit 2
 fi
 
-pg_major="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c 'SHOW server_version_num')"
+# Never allow a libpq environment override to redirect a destructive restore
+# check to another database, even if the caller supplies synthetic POSTGRES_*.
+# These names are not needed by the official disposable PostgreSQL container.
+for forbidden in PGHOST PGHOSTADDR PGPORT PGDATABASE PGUSER PGSERVICE PGSERVICEFILE PGPASSFILE PGPASSWORD PGOPTIONS PGTARGETSESSIONATTRS; do
+  if printenv "$forbidden" >/dev/null 2>&1; then
+    echo "FAIL: libpq connection override forbidden in disposable restore QA." >&2
+    exit 2
+  fi
+done
+pg_socket=/var/run/postgresql
+pg_port=5432
+
+pg_major="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c 'SHOW server_version_num')"
 case "$pg_major" in
   18*) ;;
   *) echo "FAIL: expected disposable PostgreSQL18." >&2; exit 2 ;;
 esac
 
+# A local Unix socket is required; an authenticated remote connection is not
+# an acceptable substitute for this in-container destructive QA fixture.
+socket_proof="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c 'SELECT CASE WHEN inet_server_addr() IS NULL THEN 1 ELSE 0 END')"
+test "$socket_proof" = "1" || {
+  echo "FAIL: restore QA requires local PostgreSQL Unix socket." >&2
+  exit 2
+}
+
 # Only restore into the second fixed synthetic database. Never overwrite.
 restore_db="uni_ci_restore"
-already="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d postgres -c "SELECT COUNT(*) FROM pg_database WHERE datname='uni_ci_restore'")"
+already="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d postgres -c "SELECT COUNT(*) FROM pg_database WHERE datname='uni_ci_restore'")"
 test "$already" = "0" || { echo "FAIL: restore target already exists." >&2; exit 2; }
 
 snapshot="$(mktemp /tmp/uni_synthetic_qa.XXXXXX)"
 cleanup() {
-  dropdb --if-exists -U uni_ci "$restore_db" >/dev/null 2>&1 || true
+  dropdb -h "$pg_socket" -p "$pg_port" --if-exists -U uni_ci "$restore_db" >/dev/null 2>&1 || true
   rm -f "$snapshot"
 }
 trap cleanup EXIT HUP INT TERM
@@ -100,8 +120,8 @@ END $qa$;
 SELECT md5(string_agg(name||':'||digest,chr(10) ORDER BY name)) FROM qa_pg_table_hashes;
 SQL
 )"
-schema_hash() { psql -X -q -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$1" -c "$schema_sql"; }
-data_hash() { psql -X -q -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$1" -c "$data_sql"; }
+schema_hash() { psql -h "$pg_socket" -p "$pg_port" -X -q -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$1" -c "$schema_sql"; }
+data_hash() { psql -h "$pg_socket" -p "$pg_port" -X -q -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$1" -c "$data_sql"; }
 before_schema="$(schema_hash uni_ci)"
 before_data="$(data_hash uni_ci)"
 test -n "$before_schema" && test -n "$before_data" || {
@@ -109,21 +129,21 @@ test -n "$before_schema" && test -n "$before_data" || {
   exit 2
 }
 
-before_counts="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c "$counts_sql")"
-before_hash="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c "$fingerprint_sql")"
+before_counts="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c "$counts_sql")"
+before_hash="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d uni_ci -c "$fingerprint_sql")"
 test "$before_counts" = "10,35,0,0" || {
   echo "FAIL: source must be exactly ten draft courses, thirty-five lessons and no learner progress." >&2
   exit 2
 }
 test "${#before_hash}" -eq 32 || { echo "FAIL: invalid source fingerprint." >&2; exit 2; }
 
-pg_dump -U uni_ci -Fc --no-owner --no-acl -f "$snapshot" uni_ci
+pg_dump -h "$pg_socket" -p "$pg_port" -U uni_ci -Fc --no-owner --no-acl -f "$snapshot" uni_ci
 test -s "$snapshot" || { echo "FAIL: empty database snapshot." >&2; exit 2; }
-createdb -U uni_ci -T template0 "$restore_db"
-pg_restore -U uni_ci --exit-on-error --single-transaction --no-owner --no-acl -d "$restore_db" "$snapshot"
+createdb -h "$pg_socket" -p "$pg_port" -U uni_ci -T template0 "$restore_db"
+pg_restore -h "$pg_socket" -p "$pg_port" -U uni_ci --exit-on-error --single-transaction --no-owner --no-acl -d "$restore_db" "$snapshot"
 
-after_counts="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c "$counts_sql")"
-after_hash="$(psql -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c "$fingerprint_sql")"
+after_counts="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c "$counts_sql")"
+after_hash="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c "$fingerprint_sql")"
 test "$after_counts" = "$before_counts" || { echo "FAIL: restored counts differ." >&2; exit 2; }
 test "$after_hash" = "$before_hash" || { echo "FAIL: restored lesson content differs." >&2; exit 2; }
 
@@ -136,7 +156,7 @@ test "$(data_hash "$restore_db")" = "$before_data" || {
   exit 2
 }
 # Negative proof: tampering with one lesson in the RESTORED COPY must be seen.
-psql -X -q -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c \
+psql -h "$pg_socket" -p "$pg_port" -X -q -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c \
   "UPDATE educational_lessons SET body=body||' QA-only tamper'
    WHERE id=(SELECT min(id) FROM educational_lessons)" >/dev/null
 test "$(data_hash "$restore_db")" != "$before_data" || {

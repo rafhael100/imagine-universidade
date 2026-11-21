@@ -52,9 +52,19 @@ cleanup() {
   # Avoid firing the EXIT handler a second time on its own explicit exit.
   trap - EXIT HUP INT TERM
   if [ "$restore_created" -eq 1 ]; then
-    if ! dropdb -h "$pg_socket" -p "$pg_port" --if-exists -U uni_ci "$restore_db" >/dev/null 2>&1; then
+    # A successful dropdb exit alone is not proof that the clone is gone.
+    # Do not use --if-exists here: this run owns a created clone.
+    if ! dropdb -h "$pg_socket" -p "$pg_port" -U uni_ci "$restore_db" >/dev/null 2>&1; then
       echo "FAIL: disposable restore clone cleanup not confirmed." >&2
       result=2
+    else
+      if ! remaining="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d postgres -c "SELECT COUNT(*) FROM pg_database WHERE datname='uni_ci_restore'")"; then
+        echo "FAIL: cannot verify removal of disposable restore clone." >&2
+        result=2
+      elif [ "$remaining" != "0" ]; then
+        echo "FAIL: disposable restore clone still exists after cleanup." >&2
+        result=2
+      fi
     fi
   fi
   if ! rm -f "$snapshot"; then

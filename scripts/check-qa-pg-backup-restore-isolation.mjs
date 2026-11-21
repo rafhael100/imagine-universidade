@@ -54,7 +54,7 @@ try{
     psql:`#!/bin/sh
 # Synthetic successful path: a mutation must change ONLY the restored copy.
 case "\${UNI_QA_FAIL_AT:-}" in
-  dropdb|success)
+  dropdb|dropdb_false_success|success)
     case "$*" in
       *"UPDATE educational_lessons SET body"*) : > "$UNI_QA_TAMPER_MARKER"; exit 0 ;;
       *"CREATE TEMP TABLE qa_pg_table_hashes"*)
@@ -70,7 +70,7 @@ esac
 case "$*" in
   *"SHOW server_version_num"*) echo 180003 ;;
   *"inet_server_addr() IS NULL"*) echo 1 ;;
-  *"FROM pg_database WHERE datname"*) echo 0 ;;
+  *"FROM pg_database WHERE datname"*) if [ -f "$UNI_QA_CLONE_REMAINS_MARKER" ]; then echo 1; else echo 0; fi ;;
   *"WITH parts(kind, name, def)"*) echo schema-hash ;;
   *"CREATE TEMP TABLE qa_pg_table_hashes"*) echo data-hash ;;
   *"SELECT (SELECT COUNT(*) FROM educational_courses)"*) echo '10,35,0,0' ;;
@@ -97,6 +97,10 @@ exit 0
 `,
     dropdb:`#!/bin/sh
 printf 'DROP_WAS_CALLED' > "$UNI_QA_DROP_MARKER"
+if [ "$UNI_QA_FAIL_AT" = "dropdb_false_success" ]; then
+  : > "$UNI_QA_CLONE_REMAINS_MARKER"
+  exit 0
+fi
 if [ "\${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
 `,
   };
@@ -109,7 +113,8 @@ if [ "\${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
     const result=spawnSync("sh",[target],{
       cwd:root,
       env:{...safeEnv,PATH:fakeDir+delimiter+safeEnv.PATH,
-        UNI_QA_FAIL_AT:phase,UNI_QA_DROP_MARKER:marker,UNI_QA_TAMPER_MARKER:tamper},
+        UNI_QA_FAIL_AT:phase,UNI_QA_DROP_MARKER:marker,UNI_QA_TAMPER_MARKER:tamper,
+        UNI_QA_CLONE_REMAINS_MARKER:join(fakeDir,"remains-"+phase)},
       encoding:"utf8",timeout:5000,
     });
     assert.equal(result.status,exitCode,
@@ -120,13 +125,15 @@ if [ "\${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
     if(exitCode!==0)assert.doesNotMatch(result.stdout,/PASS:/u,
       "a failed restore or cleanup must never claim success");
     if(phase==="dropdb")assert.match(result.stderr,/clone cleanup not confirmed/u);
+    if(phase==="dropdb_false_success")assert.match(result.stderr,/clone still exists after cleanup/u);
     if(phase==="success")assert.match(result.stdout,/PASS: PostgreSQL18 snapshot restored/u);
   }
   failAt("createdb",41,false);
   failAt("pg_restore",42,true);
   failAt("dropdb",2,true);
+  failAt("dropdb_false_success",2,true);
   failAt("success",0,true);
-  console.log("PASS synthetic restore cleanup: unowned clone retained; owned failed restore cleaned; cleanup failure never reports PASS; full verified path reports PASS only after successful drop. No DB connected.");
+  console.log("PASS synthetic restore cleanup: unowned clone retained; failed restore cleaned; failed drop and false-success drop with live clone rejected; PASS only after confirmed absence. No DB connected.");
 } finally{
   rmSync(fakeDir,{recursive:true,force:true});
 }

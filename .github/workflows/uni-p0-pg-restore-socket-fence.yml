@@ -4,6 +4,7 @@ on:
     branches:
       - review/uni-p0-pg-restore-socket-fence-2026-11-20
       - review/uni-p0-restore-cleanup-ownership-2026-11-21
+      - review/uni-p0-restore-cleanup-verified-2026-11-21
     paths:
       - .github/workflows/uni-p0-pg-restore-socket-fence.yml
       - scripts/qa-pg-backup-restore.sh
@@ -30,7 +31,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
           case "$GITHUB_REF_NAME" in
-            review/uni-p0-pg-restore-socket-fence-2026-11-20|review/uni-p0-restore-cleanup-ownership-2026-11-21) ;;
+            review/uni-p0-pg-restore-socket-fence-2026-11-20|review/uni-p0-restore-cleanup-ownership-2026-11-21|review/uni-p0-restore-cleanup-verified-2026-11-21) ;;
             *) exit 2 ;;
           esac
           test ! -e .env && test ! -e .env.production

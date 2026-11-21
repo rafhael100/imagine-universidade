@@ -60,6 +60,10 @@ if(name==="docker"){
   reply("disk","Filesystem 1024-blocks Used Available Capacity Mounted on\\nfixture 99999999 1 "+fixture.disk+" 1% /\\n");
 }else if(name==="df"&&JSON.stringify(args)===JSON.stringify(["-Pk","--",fixture.dockerRoot.trim()])){
   reply("dockerDisk","Filesystem 1024-blocks Used Available Capacity Mounted on\\nfixture 99999999 1 "+fixture.dockerDisk+" 1% /var/lib/docker\\n");
+}else if(name==="df"&&JSON.stringify(args)==='["-Pi","."]'){
+  reply("checkoutInodes","Filesystem Inodes IUsed IFree IUse% Mounted on\\nfixture 99999999 1 "+fixture.checkoutInodes+" 1% /\\n");
+}else if(name==="df"&&JSON.stringify(args)===JSON.stringify(["-Pi","--",fixture.dockerRoot.trim()])){
+  reply("dockerInodes","Filesystem Inodes IUsed IFree IUse% Mounted on\\nfixture 99999999 1 "+fixture.dockerInodes+" 1% /var/lib/docker\\n");
 }else if(name==="awk"){
   if(args.length===2&&args[1]==="/proc/meminfo")reply("memory",fixture.memory+"\\n");
   if(args[0]==="-v"&&fixture.fail==="socketParser")reply("socketParser","");
@@ -72,7 +76,7 @@ process.stderr.write("UNEXPECTED_INVENTORY_COMMAND\\n");process.exit(99);
 
 function run(label,changes={},expected="hold",options={}){
   const fixture={project,log:logPath,os:"Linux",context:"default\n",endpoint:"unix:///var/run/docker.sock\n",dockerRoot:"/var/lib/docker\n",
-    dockerDisk:"20971520",runningContainers:[],
+    dockerDisk:"20971520",checkoutInodes:"65536",dockerInodes:"65536",runningContainers:[],
     containerNames:[],ownedContainers:[],networkNames:[],ownedNetworks:[],volumeNames:[],ownedVolumes:[],
     sockets:[],memory:"4194304",disk:"20971520",...changes};
   writeFileSync(scenarioPath,JSON.stringify(fixture));writeFileSync(logPath,"");
@@ -130,7 +134,8 @@ try{
     volumeNames:["PRIVATE_RENAMED_VOLUME"],ownedVolumes:["PRIVATE_RENAMED_VOLUME"]
   },"hold",{reason:/staging volume/});
   for(const fail of ["context","endpoint","dockerRoot","runningContainers","containerNames","ownedContainers",
-    "networkNames","ownedNetworks","volumeNames","ownedVolumes","sockets","socketParser","memory","disk","dockerDisk"]){
+    "networkNames","ownedNetworks","volumeNames","ownedVolumes","sockets","socketParser","memory","disk","dockerDisk",
+    "checkoutInodes","dockerInodes"]){
     run("unavailable read holds: "+fail,{fail});
   }
   for(const address of ["127.0.0.1:18123","0.0.0.0:18123","[::]:18123"]){
@@ -169,6 +174,13 @@ try{
   run("Docker data-root disk almost full despite spacious checkout",{disk:"20971520",dockerDisk:"10485759"},
     "hold",{reason:/Docker data-root disk/});
   run("Docker data-root disk reading is malformed",{dockerDisk:"unavailable"});
+  run("checkout inodes exhausted despite free disk",{checkoutInodes:"1023"},"hold",
+    {reason:/checkout inodes/});
+  run("Docker data-root inodes exhausted despite free disk",{dockerInodes:"1023"},"hold",
+    {reason:/Docker data-root inodes/});
+  run("checkout inode accounting malformed",{checkoutInodes:"unknown"});
+  run("Docker data-root inode accounting malformed",{dockerInodes:"unknown"});
+  run("checkout and Docker inode floors exactly met",{checkoutInodes:"1024",dockerInodes:"1024"},"pass");
   for (const dockerRoot of ["","relative/docker"," /var/lib/docker","/var/lib/docker\n/other"]) {
     const commands=run("Docker data-root not a single absolute path",{dockerRoot},"hold",
       {reason:/single absolute path/});

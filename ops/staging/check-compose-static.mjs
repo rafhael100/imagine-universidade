@@ -61,7 +61,7 @@ verifyPrivateHealth(compose,nginx,bootstrap);
 // Bound PostgreSQL health uses a real local TCP authentication + SELECT 1
 // rather than pg_isready, which can report the temporary socket during initdb.
 const dollar=String.fromCharCode(36), escapedDollar=dollar+dollar;
-const expectedDatabaseHealth='PGPASSWORD="'+escapedDollar+'POSTGRES_PASSWORD" PGCONNECT_TIMEOUT=2 PGOPTIONS="-c statement_timeout=2000" psql -X -w -h 127.0.0.1 -p 5432 -U "'+escapedDollar+'POSTGRES_USER" -d "'+escapedDollar+'POSTGRES_DB" -v ON_ERROR_STOP=1 -tA -c "SELECT 1" 2>/dev/null | grep -qx 1';
+const expectedDatabaseHealth='PGPASSWORD="'+escapedDollar+'POSTGRES_PASSWORD" PGCONNECT_TIMEOUT=2 PGOPTIONS="-c statement_timeout=2000" psql -X -w -h db -p 5432 -U "'+escapedDollar+'POSTGRES_USER" -d "'+escapedDollar+'POSTGRES_DB" -v ON_ERROR_STOP=1 -tA -c "SELECT 1" 2>/dev/null | grep -qx 1';
 function verifyDatabaseSqlHealth(composeText){
   const start=composeText.indexOf("\n  db:\n");
   const end=composeText.indexOf("\nnetworks:\n",start);
@@ -76,7 +76,7 @@ function verifyDatabaseSqlHealth(composeText){
 }
 verifyDatabaseSqlHealth(compose);
 const badSqlHealth=[
-  expectedDatabaseHealth.replace("-h 127.0.0.1","-h example.invalid"),
+  expectedDatabaseHealth.replace("-h db","-h example.invalid"),
   expectedDatabaseHealth.replace('-c "SELECT 1"','-c "SELECT 0"'),
   expectedDatabaseHealth.replace(escapedDollar+"POSTGRES_PASSWORD",escapedDollar+"WRONG_PASSWORD"),
   expectedDatabaseHealth.replace("PGCONNECT_TIMEOUT=2 ",""),

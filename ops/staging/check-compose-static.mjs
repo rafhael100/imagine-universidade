@@ -57,6 +57,39 @@ function verifyPrivateHealth(composeText,nginxText,bootstrapText){
     "Never return a synthetic static response for /up");
 }
 verifyPrivateHealth(compose,nginx,bootstrap);
+
+const expectedDatabaseHealth="PGPASSWORD=\"$POSTGRES_PASSWORD\" PGCONNECT_TIMEOUT=2 PGOPTIONS=\"-c statement_timeout=2000\" psql -X -w -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -v ON_ERROR_STOP=1 -tA -c \"SELECT 1\" 2>/dev/null | grep -qx 1";
+// PostgreSQL's socket-only pg_isready can succeed while the final TCP server
+// is not yet available. Database health is an authenticated bounded TCP query.
+// Keep `$` escapes in YAML so Compose does not expand service secrets.
+function verifyDatabaseSqlHealth(composeText){
+  const dbBlock=composeText.match(/^  db:\\n([\\s\\S]*?)(?=^networks:)/m)?.[1];
+  assert.ok(dbBlock,"Missing private PostgreSQL service");
+  const actual=dbBlock.match(/^      test: \\['CMD-SHELL', '([^'\\n]+)'\\]$/m)?.[1];
+  assert.equal(actual,expectedDatabaseHealth,
+    "PostgreSQL health must use fixed authenticated local TCP SQL, not socket-only pg_isready");
+  assert.match(dbBlock,/^      interval: 5s$/m);
+  assert.match(dbBlock,/^      timeout: 3s$/m);
+  assert.match(dbBlock,/^      retries: 15$/m);
+}
+verifyDatabaseSqlHealth(compose);
+const badSqlHealth=[
+  expectedDatabaseHealth.replace("-h 127.0.0.1","-h db"),
+  expectedDatabaseHealth.replace("-c \\"SELECT 1\\"","-c \\"SELECT 0\\""),
+  expectedDatabaseHealth.replace("$POSTGRES_PASSWORD","$WRONG_PASSWORD"),
+  expectedDatabaseHealth.replace("PGCONNECT_TIMEOUT=2 ",""),
+  expectedDatabaseHealth.replace("PGOPTIONS=\\\"-c statement_timeout=2000\\\" ",""),
+  expectedDatabaseHealth.replace("-U \\"$POSTGRES_USER\\"","-U postgres"),
+  expectedDatabaseHealth.replace("| grep -qx 1",""),
+  "pg_isready -U \\"$POSTGRES_USER\\" -d \\"$POSTGRES_DB\\"",
+];
+for(const wrong of badSqlHealth){
+  assert.notEqual(wrong,expectedDatabaseHealth,"negative fixture must change the healthcheck");
+  assert.throws(()=>verifyDatabaseSqlHealth(compose.replace(expectedDatabaseHealth,wrong)),
+    "Unsafe PostgreSQL health mutation must fail closed");
+}
+console.log("PASS authenticated PostgreSQL18 TCP SQL readiness: eight negative mutations; no container started");
+
 const healthMutations=[
   [compose.replace("http://127.0.0.1:8080/up","http://127.0.0.1:8080/universidade/private/app"),nginx,bootstrap],
   [compose.replace("http://127.0.0.1:8080/up","http://example.invalid:8080/up"),nginx,bootstrap],

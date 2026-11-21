@@ -1,0 +1,40 @@
+name: UNI P0 manual QA migration preflight order (static negative QA)
+on:
+  push:
+    branches:
+      - review/uni-p0-preflight-manual-branch-workflows-2026-11-21
+    paths:
+      - .github/workflows/uni-branch-qa-isolated.yml
+      - .github/workflows/university-manual-qa.yml
+      - .github/workflows/uni-p0-manual-qa-preflight-order.yml
+      - scripts/check-qa-pg-workflow-order.mjs
+permissions:
+  contents: read
+concurrency:
+  group: uni-p0-manual-preflight-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  guarded-qa-config:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Confirm isolated static-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-preflight-manual-branch-workflows-2026-11-21
+          test ! -e .env && test ! -e .env.testing && test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+      - name: Reject missing/reordered SQL preflight before migrations
+        run: |
+          node --check scripts/check-qa-pg-workflow-order.mjs
+          node scripts/check-qa-pg-workflow-order.mjs
+      - name: Preserve 13 existing gates and deny-all
+        run: node ops/staging/check-release-gates.mjs
+      - name: Record evidence boundary
+        run: echo 'Static test only; no PostgreSQL, migrations, restore, SSO, grants, VPS, deploy or real data.'

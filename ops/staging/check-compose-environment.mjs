@@ -39,6 +39,32 @@ export function validateComposeEnvironment(model){
     exposed.protocol==="tcp"&&/^[0-9]{5}$/.test(published)&&
     Number(published)>=18000&&Number(published)<=60000&&published!=="18081",
     "Resolved web port must be the one approved loopback TCP mapping");
+
+  // Prevent Compose overrides from silently attaching containers to shared,
+  // externally managed or non-internal networks. The DB must be isolated from
+  // the web tier; only app may bridge the two project-owned networks.
+  assert.ok(model.name==="imagine-universidade-staging","Unexpected Compose project");
+  assert.ok(record(model.networks),"Missing resolved Compose networks");
+  assert.deepEqual(Object.keys(model.networks).sort(),["university_database","university_front"],
+    "Only two dedicated staging networks are permitted");
+  assert.deepEqual(model.networks.university_front,{
+    name:"imagine-universidade-staging_university_front"
+  },"Front network must be project-owned, without external/driver/attachable overrides");
+  assert.deepEqual(model.networks.university_database,{
+    name:"imagine-universidade-staging_university_database",internal:true
+  },"Database network must remain project-owned and internal");
+  for(const [service,expected] of [
+    [app,["university_database","university_front"]],
+    [web,["university_front"]],
+    [db,["university_database"]]
+  ]){
+    assert.ok(record(service.networks),"Missing resolved service network attachments");
+    assert.deepEqual(Object.keys(service.networks).sort(),expected,
+      "Unexpected staging service network attachment");
+    assert.ok(Object.values(service.networks).every(value=>
+      value===null||(record(value)&&Object.keys(value).length===0)),
+      "Service network aliases, addresses and link overrides require independent review");
+  }
   // Overrides can keep private ports and still escape confinement by adding
   // privileges, host namespaces, or a bind mount of the Docker socket.
   // Check the resolved Compose model, not only the reviewed YAML text.
@@ -111,17 +137,32 @@ export function checkEnvironmentRegressionCases(){
     SESSION_SAME_SITE:"lax",SESSION_COOKIE:"imagine_universidade_staging_session",LOG_CHANNEL:"stderr",
     LOG_LEVEL:"warning",CACHE_STORE:"array",QUEUE_CONNECTION:"sync",MAIL_MAILER:"array"};
   const safeRuntime={read_only:true,cap_drop:["ALL"],security_opt:["no-new-privileges:true"]};
-  const fixture={services:{app:{environment,...safeRuntime,volumes:[
+  const fixture={name:"imagine-universidade-staging",networks:{
+    university_front:{name:"imagine-universidade-staging_university_front"},
+    university_database:{name:"imagine-universidade-staging_university_database",internal:true}},
+    services:{app:{networks:{university_front:null,university_database:null},environment,...safeRuntime,volumes:[
       {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
       {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
-    web:{...safeRuntime,ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+    web:{networks:{university_front:null},...safeRuntime,ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
       healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
-    db:{volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
+    db:{networks:{university_database:null},volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
     environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand]}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
+    model=>{model.name="unexpected-project";},
+    model=>{model.services.web.networks.university_database=null;},
+    model=>{model.services.db.networks.university_front=null;},
+    model=>{delete model.services.app.networks.university_database;},
+    model=>{model.services.app.networks.unreviewed_network=null;},
+    model=>{model.services.web.networks.university_front={aliases:["database"]};},
+    model=>{delete model.networks.university_database.internal;},
+    model=>{model.networks.university_database.internal=false;},
+    model=>{model.networks.university_front.external=true;},
+    model=>{model.networks.university_front.attachable=true;},
+    model=>{model.networks.university_database.name="shared_database";},
+    model=>{model.networks.unreviewed_network={external:true,name:"other_project"};},
     model=>{model.services.app.privileged=true;},
     model=>{model.services.web.privileged=true;},
     model=>{model.services.db.privileged=true;},

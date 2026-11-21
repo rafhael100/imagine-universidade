@@ -1,9 +1,10 @@
-name: UNI P0 database-aware readiness (synthetic, no deploy)
+name: UNI P0 private readiness and image rollback (synthetic, no deploy)
 
 on:
   push:
     branches:
       - review/uni-p0-db-aware-health-2026-11-20
+      - review/uni-p0-synthetic-image-rollback-2026-11-20
     paths:
       - .github/workflows/uni-p0-db-aware-health.yml
       - app/Providers/AppServiceProvider.php
@@ -16,6 +17,7 @@ on:
       - ops/staging/compose.yaml
       - ops/staging/nginx.conf
       - docs/UNI-P0-DATABASE-READY-2026-11-20.md
+      - docs/UNI-P0-IMAGE-ROLLBACK-2026-11-20.md
 
 permissions:
   contents: read
@@ -40,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = "review/uni-p0-db-aware-health-2026-11-20"
+          [[ "$GITHUB_REF_NAME" == "review/uni-p0-db-aware-health-2026-11-20" || "$GITHUB_REF_NAME" == "review/uni-p0-synthetic-image-rollback-2026-11-20" ]]
           test "$GITHUB_EVENT_NAME" = push
           test ! -e .env && test ! -e .env.production && test ! -e ops/staging/.env.staging
           test -f composer.lock
@@ -58,11 +60,11 @@ jobs:
           tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           docker build -f ops/staging/Dockerfile.php -t "${tag}-php" .
           docker build -f ops/staging/Dockerfile.nginx -t "${tag}-nginx" .
-      - name: Test DB-dependent healthy-unhealthy-recovery with private deny
+      - name: Test DB health, wrong-image readiness and exact-image rollback with private deny
         shell: bash
         run: |
           set -euo pipefail
           tag="uni-qa-stage-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           bash scripts/qa-staging-postgres-http.sh "${tag}-php" "${tag}-nginx"
       - name: Report scope
-        run: echo 'Disposable PG18, FPM and Nginx health only. No private VPS or Portal authority; HOLD_NO_GO.'
+        run: echo 'Disposable PG18, FPM, Nginx and image rollback only. No schema rollback, private VPS or Portal authority; HOLD_NO_GO.'

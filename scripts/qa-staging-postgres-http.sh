@@ -18,7 +18,8 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
      ( "${GITHUB_REF:-}" == "refs/heads/fix/uni-c108-private-flow-2026-11-17" ||
        "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-private-health-runtime-2026-11-20" ||
        "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-db-outage-failclosed-2026-11-20" ||
-       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-db-aware-health-2026-11-20" ) ]] ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-db-aware-health-2026-11-20" ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-synthetic-image-rollback-2026-11-20" ) ]] ||
     fail "push QA only on authorized review branch"
 elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" ]] ||
@@ -125,7 +126,8 @@ sed -e 's/uni_stage_runtime/uni_ci_runtime_only/g' \
 
 # Actual app must run with runtime SQL role, NOT migration owner.
 stagingPgStage=app_start
-docker run -d --name "$app" --network "$network" --network-alias app \
+start_app() {
+  docker run -d --name "$app" --network "$network" --network-alias app \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   --tmpfs /tmp:mode=1777 --tmpfs /usr/local/var/run:mode=1777 \
   --tmpfs /var/www/html/storage:mode=1777 \
@@ -141,6 +143,8 @@ docker run -d --name "$app" --network "$network" --network-alias app \
   --env CACHE_STORE=array --env QUEUE_CONNECTION=sync \
   "$phpImage" sh -ec \
   'mkdir -p storage/logs storage/framework/views storage/framework/cache/data storage/framework/sessions;exec php-fpm -F' >/dev/null
+}
+start_app
 stagingPgStage=web_start
 docker run -d --name "$web" --network "$network" --network-alias web \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
@@ -248,6 +252,60 @@ docker run --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
 echo "PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied."
+
+# P0 release safety: simulate replacing the trusted PHP app with the WRONG,
+# non-PHP image, then replace it with the exact previous image ID. This is a
+# rollback of a disposable container image, not a database/schema rollback or
+# private VPS rehearsal. Nginx is restarted to re-resolve the app alias.
+stagingPgStage=release_rollback_baseline
+approvedImageId="$(docker inspect --format '{{.Image}}' "$app")"
+[[ "$approvedImageId" == sha256:* &&
+   "$approvedImageId" == "$(docker image inspect --format '{{.Id}}' "$phpImage")" ]] ||
+  fail "approved PHP image identity is not verifiable"
+beforeRollbackSessions="$(docker exec "$db" psql -X -U uni_ci_migration_owner \
+  -d uni_staging_ci_only -v ON_ERROR_STOP=1 -tA \
+  -c 'SELECT COUNT(*) FROM public.sessions')"
+[[ "$beforeRollbackSessions" =~ ^[0-9]+$ ]] ||
+  fail "cannot verify session persistence before synthetic image replacement"
+
+stagingPgStage=release_wrong_image
+docker rm -f "$app" >/dev/null
+# nginxImage is intentionally not a PHP-FPM image: no executable on port 9000.
+# A running but WRONG candidate must fail readiness (not falsely return 200).
+docker run -d --name "$app" --network "$network" --network-alias app \
+  --read-only --cap-drop ALL --security-opt no-new-privileges \
+  "$nginxImage" sleep 120 >/dev/null
+[[ "$(docker inspect --format '{{.State.Running}}' "$app")" == true ]] ||
+  fail "invalid candidate did not stay running for the negative test"
+[[ "$(docker inspect --format '{{.Image}}' "$app")" != "$approvedImageId" ]] ||
+  fail "negative candidate unexpectedly used the approved application image"
+docker restart -t 2 "$web" >/dev/null
+wait_web_health unhealthy ||
+  fail "wrong runtime image was not detected by private readiness"
+if timeout 5s docker exec "$web" wget -q -T 3 -O /dev/null \
+  http://127.0.0.1:8080/up >/dev/null 2>&1; then
+  fail "wrong image returned a successful readiness response"
+fi
+
+stagingPgStage=release_restore_image
+docker rm -f "$app" >/dev/null
+start_app
+[[ "$(docker inspect --format '{{.Image}}' "$app")" == "$approvedImageId" ]] ||
+  fail "rollback did not restore the exact previously approved image ID"
+docker restart -t 2 "$web" >/dev/null
+wait_web_health healthy ||
+  fail "rollback to approved image failed to restore health"
+afterRollbackSessions="$(docker exec "$db" psql -X -U uni_ci_migration_owner \
+  -d uni_staging_ci_only -v ON_ERROR_STOP=1 -tA \
+  -c 'SELECT COUNT(*) FROM public.sessions')"
+[[ "$afterRollbackSessions" == "$beforeRollbackSessions" ]] ||
+  fail "rollback modified or lost the PostgreSQL session baseline"
+stagingPgStage=release_rollback_deny_all
+docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+  --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
+  "$phpImage" php < scripts/qa-staging-private-http-probe.php
+echo "PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403."
+
 
 
 echo "PASS synthetic 3-service staging PG18: owner migrations, separate runtime role, private HTTP and session storage query. No host ports."

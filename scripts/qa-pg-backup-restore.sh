@@ -70,6 +70,11 @@ cleanup() {
   if ! rm -f "$snapshot"; then
     echo "FAIL: disposable snapshot cleanup not confirmed." >&2
     result=2
+  elif [ -e "$snapshot" ] || [ -L "$snapshot" ]; then
+    # A successful rm exit is not evidence that the backup disappeared.
+    # Refuse a PASS if a regular file or symlink survives cleanup.
+    echo "FAIL: disposable snapshot still exists after cleanup." >&2
+    result=2
   fi
   # No success is reported until BOTH temporary artifacts are gone.
   if [ "$result" -eq 0 ] && [ "$restore_verified" -eq 1 ]; then

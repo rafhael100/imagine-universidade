@@ -137,6 +137,8 @@ jobs:
           set -euo pipefail
           test "$DB_DATABASE" = "uni_ci"
           test "$APP_ENV" = "testing"
+          # Fail closed if effective Laravel configuration or the PG18 target differs.
+          php scripts/qa-pg-pre-migrate.php
           php artisan migrate:fresh --database=pgsql --force
           php artisan migrate:status --database=pgsql
           php scripts/check-pg-schema.php

@@ -9,6 +9,8 @@ on:
       - scripts/run-qa-compose.sh
       - scripts/check-qa-compose-teardown.mjs
       - scripts/qa-pg-backup-restore.sh
+      - tests/Feature/PrivateUniversityResponseBoundaryTest.php
+      - tests/Feature/SyntheticEditorialFixtureImportTest.php
 
 permissions:
   contents: read

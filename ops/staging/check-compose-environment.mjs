@@ -36,7 +36,7 @@ export function validateComposeEnvironment(model){
     "Web must publish exactly one explicit loopback-only port");
   const exposed=web.ports[0],published=String(exposed.published??"");
   assert.ok(exposed.host_ip==="127.0.0.1"&&exposed.target===8080&&
-    exposed.protocol==="tcp"&&/^[0-9]{5}$/.test(published)&&
+    exposed.protocol==="tcp"&&exposed.mode==="ingress"&&/^[0-9]{5}$/.test(published)&&
     Number(published)>=18000&&Number(published)<=60000&&published!=="18081",
     "Resolved web port must be the one approved loopback TCP mapping");
 
@@ -97,6 +97,13 @@ export function validateComposeEnvironment(model){
   }
   for(const service of [app,web,db]){
     assert.ok(!Object.hasOwn(service,"env_file"),"Service env_file is not allowed");
+    // A Compose override can redirect the fixed DB_HOST via /etc/hosts or DNS,
+    // or replace the trusted image startup with arbitrary code. The database
+    // credentials must never be sent to an override-controlled destination.
+    for(const key of ["extra_hosts","dns","dns_search","dns_opt","links",
+      "external_links","hostname","domainname","entrypoint","command","user"]){
+      assert.ok(!Object.hasOwn(service,key),"Unreviewed service identity, DNS or startup override");
+    }
   }
   // Validate the *resolved* Docker Compose health contract, not just YAML text.
   // Never use a private Student/Admin route as a health endpoint.
@@ -187,6 +194,18 @@ export function checkEnvironmentRegressionCases(){
     model=>{delete model.services.web.ports[0].host_ip;},
     model=>{model.services.web.ports[0].target=80;},
     model=>{model.services.web.ports[0].protocol="udp";},
+    model=>{model.services.web.ports[0].mode="host";},
+    model=>{model.services.app.extra_hosts=["db:203.0.113.7"];},
+    model=>{model.services.app.dns=["203.0.113.7"];},
+    model=>{model.services.app.dns_search=["untrusted.invalid"];},
+    model=>{model.services.web.dns_opt=["ndots:0"];},
+    model=>{model.services.app.links=["web:db"];},
+    model=>{model.services.app.external_links=["other:db"];},
+    model=>{model.services.db.hostname="other-db";},
+    model=>{model.services.web.domainname="untrusted.invalid";},
+    model=>{model.services.app.entrypoint=["/bin/sh"];},
+    model=>{model.services.web.command=["sh","-c","echo unsafe"];},
+    model=>{model.services.db.user="root";},
     model=>{model.services.web.ports[0].published="18081";},
     model=>{model.services.web.ports[0].published="60001";},
     model=>{delete model.services.web.ports;},

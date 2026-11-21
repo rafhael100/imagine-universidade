@@ -1,0 +1,96 @@
+name: UNI P0 exact Git blob readiness (no deploy)
+on:
+  push:
+    branches:
+      - review/uni-p0-readiness-blob-integrity-2026-11-21
+    paths:
+      - .github/workflows/uni-p0-readiness-git-blobs.yml
+      - scripts/build-university-readiness-pack.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-p0-readiness-git-blobs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  immutable-source-only:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact review source with no retained credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Confirm isolated branch SHA and no injected environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_TYPE" = branch
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-blob-integrity-2026-11-21
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.local && test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          node --check scripts/build-university-readiness-pack.mjs
+          node scripts/check-university-readiness-pack.mjs
+          node ops/staging/check-release-gates.mjs
+      - name: Generate report only from matching Git blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/uni-p0-readiness"
+          (cd "$RUNNER_TEMP/uni-p0-readiness" && sha256sum -c SHA256SUMS)
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import {readFileSync} from "node:fs";
+            const d=process.env.RUNNER_TEMP+"/uni-p0-readiness/";
+            const p=JSON.parse(readFileSync(d+"source-provenance.json","utf8"));
+            const r=JSON.parse(readFileSync(d+"readiness.json","utf8"));
+            assert.equal(p.source_checkout_sha,process.env.GITHUB_SHA);
+            assert.equal(p.source_commit_blobs_verified,true);
+            assert.equal(p.source_kind,"GIT_FILES_ONLY");
+            assert.equal(p.runtime_image_digest_verified,false);
+            assert.equal(p.production_approval,false);
+            assert.equal(Object.keys(p.source_files_sha256).length,5);
+            assert.equal(r.source_sha,process.env.GITHUB_SHA);
+            assert.equal(r.gates_total,13);
+            assert.equal(r.gates_unverified,13);
+            assert.equal(r.release_decision,"HOLD_NO_GO");
+            console.log("PASS five Git-blob source hashes, 13 NOT_VERIFIED and HOLD_NO_GO; no Docker image digest");
+          '
+      - name: Reject drift of gate manifest and generator before writing any package
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in ops/release-gates.json scripts/build-university-readiness-pack.mjs; do
+            original="$(mktemp "$RUNNER_TEMP/uni-source-original.XXXXXXXX")"
+            cp "$source" "$original"
+            printf '\n' >> "$source"
+            if node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/uni-p0-drift" >"$RUNNER_TEMP/uni-drift-stdout.log" 2>"$RUNNER_TEMP/uni-drift-stderr.log"; then
+              cp "$original" "$source"
+              echo "FAIL: mutated source was accepted: $source" >&2
+              exit 2
+            fi
+            if ! grep -Fq 'Source file differs from exact checked-out Git commit:' "$RUNNER_TEMP/uni-drift-stderr.log"; then
+              cat "$RUNNER_TEMP/uni-drift-stderr.log" >&2
+              cp "$original" "$source"
+              echo "FAIL: drift refusal not verified: $source" >&2
+              exit 2
+            fi
+            cp "$original" "$source"
+            rm -f "$original"
+            test ! -e "$RUNNER_TEMP/uni-p0-drift"
+            echo "PASS exact-commit drift refused: $source"
+          done
+          git diff --exit-code -- ops/release-gates.json scripts/build-university-readiness-pack.mjs
+      - name: Attach source-only report for private review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-source-blobs-HOLD-NO-GO
+          path: ${{ runner.temp }}/uni-p0-readiness/
+          retention-days: 14
+          if-no-files-found: error

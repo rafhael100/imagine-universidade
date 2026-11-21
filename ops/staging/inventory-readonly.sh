@@ -30,6 +30,13 @@ docker_endpoint="$(docker context inspect default --format '{{ (index .Endpoints
   fail "Cannot inspect the default Docker context endpoint."
 [[ "$docker_endpoint" == "unix:///var/run/docker.sock" ]] ||
   fail "Docker endpoint is not the approved local Unix socket."
+# The checkout and Docker's data-root may live on DIFFERENT filesystems.
+# Checking only 'df .' could falsely approve a staging host whose Docker
+# image/volume storage is full. Ask the verified local daemon for its root.
+docker_data_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null)" ||
+  fail "Cannot determine the local Docker data-root filesystem."
+[[ "$docker_data_root" == /* && "$docker_data_root" != *[[:space:]]* ]] ||
+  fail "Docker data-root must be a single absolute path."
 docker ps --format '{{.Names}}' >/dev/null 2>&1 ||
   fail "Docker local read-only inventory is unavailable."
 
@@ -97,15 +104,20 @@ owned_volumes="$(docker volume ls --filter "$staging_label" --format '{{.Name}}'
 available_kb="$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo 2>/dev/null)" ||
   fail "Memory inventory is unavailable."
 disk_kb="$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}' 2>/dev/null)" ||
-  fail "Disk inventory is unavailable."
-[[ "$available_kb" =~ ^[0-9]+$ && "$disk_kb" =~ ^[0-9]+$ ]] ||
+  fail "Checkout disk inventory is unavailable."
+docker_disk_kb="$(df -Pk -- "$docker_data_root" 2>/dev/null | awk 'NR==2 {print $4}' 2>/dev/null)" ||
+  fail "Docker data-root disk inventory is unavailable."
+[[ "$available_kb" =~ ^[0-9]+$ && "$disk_kb" =~ ^[0-9]+$ &&
+   "$docker_disk_kb" =~ ^[0-9]+$ ]] ||
   fail "Could not obtain trusted local memory/disk inventory."
 (( available_kb >= 2097152 )) ||
   fail "Available memory below preliminary 2 GiB safety floor."
 (( disk_kb >= 10485760 )) ||
-  fail "Available disk below preliminary 10 GiB safety floor."
+  fail "Available checkout disk below preliminary 10 GiB safety floor."
+(( docker_disk_kb >= 10485760 )) ||
+  fail "Available Docker data-root disk below preliminary 10 GiB safety floor."
 
 printf 'PASS READ-ONLY: loopback port %s appears free at this instant.\n' "$candidate_port"
 printf 'PASS READ-ONLY: no University staging container, network or volume collision found.\n'
-printf 'PASS READ-ONLY: local default Docker context and provisional free resource floors.\n'
+printf 'PASS READ-ONLY: local Docker data-root and checkout each have provisional free resource floors.\n'
 printf 'HOLD: no socket was reserved, no service was launched, no TLS/SSO/DB/backup gate was approved.\n'

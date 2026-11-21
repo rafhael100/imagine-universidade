@@ -10,9 +10,22 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 docker compose version >/dev/null
 
-DOCKER_HOST_VALUE="$(printenv DOCKER_HOST || true)"
-if [[ -n "$DOCKER_HOST_VALUE" || "$(docker context show)" != "default" ]]; then
-  echo "FAIL: refusing to run QA against a remote/non-default Docker daemon." >&2
+# The context *name* alone does not guarantee a local daemon: even a
+# context named "default" can be configured for TCP/SSH or another Unix socket.
+# Reject client overrides before any daemon-query, build, or cleanup.
+for docker_override in DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH; do
+  if [[ -n "$(printenv "$docker_override" || true)" ]]; then
+    echo "FAIL: refusing Docker client endpoint overrides for disposable QA." >&2
+    exit 2
+  fi
+done
+if ! DOCKER_CONTEXT_NAME="$(docker context show)" || [[ "$DOCKER_CONTEXT_NAME" != "default" ]]; then
+  echo "FAIL: refusing non-default/uninspectable Docker context for QA." >&2
+  exit 2
+fi
+if ! DOCKER_ENDPOINT="$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" ||
+   [[ "$DOCKER_ENDPOINT" != "unix:///var/run/docker.sock" ]]; then
+  echo "FAIL: disposable QA requires the exact local Docker Unix socket." >&2
   exit 2
 fi
 if [[ -e .env || -e .env.production || -e .env.local ]]; then

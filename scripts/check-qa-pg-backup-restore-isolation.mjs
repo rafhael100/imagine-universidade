@@ -53,7 +53,7 @@ try{
   const fakeTools={
     psql:`#!/bin/sh
 # Synthetic successful path: a mutation must change ONLY the restored copy.
-case "${UNI_QA_FAIL_AT:-}" in
+case "\${UNI_QA_FAIL_AT:-}" in
   dropdb|success)
     case "$*" in
       *"UPDATE educational_lessons SET body"*) : > "$UNI_QA_TAMPER_MARKER"; exit 0 ;;
@@ -97,7 +97,7 @@ exit 0
 `,
     dropdb:`#!/bin/sh
 printf 'DROP_WAS_CALLED' > "$UNI_QA_DROP_MARKER"
-if [ "${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
+if [ "\${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
 `,
   };
   for(const [cmd,content] of Object.entries(fakeTools)){

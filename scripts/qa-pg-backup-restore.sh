@@ -46,13 +46,33 @@ snapshot="$(mktemp /tmp/uni_synthetic_qa.XXXXXX)"
 # createdb (e.g. another process won the name race) must never trigger a
 # destructive dropdb of a database that this QA run does not own.
 restore_created=0
+restore_verified=0
 cleanup() {
+  result=$?
+  # Avoid firing the EXIT handler a second time on its own explicit exit.
+  trap - EXIT HUP INT TERM
   if [ "$restore_created" -eq 1 ]; then
-    dropdb -h "$pg_socket" -p "$pg_port" --if-exists -U uni_ci "$restore_db" >/dev/null 2>&1 || true
+    if ! dropdb -h "$pg_socket" -p "$pg_port" --if-exists -U uni_ci "$restore_db" >/dev/null 2>&1; then
+      echo "FAIL: disposable restore clone cleanup not confirmed." >&2
+      result=2
+    fi
   fi
-  rm -f "$snapshot"
+  if ! rm -f "$snapshot"; then
+    echo "FAIL: disposable snapshot cleanup not confirmed." >&2
+    result=2
+  fi
+  # No success is reported until BOTH temporary artifacts are gone.
+  if [ "$result" -eq 0 ] && [ "$restore_verified" -eq 1 ]; then
+    echo "PASS: PG18 restored all public data and relational structure; clone-only tamper detected."
+    echo "PASS: PostgreSQL18 snapshot restored into synthetic isolated database; 10 courses, 35 lessons, no client progress; content fingerprint matches."
+    echo "The temp backup and clone DB were removed; production/VPS backup is NOT proven."
+  fi
+  exit "$result"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 counts_sql="SELECT (SELECT COUNT(*) FROM educational_courses)::text || ',' ||
                    (SELECT COUNT(*) FROM educational_lessons)::text || ',' ||
@@ -174,8 +194,4 @@ test "$(data_hash uni_ci)" = "$before_data" || {
   echo "FAIL: the original disposable source was unexpectedly modified." >&2
   exit 2
 }
-echo "PASS: PG18 restored all public data and relational structure; clone-only tamper detected."
-
-
-echo "PASS: PostgreSQL18 snapshot restored into synthetic isolated database; 10 courses, 35 lessons, no client progress; content fingerprint matches."
-echo "The temp backup and clone DB are removed before exit; production/VPS backup is NOT proven."
+restore_verified=1

@@ -1,0 +1,61 @@
+name: UNI P0 disposable PG18 restore and verified Compose teardown
+
+on:
+  push:
+    branches:
+      - review/uni-p0-compose-teardown-proof-2026-11-21
+    paths:
+      - .github/workflows/uni-p0-restore-compose-teardown.yml
+      - scripts/run-qa-compose.sh
+      - scripts/check-qa-compose-teardown.mjs
+      - scripts/qa-pg-backup-restore.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-p0-disposable-restore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compose-restore-and-cleanup:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact isolated review head without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify zero production credentials and local Docker isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-compose-teardown-proof-2026-11-21
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test ! -e .env && test ! -e .env.testing && test ! -e .env.local
+          test ! -e .env.production && test ! -e ops/staging/.env.staging
+          test -z "${DOCKER_HOST:-}"
+          test "$(docker context show)" = default
+          test -f composer.lock
+          ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
+          ! grep -Fq /var/run/docker.sock compose.qa.yml
+          bash -n scripts/run-qa-compose.sh
+          sh -n scripts/qa-pg-backup-restore.sh
+      - name: Prove fail-closed cleanup before starting real disposable Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/check-qa-compose-teardown.mjs
+          node scripts/check-qa-compose-teardown.mjs
+      - name: Run existing locked Laravel and live PG18 synthetic restore in local Docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/run-qa-compose.sh | tee "$RUNNER_TEMP/uni-p0-disposable-restore.log"
+          grep -Fq 'PASS QA PostgreSQL pre-migrate: effective Laravel config + live synthetic PG18 SQL checked' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
+          grep -Fq 'The temp backup and clone DB were removed; production/VPS backup is NOT proven.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
+          grep -Fq 'PASS: synthetic PostgreSQL restore and verified disposal of QA containers, database volume and network.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
+      - name: Confirm 13 independent gates still HOLD_NO_GO and real access denied
+        run: node ops/staging/check-release-gates.mjs

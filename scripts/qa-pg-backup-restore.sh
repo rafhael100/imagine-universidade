@@ -42,8 +42,14 @@ already="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni
 test "$already" = "0" || { echo "FAIL: restore target already exists." >&2; exit 2; }
 
 snapshot="$(mktemp /tmp/uni_synthetic_qa.XXXXXX)"
+# Only delete the clone if THIS run successfully created it. A failed
+# createdb (e.g. another process won the name race) must never trigger a
+# destructive dropdb of a database that this QA run does not own.
+restore_created=0
 cleanup() {
-  dropdb -h "$pg_socket" -p "$pg_port" --if-exists -U uni_ci "$restore_db" >/dev/null 2>&1 || true
+  if [ "$restore_created" -eq 1 ]; then
+    dropdb -h "$pg_socket" -p "$pg_port" --if-exists -U uni_ci "$restore_db" >/dev/null 2>&1 || true
+  fi
   rm -f "$snapshot"
 }
 trap cleanup EXIT HUP INT TERM
@@ -140,6 +146,7 @@ test "${#before_hash}" -eq 32 || { echo "FAIL: invalid source fingerprint." >&2;
 pg_dump -h "$pg_socket" -p "$pg_port" -U uni_ci -Fc --no-owner --no-acl -f "$snapshot" uni_ci
 test -s "$snapshot" || { echo "FAIL: empty database snapshot." >&2; exit 2; }
 createdb -h "$pg_socket" -p "$pg_port" -U uni_ci -T template0 "$restore_db"
+restore_created=1
 pg_restore -h "$pg_socket" -p "$pg_port" -U uni_ci --exit-on-error --single-transaction --no-owner --no-acl -d "$restore_db" "$snapshot"
 
 after_counts="$(psql -h "$pg_socket" -p "$pg_port" -X -A -t -v ON_ERROR_STOP=1 -U uni_ci -d "$restore_db" -c "$counts_sql")"

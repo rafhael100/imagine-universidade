@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {readFileSync, mkdirSync, writeFileSync} from "node:fs";
 import {resolve, relative, sep, join} from "node:path";
 import {fileURLToPath} from "node:url";
+import {execFileSync} from "node:child_process";
+import {createHash} from "node:crypto";
 import {validateReleaseManifest, requiredReleaseGates} from "../ops/staging/release-gate-policy.mjs";
 
 // These are suggested workstreams, NOT named owners or approvals.
@@ -111,20 +113,61 @@ const selfPath=fileURLToPath(import.meta.url);
 if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   const args=process.argv.slice(2);
   if(args.length!==2||args[0]!=="--out")throw new Error("Usage: --out RUNNER_TEMP/subdirectory");
-  const tmp=process.env.RUNNER_TEMP;
+  const temp=process.env.RUNNER_TEMP;
   const dest=resolve(args[1]);
+  const ref=process.env.GITHUB_REF_NAME||"";
+  // Cited #85 historical review remains supported; P0 successors may emit a
+  // non-authoritative source package only on a branch-local GitHub Actions push.
+  const allowedBranch=ref==="fix/uni-c108-private-flow-2026-11-17" ||
+    /^review\\/uni-p0-[a-z0-9-]+-20[0-9]{2}-[0-9]{2}-[0-9]{2}$/u.test(ref);
   if(process.env.GITHUB_ACTIONS!=="true"
+    || process.env.GITHUB_EVENT_NAME!=="push"
+    || process.env.GITHUB_REF_TYPE!=="branch"
     || process.env.GITHUB_REPOSITORY!=="rafhael100/imagine-universidade"
-    || process.env.GITHUB_REF_NAME!=="fix/uni-c108-private-flow-2026-11-17"
-    || !tmp || !resolve(tmp) || !dest.startsWith(resolve(tmp)+sep)){
-    throw new Error("Readiness package only allowed in isolated reviewed GitHub Actions runner temp");
+    || !allowedBranch
+    || !temp || !dest.startsWith(resolve(temp)+sep)){
+    throw new Error("Readiness package permitted only for a checked-out P0 review push within runner temp");
+  }
+  const checkout=execFileSync("git",["rev-parse","HEAD"],{
+    cwd:new URL("../",import.meta.url),encoding:"utf8",
+    stdio:["ignore","pipe","ignore"],timeout:5000
+  }).trim();
+  const sha=process.env.GITHUB_SHA||"";
+  if(!/^[a-f0-9]{40}$/iu.test(sha)||sha!==checkout){
+    throw new Error("Refusing readiness package: checkout SHA does not match GitHub event SHA");
   }
   const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
-  const report=buildReadinessPack(manifest,process.env.GITHUB_SHA||"");
+  const report=buildReadinessPack(manifest,sha);
+  // Only exact Git-source file hashes. These are NOT Docker image digests,
+  // an SBOM, a security approval, or a license to deploy.
+  const sourceFiles=[
+    "composer.lock",
+    "ops/release-gates.json",
+    "ops/staging/compose.yaml",
+    "ops/staging/Dockerfile.php",
+    "ops/staging/Dockerfile.nginx"
+  ];
+  const sum=buffer=>createHash("sha256").update(buffer).digest("hex");
+  const sourceHashes=Object.fromEntries(sourceFiles.map(name=>[
+    name,sum(readFileSync(new URL("../"+name,import.meta.url)))
+  ]));
+  const provenance={
+    schema_version:1,
+    source_checkout_sha:sha,
+    source_ref:ref,
+    source_kind:"GIT_FILES_ONLY",
+    runtime_image_digest_verified:false,
+    production_approval:false,
+    source_files_sha256:sourceHashes
+  };
   mkdirSync(dest,{recursive:true});
   writeFileSync(join(dest,"PENDENCIAS-LANCAMENTO.md"),report.markdown);
   writeFileSync(join(dest,"gates.csv"),report.csv);
-  writeFileSync(join(dest,"readiness.json"),JSON.stringify(report.snapshot,null,2)+"\n");
-  console.log("PASS readonly readiness pack: "+report.snapshot.gates_unverified+
-    "/13 gates remain unverified; HOLD_NO_GO; no deployment or authority.");
+  writeFileSync(join(dest,"readiness.json"),JSON.stringify(report.snapshot,null,2)+"\\n");
+  writeFileSync(join(dest,"source-provenance.json"),JSON.stringify(provenance,null,2)+"\\n");
+  const artifacts=["PENDENCIAS-LANCAMENTO.md","gates.csv","readiness.json","source-provenance.json"];
+  writeFileSync(join(dest,"SHA256SUMS"),artifacts.map(name=>
+    sum(readFileSync(join(dest,name)))+"  "+name).join("\\n")+"\\n");
+  console.log("PASS readonly readiness pack at "+sha+": "+report.snapshot.gates_unverified+
+    "/13 unverified, HOLD_NO_GO, source file/report SHA-256; no image digest, deploy or authority.");
 }

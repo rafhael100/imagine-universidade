@@ -22,14 +22,14 @@ case "$*" in
   *" down --volumes --remove-orphans")
     if [ "\${UNI_FAKE_MODE:-}" = "down_failed" ]; then exit 41; fi
     exit 0 ;;
-  ps\ -aq\ --filter\ label=com.docker.compose.project=*)
+  *"ps -aq --filter label=com.docker.compose.project="*)
     if [ "\${UNI_FAKE_MODE:-}" = "container_remaining" ]; then echo synthetic-container; fi
     if [ "\${UNI_FAKE_MODE:-}" = "inspect_failed" ]; then exit 49; fi
     exit 0 ;;
-  volume\ ls\ -q\ --filter\ label=com.docker.compose.project=*)
+  *"volume ls -q --filter label=com.docker.compose.project="*)
     if [ "\${UNI_FAKE_MODE:-}" = "volume_remaining" ]; then echo synthetic-volume; fi
     exit 0 ;;
-  network\ ls\ -q\ --filter\ label=com.docker.compose.project=*)
+  *"network ls -q --filter label=com.docker.compose.project="*)
     if [ "\${UNI_FAKE_MODE:-}" = "network_remaining" ]; then echo synthetic-network; fi
     exit 0 ;;
 esac

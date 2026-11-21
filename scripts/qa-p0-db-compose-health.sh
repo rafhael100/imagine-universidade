@@ -53,14 +53,15 @@ wait_health(){
 query(){
   local password="$1" sql="$2"
   timeout 6s docker exec --env "PGPASSWORD=$password" --env PGCONNECT_TIMEOUT=2 \
-    "$cid" psql -X -w -h 127.0.0.1 -p 5432 -U uni_ci_owner_fake \
+    "$cid" psql -X -w -h db -p 5432 -U uni_ci_owner_fake \
     -d uni_stage_ci_fake -v ON_ERROR_STOP=1 -tA -c "$sql"
 }
 wait_health healthy 80
 [[ "$(query CI_FAKE_NOT_SECRET 'SELECT 1')" == 1 ]] ||
   fail "positive authenticated TCP SQL query failed"
 # Reproduce socket-readiness false positive: PostgreSQL still runs, but the
-# credential retained by the candidate DB healthcheck becomes invalid.
+# credential retained by the candidate DB healthcheck becomes invalid. Use
+# -h db (service-network IP), not loopback, which can accept local trust.
 query CI_FAKE_NOT_SECRET \
   "ALTER ROLE uni_ci_owner_fake PASSWORD 'CI_FAKE_ROTATED_ONLY'" >/dev/null
 if query CI_FAKE_NOT_SECRET 'SELECT 1' >/dev/null 2>&1; then

@@ -6,6 +6,7 @@ on:
       - review/uni-p0-restore-cleanup-ownership-2026-11-21
       - review/uni-p0-restore-cleanup-verified-2026-11-21
       - review/uni-p0-restore-drop-verified-2026-11-21
+      - review/uni-p0-restore-snapshot-verified-2026-11-21
     paths:
       - .github/workflows/uni-p0-pg-restore-socket-fence.yml
       - scripts/qa-pg-backup-restore.sh
@@ -32,13 +33,13 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
           case "$GITHUB_REF_NAME" in
-            review/uni-p0-pg-restore-socket-fence-2026-11-20|review/uni-p0-restore-cleanup-ownership-2026-11-21|review/uni-p0-restore-cleanup-verified-2026-11-21|review/uni-p0-restore-drop-verified-2026-11-21) ;;
+            review/uni-p0-pg-restore-socket-fence-2026-11-20|review/uni-p0-restore-cleanup-ownership-2026-11-21|review/uni-p0-restore-cleanup-verified-2026-11-21|review/uni-p0-restore-drop-verified-2026-11-21|review/uni-p0-restore-snapshot-verified-2026-11-21) ;;
             *) exit 2 ;;
           esac
           test ! -e .env && test ! -e .env.production
           test ! -e ops/staging/.env.staging
           sh -n scripts/qa-pg-backup-restore.sh
-      - name: Run socket, clone ownership and confirmed cleanup negative tests
+      - name: Run socket, clone ownership and backup + clone cleanup negative tests
         run: node scripts/check-qa-pg-backup-restore-isolation.mjs
       - name: Preserve release gates
         run: node ops/staging/check-release-gates.mjs

@@ -155,7 +155,8 @@ final class PrivateUniversityResponseBoundaryTest extends TestCase
         // A deliberately unmigrated disposable DB fails inside the real
         // catalog query. No artificial route or exception renderer is used.
         $response = $this->getJson('/universidade/private/courses');
-        $response->assertStatus(500)->assertJsonPath('message', 'Server Error')
+        $response->assertStatus(503)->assertJsonPath('error', 'service_unavailable')
+            ->assertHeader('Retry-After', '5')
             ->assertDontSee('educational_organizations')
             ->assertDontSee('SQLSTATE')
             ->assertDontSee('c108-synthetic-session')

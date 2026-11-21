@@ -75,7 +75,10 @@ final class SyntheticEditorialFixtureImportTest extends TestCase
         $performanceLesson = DB::table('educational_lessons')
             ->where('slug', 'performance-ai-acompanhamento-responsavel')->value('body');
         self::assertIsString($performanceLesson);
-        self::assertStringContainsString('está em desenvolvimento', $performanceLesson);
+        // The preserved draft now describes unapproved capabilities as planned.
+        // This is a safety assertion, not editorial approval.
+        self::assertStringContainsString('não homologados', $performanceLesson);
+        self::assertStringContainsString('Nenhuma integração, previsão, pagamento ou campanha é ativada', $performanceLesson);
         $bodies = DB::table('educational_lessons')->pluck('body');
         self::assertCount(35, $bodies);
         foreach ($bodies as $body) {

@@ -25,7 +25,7 @@ for(const cmd of ["psql","pg_dump","createdb","pg_restore","dropdb"]){
 }
 assert.ok(source.includes("pg_socket=/var/run/postgresql"));
 assert.ok(source.includes("inet_server_addr() IS NULL"));
-assert.doesNotMatch(source,/\\b(?:psql|pg_dump|createdb|pg_restore|dropdb) (?:-X|-U|--if-exists)\\b/u);
+assert.doesNotMatch(source,/\b(?:psql|pg_dump|createdb|pg_restore|dropdb) (?:-X|-U|--if-exists)\b/u);
 function reject(env,expected){
   const result=spawnSync("sh",[target],{
     cwd:root,env,encoding:"utf8",timeout:2500,

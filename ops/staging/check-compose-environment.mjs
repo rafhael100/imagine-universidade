@@ -21,6 +21,24 @@ export function validateComposeEnvironment(model){
   assert.ok(record(model?.services),"Missing Compose services");
   const {app,web,db}=model.services;
   assert.ok(record(app)&&record(web)&&record(db),"Missing staging service");
+  // A valid environment and SQL healthcheck are not sufficient if a resolved
+  // override publishes the database, adds a debug service, or binds public web.
+  // Inspect the resolved model, not only the literal Compose YAML.
+  assert.deepEqual(Object.keys(model.services).sort(),["app","db","web"],
+    "Only the three reviewed private staging services are permitted");
+  for(const service of [app,db]){
+    assert.ok(!Object.hasOwn(service,"ports"),
+      "Application and database must not publish host ports");
+  }
+  assert.ok([app,web,db].every(service=>!Object.hasOwn(service,"network_mode")),
+    "Custom network modes may bypass the private Compose network boundary");
+  assert.ok(Array.isArray(web.ports)&&web.ports.length===1&&record(web.ports[0]),
+    "Web must publish exactly one explicit loopback-only port");
+  const exposed=web.ports[0],published=String(exposed.published??"");
+  assert.ok(exposed.host_ip==="127.0.0.1"&&exposed.target===8080&&
+    exposed.protocol==="tcp"&&/^[0-9]{5}$/.test(published)&&
+    Number(published)>=18000&&Number(published)<=60000&&published!=="18081",
+    "Resolved web port must be the one approved loopback TCP mapping");
   for(const service of [app,web,db]){
     assert.ok(!Object.hasOwn(service,"env_file"),"Service env_file is not allowed");
   }
@@ -63,12 +81,28 @@ export function checkEnvironmentRegressionCases(){
     SESSION_SAME_SITE:"lax",SESSION_COOKIE:"imagine_universidade_staging_session",LOG_CHANNEL:"stderr",
     LOG_LEVEL:"warning",CACHE_STORE:"array",QUEUE_CONNECTION:"sync",MAIL_MAILER:"array"};
   const fixture={services:{app:{environment},
-    web:{healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
+    web:{ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+      healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
     db:{environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand]}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
+    model=>{model.services.debug={ports:[{host_ip:"0.0.0.0",published:"5432",target:5432,protocol:"tcp"}]};},
+    model=>{model.services.app.ports=[{host_ip:"0.0.0.0",published:"9000",target:9000,protocol:"tcp"}];},
+    model=>{model.services.db.ports=[{host_ip:"127.0.0.1",published:"5432",target:5432,protocol:"tcp"}];},
+    model=>{model.services.web.ports.push({host_ip:"0.0.0.0",published:"8080",target:8080,protocol:"tcp"});},
+    model=>{model.services.web.ports[0].host_ip="0.0.0.0";},
+    model=>{model.services.web.ports[0].host_ip="::1";},
+    model=>{delete model.services.web.ports[0].host_ip;},
+    model=>{model.services.web.ports[0].target=80;},
+    model=>{model.services.web.ports[0].protocol="udp";},
+    model=>{model.services.web.ports[0].published="18081";},
+    model=>{model.services.web.ports[0].published="60001";},
+    model=>{delete model.services.web.ports;},
+    model=>{model.services.app.network_mode="host";},
+    model=>{model.services.db.network_mode="host";},
+    model=>{model.services.web.network_mode="host";},
     model=>{model.services.app.environment.UNI_STAGING_DB_OWNER_PASSWORD="CI_FAKE_OWNER";},
     model=>{model.services.app.environment.UNI_STAGING_DB_OWNER="ci_owner";},
     model=>{model.services.app.environment.UNRELATED_SECRET="CI_FAKE_OTHER";},

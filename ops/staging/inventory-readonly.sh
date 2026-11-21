@@ -107,6 +107,15 @@ disk_kb="$(df -Pk . 2>/dev/null | awk 'NR==2 {print $4}' 2>/dev/null)" ||
   fail "Checkout disk inventory is unavailable."
 docker_disk_kb="$(df -Pk -- "$docker_data_root" 2>/dev/null | awk 'NR==2 {print $4}' 2>/dev/null)" ||
   fail "Docker data-root disk inventory is unavailable."
+# Free bytes alone are not enough: exhausted inodes prevent new files or
+# PostgreSQL writes even when both filesystems report ample free kilobytes.
+# Fail closed on unsupported or unreadable inode accounting.
+checkout_inodes="$(df -Pi . 2>/dev/null | awk 'NR==2 {print $4}' 2>/dev/null)" ||
+  fail "Checkout inode inventory is unavailable."
+docker_inodes="$(df -Pi -- "$docker_data_root" 2>/dev/null | awk 'NR==2 {print $4}' 2>/dev/null)" ||
+  fail "Docker data-root inode inventory is unavailable."
+[[ "$checkout_inodes" =~ ^[0-9]+$ && "$docker_inodes" =~ ^[0-9]+$ ]] ||
+  fail "Could not obtain trusted local inode inventory."
 [[ "$available_kb" =~ ^[0-9]+$ && "$disk_kb" =~ ^[0-9]+$ &&
    "$docker_disk_kb" =~ ^[0-9]+$ ]] ||
   fail "Could not obtain trusted local memory/disk inventory."
@@ -116,8 +125,12 @@ docker_disk_kb="$(df -Pk -- "$docker_data_root" 2>/dev/null | awk 'NR==2 {print 
   fail "Available checkout disk below preliminary 10 GiB safety floor."
 (( docker_disk_kb >= 10485760 )) ||
   fail "Available Docker data-root disk below preliminary 10 GiB safety floor."
+(( checkout_inodes >= 1024 )) ||
+  fail "Available checkout inodes below preliminary 1024 inode safety floor."
+(( docker_inodes >= 1024 )) ||
+  fail "Available Docker data-root inodes below preliminary 1024 inode safety floor."
 
 printf 'PASS READ-ONLY: loopback port %s appears free at this instant.\n' "$candidate_port"
 printf 'PASS READ-ONLY: no University staging container, network or volume collision found.\n'
-printf 'PASS READ-ONLY: local Docker data-root and checkout each have provisional free resource floors.\n'
+printf 'PASS READ-ONLY: local Docker data-root and checkout each have provisional free space and inode floors.\n'
 printf 'HOLD: no socket was reserved, no service was launched, no TLS/SSO/DB/backup gate was approved.\n'

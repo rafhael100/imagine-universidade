@@ -1,0 +1,49 @@
+name: UNI P0 authenticated PostgreSQL DB health (disposable only)
+on:
+  push:
+    branches:
+      - review/uni-p0-pg-sql-health-contract-2026-11-20
+    paths:
+      - .github/workflows/uni-p0-db-sql-health.yml
+      - ops/staging/compose.yaml
+      - ops/staging/check-compose-static.mjs
+      - ops/staging/check-compose-environment.mjs
+      - scripts/qa-p0-db-compose-health.sh
+
+permissions:
+  contents: read
+concurrency:
+  group: uni-p0-db-sql-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  db-authenticated-readiness:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout exact isolated SHA without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify no secrets and source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-pg-sql-health-contract-2026-11-20
+          test ! -e .env && test ! -e .env.production && test ! -e ops/staging/.env.staging
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test "$(docker context show)" = default
+          bash -n scripts/qa-p0-db-compose-health.sh
+          node ops/staging/check-compose-static.mjs
+          node ops/staging/check-compose-environment.mjs --self-test
+          node ops/staging/check-release-gates.mjs
+      - name: Resolve candidate Compose with fake values only (no start)
+        run: bash ops/staging/check-compose-syntax.sh
+      - name: Exercise real candidate PostgreSQL health with fake credential revoke/recover
+        run: bash scripts/qa-p0-db-compose-health.sh
+      - name: Report limits
+        run: echo 'Synthetic PG18 DB-only readiness. No app journey, migrations, SSO, backup, VPS, merge or deploy. HOLD_NO_GO.'

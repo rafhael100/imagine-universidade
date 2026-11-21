@@ -57,6 +57,41 @@ function verifyPrivateHealth(composeText,nginxText,bootstrapText){
     "Never return a synthetic static response for /up");
 }
 verifyPrivateHealth(compose,nginx,bootstrap);
+
+// Bound PostgreSQL health uses a real local TCP authentication + SELECT 1
+// rather than pg_isready, which can report the temporary socket during initdb.
+const dollar=String.fromCharCode(36), escapedDollar=dollar+dollar;
+const expectedDatabaseHealth='PGPASSWORD="'+escapedDollar+'POSTGRES_PASSWORD" PGCONNECT_TIMEOUT=2 PGOPTIONS="-c statement_timeout=2000" psql -X -w -h db -p 5432 -U "'+escapedDollar+'POSTGRES_USER" -d "'+escapedDollar+'POSTGRES_DB" -v ON_ERROR_STOP=1 -tA -c "SELECT 1" 2>/dev/null | grep -qx 1';
+function verifyDatabaseSqlHealth(composeText){
+  const start=composeText.indexOf("\n  db:\n");
+  const end=composeText.indexOf("\nnetworks:\n",start);
+  assert.ok(start>=0&&end>start,"Missing private PostgreSQL service");
+  const dbLines=composeText.slice(start,end).split("\n");
+  const healthLines=dbLines.filter(line=>line.trimStart().startsWith("test: "));
+  assert.deepEqual(healthLines,["      test: ['CMD-SHELL', '"+expectedDatabaseHealth+"']"],
+    "Database must use exactly one authenticated bounded TCP SQL health command");
+  for(const setting of ["      interval: 5s","      timeout: 3s","      retries: 15"]){
+    assert.ok(dbLines.includes(setting),"Required bounded database health setting missing");
+  }
+}
+verifyDatabaseSqlHealth(compose);
+const badSqlHealth=[
+  expectedDatabaseHealth.replace("-h db","-h example.invalid"),
+  expectedDatabaseHealth.replace('-c "SELECT 1"','-c "SELECT 0"'),
+  expectedDatabaseHealth.replace(escapedDollar+"POSTGRES_PASSWORD",escapedDollar+"WRONG_PASSWORD"),
+  expectedDatabaseHealth.replace("PGCONNECT_TIMEOUT=2 ",""),
+  expectedDatabaseHealth.replace('PGOPTIONS="-c statement_timeout=2000" ',''),
+  expectedDatabaseHealth.replace('-U "'+escapedDollar+'POSTGRES_USER"','-U postgres'),
+  expectedDatabaseHealth.replace("| grep -qx 1",""),
+  'pg_isready -U "'+escapedDollar+'POSTGRES_USER" -d "'+escapedDollar+'POSTGRES_DB"',
+];
+for(const wrong of badSqlHealth){
+  assert.notEqual(wrong,expectedDatabaseHealth,"Mutation must change health contract");
+  assert.throws(()=>verifyDatabaseSqlHealth(compose.replace(expectedDatabaseHealth,wrong)),
+    "Unsafe PostgreSQL health mutation must fail closed");
+}
+console.log("PASS authenticated PostgreSQL TCP readiness: eight negative mutations; no container started");
+
 const healthMutations=[
   [compose.replace("http://127.0.0.1:8080/up","http://127.0.0.1:8080/universidade/private/app"),nginx,bootstrap],
   [compose.replace("http://127.0.0.1:8080/up","http://example.invalid:8080/up"),nginx,bootstrap],

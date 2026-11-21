@@ -18,10 +18,18 @@ fi
 for required_command in docker ss awk df; do
   command -v "$required_command" >/dev/null 2>&1 || fail "Missing required local inventory tool."
 done
-[[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" ]] ||
+# A context named "default" can still point to TCP/SSH or a different Unix socket.
+# Refuse client overrides and prove the exact local endpoint BEFORE querying
+# any containers, networks or volumes, even in a read-only inventory.
+[[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" &&
+   -z "${DOCKER_TLS_VERIFY:-}" && -z "${DOCKER_CERT_PATH:-}" ]] ||
   fail "Remote/overridden Docker daemon is not authorized."
 [[ "$(docker context show 2>/dev/null)" == "default" ]] ||
   fail "Docker context must be the local default."
+docker_endpoint="$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}' 2>/dev/null)" ||
+  fail "Cannot inspect the default Docker context endpoint."
+[[ "$docker_endpoint" == "unix:///var/run/docker.sock" ]] ||
+  fail "Docker endpoint is not the approved local Unix socket."
 docker ps --format '{{.Names}}' >/dev/null 2>&1 ||
   fail "Docker local read-only inventory is unavailable."
 

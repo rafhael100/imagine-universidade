@@ -39,6 +39,7 @@ function reply(key,value){
 const label="label=com.docker.compose.project="+fixture.project;
 const reads=new Map([
   [["context","show"],"context"],
+  [["context","inspect","default","--format",'{{ (index .Endpoints "docker").Host }}'],"endpoint"],
   [["ps","--format","{{.Names}}"],"runningContainers"],
   [["ps","-a","--format","{{.Names}}"],"containerNames"],
   [["ps","-a","--filter",label,"--format","{{.ID}}"],"ownedContainers"],
@@ -67,7 +68,7 @@ process.stderr.write("UNEXPECTED_INVENTORY_COMMAND\\n");process.exit(99);
 `;
 
 function run(label,changes={},expected="hold",options={}){
-  const fixture={project,log:logPath,os:"Linux",context:"default\n",runningContainers:[],
+  const fixture={project,log:logPath,os:"Linux",context:"default\n",endpoint:"unix:///var/run/docker.sock\n",runningContainers:[],
     containerNames:[],ownedContainers:[],networkNames:[],ownedNetworks:[],volumeNames:[],ownedVolumes:[],
     sockets:[],memory:"4194304",disk:"20971520",...changes};
   writeFileSync(scenarioPath,JSON.stringify(fixture));writeFileSync(logPath,"");
@@ -97,7 +98,7 @@ try{
     writeFileSync(join(directory,name),fixtureProgram,{mode:0o700});
   }
   const clean=run("empty local inventory",{},"pass");
-  assert.equal(clean.filter(command=>command.name==="docker").length,8,
+  assert.equal(clean.filter(command=>command.name==="docker").length,9,
     "a clean result must read names and ownership for all three resource kinds");
   run("unrelated resources and a similar project are not collisions",{
     containerNames:["PRIVATE_OTHER_CONTAINER",project+"2-app-1"],
@@ -131,6 +132,25 @@ try{
   }
   for(const args of [[],["18123","18124"],["invalid"],["17999"],["60001"],["18081"]]){
     run("invalid or reserved candidate port",{},"hold",{args,noCommands:true});
+  }
+  // A named "default" may still be remote. Reject before querying host resources.
+  for (const endpoint of ["tcp://10.0.0.20:2376\n","ssh://qa@remote.example\n",
+    "unix:///run/user/1000/docker.sock\n"]) {
+    const commands=run("remote or alternate default endpoint refused",{endpoint},"hold",
+      {reason:/approved local Unix socket/});
+    assert.deepEqual(commands.filter(c=>c.name==="docker").map(c=>c.args[0]),
+      ["context","context"],"endpoint refusal must precede every Docker resource read");
+  }
+  const failedInspect=run("context inspect failed",{fail:"endpoint"},"hold",
+    {reason:/Cannot inspect/});
+  assert.deepEqual(failedInspect.filter(c=>c.name==="docker").map(c=>c.args[0]),
+    ["context","context"],"cannot read resources if Docker endpoint is unknown");
+  for (const [name,value] of [["DOCKER_TLS_VERIFY","1"],
+    ["DOCKER_CERT_PATH","/tmp/fixture-certificate"]]) {
+    const commands=run("Docker client override refused: "+name,{},"hold",
+      {env:{[name]:value},reason:/overridden Docker daemon/});
+    assert.equal(commands.filter(c=>c.name==="docker").length,0,
+      "override must refuse before Docker reads");
   }
   run("remote Docker host is refused",{},"hold",{env:{DOCKER_HOST:"tcp://unavailable.invalid:2376"}});
   run("overridden Docker context is refused",{},"hold",{env:{DOCKER_CONTEXT:"another-context"}});

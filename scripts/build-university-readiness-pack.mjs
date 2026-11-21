@@ -136,10 +136,10 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   if(!/^[a-f0-9]{40}$/iu.test(sha)||sha!==checkout){
     throw new Error("Refusing readiness package: checkout SHA does not match GitHub event SHA");
   }
-  const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
-  const report=buildReadinessPack(manifest,sha);
-  // Only exact Git-source file hashes. These are NOT Docker image digests,
-  // an SBOM, a security approval, or a license to deploy.
+  // A matching HEAD alone does not attest the working tree. A previous CI
+  // step might have rewritten the manifest, dependency lock or release inputs.
+  // Reject drift BEFORE writing a package, and hash bytes proven identical to
+  // the exact commit (not arbitrary local workspace contents).
   const sourceFiles=[
     "composer.lock",
     "ops/release-gates.json",
@@ -147,9 +147,31 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
     "ops/staging/Dockerfile.php",
     "ops/staging/Dockerfile.nginx"
   ];
+  const guardedFiles=[...new Set([...sourceFiles,
+    "scripts/build-university-readiness-pack.mjs",
+    "ops/staging/release-gate-policy.mjs",
+    "ops/staging/check-release-gates.mjs",
+    "app/Providers/AppServiceProvider.php",
+    "routes/web.php"
+  ])];
+  const root=fileURLToPath(new URL("../",import.meta.url));
+  const exactBytes=new Map();
+  for (const name of guardedFiles) {
+    const committed=execFileSync("git",["show",sha+":"+name],{
+      cwd:root,stdio:["ignore","pipe","pipe"],timeout:5000,maxBuffer:16*1024*1024
+    });
+    const current=readFileSync(new URL("../"+name,import.meta.url));
+    if (!current.equals(committed)) {
+      throw new Error("Source file differs from exact checked-out Git commit: "+name);
+    }
+    exactBytes.set(name,committed);
+  }
+  const manifest=JSON.parse(exactBytes.get("ops/release-gates.json").toString("utf8"));
+  const report=buildReadinessPack(manifest,sha);
+  // These are source hashes only, not Docker digests, SBOM or deploy approval.
   const sum=buffer=>createHash("sha256").update(buffer).digest("hex");
   const sourceHashes=Object.fromEntries(sourceFiles.map(name=>[
-    name,sum(readFileSync(new URL("../"+name,import.meta.url)))
+    name,sum(exactBytes.get(name))
   ]));
   const provenance={
     schema_version:1,

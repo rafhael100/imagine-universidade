@@ -119,7 +119,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   // Cited #85 historical review remains supported; P0 successors may emit a
   // non-authoritative source package only on a branch-local GitHub Actions push.
   const allowedBranch=ref==="fix/uni-c108-private-flow-2026-11-17" ||
-    /^review\\/uni-p0-[a-z0-9-]+-20[0-9]{2}-[0-9]{2}-[0-9]{2}$/u.test(ref);
+    /^review\/uni-p0-[a-z0-9-]+-20[0-9]{2}-[0-9]{2}-[0-9]{2}$/u.test(ref);
   if(process.env.GITHUB_ACTIONS!=="true"
     || process.env.GITHUB_EVENT_NAME!=="push"
     || process.env.GITHUB_REF_TYPE!=="branch"
@@ -163,11 +163,11 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   mkdirSync(dest,{recursive:true});
   writeFileSync(join(dest,"PENDENCIAS-LANCAMENTO.md"),report.markdown);
   writeFileSync(join(dest,"gates.csv"),report.csv);
-  writeFileSync(join(dest,"readiness.json"),JSON.stringify(report.snapshot,null,2)+"\\n");
-  writeFileSync(join(dest,"source-provenance.json"),JSON.stringify(provenance,null,2)+"\\n");
+  writeFileSync(join(dest,"readiness.json"),JSON.stringify(report.snapshot,null,2)+"\n");
+  writeFileSync(join(dest,"source-provenance.json"),JSON.stringify(provenance,null,2)+"\n");
   const artifacts=["PENDENCIAS-LANCAMENTO.md","gates.csv","readiness.json","source-provenance.json"];
   writeFileSync(join(dest,"SHA256SUMS"),artifacts.map(name=>
-    sum(readFileSync(join(dest,name)))+"  "+name).join("\\n")+"\\n");
+    sum(readFileSync(join(dest,name)))+"  "+name).join("\n")+"\n");
   console.log("PASS readonly readiness pack at "+sha+": "+report.snapshot.gates_unverified+
     "/13 unverified, HOLD_NO_GO, source file/report SHA-256; no image digest, deploy or authority.");
 }

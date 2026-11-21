@@ -178,6 +178,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
     source_checkout_sha:sha,
     source_ref:ref,
     source_kind:"GIT_FILES_ONLY",
+    source_commit_blobs_verified:true,
     runtime_image_digest_verified:false,
     production_approval:false,
     source_files_sha256:sourceHashes

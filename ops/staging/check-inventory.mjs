@@ -9,6 +9,8 @@ assert.match(script,/docker context show/);
 assert.match(script,/docker context inspect default --format/);
 assert.match(script,/docker info --format/);
 assert.ok(script.includes('df -Pk -- "$docker_data_root"'));
+assert.ok(script.includes('df -Pi -- "$docker_data_root"'));
+assert.match(script,/Available Docker data-root inodes below preliminary 1024 inode safety floor/);
 assert.ok(script.includes("unix:///var/run/docker.sock"));
 assert.match(script,/docker ps --format/);
 assert.match(script,/ss -H -ltn/);

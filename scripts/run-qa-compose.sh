@@ -25,6 +25,28 @@ if [[ ! -f compose.qa.yml || ! -f ops/qa/Dockerfile ]]; then
 fi
 
 PROJECT="imagine-uni-qa-$BASHPID"
+# A PID can be reused. Before registering any EXIT cleanup or starting Docker,
+# prove this Compose project label does not already belong to another run.
+# A refusal must NOT call down/logs: they could remove/read another run's data.
+require_unused_project_label() {
+  local kind="$1"
+  shift
+  local existing
+  if ! existing="$(docker "$@")"; then
+    echo "FAIL: cannot verify absence of existing QA $kind; no cleanup attempted." >&2
+    exit 2
+  fi
+  if [[ -n "$existing" ]]; then
+    echo "FAIL: QA Compose project label already exists ($kind); refusing reuse or teardown." >&2
+    exit 2
+  fi
+}
+require_unused_project_label containers ps -aq --filter "label=com.docker.compose.project=$PROJECT"
+require_unused_project_label volumes volume ls -q --filter "label=com.docker.compose.project=$PROJECT"
+require_unused_project_label networks network ls -q --filter "label=com.docker.compose.project=$PROJECT"
+
+# Only this point starts the owned attempt; cleanup may now dispose resources
+# created by a failed build, run, or restore for this checked-empty project.
 cleanup() {
   local status=$?
   trap - EXIT INT TERM

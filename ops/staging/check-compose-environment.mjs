@@ -65,6 +65,19 @@ export function validateComposeEnvironment(model){
       value===null||(record(value)&&Object.keys(value).length===0)),
       "Service network aliases, addresses and link overrides require independent review");
   }
+  // Resource and restart limits must survive Compose override resolution.
+  // A private endpoint is not safe if one container can exhaust the host.
+  for(const [service,expectedMemory,notation,expectedPids] of [
+    [app,2147483648,"2g",160],
+    [web,268435456,"256m",64],
+    [db,4294967296,"4g",160]
+  ]){
+    assert.ok([expectedMemory,String(expectedMemory),notation].includes(service.mem_limit)&&
+      service.pids_limit===expectedPids&&service.restart==="no"&&
+      !Object.hasOwn(service,"deploy")&&!Object.hasOwn(service,"memswap_limit")&&
+      !Object.hasOwn(service,"oom_kill_disable"),
+      "Resolved resource limits, no-restart and no-deploy contract must remain fixed");
+  }
   // Overrides can keep private ports and still escape confinement by adding
   // privileges, host namespaces, or a bind mount of the Docker socket.
   // Check the resolved Compose model, not only the reviewed YAML text.
@@ -147,12 +160,12 @@ export function checkEnvironmentRegressionCases(){
   const fixture={name:"imagine-universidade-staging",networks:{
     university_front:{name:"imagine-universidade-staging_university_front"},
     university_database:{name:"imagine-universidade-staging_university_database",internal:true}},
-    services:{app:{networks:{university_front:null,university_database:null},environment,...safeRuntime,volumes:[
+    services:{app:{networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",volumes:[
       {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
       {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
-    web:{networks:{university_front:null},...safeRuntime,ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+    web:{networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
       healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
-    db:{networks:{university_database:null},volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
+    db:{networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
     environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand]}}}};
@@ -170,6 +183,16 @@ export function checkEnvironmentRegressionCases(){
     model=>{model.networks.university_front.attachable=true;},
     model=>{model.networks.university_database.name="shared_database";},
     model=>{model.networks.unreviewed_network={external:true,name:"other_project"};},
+    model=>{model.services.app.mem_limit=0;},
+    model=>{model.services.web.mem_limit="0";},
+    model=>{delete model.services.db.mem_limit;},
+    model=>{model.services.app.pids_limit=0;},
+    model=>{delete model.services.web.pids_limit;},
+    model=>{model.services.db.restart="always";},
+    model=>{model.services.app.restart="unless-stopped";},
+    model=>{model.services.web.deploy={replicas:3};},
+    model=>{model.services.db.memswap_limit=-1;},
+    model=>{model.services.app.oom_kill_disable=true;},
     model=>{model.services.app.privileged=true;},
     model=>{model.services.web.privileged=true;},
     model=>{model.services.db.privileged=true;},

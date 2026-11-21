@@ -1,0 +1,103 @@
+name: UNI P0 exact source readiness pack (no deploy)
+on:
+  push:
+    branches:
+      - review/uni-p0-readiness-exact-2026-11-21
+    paths:
+      - .github/workflows/uni-p0-readiness-exact.yml
+      - scripts/build-university-readiness-pack.mjs
+      - scripts/check-university-readiness-pack.mjs
+      - ops/release-gates.json
+      - ops/staging/release-gate-policy.mjs
+      - ops/staging/check-release-gates.mjs
+      - composer.lock
+      - ops/staging/compose.yaml
+      - ops/staging/Dockerfile.php
+      - ops/staging/Dockerfile.nginx
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-p0-readiness-exact-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-provenance-only:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact P0 review commit, without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Enforce exact, secret-free, non-production checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_TYPE" = branch
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-exact-2026-11-21
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.local && test ! -e .env.production
+          test ! -e ops/staging/.env.staging
+          test -f composer.lock && test -f ops/release-gates.json
+      - name: Check P0 manifest and generate SHA-pinned, read-only report
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/build-university-readiness-pack.mjs
+          node scripts/check-university-readiness-pack.mjs
+          node scripts/check-release-gate-policy.mjs
+          node ops/staging/check-release-gates.mjs
+          node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/uni-p0-readiness"
+          (cd "$RUNNER_TEMP/uni-p0-readiness" && sha256sum -c SHA256SUMS)
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import {readFileSync} from "node:fs";
+            import {join} from "node:path";
+            const d=process.env.RUNNER_TEMP+"/uni-p0-readiness";
+            const p=JSON.parse(readFileSync(join(d,"source-provenance.json"),"utf8"));
+            const r=JSON.parse(readFileSync(join(d,"readiness.json"),"utf8"));
+            assert.equal(p.source_checkout_sha,process.env.GITHUB_SHA);
+            assert.equal(r.source_sha,process.env.GITHUB_SHA);
+            assert.equal(p.source_kind,"GIT_FILES_ONLY");
+            assert.equal(p.runtime_image_digest_verified,false);
+            assert.equal(p.production_approval,false);
+            assert.equal(Object.keys(p.source_files_sha256).length,5);
+            assert.equal(r.release_decision,"HOLD_NO_GO");
+            assert.equal(r.qa_status,"NOT_EVALUATED_BY_THIS_REPORT");
+            assert.equal(r.gates_total,13);
+            assert.equal(r.gates_unverified,13);
+            assert.equal(r.gates_verified,0);
+            assert.equal(r.gates.filter(g=>g.status==="NOT_VERIFIED").length,13);
+            console.log("PASS exact source provenance; 13 gates NOT_VERIFIED; no release approval");
+          '
+      - name: Reject wrong SHA, forbidden branch and non-CI execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          if GITHUB_SHA=0000000000000000000000000000000000000000 \
+              node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/p0-bad-sha" >/dev/null 2>&1; then
+            echo "FAIL: forged commit accepted" >&2; exit 2
+          fi
+          if GITHUB_REF_NAME=main \
+              node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/p0-bad-branch" >/dev/null 2>&1; then
+            echo "FAIL: main branch accepted" >&2; exit 2
+          fi
+          if GITHUB_ACTIONS=false \
+              node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/p0-bad-runtime" >/dev/null 2>&1; then
+            echo "FAIL: untrusted runtime accepted" >&2; exit 2
+          fi
+          test ! -e "$RUNNER_TEMP/p0-bad-sha"
+          test ! -e "$RUNNER_TEMP/p0-bad-branch"
+          test ! -e "$RUNNER_TEMP/p0-bad-runtime"
+          echo "PASS three negative provenance checks; no report from invalid authority"
+      - name: Attach source-only readiness report for private review (not deploy)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-source-readiness-HOLD-NO-GO
+          path: ${{ runner.temp }}/uni-p0-readiness/
+          retention-days: 14
+          if-no-files-found: error

@@ -39,6 +39,36 @@ export function validateComposeEnvironment(model){
     exposed.protocol==="tcp"&&/^[0-9]{5}$/.test(published)&&
     Number(published)>=18000&&Number(published)<=60000&&published!=="18081",
     "Resolved web port must be the one approved loopback TCP mapping");
+  // Overrides can keep private ports and still escape confinement by adding
+  // privileges, host namespaces, or a bind mount of the Docker socket.
+  // Check the resolved Compose model, not only the reviewed YAML text.
+  for(const service of [app,web,db]){
+    assert.ok(service.privileged!==true&&!Object.hasOwn(service,"cap_add")&&
+      !Object.hasOwn(service,"devices")&&!Object.hasOwn(service,"volumes_from")&&
+      !Object.hasOwn(service,"pid")&&!Object.hasOwn(service,"ipc")&&
+      !Object.hasOwn(service,"userns_mode"),
+      "Unsafe container privilege, device or host namespace override");
+  }
+  for(const service of [app,web]){
+    assert.ok(service.read_only===true&&
+      Array.isArray(service.cap_drop)&&service.cap_drop.length===1&&service.cap_drop[0]==="ALL"&&
+      Array.isArray(service.security_opt)&&service.security_opt.length===1&&
+      service.security_opt[0]==="no-new-privileges:true",
+      "Application and web must remain read-only without capabilities or new privileges");
+  }
+  assert.ok(!Object.hasOwn(db,"security_opt"),"Database security overrides require independent review");
+  for(const [service,expected] of [
+    [app,["university_cache:/var/www/html/bootstrap/cache",
+      "university_storage:/var/www/html/storage"]],
+    [web,[]],
+    [db,["university_pgdata:/var/lib/postgresql"]]
+  ]){
+    const mounts=service.volumes??[];
+    assert.ok(Array.isArray(mounts)&&mounts.every(record),"Invalid resolved service mounts");
+    const actual=mounts.map(mount=>mount.type==="volume"?
+      mount.source+":"+mount.target:"UNAPPROVED_MOUNT").sort();
+    assert.deepEqual(actual,expected,"Unexpected mount: bind, host path, or extra volume");
+  }
   for(const service of [app,web,db]){
     assert.ok(!Object.hasOwn(service,"env_file"),"Service env_file is not allowed");
   }
@@ -80,14 +110,33 @@ export function checkEnvironmentRegressionCases(){
     SESSION_DRIVER:"database",SESSION_ENCRYPT:"true",SESSION_SECURE_COOKIE:"true",SESSION_HTTP_ONLY:"true",
     SESSION_SAME_SITE:"lax",SESSION_COOKIE:"imagine_universidade_staging_session",LOG_CHANNEL:"stderr",
     LOG_LEVEL:"warning",CACHE_STORE:"array",QUEUE_CONNECTION:"sync",MAIL_MAILER:"array"};
-  const fixture={services:{app:{environment},
-    web:{ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+  const safeRuntime={read_only:true,cap_drop:["ALL"],security_opt:["no-new-privileges:true"]};
+  const fixture={services:{app:{environment,...safeRuntime,volumes:[
+      {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
+      {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
+    web:{...safeRuntime,ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
       healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
-    db:{environment:{
+    db:{volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
+    environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand]}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
+    model=>{model.services.app.privileged=true;},
+    model=>{model.services.web.privileged=true;},
+    model=>{model.services.db.privileged=true;},
+    model=>{model.services.app.cap_add=["SYS_ADMIN"];},
+    model=>{model.services.web.devices=["/dev/kvm"];},
+    model=>{model.services.db.pid="host";},
+    model=>{model.services.web.ipc="host";},
+    model=>{model.services.app.userns_mode="host";},
+    model=>{model.services.web.volumes_from=["app"];},
+    model=>{model.services.app.read_only=false;},
+    model=>{model.services.web.cap_drop=[];},
+    model=>{model.services.app.security_opt=["seccomp:unconfined"];},
+    model=>{model.services.db.security_opt=["seccomp:unconfined"];},
+    model=>{model.services.app.volumes.push({type:"bind",source:"/var/run/docker.sock",target:"/socket"});},
+    model=>{model.services.db.volumes.push({type:"volume",source:"unapproved_volume",target:"/tmp/extra"});},
     model=>{model.services.debug={ports:[{host_ip:"0.0.0.0",published:"5432",target:5432,protocol:"tcp"}]};},
     model=>{model.services.app.ports=[{host_ip:"0.0.0.0",published:"9000",target:9000,protocol:"tcp"}];},
     model=>{model.services.db.ports=[{host_ip:"127.0.0.1",published:"5432",target:5432,protocol:"tcp"}];},

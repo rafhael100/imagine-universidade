@@ -9,6 +9,7 @@ const appKeys=["APP_NAME","APP_KEY","APP_URL","APP_ENV","APP_DEBUG",
   "SESSION_SAME_SITE","SESSION_COOKIE","LOG_CHANNEL","LOG_LEVEL","CACHE_STORE",
   "QUEUE_CONNECTION","MAIL_MAILER"];
 const dbKeys=["POSTGRES_DB","POSTGRES_USER","POSTGRES_PASSWORD"];
+const dbHealthCommand="PGPASSWORD=\"$POSTGRES_PASSWORD\" PGCONNECT_TIMEOUT=2 PGOPTIONS=\"-c statement_timeout=2000\" psql -X -w -h 127.0.0.1 -p 5432 -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\" -v ON_ERROR_STOP=1 -tA -c \"SELECT 1\" 2>/dev/null | grep -qx 1";
 const record=value=>value!==null&&typeof value==="object"&&!Array.isArray(value);
 
 // Inspect Docker Compose's resolved model without starting any service.
@@ -27,6 +28,8 @@ export function validateComposeEnvironment(model){
   assert.deepEqual(web.healthcheck.test,[
     "CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"
   ],"Web healthcheck must probe only local Laravel /up through Nginx");
+  assert.deepEqual(db.healthcheck?.test,["CMD-SHELL",dbHealthCommand],
+    "Resolved database health must use authenticated local TCP SELECT 1 with bounded timeout");
   const application=app.environment,database=db.environment;
   assert.ok(record(application)&&record(database),"Missing explicit service environment");
   assert.ok(Object.keys(application).length===appKeys.length&&
@@ -59,7 +62,8 @@ export function checkEnvironmentRegressionCases(){
   const fixture={services:{app:{environment},
     web:{healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
     db:{environment:{
-    POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"}}}};
+    POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
+    healthcheck:{test:["CMD-SHELL",dbHealthCommand]}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
     model=>{model.services.app.environment.UNI_STAGING_DB_OWNER_PASSWORD="CI_FAKE_OWNER";},
@@ -75,6 +79,11 @@ export function checkEnvironmentRegressionCases(){
     model=>{model.services.app.environment.DB_DATABASE="another_database";},
     model=>{model.services.web.environment={APP_KEY:"CI_FAKE_KEY"};},
     model=>{model.services.db.environment.EXTRA_SECRET="CI_FAKE_OTHER";},
+    model=>{delete model.services.db.healthcheck;},
+    model=>{model.services.db.healthcheck.test=["CMD-SHELL","pg_isready -U ci_owner"];},
+    model=>{model.services.db.healthcheck.test=["CMD-SHELL",dbHealthCommand.replace("-h 127.0.0.1","-h example.invalid")];},
+    model=>{model.services.db.healthcheck.test=["CMD-SHELL",dbHealthCommand.replace("PGCONNECT_TIMEOUT=2 ","")];},
+    model=>{model.services.db.healthcheck.test=["CMD-SHELL",dbHealthCommand.replace("$POSTGRES_PASSWORD","$UNTRUSTED_PASSWORD")];},
     model=>{delete model.services.web.healthcheck;},
     model=>{model.services.web.healthcheck.test=["CMD-SHELL","true"];},
     model=>{model.services.web.healthcheck.test=["CMD-SHELL","wget -q -O /dev/null http://example.invalid/up"];},
@@ -84,7 +93,7 @@ export function checkEnvironmentRegressionCases(){
     const model=structuredClone(fixture);alter(model);
     assert.throws(()=>validateComposeEnvironment(model));
   }
-  console.log("PASS staging environment: 14 regression cases; runtime allowlist excludes owner credentials and unrelated secrets");
+  console.log("PASS staging environment: "+invalid.length+" regression cases; authenticated DB SQL health and owner/runtime isolation");
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){

@@ -1,0 +1,45 @@
+name: UNI P0 local Docker endpoint fence (no deploy)
+on:
+  push:
+    branches:
+      - review/uni-p0-docker-endpoint-fence-2026-11-21
+    paths:
+      - .github/workflows/uni-p0-docker-endpoint-fence.yml
+      - scripts/run-qa-compose.sh
+      - scripts/check-qa-compose-teardown.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uni-p0-docker-endpoint-fence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-daemon-fail-closed:
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact source without retained credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check QA-only scope, fixed SHA and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-docker-endpoint-fence-2026-11-21
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.local && test ! -e .env.production
+          bash -n scripts/run-qa-compose.sh
+          node --check scripts/check-qa-compose-teardown.mjs
+      - name: Prove remote Docker refusal and unchanged 13 release gates (no daemon)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-qa-compose-teardown.mjs
+          node ops/staging/check-release-gates.mjs
+          echo "HOLD_NO_GO: 13 gates not verified; no real Docker, PostgreSQL or staging started."

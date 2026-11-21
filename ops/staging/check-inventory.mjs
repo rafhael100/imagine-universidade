@@ -7,6 +7,8 @@ assert.match(script,/set -euo pipefail/);
 assert.match(script,/DOCKER_HOST/);
 assert.match(script,/docker context show/);
 assert.match(script,/docker context inspect default --format/);
+assert.match(script,/docker info --format/);
+assert.ok(script.includes('df -Pk -- "$docker_data_root"'));
 assert.ok(script.includes("unix:///var/run/docker.sock"));
 assert.match(script,/docker ps --format/);
 assert.match(script,/ss -H -ltn/);
@@ -23,6 +25,7 @@ assert.deepEqual(dockerLines,[
   "for required_command in docker ss awk df; do",
   '[[ "$(docker context show 2>/dev/null)" == "default" ]] ||',
   'docker_endpoint="$(docker context inspect default --format \'{{ (index .Endpoints "docker").Host }}\' 2>/dev/null)" ||',
+  'docker_data_root="$(docker info --format \'{{.DockerRootDir}}\' 2>/dev/null)" ||',
   "docker ps --format '{{.Names}}' >/dev/null 2>&1 ||",
   "container_names=\"$(docker ps -a --format '{{.Names}}' 2>/dev/null)\" ||",
   "owned_containers=\"$(docker ps -a --filter \"$staging_label\" --format '{{.ID}}' 2>/dev/null)\" ||",

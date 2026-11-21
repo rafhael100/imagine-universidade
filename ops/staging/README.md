@@ -2,7 +2,7 @@
 
 **15/11/2026 · DRAFT / NO-MERGE / NO-DEPLOY / NÃO EXECUTADO NA VPS.**
 
-O script `inventory-readonly.sh` é **somente de leitura**. Quando executado manualmente por um operador autorizado na VPS Linux escolhida, ele valida a porta de loopback candidata, Docker local (sem contexto remoto), nomes de contêineres de staging existentes e limites preliminares de memória livre (2 GiB) e espaço (10 GiB).
+O script `inventory-readonly.sh` é **somente de leitura**. Quando executado manualmente por um operador autorizado na VPS Linux escolhida, ele valida a porta de loopback candidata, Docker local (sem contexto remoto), nomes de contêineres de staging existentes e limites preliminares de memória livre (2 GiB) e espaço livre **tanto no checkout quanto no Docker data-root local** (10 GiB em cada filesystem, mesmo quando usam mounts distintos).
 
 Ele **não escolhe uma porta por conta própria**, não reserva sockets e não altera rede, contêineres, DNS, firewall, volumes, arquivos de ambiente, serviços ou credenciais. `18081` é recusada por seu histórico de conflito/reserva com os demais módulos Imagine. Uma porta que está livre no instante do teste pode ser utilizada por outro serviço segundos depois; novas verificações são necessárias antes de qualquer publicação.
 
@@ -13,6 +13,8 @@ Em uma cópia limpa do repositório, já na VPS e após aprovação de infraestr
 `bash ops/staging/inventory-readonly.sh PORTA_CANDIDATA`
 
 Substitua a expressão por um número inteiro entre 18000 e 60000 **identificado previamente no inventário real**, sem presumir disponibilidade. O comando deve ser usado somente no host local; Docker remoto, contexto diferente de default ou recursos insuficientes causam HOLD.
+
+A checagem do Docker data-root usa exclusivamente `docker info --format '{{.DockerRootDir}}'` no daemon local previamente validado e `df -Pk` somente leitura. Se a raiz não for um caminho absoluto confiável, `docker info`/`df` falhar ou qualquer filesystem ficar abaixo de 10 GiB livres, o inventário retorna `HOLD`; isso não reserva espaço nem prova recuperação/rollback.
 
 ## Gates restantes (sem autorizações implícitas)
 

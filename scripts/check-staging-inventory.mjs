@@ -40,6 +40,7 @@ const label="label=com.docker.compose.project="+fixture.project;
 const reads=new Map([
   [["context","show"],"context"],
   [["context","inspect","default","--format",'{{ (index .Endpoints "docker").Host }}'],"endpoint"],
+  [["info","--format","{{.DockerRootDir}}"],"dockerRoot"],
   [["ps","--format","{{.Names}}"],"runningContainers"],
   [["ps","-a","--format","{{.Names}}"],"containerNames"],
   [["ps","-a","--filter",label,"--format","{{.ID}}"],"ownedContainers"],
@@ -57,6 +58,8 @@ if(name==="docker"){
   reply("sockets",fixture.sockets);
 }else if(name==="df"&&JSON.stringify(args)==='["-Pk","."]'){
   reply("disk","Filesystem 1024-blocks Used Available Capacity Mounted on\\nfixture 99999999 1 "+fixture.disk+" 1% /\\n");
+}else if(name==="df"&&JSON.stringify(args)===JSON.stringify(["-Pk","--",fixture.dockerRoot.trim()])){
+  reply("dockerDisk","Filesystem 1024-blocks Used Available Capacity Mounted on\\nfixture 99999999 1 "+fixture.dockerDisk+" 1% /var/lib/docker\\n");
 }else if(name==="awk"){
   if(args.length===2&&args[1]==="/proc/meminfo")reply("memory",fixture.memory+"\\n");
   if(args[0]==="-v"&&fixture.fail==="socketParser")reply("socketParser","");
@@ -68,7 +71,8 @@ process.stderr.write("UNEXPECTED_INVENTORY_COMMAND\\n");process.exit(99);
 `;
 
 function run(label,changes={},expected="hold",options={}){
-  const fixture={project,log:logPath,os:"Linux",context:"default\n",endpoint:"unix:///var/run/docker.sock\n",runningContainers:[],
+  const fixture={project,log:logPath,os:"Linux",context:"default\n",endpoint:"unix:///var/run/docker.sock\n",dockerRoot:"/var/lib/docker\n",
+    dockerDisk:"20971520",runningContainers:[],
     containerNames:[],ownedContainers:[],networkNames:[],ownedNetworks:[],volumeNames:[],ownedVolumes:[],
     sockets:[],memory:"4194304",disk:"20971520",...changes};
   writeFileSync(scenarioPath,JSON.stringify(fixture));writeFileSync(logPath,"");
@@ -98,8 +102,10 @@ try{
     writeFileSync(join(directory,name),fixtureProgram,{mode:0o700});
   }
   const clean=run("empty local inventory",{},"pass");
-  assert.equal(clean.filter(command=>command.name==="docker").length,9,
-    "a clean result must read names and ownership for all three resource kinds");
+  assert.equal(clean.filter(command=>command.name==="docker").length,10,
+    "a clean result must prove the local Docker data-root and read all resource ownership");
+  assert.ok(clean.some(c=>c.name==="df"&&JSON.stringify(c.args)===JSON.stringify(["-Pk","--","/var/lib/docker"])),
+    "a clean result must measure free disk at the Docker data-root, not only checkout");
   run("unrelated resources and a similar project are not collisions",{
     containerNames:["PRIVATE_OTHER_CONTAINER",project+"2-app-1"],
     networkNames:["PRIVATE_OTHER_NETWORK",project+"2_university_front"],
@@ -123,8 +129,8 @@ try{
   run("renamed staging volume by project label",{
     volumeNames:["PRIVATE_RENAMED_VOLUME"],ownedVolumes:["PRIVATE_RENAMED_VOLUME"]
   },"hold",{reason:/staging volume/});
-  for(const fail of ["context","runningContainers","containerNames","ownedContainers",
-    "networkNames","ownedNetworks","volumeNames","ownedVolumes","sockets","socketParser","memory","disk"]){
+  for(const fail of ["context","endpoint","dockerRoot","runningContainers","containerNames","ownedContainers",
+    "networkNames","ownedNetworks","volumeNames","ownedVolumes","sockets","socketParser","memory","disk","dockerDisk"]){
     run("unavailable read holds: "+fail,{fail});
   }
   for(const address of ["127.0.0.1:18123","0.0.0.0:18123","[::]:18123"]){
@@ -158,8 +164,17 @@ try{
   run("non-Linux host is refused",{os:"Darwin"});
   run("insufficient memory",{memory:"2097151"});
   run("malformed memory reading",{memory:"unavailable"});
-  run("insufficient disk",{disk:"10485759"});
-  run("malformed disk reading",{disk:"unavailable"});
+  run("insufficient checkout disk",{disk:"10485759"});
+  run("malformed checkout disk reading",{disk:"unavailable"});
+  run("Docker data-root disk almost full despite spacious checkout",{disk:"20971520",dockerDisk:"10485759"},
+    "hold",{reason:/Docker data-root disk/});
+  run("Docker data-root disk reading is malformed",{dockerDisk:"unavailable"});
+  for (const dockerRoot of ["","relative/docker"," /var/lib/docker","/var/lib/docker\n/other"]) {
+    const commands=run("Docker data-root not a single absolute path",{dockerRoot},"hold",
+      {reason:/single absolute path/});
+    assert.deepEqual(commands.filter(c=>c.name==="docker").map(c=>c.args[0]),
+      ["context","context","info"],"invalid Docker root must fail before resource enumeration");
+  }
   renameSync(join(directory,"df"),join(directory,"df-unavailable"));
   try{run("required local tool unavailable");}
   finally{renameSync(join(directory,"df-unavailable"),join(directory,"df"));}

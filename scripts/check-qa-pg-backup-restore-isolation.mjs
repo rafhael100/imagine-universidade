@@ -49,12 +49,13 @@ console.log("PASS isolated restore guard: "+(forbidden.length+1)+
 // another process may create it before our createdb. Failed createdb must
 // NOT let cleanup drop an unowned database. PATH stubs avoid real SQL.
 const fakeDir=mkdtempSync(join(tmpdir(),"uni-restore-ownership-"));
+const deliberatelyRetainedSnapshots=[];
 try{
   const fakeTools={
     psql:`#!/bin/sh
 # Synthetic successful path: a mutation must change ONLY the restored copy.
 case "\${UNI_QA_FAIL_AT:-}" in
-  dropdb|dropdb_false_success|success)
+  dropdb|dropdb_false_success|snapshot_false_success|success)
     case "$*" in
       *"UPDATE educational_lessons SET body"*) : > "$UNI_QA_TAMPER_MARKER"; exit 0 ;;
       *"CREATE TEMP TABLE qa_pg_table_hashes"*)
@@ -103,6 +104,17 @@ if [ "$UNI_QA_FAIL_AT" = "dropdb_false_success" ]; then
 fi
 if [ "\${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
 `,
+    rm:`#!/bin/sh
+# Simulate rm returning success without removing the synthetic dump.
+if [ "\${UNI_QA_FAIL_AT:-}" = "snapshot_false_success" ]; then
+  case "$1:$2" in
+    -f:/tmp/uni_synthetic_qa.*)
+      printf '%s' "$2" > "$UNI_QA_SNAPSHOT_PATH_MARKER"
+      exit 0 ;;
+  esac
+fi
+exec /bin/rm "$@"
+`,
   };
   for(const [cmd,content] of Object.entries(fakeTools)){
     writeFileSync(join(fakeDir,cmd),content,{mode:0o700});
@@ -114,7 +126,8 @@ if [ "\${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
       cwd:root,
       env:{...safeEnv,PATH:fakeDir+delimiter+safeEnv.PATH,
         UNI_QA_FAIL_AT:phase,UNI_QA_DROP_MARKER:marker,UNI_QA_TAMPER_MARKER:tamper,
-        UNI_QA_CLONE_REMAINS_MARKER:join(fakeDir,"remains-"+phase)},
+        UNI_QA_CLONE_REMAINS_MARKER:join(fakeDir,"remains-"+phase),
+        UNI_QA_SNAPSHOT_PATH_MARKER:join(fakeDir,"snapshot-"+phase)},
       encoding:"utf8",timeout:5000,
     });
     assert.equal(result.status,exitCode,
@@ -126,14 +139,24 @@ if [ "\${UNI_QA_FAIL_AT:-}" = "dropdb" ]; then exit 43; fi
       "a failed restore or cleanup must never claim success");
     if(phase==="dropdb")assert.match(result.stderr,/clone cleanup not confirmed/u);
     if(phase==="dropdb_false_success")assert.match(result.stderr,/clone still exists after cleanup/u);
+    if(phase==="snapshot_false_success"){
+      assert.match(result.stderr,/snapshot still exists after cleanup/u);
+      const dumpPath=readFileSync(join(fakeDir,"snapshot-"+phase),"utf8");
+      assert.match(dumpPath,/^\/tmp\/uni_synthetic_qa\.[A-Za-z0-9]+$/u);
+      deliberatelyRetainedSnapshots.push(dumpPath);
+      assert.ok(existsSync(dumpPath),"the false-success rm must leave the snapshot on disk");
+    }
     if(phase==="success")assert.match(result.stdout,/PASS: PostgreSQL18 snapshot restored/u);
   }
   failAt("createdb",41,false);
   failAt("pg_restore",42,true);
   failAt("dropdb",2,true);
   failAt("dropdb_false_success",2,true);
+  failAt("snapshot_false_success",2,true);
   failAt("success",0,true);
-  console.log("PASS synthetic restore cleanup: unowned clone retained; failed restore cleaned; failed drop and false-success drop with live clone rejected; PASS only after confirmed absence. No DB connected.");
-} finally{
+  console.log("PASS synthetic restore cleanup: unowned clone retained; failed restore cleaned; failed/false-success drop rejected; false-success rm with surviving dump rejected; PASS only after verified removal. No DB connected.");
+ } finally{
+  // Remove a deliberately retained synthetic snapshot without touching other files.
+  for(const p of deliberatelyRetainedSnapshots)rmSync(p,{force:true});
   rmSync(fakeDir,{recursive:true,force:true});
 }

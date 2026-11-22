@@ -26,6 +26,10 @@ export function validateComposeEnvironment(model){
   // Inspect the resolved model, not only the literal Compose YAML.
   assert.deepEqual(Object.keys(model.services).sort(),["app","db","web"],
     "Only the three reviewed private staging services are permitted");
+  // Compose configs/secrets may mount unreviewed host material into a service
+  // even when environment variables, ports and named volumes are fenced.
+  assert.ok(!Object.hasOwn(model,"secrets")&&!Object.hasOwn(model,"configs"),
+    "Unreviewed top-level Compose secrets/configs are forbidden");
   for(const service of [app,db]){
     assert.ok(!Object.hasOwn(service,"ports"),
       "Application and database must not publish host ports");
@@ -93,6 +97,10 @@ export function validateComposeEnvironment(model){
   // privileges, host namespaces, or a bind mount of the Docker socket.
   // Check the resolved Compose model, not only the reviewed YAML text.
   for(const service of [app,web,db]){
+    assert.ok(!Object.hasOwn(service,"secrets")&&
+      !Object.hasOwn(service,"configs")&&
+      !Object.hasOwn(service,"credential_spec"),
+      "Unreviewed injected secrets, configs or credential providers are forbidden");
     assert.ok(service.privileged!==true&&!Object.hasOwn(service,"cap_add")&&
       !Object.hasOwn(service,"devices")&&!Object.hasOwn(service,"volumes_from")&&
       !Object.hasOwn(service,"pid")&&!Object.hasOwn(service,"ipc")&&
@@ -221,6 +229,15 @@ export function checkEnvironmentRegressionCases(){
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand],interval:5_000_000_000,timeout:3_000_000_000,retries:15}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
+    model=>{model.secrets={outside:{file:"/tmp/unreviewed-secret"}};},
+    model=>{model.configs={outside:{file:"/tmp/unreviewed-config"}};},
+    model=>{model.services.app.secrets=["outside"];},
+    model=>{model.services.web.secrets=[{source:"outside",target:"runtime_secret"}];},
+    model=>{model.services.db.secrets=["outside"];},
+    model=>{model.services.app.configs=["outside"];},
+    model=>{model.services.web.configs=[{source:"outside",target:"/etc/nginx/conf.d/default.conf"}];},
+    model=>{model.services.db.configs=["outside"];},
+    model=>{model.services.app.credential_spec={file:"/tmp/unreviewed-credential"};},
     model=>{model.services.web.healthcheck.interval=86_400_000_000_000;},
     model=>{delete model.services.web.healthcheck.timeout;},
     model=>{model.services.web.healthcheck.retries=0;},

@@ -16,6 +16,7 @@ on:
       - scripts/qa-staging-private-http.sh
       - scripts/qa-staging-postgres-http.sh
       - scripts/qa-staging-pg-pre-migrate.php
+      - scripts/qa-staging-private-http-probe.php
 
 permissions:
   contents: read

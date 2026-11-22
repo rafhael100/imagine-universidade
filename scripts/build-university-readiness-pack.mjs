@@ -118,8 +118,9 @@ export function requireCleanReleaseCheckout(root){
     cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
     maxBuffer:8*1024*1024
   });
-  assert.equal(status,"",
-    "Refusing readiness package: tracked or untracked source drift");
+  if(status.length!==0){
+    throw new Error("Refusing readiness package: tracked or untracked source drift");
+  }
 }
 
 const selfPath=fileURLToPath(import.meta.url);

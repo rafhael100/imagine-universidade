@@ -8,8 +8,8 @@ const base={
   DB_DATABASE:"uni_ci", DB_USERNAME:"uni_ci", DB_PASSWORD:"synthetic_ci_only",
 };
 for (const override of ["PGHOST","PGHOSTADDR","PGPORT","PGDATABASE","PGUSER",
- "PGSERVICE","PGSERVICEFILE","PGPASSFILE","PGOPTIONS","PGSSLMODE",
- "DATABASE_URL","DB_URL","DB_SOCKET","APP_CONFIG_CACHE","DB_READ_HOST","DB_WRITE_HOST"]) {
+ "PGSERVICE","PGSERVICEFILE","PGPASSFILE","PGPASSWORD","PGOPTIONS",
+ "PGSSLMODE","PGTARGETSESSIONATTRS","DATABASE_URL","DB_URL","DB_SOCKET","APP_CONFIG_CACHE","DB_READ_HOST","DB_WRITE_HOST"]) {
   delete base[override];
 }
 const cases=[
@@ -24,6 +24,8 @@ const cases=[
   ["libpq remote override",{PGHOST:"remote.invalid"}],
   ["libpq hostaddr override",{PGHOSTADDR:"203.0.113.1"}],
   ["libpq service injection",{PGSERVICE:"untrusted"}],
+  ["libpq password injection",{PGPASSWORD:"QA_SECRET_NOT_FOR_LOGS"}],
+  ["libpq target session override",{PGTARGETSESSIONATTRS:"read-write"}],
   ["Laravel alternate URL",{DB_URL:"postgres://external.invalid/test"}],
   ["cached config override",{APP_CONFIG_CACHE:"/tmp/config.php"}],
   ["separate read target",{DB_READ_HOST:"remote.invalid"}],
@@ -35,7 +37,7 @@ for (const [label,delta] of cases) {
   assert.ifError(output.error);
   assert.equal(output.status,2,label+": must fail before database connection");
   assert.match(output.stderr,/^HOLD QA PostgreSQL pre-migrate: /u,label);
-  assert.doesNotMatch(output.stdout+output.stderr,/OTHER_SECRET_DO_NOT_PRINT|postgres:\/\/external|remote\.invalid/u,label);
+  assert.doesNotMatch(output.stdout+output.stderr,/OTHER_SECRET_DO_NOT_PRINT|QA_SECRET_NOT_FOR_LOGS|postgres:\/\/external|remote\.invalid/u,label);
 }
 console.log("PASS P0 pre-migrate guard: "+cases.length+" fail-closed negative scenarios; no SQL or migrations in mutation tests.");
 

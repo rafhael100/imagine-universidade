@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - review/uni-p0-compose-teardown-proof-2026-11-21
+      - review/uni-p0-readiness-git-config-root-fence-2026-11-22
     paths:
       - .github/workflows/uni-p0-restore-compose-teardown.yml
       - scripts/run-qa-compose.sh
@@ -26,7 +27,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Checkout exact isolated review head without credentials
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 immutable
         with:
           persist-credentials: false
       - name: Verify zero production credentials and local Docker isolation
@@ -34,13 +35,23 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
-          test "$GITHUB_REF_NAME" = review/uni-p0-compose-teardown-proof-2026-11-21
+          case "$GITHUB_REF_NAME" in
+            review/uni-p0-compose-teardown-proof-2026-11-21|review/uni-p0-readiness-git-config-root-fence-2026-11-22) ;;
+            *) echo 'HOLD: unapproved review branch for Docker QA' >&2; exit 2 ;;
+          esac
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
           test ! -e .env && test ! -e .env.testing && test ! -e .env.local
           test ! -e .env.production && test ! -e ops/staging/.env.staging
           test -z "${DOCKER_HOST:-}"
           test "$(docker context show)" = default
           test -f composer.lock
+          test -f compose.qa.yml
+          test -f scripts/qa-pg-pre-migrate.php
+          test -f scripts/qa-compose-entrypoint.sh
+          test -f scripts/qa-pg-backup-restore.sh
+          # Validate the fully resolved disposable lab model before any mutation.
+          docker compose -f compose.qa.yml --profile manual-qa config --quiet
           ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
           ! grep -Fq /var/run/docker.sock compose.qa.yml
           bash -n scripts/run-qa-compose.sh
@@ -55,6 +66,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # This live run exercises the HEAD's pre-migrate Laravel+SQL proof,
+          # migrations, private deny-all, snapshot/restore and verified teardown.
           bash scripts/run-qa-compose.sh | tee "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'PASS QA PostgreSQL pre-migrate: effective Laravel config + live synthetic PG18 SQL checked' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'The temp backup and clone DB were removed; production/VPS backup is NOT proven.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"

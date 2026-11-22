@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
-import {buildReadinessPack} from "./build-university-readiness-pack.mjs";
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSync,rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {execFileSync} from "node:child_process";
+import {buildReadinessPack,requireCleanReleaseCheckout} from "./build-university-readiness-pack.mjs";
 
 const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
 const sha="a".repeat(40);
@@ -50,5 +53,132 @@ check("cannot omit a gate",()=>{
 });
 check("cannot forge source SHA",()=>{
   assert.throws(()=>buildReadinessPack(manifest,"truncated"));
+});
+check("clean Git source accepted, untracked and modified build inputs rejected",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-synthetic-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"tracked.php"),"<?php // synthetic\\n");
+    git("add","tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const original=git("rev-parse","HEAD").toString("utf8").trim();
+    writeFileSync(join(root,"untracked.php"),"<?php // unexpected synthetic input\\n");
+    assert.equal(git("rev-parse","HEAD").toString("utf8").trim(),original,
+      "An untracked build file does not change HEAD");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift"&&
+      !error.message.includes("untracked.php"));
+    unlinkSync(join(root,"untracked.php"));
+    appendFileSync(join(root,"tracked.php"),"// changed synthetic input\\n");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift"&&
+      !error.message.includes("tracked.php"));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+check("ignored Laravel PHP bootstrap cache cannot enter release provenance",()=>{
+  // Synthetic Git repository exercises a Git-ignored executable build input.
+  // The unchanged HEAD and clean --porcelain status previously missed it.
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-ignored-cache-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  try{
+    git("init","-q");
+    mkdirSync(join(root,"bootstrap","cache"),{recursive:true});
+    writeFileSync(join(root,".gitignore"),"/bootstrap/cache/*.php\n");
+    writeFileSync(join(root,"bootstrap","cache",".gitkeep"),"");
+    git("add",".gitignore","bootstrap/cache/.gitkeep");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const head=git("rev-parse","HEAD").trim();
+    const cache=join(root,"bootstrap","cache","config.php");
+    writeFileSync(cache,"<?php // synthetic ignored cache\n");
+    assert.equal(git("rev-parse","HEAD").trim(),head);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: ignored build-context cache files"&&
+      !error.message.includes("config.php"));
+    unlinkSync(cache);
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+check("Git index hidden flags cannot mask tracked release inputs",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-hidden-index-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"app.php"),"<?php // harmless synthetic source\n");
+    git("add","app.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    const head=git("rev-parse","HEAD").trim();
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    for(const [setFlag,unsetFlag] of [
+      ["--assume-unchanged","--no-assume-unchanged"],
+      ["--skip-worktree","--no-skip-worktree"]
+    ]){
+      git("update-index",setFlag,"app.php");
+      appendFileSync(join(root,"app.php"),"// hidden synthetic change\n");
+      assert.equal(git("rev-parse","HEAD").trim(),head);
+      assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"",
+        "Git status must reproduce hidden changes");
+      assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+        error.message==="Refusing readiness package: hidden Git index flags"&&
+        !error.message.includes("app.php"));
+      git("update-index",unsetFlag,"app.php");
+      git("checkout","--","app.php");
+      assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    }
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+check("Git-ignored PHP inside Docker COPY source is denied",()=>{
+  // Unlike bootstrap/cache, this file is hidden only by local Git excludes.
+  // It remains an eligible Docker COPY app/ input, while HEAD/status are clean.
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-ignored-app-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  try{
+    git("init","-q");
+    mkdirSync(join(root,"app"),{recursive:true});
+    writeFileSync(join(root,"app","Tracked.php"),"<?php // tracked synthetic source\n");
+    git("add","app/Tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const sha=git("rev-parse","HEAD").trim();
+    const hidden=join(root,"app","Hidden.php");
+    writeFileSync(join(root,".git","info","exclude"),"app/Hidden.php\n");
+    writeFileSync(hidden,"<?php // ignored synthetic build input\n");
+    assert.equal(git("rev-parse","HEAD").trim(),sha);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"");
+    assert.equal(git("ls-files","--others","--ignored","--exclude-standard",
+      "--","app").trim(),"app/Hidden.php");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: Git-ignored build source"&&
+      !error.message.includes("Hidden.php"));
+    unlinkSync(hidden);
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+check("Docker context excludes ignored bootstrap PHP cache",()=>{
+  const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
+  assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");
 });
 console.log("PASS readonly readiness pack: "+cases+" positive/negative scenarios; 13 operational gates remain unchanged.");

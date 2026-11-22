@@ -109,6 +109,58 @@ export function buildReadinessPack(manifest,sha){
   return {snapshot,markdown:md,csv};
 }
 
+// A matching HEAD and matching selected Git blobs are not sufficient: an
+// earlier CI step could add a new, untracked PHP/config file inside the Docker
+// build context without changing any tracked SHA. Refuse a non-clean checkout
+// before emitting a source provenance report. Do not print file names or data.
+export function requireCleanReleaseCheckout(root){
+  const status=execFileSync("git",["status","--porcelain=v1","--untracked-files=all"],{
+    cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+    maxBuffer:8*1024*1024
+  });
+  if(status.length!==0){
+    throw new Error("Refusing readiness package: tracked or untracked source drift");
+  }
+  // Git's assume-unchanged and skip-worktree index bits can hide altered
+  // tracked PHP from --porcelain even when HEAD still matches GITHUB_SHA.
+  // A release checkout may not suppress inspection of any tracked source.
+  const indexFlags=execFileSync("git",["ls-files","-v","-z"],{
+    cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+    maxBuffer:8*1024*1024
+  });
+  if(indexFlags.split("\0").some(entry=>entry.length>0&&!entry.startsWith("H "))){
+    throw new Error("Refusing readiness package: hidden Git index flags");
+  }
+  // git status suppresses .gitignore matches. Laravel's ignored PHP bootstrap
+  // cache was otherwise accepted despite being eligible for Docker COPY.
+  // Refuse that hidden input even if future .dockerignore rules drift.
+  const ignoredCache=execFileSync("git",[
+    "ls-files","--others","--ignored","--exclude-standard","--","bootstrap/cache"
+  ],{
+    cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+    maxBuffer:8*1024*1024
+  });
+  if(ignoredCache.length!==0){
+    throw new Error("Refusing readiness package: ignored build-context cache files");
+  }
+  // A local .git/info/exclude, global Git excludes or .gitignore can hide
+  // otherwise untracked PHP/configuration under Docker's allowed COPY trees.
+  // They are invisible to porcelain status and to the bootstrap-only check.
+  // Refuse ignored inputs in reviewed source trees, regardless of which
+  // local ignore rule matched. Safe false positives must fail closed.
+  const ignoredSources=execFileSync("git",[
+    "ls-files","--others","--ignored","--exclude-standard","--",
+    "app","bootstrap","database","routes","resources","content",
+    "tests","scripts","public","ops"
+  ],{
+    cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+    maxBuffer:8*1024*1024
+  });
+  if(ignoredSources.length!==0){
+    throw new Error("Refusing readiness package: Git-ignored build source");
+  }
+}
+
 const selfPath=fileURLToPath(import.meta.url);
 if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   const args=process.argv.slice(2);
@@ -136,6 +188,8 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   if(!/^[a-f0-9]{40}$/iu.test(sha)||sha!==checkout){
     throw new Error("Refusing readiness package: checkout SHA does not match GitHub event SHA");
   }
+  // Covers non-ignored additions and changes, beyond the pinned source hash list.
+  requireCleanReleaseCheckout(fileURLToPath(new URL("../",import.meta.url)));
   // A matching HEAD alone does not attest the working tree. A previous CI
   // step might have rewritten the manifest, dependency lock or release inputs.
   // Reject drift BEFORE writing a package, and hash bytes proven identical to

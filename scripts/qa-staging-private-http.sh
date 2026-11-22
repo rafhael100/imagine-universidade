@@ -64,5 +64,6 @@ docker run -d --name "$web" --network "$network" --network-alias web \
 # No bind of ports/volumes/docker.sock, no internet egress.
 docker run --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
+  --env UNI_QA_EXPECT_DB_HEALTH_DOWN=1 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
 echo "PASS: private Docker network HTTP integration, automatic cleanup, no host ports."

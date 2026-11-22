@@ -121,7 +121,7 @@ export function requireCleanReleaseCheckout(root){
   if(status.length!==0){
     throw new Error("Refusing readiness package: tracked or untracked source drift");
   }
-  // git status suppresses .gitignore matches. Laravel's ignored PHP bootstrap
+  // Git's assume-unchanged and skip-worktree index bits can hide altered\n  // tracked PHP from --porcelain even when HEAD still matches GITHUB_SHA.\n  // A release checkout may not suppress inspection of any tracked source.\n  const indexFlags=execFileSync("git",["ls-files","-v","-z"],{\n    cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,\n    maxBuffer:8*1024*1024\n  });\n  if(indexFlags.split("\\0").some(entry=>entry.length>0&&!entry.startsWith("H "))){\n    throw new Error("Refusing readiness package: hidden Git index flags");\n  }\n  // git status suppresses .gitignore matches. Laravel's ignored PHP bootstrap
   // cache was otherwise accepted despite being eligible for Docker COPY.
   // Refuse that hidden input even if future .dockerignore rules drift.
   const ignoredCache=execFileSync("git",[

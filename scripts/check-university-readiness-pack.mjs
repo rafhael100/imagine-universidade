@@ -327,4 +327,16 @@ check("Docker context excludes ignored bootstrap PHP cache",()=>{
   const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
   assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");
 });
+check("release QA workflows verify actual reviewed source paths, not a stale count",()=>{
+  const proof='assert.deepEqual(Object.keys(p.source_files_sha256).sort(), [...reviewedSourceFiles].sort());';
+  for(const file of [
+    ".github/workflows/uni-p0-readiness-exact.yml",
+    ".github/workflows/uni-p0-readiness-git-blobs.yml"
+  ]){
+    const yaml=readFileSync(new URL("../"+file,import.meta.url),"utf8");
+    assert.ok(yaml.includes('import {reviewedSourceFiles} from "./scripts/build-university-readiness-pack.mjs";'));
+    assert.ok(yaml.includes(proof));
+    assert.ok(!yaml.includes("assert.equal(Object.keys(p.source_files_sha256).length,5);"));
+  }
+});
 console.log("PASS readonly readiness pack: "+cases+" positive/negative scenarios; 13 operational gates remain unchanged.");

@@ -112,6 +112,39 @@ check("ignored Laravel PHP bootstrap cache cannot enter release provenance",()=>
     rmSync(root,{recursive:true,force:true});
   }
 });
+check("Git index hidden flags cannot mask tracked release inputs",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-hidden-index-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"app.php"),"<?php // harmless synthetic source\n");
+    git("add","app.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    const head=git("rev-parse","HEAD").trim();
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    for(const [setFlag,unsetFlag] of [
+      ["--assume-unchanged","--no-assume-unchanged"],
+      ["--skip-worktree","--no-skip-worktree"]
+    ]){
+      git("update-index",setFlag,"app.php");
+      appendFileSync(join(root,"app.php"),"// hidden synthetic change\n");
+      assert.equal(git("rev-parse","HEAD").trim(),head);
+      assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"",
+        "Git status must reproduce hidden changes");
+      assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+        error.message==="Refusing readiness package: hidden Git index flags"&&
+        !error.message.includes("app.php"));
+      git("update-index",unsetFlag,"app.php");
+      git("checkout","--","app.php");
+      assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    }
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
 check("Docker context excludes ignored bootstrap PHP cache",()=>{
   const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
   assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");

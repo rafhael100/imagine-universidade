@@ -4,7 +4,7 @@ import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSy
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {execFileSync} from "node:child_process";
-import {buildReadinessPack,requireCleanReleaseCheckout} from "./build-university-readiness-pack.mjs";
+import {buildReadinessPack,requireCleanReleaseCheckout,reviewedSourceFiles} from "./build-university-readiness-pack.mjs";
 
 const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
 const sha="a".repeat(40);
@@ -244,6 +244,19 @@ check("Git configuration/index overrides are rejected without disclosing values"
     assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
   }finally{
     rmSync(root,{recursive:true,force:true});
+  }
+});
+check("source provenance includes reviewed Docker context and executable image inputs",()=>{
+  assert.deepEqual([...reviewedSourceFiles],[
+    ".dockerignore","composer.json","composer.lock","ops/release-gates.json",
+    "ops/staging/compose.yaml","ops/staging/Dockerfile.php",
+    "ops/staging/Dockerfile.nginx","ops/staging/nginx.conf","ops/qa/Dockerfile"
+  ]);
+  assert.equal(new Set(reviewedSourceFiles).size,reviewedSourceFiles.length,
+    "No duplicate source hash keys");
+  for(const name of reviewedSourceFiles){
+    const local=readFileSync(new URL("../"+name,import.meta.url));
+    assert.ok(local.length>0,"Reviewed source must exist and be non-empty: "+name);
   }
 });
 check("Docker context excludes ignored bootstrap PHP cache",()=>{

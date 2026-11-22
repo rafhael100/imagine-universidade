@@ -178,6 +178,22 @@ export function requireCleanReleaseCheckout(root){
   }
 }
 
+// Explicitly hashed review inputs, NOT a container image digest or SBOM.
+// Git HEAD identifies the full tree; these separate hashes let reviewers
+// confirm that the Docker context filter and executable image configuration
+// belong to the same reviewed checkout as the release gates.
+export const reviewedSourceFiles=Object.freeze([
+  ".dockerignore",
+  "composer.json",
+  "composer.lock",
+  "ops/release-gates.json",
+  "ops/staging/compose.yaml",
+  "ops/staging/Dockerfile.php",
+  "ops/staging/Dockerfile.nginx",
+  "ops/staging/nginx.conf",
+  "ops/qa/Dockerfile"
+]);
+
 const selfPath=fileURLToPath(import.meta.url);
 if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   const args=process.argv.slice(2);
@@ -211,13 +227,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   // step might have rewritten the manifest, dependency lock or release inputs.
   // Reject drift BEFORE writing a package, and hash bytes proven identical to
   // the exact commit (not arbitrary local workspace contents).
-  const sourceFiles=[
-    "composer.lock",
-    "ops/release-gates.json",
-    "ops/staging/compose.yaml",
-    "ops/staging/Dockerfile.php",
-    "ops/staging/Dockerfile.nginx"
-  ];
+  const sourceFiles=reviewedSourceFiles;
   const guardedFiles=[...new Set([...sourceFiles,
     "scripts/build-university-readiness-pack.mjs",
     "ops/staging/release-gate-policy.mjs",

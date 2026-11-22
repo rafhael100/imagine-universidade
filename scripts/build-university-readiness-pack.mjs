@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import {readFileSync, mkdirSync, writeFileSync, realpathSync, lstatSync} from "node:fs";
-import {resolve, relative, sep, join, dirname} from "node:path";
+import {resolve, relative, join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
 import {execFileSync} from "node:child_process";
 import {createHash} from "node:crypto";

@@ -97,6 +97,13 @@ export function validateComposeEnvironment(model){
   // privileges, host namespaces, or a bind mount of the Docker socket.
   // Check the resolved Compose model, not only the reviewed YAML text.
   for(const service of [app,web,db]){
+    // Unreviewed container names can collide with sibling Imagine projects;
+    // remote logging and runtime/develop overrides can escape isolation.
+    for(const key of ["container_name","logging","sysctls","runtime",
+      "profiles","init","cgroup_parent","develop"]){
+      assert.ok(!Object.hasOwn(service,key),
+        "Unreviewed container identity, logging or runtime override");
+    }
     assert.ok(!Object.hasOwn(service,"secrets")&&
       !Object.hasOwn(service,"configs")&&
       !Object.hasOwn(service,"credential_spec"),
@@ -267,6 +274,14 @@ export function checkEnvironmentRegressionCases(){
   }
   assert.ok(validateComposeEnvironment(normalizedMounts));
   const invalid=[
+    model=>{model.services.web.container_name="imagine-portal-live";},
+    model=>{model.services.app.logging={driver:"syslog",options:{"syslog-address":"tcp://203.0.113.10:514"}};},
+    model=>{model.services.db.sysctls={"net.ipv4.ip_forward":"1"};},
+    model=>{model.services.app.runtime="nvidia";},
+    model=>{model.services.db.profiles=["hidden"];},
+    model=>{model.services.web.init=true;},
+    model=>{model.services.web.cgroup_parent="shared";},
+    model=>{model.services.web.develop={watch:[{action:"sync",path:"/shared",target:"/etc/nginx"}]};},
     model=>{model.services.db.volumes[0].volume={subpath:"other"};},
     model=>{model.services.app.volumes[0].volume={subpath:"uploads"};},
     model=>{model.services.app.volumes[0].volume={nocopy:true};},

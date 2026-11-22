@@ -127,6 +127,20 @@ export function validateComposeEnvironment(model){
       mount.source+":"+mount.target:"UNAPPROVED_MOUNT").sort();
     assert.deepEqual(actual,expected,"Unexpected mount: bind, host path, or extra volume");
   }
+  // Named volumes are not sufficient to prevent an override from mounting
+  // tmpfs over Laravel code, Nginx configuration or PostgreSQL data.
+  // Keep only the temporary write paths in the reviewed staging Compose.
+  for(const [service,reviewed] of [
+    [app,["/tmp:mode=1777"]],
+    [web,["/tmp:mode=1777","/var/cache/nginx:mode=1777","/var/run:mode=1777"]],
+    [db,[]]
+  ]){
+    const actual=service.tmpfs??[];
+    assert.ok(Array.isArray(actual)&&actual.every(value=>typeof value==="string"),
+      "Invalid resolved tmpfs mount shape");
+    assert.deepEqual([...actual].sort(),[...reviewed].sort(),
+      "Unreviewed tmpfs mount or option may hide application code, configuration or data");
+  }
   for(const service of [app,web,db]){
     assert.ok(!Object.hasOwn(service,"env_file"),"Service env_file is not allowed");
     // A Compose override can redirect the fixed DB_HOST via /etc/hosts or DNS,
@@ -218,10 +232,10 @@ export function checkEnvironmentRegressionCases(){
       university_pgdata:{name:"imagine-universidade-staging_university_pgdata"},
       university_storage:{name:"imagine-universidade-staging_university_storage"}
     },
-    services:{app:{depends_on:{db:{condition:"service_healthy",required:true}},networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",volumes:[
+    services:{app:{depends_on:{db:{condition:"service_healthy",required:true}},networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",tmpfs:["/tmp:mode=1777"],volumes:[
       {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
       {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
-    web:{depends_on:{app:{condition:"service_started",required:true}},networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+    web:{depends_on:{app:{condition:"service_started",required:true}},networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",tmpfs:["/tmp:mode=1777","/var/cache/nginx:mode=1777","/var/run:mode=1777"],ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
       healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"],interval:15_000_000_000,timeout:5_000_000_000,retries:3,start_period:30_000_000_000}},
     db:{networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
     environment:{
@@ -229,6 +243,15 @@ export function checkEnvironmentRegressionCases(){
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand],interval:5_000_000_000,timeout:3_000_000_000,retries:15}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
+    model=>{model.services.app.tmpfs=["/var/www/html:mode=1777"];},
+    model=>{model.services.web.tmpfs=["/etc/nginx:mode=1777"];},
+    model=>{model.services.db.tmpfs=["/var/lib/postgresql:mode=1777"];},
+    model=>{model.services.app.tmpfs.push("/var/www/html/storage:mode=1777");},
+    model=>{model.services.web.tmpfs=[];},
+    model=>{model.services.web.tmpfs=["/tmp:mode=1777","/var/cache/nginx:mode=0777","/var/run:mode=1777"];},
+    model=>{model.services.web.tmpfs={target:"/tmp"};},
+    model=>{model.services.app.tmpfs=["/tmp:mode=1777,exec"];},
+    model=>{model.services.app.tmpfs.push("/tmp:mode=1777");},
     model=>{model.secrets={outside:{file:"/tmp/unreviewed-secret"}};},
     model=>{model.configs={outside:{file:"/tmp/unreviewed-config"}};},
     model=>{model.services.app.secrets=["outside"];},

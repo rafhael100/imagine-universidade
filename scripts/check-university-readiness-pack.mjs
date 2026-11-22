@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSync,rmSync} from "node:fs";
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSync,symlinkSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {execFileSync} from "node:child_process";
-import {buildReadinessPack,requireCleanReleaseCheckout,reviewedSourceFiles,readPinnedGitSourceBytes} from "./build-university-readiness-pack.mjs";
+import {buildReadinessPack,requireCleanReleaseCheckout,requireFreshReadinessOutput,reviewedSourceFiles,readPinnedGitSourceBytes} from "./build-university-readiness-pack.mjs";
 
 const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
 const sha="a".repeat(40);
@@ -280,6 +280,30 @@ check("repository-local core.worktree cannot redirect readiness Git inspection",
   }finally{
     rmSync(root,{recursive:true,force:true});
     rmSync(alternative,{recursive:true,force:true});
+  }
+});
+check("readiness output is fresh and cannot follow a runner-temp symlink",()=>{
+  const temp=mkdtempSync(join(tmpdir(),"uni-readiness-out-"));
+  const outside=mkdtempSync(join(tmpdir(),"uni-readiness-external-"));
+  const refusal="Refusing readiness package: output must be a fresh direct runner temp child";
+  try{
+    const fresh=join(temp,"fresh");
+    assert.equal(requireFreshReadinessOutput(temp,fresh),fresh);
+    const redirect=join(temp,"redirect");
+    symlinkSync(outside,redirect,"dir");
+    assert.throws(()=>requireFreshReadinessOutput(temp,redirect),
+      error=>error.message===refusal&&!error.message.includes(outside));
+    assert.throws(()=>requireFreshReadinessOutput(temp,join(redirect,"nested")),
+      error=>error.message===refusal&&!error.message.includes(outside));
+    const existing=join(temp,"already");
+    mkdirSync(existing);
+    assert.throws(()=>requireFreshReadinessOutput(temp,existing),
+      error=>error.message===refusal);
+    assert.throws(()=>requireFreshReadinessOutput(temp,join(temp,"sub","new")),
+      error=>error.message===refusal);
+  }finally{
+    rmSync(temp,{recursive:true,force:true});
+    rmSync(outside,{recursive:true,force:true});
   }
 });
 check("source provenance includes reviewed Docker context and executable image inputs",()=>{

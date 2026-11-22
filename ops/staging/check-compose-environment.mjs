@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {pathToFileURL} from "node:url";
+import {fileURLToPath,pathToFileURL} from "node:url";
+import {isAbsolute,resolve} from "node:path";
 
 const appKeys=["APP_NAME","APP_KEY","APP_URL","APP_ENV","APP_DEBUG",
   "DB_CONNECTION","DB_HOST","DB_PORT","DB_DATABASE","DB_USERNAME","DB_PASSWORD",
@@ -14,6 +15,7 @@ const dbHealthCommand="PGPASSWORD=\"$POSTGRES_PASSWORD\" PGCONNECT_TIMEOUT=2 PGO
 // CMD-SHELL; Docker runtime is verified separately by the disposable health test.
 const resolvedDbHealthCommand=dbHealthCommand.replaceAll("$",()=>"$"+"$");
 const record=value=>value!==null&&typeof value==="object"&&!Array.isArray(value);
+const reviewedContext=resolve(fileURLToPath(new URL("../../",import.meta.url)));
 
 // Inspect Docker Compose's resolved model without starting any service.
 // All failures are fixed messages: never print configuration values/secrets.
@@ -26,6 +28,21 @@ export function validateComposeEnvironment(model){
   // Inspect the resolved model, not only the literal Compose YAML.
   assert.deepEqual(Object.keys(model.services).sort(),["app","db","web"],
     "Only the three reviewed private staging services are permitted");
+  // A resolved override could replace the reviewed build context or Dockerfile,
+  // inject build secrets, or swap the DB image while preserving safe runtime
+  // mounts, ports and healthchecks. Never build unreviewed sources in staging.
+  for(const [service,dockerfile] of [
+    [app,"ops/staging/Dockerfile.php"],[web,"ops/staging/Dockerfile.nginx"]
+  ]){
+    assert.ok(record(service.build)&&
+      Object.keys(service.build).sort().join(",")==="context,dockerfile"&&
+      typeof service.build.context==="string"&&isAbsolute(service.build.context)&&
+      resolve(service.build.context)===reviewedContext&&
+      service.build.dockerfile===dockerfile&&!Object.hasOwn(service,"image"),
+      "Application and web must build only reviewed source and Dockerfile");
+  }
+  assert.ok(db.image==="postgres:18"&&!Object.hasOwn(db,"build"),
+    "Database must use only reviewed image without a build override");
   // Compose configs/secrets may mount unreviewed host material into a service
   // even when environment variables, ports and named volumes are fenced.
   assert.ok(!Object.hasOwn(model,"secrets")&&!Object.hasOwn(model,"configs"),
@@ -245,6 +262,7 @@ export function checkEnvironmentRegressionCases(){
     SESSION_SAME_SITE:"lax",SESSION_COOKIE:"imagine_universidade_staging_session",LOG_CHANNEL:"stderr",
     LOG_LEVEL:"warning",CACHE_STORE:"array",QUEUE_CONNECTION:"sync",MAIL_MAILER:"array"};
   const safeRuntime={read_only:true,cap_drop:["ALL"],security_opt:["no-new-privileges:true"]};
+  const reviewedBuild=dockerfile=>({context:reviewedContext,dockerfile});
   const fixture={name:"imagine-universidade-staging",networks:{
     university_front:{name:"imagine-universidade-staging_university_front"},
     university_database:{name:"imagine-universidade-staging_university_database",internal:true}},
@@ -253,12 +271,12 @@ export function checkEnvironmentRegressionCases(){
       university_pgdata:{name:"imagine-universidade-staging_university_pgdata"},
       university_storage:{name:"imagine-universidade-staging_university_storage"}
     },
-    services:{app:{depends_on:{db:{condition:"service_healthy",required:true}},networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",tmpfs:["/tmp:mode=1777"],volumes:[
+    services:{app:{build:reviewedBuild("ops/staging/Dockerfile.php"),depends_on:{db:{condition:"service_healthy",required:true}},networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",tmpfs:["/tmp:mode=1777"],volumes:[
       {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
       {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
-    web:{depends_on:{app:{condition:"service_started",required:true}},networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",tmpfs:["/tmp:mode=1777","/var/cache/nginx:mode=1777","/var/run:mode=1777"],ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+    web:{build:reviewedBuild("ops/staging/Dockerfile.nginx"),depends_on:{app:{condition:"service_started",required:true}},networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",tmpfs:["/tmp:mode=1777","/var/cache/nginx:mode=1777","/var/run:mode=1777"],ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
       healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"],interval:15_000_000_000,timeout:5_000_000_000,retries:3,start_period:30_000_000_000}},
-    db:{networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
+    db:{image:"postgres:18",networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
     environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand],interval:5_000_000_000,timeout:3_000_000_000,retries:15}}}};
@@ -274,6 +292,18 @@ export function checkEnvironmentRegressionCases(){
   }
   assert.ok(validateComposeEnvironment(normalizedMounts));
   const invalid=[
+    model=>{model.services.app.build.dockerfile="Dockerfile.unreviewed";},
+    model=>{model.services.web.build.dockerfile="ops/staging/Dockerfile.php";},
+    model=>{model.services.app.build.context="/tmp/another-repository";},
+    model=>{model.services.web.build.context="../..";},
+    model=>{model.services.app.build.secrets=["local-secret"];},
+    model=>{model.services.web.build.network="host";},
+    model=>{model.services.app.build.args={INSTALL_TOKEN:"test-only"};},
+    model=>{model.services.web.build.ssh=["default"];},
+    model=>{model.services.db.image="untrusted.example/postgres:latest";},
+    model=>{model.services.db.build={context:reviewedContext,dockerfile:"Dockerfile"};},
+    model=>{model.services.app.image="unreviewed/app:latest";},
+    model=>{model.services.web.image="unreviewed/web:latest";},
     model=>{model.services.web.container_name="imagine-portal-live";},
     model=>{model.services.app.logging={driver:"syslog",options:{"syslog-address":"tcp://203.0.113.10:514"}};},
     model=>{model.services.db.sysctls={"net.ipv4.ip_forward":"1"};},

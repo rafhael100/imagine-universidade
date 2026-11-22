@@ -143,6 +143,22 @@ export function requireCleanReleaseCheckout(root){
   if(ignoredCache.length!==0){
     throw new Error("Refusing readiness package: ignored build-context cache files");
   }
+  // A local .git/info/exclude, global Git excludes or .gitignore can hide
+  // otherwise untracked PHP/configuration under Docker's allowed COPY trees.
+  // They are invisible to porcelain status and to the bootstrap-only check.
+  // Refuse ignored inputs in reviewed source trees, regardless of which
+  // local ignore rule matched. Safe false positives must fail closed.
+  const ignoredSources=execFileSync("git",[
+    "ls-files","--others","--ignored","--exclude-standard","--",
+    "app","bootstrap","database","routes","resources","content",
+    "tests","scripts","public","ops"
+  ],{
+    cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+    maxBuffer:8*1024*1024
+  });
+  if(ignoredSources.length!==0){
+    throw new Error("Refusing readiness package: Git-ignored build source");
+  }
 }
 
 const selfPath=fileURLToPath(import.meta.url);

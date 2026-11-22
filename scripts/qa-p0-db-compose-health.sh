@@ -7,8 +7,20 @@ fail(){ echo "HOLD synthetic DB SQL readiness: $1" >&2; exit 2; }
    "${GITHUB_EVENT_NAME:-}" == push &&
    "${GITHUB_REF_NAME:-}" == "review/uni-p0-pg-sql-health-contract-2026-11-20" ]] ||
   fail "isolated review branch only"
-[[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" ]] || fail "remote Docker forbidden"
-[[ "$(docker context show)" == default ]] || fail "default Docker context only"
+# A context called "default" may still point to remote SSH/TCP or an
+# alternate Unix socket. Check the effective endpoint before build/run/cleanup.
+# Do not echo endpoint values, paths or any environment contents.
+for docker_override in DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH; do
+  [[ -z "$(printenv "$docker_override" || true)" ]] ||
+    fail "Docker client endpoint override forbidden"
+done
+if ! docker_context_name="$(docker context show)" || [[ "$docker_context_name" != "default" ]]; then
+  fail "default local Docker context required"
+fi
+if ! docker_endpoint="$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" ||
+   [[ "$docker_endpoint" != "unix:///var/run/docker.sock" ]]; then
+  fail "exact local Docker Unix socket required"
+fi
 test ! -e .env && test ! -e .env.production && test ! -e .env.local &&
 test ! -e ops/staging/.env.staging || fail "environment files forbidden"
 command -v timeout >/dev/null || fail "bounded probe required"

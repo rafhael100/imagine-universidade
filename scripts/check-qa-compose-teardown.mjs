@@ -116,7 +116,38 @@ exit 99
       assert.equal(existsSync(downMarker),true,mode+": own attempt must cleanup");
     }
   }
-  console.log("PASS 21 synthetic teardown, project-ownership and daemon-endpoint cases; remote endpoints never trigger build/logs/down; no real Docker.");
+  // The four staging QA scripts must not trust a context merely named "default".
+  // PATH fixtures simulate remote endpoints without using any Docker daemon.
+  const entrypoints=[
+    ["scripts/qa-staging-image-build.sh","fix/uni-c108-private-flow-2026-11-17",["uni-qa-stage-test-php","uni-qa-stage-test-nginx"]],
+    ["scripts/qa-staging-private-http.sh","fix/uni-c108-private-flow-2026-11-17",["uni-qa-stage-test-php","uni-qa-stage-test-nginx"]],
+    ["scripts/qa-staging-postgres-http.sh","review/uni-p0-db-aware-health-2026-11-20",["uni-qa-stage-test-php","uni-qa-stage-test-nginx"]],
+    ["scripts/qa-p0-db-compose-health.sh","review/uni-p0-pg-sql-health-contract-2026-11-20",[]],
+  ];
+  let remoteScriptCases=0;
+  for(const [file,branch,args] of entrypoints){
+    for(const mode of ["remote_endpoint_tcp","remote_endpoint_ssh",
+      "alternate_unix_socket","context_inspect_failed"]){
+      const env={...process.env,
+        PATH:fakeDir+delimiter+(process.env.PATH||"/usr/bin:/bin"),
+        UNI_FAKE_MODE:mode,CI:"true",GITHUB_ACTIONS:"true",
+        GITHUB_EVENT_NAME:"push",GITHUB_REPOSITORY:"rafhael100/imagine-universidade",
+        GITHUB_REF:"refs/heads/"+branch,GITHUB_REF_NAME:branch,
+        GITHUB_RUN_ID:"900001",GITHUB_RUN_ATTEMPT:"1"};
+      for(const name of ["DOCKER_HOST","DOCKER_CONTEXT",
+        "DOCKER_TLS_VERIFY","DOCKER_CERT_PATH"])delete env[name];
+      const result=spawnSync("bash",[file,...args],{
+        cwd:new URL("../",import.meta.url),encoding:"utf8",timeout:7000,env});
+      assert.ifError(result.error);
+      assert.equal(result.status,2,file+" "+mode+": "+result.stderr);
+      assert.match(result.stderr,/exact local Docker Unix socket required/u);
+      assert.doesNotMatch(result.stderr,/FAIL unrecognized synthetic Docker command/u,
+        file+" "+mode+": must not perform Docker build, run or cleanup");
+      assert.doesNotMatch(result.stdout,/PASS/u);
+      remoteScriptCases++;
+    }
+  }
+  console.log("PASS 21 existing Docker QA cases + "+remoteScriptCases+" remote-endpoint checks across four staging entrypoints; no real Docker.");
 } finally {
   rmSync(fakeDir,{force:true,recursive:true});
 }

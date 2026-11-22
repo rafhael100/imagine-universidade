@@ -27,8 +27,20 @@ elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
 else
   fail "CI event not authorized"
 fi
-[[ -z "${DOCKER_HOST:-}" && -z "${DOCKER_CONTEXT:-}" ]] || fail "local Docker only"
-[[ "$(docker context show)" == "default" ]] || fail "default Docker context required"
+# A context called "default" may still point to remote SSH/TCP or an
+# alternate Unix socket. Check the effective endpoint before build/run/cleanup.
+# Do not echo endpoint values, paths or any environment contents.
+for docker_override in DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH; do
+  [[ -z "$(printenv "$docker_override" || true)" ]] ||
+    fail "Docker client endpoint override forbidden"
+done
+if ! docker_context_name="$(docker context show)" || [[ "$docker_context_name" != "default" ]]; then
+  fail "default local Docker context required"
+fi
+if ! docker_endpoint="$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" ||
+   [[ "$docker_endpoint" != "unix:///var/run/docker.sock" ]]; then
+  fail "exact local Docker Unix socket required"
+fi
 test ! -e .env && test ! -e ops/staging/.env.staging || fail "environment files prohibited"
 [[ "$#" == 2 && "$1" == uni-qa-stage-* && "$2" == uni-qa-stage-* ]] ||
   fail "two locally built staging tags required"

@@ -339,4 +339,13 @@ check("release QA workflows verify actual reviewed source paths, not a stale cou
     assert.ok(!yaml.includes("assert.equal(Object.keys(p.source_files_sha256).length,5);"));
   }
 });
+check("Git-blob negative QA matches the early fail-closed source-drift error",()=>{
+  const yaml=readFileSync(new URL("../.github/workflows/uni-p0-readiness-git-blobs.yml",import.meta.url),"utf8");
+  assert.ok(yaml.includes("if ! grep -Fq 'Refusing readiness package: tracked or untracked source drift'"),
+    "Negative drift QA must match the earliest Git worktree guard");
+  assert.ok(!yaml.includes("if ! grep -Fq 'Source file differs from exact checked-out Git commit:'"),
+    "The old blob-check error is unreachable for a dirty worktree");
+  assert.ok(!yaml.includes('cat "$RUNNER_TEMP/uni-drift-stderr.log" >&2'),
+    "Negative QA must not echo potentially sensitive diagnostics");
+});
 console.log("PASS readonly readiness pack: "+cases+" positive/negative scenarios; 13 operational gates remain unchanged.");

@@ -150,6 +150,26 @@ export function requireCleanReleaseCheckout(root){
   if(effectiveRoot!==requestedRoot){
     throw new Error("Refusing readiness package: Git worktree root mismatch");
   }
+  // On a case-sensitive runner, repository-local core.ignorecase=true can
+  // hide app/Trusted.php vs app/trusted.php from BOTH status and ls-files,
+  // while Docker COPY still includes both. Reject ambiguous Git semantics.
+  // Missing config uses Git's Linux default (false); unreadable/invalid config
+  // fails closed. Never include local Git configuration values in diagnostics.
+  let ignoreCase;
+  try{
+    ignoreCase=execFileSync("git",["config","--bool","--get","core.ignorecase"],{
+      cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+      maxBuffer:1024
+    }).trim();
+  }catch(error){
+    if(error?.status!==1){
+      throw new Error("Refusing readiness package: Git case semantics cannot be verified");
+    }
+    ignoreCase="false";
+  }
+  if(ignoreCase!=="false"){
+    throw new Error("Refusing readiness package: unsafe Git core.ignorecase");
+  }
   const status=execFileSync("git",["status","--porcelain=v1","--untracked-files=all"],{
     cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
     maxBuffer:8*1024*1024

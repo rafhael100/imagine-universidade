@@ -18,22 +18,29 @@ function fetchProbe(string $path): array
     $headers = $http_response_header ?? [];
     return [$text, $headers];
 }
-$health = null;
+// Two-container QA intentionally has NO database; the app health listener
+// probes SQL and MUST NOT report 200. The three-container QA includes PG18
+// and MUST report 200. The mode is a synthetic runner flag, never an auth hint.
+$withoutSql = getenv('UNI_QA_EXPECT_DB_HEALTH_DOWN') === '1';
+$healthStatus = 0;
 for ($attempt = 0; $attempt < 30; $attempt++) {
-    $health = fetchProbe('/up');
-    if (str_contains($health[1][0] ?? '', ' 200 ')) {
+    [, $headers] = fetchProbe('/up');
+    $statusLine = $headers[0] ?? '';
+    $healthStatus = preg_match('~^HTTP/\S+\s+([0-9]{3})~', $statusLine, $match) === 1
+        ? (int) $match[1] : 0;
+    if ($withoutSql
+        ? in_array($healthStatus, [500, 503], true)
+        : $healthStatus === 200) {
         break;
     }
     usleep(200000);
 }
-if ($health === null || !str_contains($health[1][0] ?? '', ' 200 ')) {
-    // Emit only the numeric HTTP status, never response bodies/headers or
-    // container logs: those may contain environment or credential detail.
-    $status = 'no-http-response';
-    if (preg_match('/^HTTP\\/[^ ]+\\s+([0-9]{3})/', $health[1][0] ?? '', $match) === 1) {
-        $status = $match[1];
-    }
-    fwrite(STDERR, "FAIL: synthetic HTTP health did not reach Laravel FPM (HTTP {$status}).\\n");
+if ($withoutSql
+    ? !in_array($healthStatus, [500, 503], true)
+    : $healthStatus !== 200) {
+    // Only numeric HTTP status in synthetic CI. Never emit body, error page,
+    // headers, DSN, credentials or potentially sensitive container logs.
+    fwrite(STDERR, "FAIL: unexpected synthetic /up health status: {$healthStatus}\n");
     exit(2);
 }
 
@@ -65,4 +72,4 @@ foreach ($routes as $route) {
         exit(2);
     }
 }
-echo 'PASS: HTTP /up 200, '.count($routes).' guarded routes 403 with secure headers via isolated Nginx/FPM.'."\n";
+echo 'PASS: HTTP /up '.($withoutSql ? '500/503 (database intentionally absent)' : '200 (database available)').', '.count($routes).' guarded routes 403 with secure headers via isolated Nginx/FPM.'."\n";

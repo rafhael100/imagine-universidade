@@ -266,8 +266,8 @@ check("pinned blob check detects local Docker context changes even at the same H
   });
   try{
     git("init","-q");
-    writeFileSync(join(root,".dockerignore"),"**\\n!composer.json\\n");
-    writeFileSync(join(root,"composer.json"),'{"name":"qa/synthetic"}\\n');
+    writeFileSync(join(root,".dockerignore"),"**\n!composer.json\n");
+    writeFileSync(join(root,"composer.json"),'{"name":"qa/synthetic"}\n');
     git("add",".dockerignore","composer.json");
     git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
       "commit","-qm","synthetic inputs");
@@ -276,7 +276,7 @@ check("pinned blob check detects local Docker context changes even at the same H
     const pinned=readPinnedGitSourceBytes(root,head,names);
     assert.equal(pinned.size,2);
     assert.ok(pinned.get(".dockerignore").equals(readFileSync(join(root,".dockerignore"))));
-    writeFileSync(join(root,".dockerignore"),"**\\n!composer.json\\n!**/.env\\n");
+    writeFileSync(join(root,".dockerignore"),"**\n!composer.json\n!**/.env\n");
     assert.equal(git("rev-parse","HEAD").trim(),head,
       "A changed Docker context filter cannot change HEAD");
     assert.throws(()=>readPinnedGitSourceBytes(root,head,names),

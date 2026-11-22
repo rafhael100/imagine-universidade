@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync, mkdirSync, writeFileSync} from "node:fs";
+import {readFileSync, mkdirSync, writeFileSync, realpathSync} from "node:fs";
 import {resolve, relative, sep, join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {execFileSync} from "node:child_process";
@@ -130,6 +130,25 @@ export function requireCleanReleaseCheckout(root){
     /^GIT_CONFIG_(?:KEY|VALUE)_[0-9]+$/u.test(key))){
     // Never echo the override value, path, source name or credentials.
     throw new Error("Refusing readiness package: untrusted Git routing environment");
+  }
+  // An attacker can set core.worktree in the repository's own .git/config,
+  // without any GIT_* environment override. Git status then inspects that
+  // alternate clean directory while the readiness package reads THIS root.
+  // Confirm the effective Git top-level is this exact canonical checkout.
+  let effectiveRoot;
+  let requestedRoot;
+  try{
+    const top=execFileSync("git",["rev-parse","--show-toplevel"],{
+      cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+      maxBuffer:8*1024*1024
+    }).trim();
+    requestedRoot=realpathSync(root);
+    effectiveRoot=realpathSync(top);
+  }catch{
+    throw new Error("Refusing readiness package: Git worktree root cannot be verified");
+  }
+  if(effectiveRoot!==requestedRoot){
+    throw new Error("Refusing readiness package: Git worktree root mismatch");
   }
   const status=execFileSync("git",["status","--porcelain=v1","--untracked-files=all"],{
     cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,

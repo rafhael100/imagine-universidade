@@ -246,6 +246,42 @@ check("Git configuration/index overrides are rejected without disclosing values"
     rmSync(root,{recursive:true,force:true});
   }
 });
+check("repository-local core.worktree cannot redirect readiness Git inspection",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-local-worktree-"));
+  const alternative=mkdtempSync(join(tmpdir(),"uni-readiness-clean-git-root-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:5000
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"tracked.php"),"<?php // synthetic baseline\\n");
+    git("add","tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    writeFileSync(join(alternative,"tracked.php"),"<?php // synthetic baseline\\n");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const head=git("rev-parse","HEAD").trim();
+    writeFileSync(join(root,"injected.php"),"<?php // untracked source\\n");
+    assert.ok(git("status","--porcelain=v1","--untracked-files=all").includes("injected.php"));
+    // No GIT_WORK_TREE variable: the alternate checkout is selected only
+    // by the repository-local Git configuration (not versioned by HEAD).
+    git("config","--local","core.worktree",alternative);
+    assert.equal(git("rev-parse","HEAD").trim(),head);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"",
+      "The original dirty source becomes hidden by the alternate Git worktree");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: Git worktree root mismatch"&&
+      !error.message.includes(alternative)&&!error.message.includes("injected.php"));
+    git("config","--local","--unset","core.worktree");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift");
+    unlinkSync(join(root,"injected.php"));
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+    rmSync(alternative,{recursive:true,force:true});
+  }
+});
 check("source provenance includes reviewed Docker context and executable image inputs",()=>{
   assert.deepEqual([...reviewedSourceFiles],[
     ".dockerignore","composer.json","composer.lock","ops/release-gates.json",

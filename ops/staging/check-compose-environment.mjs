@@ -138,6 +138,40 @@ export function validateComposeEnvironment(model){
   ],"Web healthcheck must probe only local Laravel /up through Nginx");
   assert.deepEqual(db.healthcheck?.test,["CMD-SHELL",resolvedDbHealthCommand],
     "Resolved database health must use authenticated local TCP SELECT 1 with bounded timeout");
+  // A correct health command is insufficient if an override disables its
+  // schedule or starts services before PostgreSQL is ready.
+  const duration=(value,seconds)=>value===seconds*1_000_000_000||
+    value===String(seconds*1_000_000_000)||value===seconds+"s";
+  for(const [service,interval,timeout,retries,startPeriod] of [
+    [web,15,5,3,30],[db,5,3,15,null]
+  ]){
+    const health=service.healthcheck;
+    assert.ok(record(health)&&duration(health.interval,interval)&&
+      duration(health.timeout,timeout)&&health.retries===retries&&
+      health.disable!==true&&!Object.hasOwn(health,"start_interval"),
+      "Resolved health timing and retries must remain bounded");
+    if(startPeriod!==null){
+      assert.ok(duration(health.start_period,startPeriod),
+        "Web startup health grace must remain bounded");
+    }else{
+      assert.ok(!Object.hasOwn(health,"start_period"),
+        "Database startup grace override requires review");
+    }
+  }
+  for(const [service,target,condition] of [
+    [app,"db","service_healthy"],[web,"app","service_started"]
+  ]){
+    assert.ok(record(service.depends_on)&&
+      Object.keys(service.depends_on).length===1&&
+      record(service.depends_on[target]),"Private startup dependency missing");
+    const dep=service.depends_on[target];
+    assert.ok(dep.condition===condition&&dep.required!==false&&
+      dep.restart!==true&&Object.keys(dep).every(key=>
+        ["condition","required","restart"].includes(key)),
+      "Startup dependency condition changed");
+  }
+  assert.ok(!Object.hasOwn(db,"depends_on"),
+    "Database must not wait for unreviewed services");
   const application=app.environment,database=db.environment;
   assert.ok(record(application)&&record(database),"Missing explicit service environment");
   assert.ok(Object.keys(application).length===appKeys.length&&
@@ -176,17 +210,31 @@ export function checkEnvironmentRegressionCases(){
       university_pgdata:{name:"imagine-universidade-staging_university_pgdata"},
       university_storage:{name:"imagine-universidade-staging_university_storage"}
     },
-    services:{app:{networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",volumes:[
+    services:{app:{depends_on:{db:{condition:"service_healthy",required:true}},networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",volumes:[
       {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
       {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
-    web:{networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
-      healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
+    web:{depends_on:{app:{condition:"service_started",required:true}},networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+      healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"],interval:15_000_000_000,timeout:5_000_000_000,retries:3,start_period:30_000_000_000}},
     db:{networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
     environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
-    healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand]}}}};
+    healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand],interval:5_000_000_000,timeout:3_000_000_000,retries:15}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
+    model=>{model.services.web.healthcheck.interval=86_400_000_000_000;},
+    model=>{delete model.services.web.healthcheck.timeout;},
+    model=>{model.services.web.healthcheck.retries=0;},
+    model=>{model.services.web.healthcheck.start_period="24h";},
+    model=>{model.services.db.healthcheck.interval="24h";},
+    model=>{model.services.db.healthcheck.timeout=0;},
+    model=>{model.services.db.healthcheck.retries=0;},
+    model=>{model.services.db.healthcheck.start_interval="2h";},
+    model=>{delete model.services.app.depends_on;},
+    model=>{model.services.app.depends_on={web:{condition:"service_started"}};},
+    model=>{model.services.app.depends_on.db.condition="service_started";},
+    model=>{model.services.web.depends_on.app.required=false;},
+    model=>{model.services.web.depends_on.app.restart=true;},
+    model=>{model.services.db.depends_on={app:{condition:"service_started"}};},
     model=>{model.volumes.university_pgdata.external=true;},
     model=>{model.volumes.university_storage.name="crm_live_storage";},
     model=>{model.volumes.university_cache.driver_opts={device:"/var/lib/shared"};},

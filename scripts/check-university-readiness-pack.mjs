@@ -155,15 +155,15 @@ check("Git-ignored PHP inside Docker COPY source is denied",()=>{
   try{
     git("init","-q");
     mkdirSync(join(root,"app"),{recursive:true});
-    writeFileSync(join(root,"app","Tracked.php"),"<?php // tracked synthetic source\\n");
+    writeFileSync(join(root,"app","Tracked.php"),"<?php // tracked synthetic source\n");
     git("add","app/Tracked.php");
     git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
       "commit","-qm","synthetic baseline");
     assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
     const sha=git("rev-parse","HEAD").trim();
     const hidden=join(root,"app","Hidden.php");
-    writeFileSync(join(root,".git","info","exclude"),"app/Hidden.php\\n");
-    writeFileSync(hidden,"<?php // ignored synthetic build input\\n");
+    writeFileSync(join(root,".git","info","exclude"),"app/Hidden.php\n");
+    writeFileSync(hidden,"<?php // ignored synthetic build input\n");
     assert.equal(git("rev-parse","HEAD").trim(),sha);
     assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"");
     assert.equal(git("ls-files","--others","--ignored","--exclude-standard",

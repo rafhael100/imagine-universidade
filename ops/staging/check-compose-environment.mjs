@@ -114,6 +114,14 @@ export function validateComposeEnvironment(model){
   // privileges, host namespaces, or a bind mount of the Docker socket.
   // Check the resolved Compose model, not only the reviewed YAML text.
   for(const service of [app,web,db]){
+    // Preserve the reviewed image provenance, process lifecycle and resource
+    // startup semantics. A remote/never pull policy can select cached or
+    // unexpected images; aggressive shutdown or scale/ulimit overrides can
+    // invalidate the restoration and rollback candidate without changing ports.
+    for(const key of ["pull_policy","platform","working_dir","stop_signal","stop_grace_period","ulimits","scale","isolation","stdin_open","tty","oom_score_adj","cpu_shares"]){
+      assert.ok(!Object.hasOwn(service,key),
+        "Unreviewed image, process lifecycle or service resource override");
+    }
     // Unreviewed container names can collide with sibling Imagine projects;
     // remote logging and runtime/develop overrides can escape isolation.
     for(const key of ["container_name","logging","sysctls","runtime",
@@ -292,6 +300,18 @@ export function checkEnvironmentRegressionCases(){
   }
   assert.ok(validateComposeEnvironment(normalizedMounts));
   const invalid=[
+    model=>{model.services.db.pull_policy="never";},
+    model=>{model.services.db.platform="linux/amd64";},
+    model=>{model.services.db.stop_signal="SIGKILL";},
+    model=>{model.services.db.stop_grace_period="1s";},
+    model=>{model.services.app.working_dir="/etc";},
+    model=>{model.services.app.ulimits={nofile:4};},
+    model=>{model.services.app.scale=0;},
+    model=>{model.services.web.isolation="hyperv";},
+    model=>{model.services.web.stdin_open=true;},
+    model=>{model.services.web.tty=true;},
+    model=>{model.services.db.oom_score_adj=-999;},
+    model=>{model.services.db.cpu_shares=1000;},
     model=>{model.services.app.build.dockerfile="Dockerfile.unreviewed";},
     model=>{model.services.web.build.dockerfile="ops/staging/Dockerfile.php";},
     model=>{model.services.app.build.context="/tmp/another-repository";},

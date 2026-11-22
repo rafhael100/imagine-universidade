@@ -113,6 +113,7 @@ jobs:
           test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
           for script in scripts/qa-staging-image-build.sh scripts/qa-staging-private-http.sh scripts/qa-staging-postgres-http.sh; do bash -n "$script"; done
           php -l scripts/qa-staging-pg-pre-migrate.php
+          php -l scripts/qa-staging-private-http-probe.php
       - name: Exercise isolated Nginx / PHP / PG18 with live SQL and image rollback
         shell: bash
         run: |

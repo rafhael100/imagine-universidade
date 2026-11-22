@@ -92,7 +92,7 @@ check("ignored Laravel PHP bootstrap cache cannot enter release provenance",()=>
   try{
     git("init","-q");
     mkdirSync(join(root,"bootstrap","cache"),{recursive:true});
-    writeFileSync(join(root,".gitignore"),"/bootstrap/cache/*.php\\n");
+    writeFileSync(join(root,".gitignore"),"/bootstrap/cache/*.php\n");
     writeFileSync(join(root,"bootstrap","cache",".gitkeep"),"");
     git("add",".gitignore","bootstrap/cache/.gitkeep");
     git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
@@ -100,7 +100,7 @@ check("ignored Laravel PHP bootstrap cache cannot enter release provenance",()=>
     assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
     const head=git("rev-parse","HEAD").trim();
     const cache=join(root,"bootstrap","cache","config.php");
-    writeFileSync(cache,"<?php // synthetic ignored cache\\n");
+    writeFileSync(cache,"<?php // synthetic ignored cache\n");
     assert.equal(git("rev-parse","HEAD").trim(),head);
     assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"");
     assert.throws(()=>requireCleanReleaseCheckout(root),error=>
@@ -114,6 +114,6 @@ check("ignored Laravel PHP bootstrap cache cannot enter release provenance",()=>
 });
 check("Docker context excludes ignored bootstrap PHP cache",()=>{
   const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
-  assert.equal(ignore.trimEnd().split("\\n").at(-1),"bootstrap/cache/*.php");
+  assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");
 });
 console.log("PASS readonly readiness pack: "+cases+" positive/negative scenarios; 13 operational gates remain unchanged.");

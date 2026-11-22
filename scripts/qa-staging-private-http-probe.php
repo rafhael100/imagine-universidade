@@ -27,7 +27,13 @@ for ($attempt = 0; $attempt < 30; $attempt++) {
     usleep(200000);
 }
 if ($health === null || !str_contains($health[1][0] ?? '', ' 200 ')) {
-    fwrite(STDERR, "FAIL: synthetic HTTP health did not reach Laravel FPM.\n");
+    // Emit only the numeric HTTP status, never response bodies/headers or
+    // container logs: those may contain environment or credential detail.
+    $status = 'no-http-response';
+    if (preg_match('/^HTTP\\/[^ ]+\\s+([0-9]{3})/', $health[1][0] ?? '', $match) === 1) {
+        $status = $match[1];
+    }
+    fwrite(STDERR, "FAIL: synthetic HTTP health did not reach Laravel FPM (HTTP {$status}).\\n");
     exit(2);
 }
 

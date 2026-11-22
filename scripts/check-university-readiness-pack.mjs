@@ -145,6 +145,38 @@ check("Git index hidden flags cannot mask tracked release inputs",()=>{
     rmSync(root,{recursive:true,force:true});
   }
 });
+check("Git-ignored PHP inside Docker COPY source is denied",()=>{
+  // Unlike bootstrap/cache, this file is hidden only by local Git excludes.
+  // It remains an eligible Docker COPY app/ input, while HEAD/status are clean.
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-ignored-app-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  try{
+    git("init","-q");
+    mkdirSync(join(root,"app"),{recursive:true});
+    writeFileSync(join(root,"app","Tracked.php"),"<?php // tracked synthetic source\\n");
+    git("add","app/Tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const sha=git("rev-parse","HEAD").trim();
+    const hidden=join(root,"app","Hidden.php");
+    writeFileSync(join(root,".git","info","exclude"),"app/Hidden.php\\n");
+    writeFileSync(hidden,"<?php // ignored synthetic build input\\n");
+    assert.equal(git("rev-parse","HEAD").trim(),sha);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"");
+    assert.equal(git("ls-files","--others","--ignored","--exclude-standard",
+      "--","app").trim(),"app/Hidden.php");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: Git-ignored build source"&&
+      !error.message.includes("Hidden.php"));
+    unlinkSync(hidden);
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
 check("Docker context excludes ignored bootstrap PHP cache",()=>{
   const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
   assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");

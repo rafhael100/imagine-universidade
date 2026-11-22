@@ -38,3 +38,42 @@ for (const [label,delta] of cases) {
   assert.doesNotMatch(output.stdout+output.stderr,/OTHER_SECRET_DO_NOT_PRINT|postgres:\/\/external|remote\.invalid/u,label);
 }
 console.log("PASS P0 pre-migrate guard: "+cases.length+" fail-closed negative scenarios; no SQL or migrations in mutation tests.");
+
+
+// P0: the separate 3-container staging preflight must reject alternate
+// Laravel/libpq routing BEFORE it can load Composer or run a SQL migration.
+// Execute the real PHP script from STDIN, as the disposable Docker QA does.
+// This is negative-only QA: it opens no connections and changes no database.
+const {readFileSync} = await import("node:fs");
+const stagingSource=readFileSync(new URL("./qa-staging-pg-pre-migrate.php",import.meta.url),"utf8");
+const stagingBase={...base,DB_HOST:"db",DB_DATABASE:"uni_staging_ci_only",
+  DB_USERNAME:"uni_ci_migration_owner",DB_PASSWORD:"FAKE_OWNER_CI_ONLY"};
+const stagingOverrides=[
+  ["libpq redirect",{PGHOST:"external.invalid"}],
+  ["hostaddr redirect",{PGHOSTADDR:"203.0.113.99"}],
+  ["Laravel database URL",{DB_URL:"postgres://external.invalid/bogus"}],
+  ["database env URL",{DATABASE_URL:"postgres://external.invalid/bogus"}],
+  ["Laravel cache redirect",{APP_CONFIG_CACHE:"/tmp/external-config.php"}],
+  ["read replica redirect",{DB_READ_HOST:"external.invalid"}],
+  ["session options",{PGOPTIONS:"-c application_name=unexpected"}],
+];
+for(const [label,change] of stagingOverrides){
+  const output=spawnSync("php",[],{
+    input:stagingSource,encoding:"utf8",env:{...stagingBase,...change},timeout:5000
+  });
+  assert.ifError(output.error);
+  assert.equal(output.status,2,label+": preflight must fail before Laravel/SQL");
+  assert.match(output.stderr,
+    /HOLD synthetic PostgreSQL Laravel preflight: Untrusted PostgreSQL or Laravel connection override/u,
+    label);
+  assert.doesNotMatch(output.stdout+output.stderr,
+    /external\.invalid|postgres:\/\/|FAKE_OWNER_CI_ONLY/u,
+    label+": no DSN or credential disclosure");
+}
+assert.match(stagingSource,/server_version_num/u);
+assert.match(stagingSource,/pg_is_in_recovery\(\)/u);
+assert.match(stagingSource,/inet_server_addr\(\)/u);
+assert.match(stagingSource,/\$connection\['url'\]/u);
+assert.match(stagingSource,/Disposable Docker boundary not attested/u);
+console.log("PASS staging PG18 pre-migration boundary: "+
+  stagingOverrides.length+" negative Laravel/libpq routing cases; no SQL, Docker or migrations executed.");

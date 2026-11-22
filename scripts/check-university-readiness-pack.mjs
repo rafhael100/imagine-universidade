@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
-import {buildReadinessPack} from "./build-university-readiness-pack.mjs";
+import {readFileSync,mkdtempSync,writeFileSync,appendFileSync,unlinkSync,rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {execFileSync} from "node:child_process";
+import {buildReadinessPack,requireCleanReleaseCheckout} from "./build-university-readiness-pack.mjs";
 
 const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
 const sha="a".repeat(40);
@@ -50,5 +53,29 @@ check("cannot omit a gate",()=>{
 });
 check("cannot forge source SHA",()=>{
   assert.throws(()=>buildReadinessPack(manifest,"truncated"));
+});
+check("clean Git source accepted, untracked and modified build inputs rejected",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-synthetic-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"tracked.php"),"<?php // synthetic\\n");
+    git("add","tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const original=git("rev-parse","HEAD").toString("utf8").trim();
+    writeFileSync(join(root,"untracked.php"),"<?php // unexpected synthetic input\\n");
+    assert.equal(git("rev-parse","HEAD").toString("utf8").trim(),original,
+      "An untracked build file does not change HEAD");
+    assert.throws(()=>requireCleanReleaseCheckout(root),/tracked or untracked source drift/u);
+    unlinkSync(join(root,"untracked.php"));
+    appendFileSync(join(root,"tracked.php"),"// changed synthetic input\\n");
+    assert.throws(()=>requireCleanReleaseCheckout(root),/tracked or untracked source drift/u);
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
 });
 console.log("PASS readonly readiness pack: "+cases+" positive/negative scenarios; 13 operational gates remain unchanged.");

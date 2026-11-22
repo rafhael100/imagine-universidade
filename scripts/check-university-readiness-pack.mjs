@@ -70,10 +70,14 @@ check("clean Git source accepted, untracked and modified build inputs rejected",
     writeFileSync(join(root,"untracked.php"),"<?php // unexpected synthetic input\\n");
     assert.equal(git("rev-parse","HEAD").toString("utf8").trim(),original,
       "An untracked build file does not change HEAD");
-    assert.throws(()=>requireCleanReleaseCheckout(root),/tracked or untracked source drift/u);
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift"&&
+      !error.message.includes("untracked.php"));
     unlinkSync(join(root,"untracked.php"));
     appendFileSync(join(root,"tracked.php"),"// changed synthetic input\\n");
-    assert.throws(()=>requireCleanReleaseCheckout(root),/tracked or untracked source drift/u);
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift"&&
+      !error.message.includes("tracked.php"));
   }finally{
     rmSync(root,{recursive:true,force:true});
   }

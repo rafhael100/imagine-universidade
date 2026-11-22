@@ -76,8 +76,7 @@ jobs:
               echo "FAIL: mutated source was accepted: $source" >&2
               exit 2
             fi
-            if ! grep -Fq 'Source file differs from exact checked-out Git commit:' "$RUNNER_TEMP/uni-drift-stderr.log"; then
-              cat "$RUNNER_TEMP/uni-drift-stderr.log" >&2
+            if ! grep -Fq 'Refusing readiness package: tracked or untracked source drift' "$RUNNER_TEMP/uni-drift-stderr.log"; then
               cp "$original" "$source"
               echo "FAIL: drift refusal not verified: $source" >&2
               exit 2

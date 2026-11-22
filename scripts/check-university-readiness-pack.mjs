@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync,mkdtempSync,writeFileSync,appendFileSync,unlinkSync,rmSync} from "node:fs";
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {execFileSync} from "node:child_process";
@@ -81,5 +81,39 @@ check("clean Git source accepted, untracked and modified build inputs rejected",
   }finally{
     rmSync(root,{recursive:true,force:true});
   }
+});
+check("ignored Laravel PHP bootstrap cache cannot enter release provenance",()=>{
+  // Synthetic Git repository exercises a Git-ignored executable build input.
+  // The unchanged HEAD and clean --porcelain status previously missed it.
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-ignored-cache-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  try{
+    git("init","-q");
+    mkdirSync(join(root,"bootstrap","cache"),{recursive:true});
+    writeFileSync(join(root,".gitignore"),"/bootstrap/cache/*.php\\n");
+    writeFileSync(join(root,"bootstrap","cache",".gitkeep"),"");
+    git("add",".gitignore","bootstrap/cache/.gitkeep");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const head=git("rev-parse","HEAD").trim();
+    const cache=join(root,"bootstrap","cache","config.php");
+    writeFileSync(cache,"<?php // synthetic ignored cache\\n");
+    assert.equal(git("rev-parse","HEAD").trim(),head);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: ignored build-context cache files"&&
+      !error.message.includes("config.php"));
+    unlinkSync(cache);
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+check("Docker context excludes ignored bootstrap PHP cache",()=>{
+  const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
+  assert.equal(ignore.trimEnd().split("\\n").at(-1),"bootstrap/cache/*.php");
 });
 console.log("PASS readonly readiness pack: "+cases+" positive/negative scenarios; 13 operational gates remain unchanged.");

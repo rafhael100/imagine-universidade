@@ -121,6 +121,18 @@ export function requireCleanReleaseCheckout(root){
   if(status.length!==0){
     throw new Error("Refusing readiness package: tracked or untracked source drift");
   }
+  // git status suppresses .gitignore matches. Laravel's ignored PHP bootstrap
+  // cache was otherwise accepted despite being eligible for Docker COPY.
+  // Refuse that hidden input even if future .dockerignore rules drift.
+  const ignoredCache=execFileSync("git",[
+    "ls-files","--others","--ignored","--exclude-standard","--","bootstrap/cache"
+  ],{
+    cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+    maxBuffer:8*1024*1024
+  });
+  if(ignoredCache.length!==0){
+    throw new Error("Refusing readiness package: ignored build-context cache files");
+  }
 }
 
 const selfPath=fileURLToPath(import.meta.url);

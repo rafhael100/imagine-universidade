@@ -45,3 +45,7 @@
 **/vendor/**
 **/node_modules/**
 **/.git/**
+
+# Never ship Laravel-generated, Git-ignored executable bootstrap cache files.
+# Last rule wins over the !bootstrap/** Docker build-context allowlist above.
+bootstrap/cache/*.php

@@ -177,6 +177,39 @@ check("Git-ignored PHP inside Docker COPY source is denied",()=>{
     rmSync(root,{recursive:true,force:true});
   }
 });
+check("Git core.ignorecase cannot hide case-distinct untracked Docker PHP sources",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-ignorecase-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:5000
+  });
+  try{
+    git("init","-q");
+    mkdirSync(join(root,"app"));
+    writeFileSync(join(root,"app","Trusted.php"),"<?php // tracked synthetic source\\n");
+    git("add","app/Trusted.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    const head=git("rev-parse","HEAD").trim();
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    git("config","--local","core.ignorecase","true");
+    writeFileSync(join(root,"app","trusted.php"),"<?php // distinct untracked synthetic source\\n");
+    assert.equal(git("rev-parse","HEAD").trim(),head);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"",
+      "Unsafe case-insensitive Git setting must conceal the added Docker source");
+    assert.equal(git("ls-files","--others","--ignored","--exclude-standard","--","app"),"",
+      "Even the ignored-source guard is blind under core.ignorecase=true");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: unsafe Git core.ignorecase"&&
+      !error.message.includes("trusted.php"));
+    git("config","--local","core.ignorecase","false");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift");
+    unlinkSync(join(root,"app","trusted.php"));
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
 check("GIT_WORK_TREE cannot redirect provenance inspection to a clean directory",()=>{
   const root=mkdtempSync(join(tmpdir(),"uni-readiness-git-route-"));
   const other=mkdtempSync(join(tmpdir(),"uni-readiness-clean-alternate-"));

@@ -19,7 +19,8 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
        "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-private-health-runtime-2026-11-20" ||
        "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-db-outage-failclosed-2026-11-20" ||
        "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-db-aware-health-2026-11-20" ||
-       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-synthetic-image-rollback-2026-11-20" ) ]] ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-synthetic-image-rollback-2026-11-20" ||
+       "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-readiness-git-config-root-fence-2026-11-22" ) ]] ||
     fail "push QA only on authorized review branch"
 elif [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" ]]; then
   [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" ]] ||

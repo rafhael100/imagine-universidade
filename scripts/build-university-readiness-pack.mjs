@@ -114,6 +114,23 @@ export function buildReadinessPack(manifest,sha){
 // build context without changing any tracked SHA. Refuse a non-clean checkout
 // before emitting a source provenance report. Do not print file names or data.
 export function requireCleanReleaseCheckout(root){
+  // Never trust Git checks when environment variables can redirect Git to a
+  // different, clean worktree or index. GIT_WORK_TREE, for example, makes
+  // status/ls-files inspect another directory while Node packages THIS one.
+  // A caller-supplied Git configuration can likewise change inspection.
+  const routingVariables=new Set([
+    "GIT_WORK_TREE","GIT_DIR","GIT_COMMON_DIR","GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY","GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CEILING_DIRECTORIES","GIT_GRAFT_FILE","GIT_NAMESPACE",
+    "GIT_NO_REPLACE_OBJECTS","GIT_REPLACE_REF_BASE","GIT_SUPER_PREFIX",
+    "GIT_CONFIG_COUNT","GIT_CONFIG_PARAMETERS","GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_SYSTEM","GIT_CONFIG_NOSYSTEM"
+  ]);
+  if(Object.keys(process.env).some(key=>routingVariables.has(key)||
+    /^GIT_CONFIG_(?:KEY|VALUE)_[0-9]+$/u.test(key))){
+    // Never echo the override value, path, source name or credentials.
+    throw new Error("Refusing readiness package: untrusted Git routing environment");
+  }
   const status=execFileSync("git",["status","--porcelain=v1","--untracked-files=all"],{
     cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
     maxBuffer:8*1024*1024

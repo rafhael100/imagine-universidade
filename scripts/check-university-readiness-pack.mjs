@@ -177,6 +177,75 @@ check("Git-ignored PHP inside Docker COPY source is denied",()=>{
     rmSync(root,{recursive:true,force:true});
   }
 });
+check("GIT_WORK_TREE cannot redirect provenance inspection to a clean directory",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-git-route-"));
+  const other=mkdtempSync(join(tmpdir(),"uni-readiness-clean-alternate-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  const original=process.env.GIT_WORK_TREE;
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"tracked.php"),"<?php // synthetic source\\n");
+    git("add","tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    writeFileSync(join(other,"tracked.php"),"<?php // synthetic source\\n");
+    writeFileSync(join(root,"injected.php"),"<?php // untracked build input\\n");
+    const head=git("rev-parse","HEAD").trim();
+    assert.ok(git("status","--porcelain=v1","--untracked-files=all").includes("injected.php"),
+      "Normal Git inspection must notice the untracked build input");
+    process.env.GIT_WORK_TREE=other;
+    assert.equal(git("rev-parse","HEAD").trim(),head,
+      "Git HEAD remains the same under a redirected worktree");
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"",
+      "Reproduce old bug: a redirected worktree reports clean");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: untrusted Git routing environment"&&
+      !error.message.includes("injected.php")&&!error.message.includes(other));
+  }finally{
+    if(original===undefined)delete process.env.GIT_WORK_TREE;
+    else process.env.GIT_WORK_TREE=original;
+    rmSync(root,{recursive:true,force:true});
+    rmSync(other,{recursive:true,force:true});
+  }
+});
+check("Git configuration/index overrides are rejected without disclosing values",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-env-overrides-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"tracked.php"),"<?php // baseline\\n");
+    git("add","tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    for(const [key,value] of [
+      ["GIT_INDEX_FILE",join(root,"hidden-index")],
+      ["GIT_DIR",join(root,".git")],
+      ["GIT_CONFIG_COUNT","0"],
+      ["GIT_CONFIG_KEY_0","core.worktree"],
+      ["GIT_CONFIG_VALUE_0","untrusted-synthetic-path"],
+      ["GIT_CONFIG_GLOBAL",join(root,"synthetic-gitconfig")]
+    ]){
+      const previous=process.env[key];
+      try{
+        process.env[key]=value;
+        assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+          error.message==="Refusing readiness package: untrusted Git routing environment"&&
+          !error.message.includes(value));
+      }finally{
+        if(previous===undefined)delete process.env[key];
+        else process.env[key]=previous;
+      }
+    }
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
 check("Docker context excludes ignored bootstrap PHP cache",()=>{
   const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
   assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");

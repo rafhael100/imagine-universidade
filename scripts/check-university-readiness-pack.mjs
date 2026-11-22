@@ -4,7 +4,7 @@ import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSy
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {execFileSync} from "node:child_process";
-import {buildReadinessPack,requireCleanReleaseCheckout} from "./build-university-readiness-pack.mjs";
+import {buildReadinessPack,requireCleanReleaseCheckout,reviewedSourceFiles,readPinnedGitSourceBytes} from "./build-university-readiness-pack.mjs";
 
 const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
 const sha="a".repeat(40);
@@ -242,6 +242,47 @@ check("Git configuration/index overrides are rejected without disclosing values"
       }
     }
     assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
+check("source provenance includes reviewed Docker context and executable image inputs",()=>{
+  assert.deepEqual([...reviewedSourceFiles],[
+    ".dockerignore","composer.json","composer.lock","ops/release-gates.json",
+    "ops/staging/compose.yaml","ops/staging/Dockerfile.php",
+    "ops/staging/Dockerfile.nginx","ops/staging/nginx.conf","ops/qa/Dockerfile"
+  ]);
+  assert.equal(new Set(reviewedSourceFiles).size,reviewedSourceFiles.length,
+    "No duplicate source hash keys");
+  for(const name of reviewedSourceFiles){
+    const local=readFileSync(new URL("../"+name,import.meta.url));
+    assert.ok(local.length>0,"Reviewed source must exist and be non-empty: "+name);
+  }
+});
+check("pinned blob check detects local Docker context changes even at the same HEAD",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-pinned-git-source-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    stdio:["ignore","pipe","pipe"],timeout:5000,encoding:"utf8"
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,".dockerignore"),"**\n!composer.json\n");
+    writeFileSync(join(root,"composer.json"),'{"name":"qa/synthetic"}\n');
+    git("add",".dockerignore","composer.json");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic inputs");
+    const head=git("rev-parse","HEAD").trim();
+    const names=[".dockerignore","composer.json"];
+    const pinned=readPinnedGitSourceBytes(root,head,names);
+    assert.equal(pinned.size,2);
+    assert.ok(pinned.get(".dockerignore").equals(readFileSync(join(root,".dockerignore"))));
+    writeFileSync(join(root,".dockerignore"),"**\n!composer.json\n!**/.env\n");
+    assert.equal(git("rev-parse","HEAD").trim(),head,
+      "A changed Docker context filter cannot change HEAD");
+    assert.throws(()=>readPinnedGitSourceBytes(root,head,names),
+      /Source file differs from exact checked-out Git commit: .dockerignore/u);
+    git("checkout","--",".dockerignore");
+    assert.doesNotThrow(()=>readPinnedGitSourceBytes(root,head,names));
   }finally{
     rmSync(root,{recursive:true,force:true});
   }

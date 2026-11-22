@@ -194,6 +194,25 @@ export const reviewedSourceFiles=Object.freeze([
   "ops/qa/Dockerfile"
 ]);
 
+// Compare the exact bytes used in a source package against the pinned Git
+// objects, not only path names or the commit hash. Called AFTER clean-checkout
+// and safe-Git-environment admission in the CLI (see requireCleanReleaseCheckout).
+export function readPinnedGitSourceBytes(root,sha,names){
+  assert.match(sha,/^[a-f0-9]{40}$/iu,"Invalid pinned commit SHA");
+  const pinned=new Map();
+  for (const name of names){
+    const committed=execFileSync("git",["show",sha+":"+name],{
+      cwd:root,stdio:["ignore","pipe","pipe"],timeout:5000,maxBuffer:16*1024*1024
+    });
+    const current=readFileSync(join(root,name));
+    if(!current.equals(committed)){
+      throw new Error("Source file differs from exact checked-out Git commit: "+name);
+    }
+    pinned.set(name,committed);
+  }
+  return pinned;
+}
+
 const selfPath=fileURLToPath(import.meta.url);
 if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   const args=process.argv.slice(2);
@@ -236,17 +255,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
     "routes/web.php"
   ])];
   const root=fileURLToPath(new URL("../",import.meta.url));
-  const exactBytes=new Map();
-  for (const name of guardedFiles) {
-    const committed=execFileSync("git",["show",sha+":"+name],{
-      cwd:root,stdio:["ignore","pipe","pipe"],timeout:5000,maxBuffer:16*1024*1024
-    });
-    const current=readFileSync(new URL("../"+name,import.meta.url));
-    if (!current.equals(committed)) {
-      throw new Error("Source file differs from exact checked-out Git commit: "+name);
-    }
-    exactBytes.set(name,committed);
-  }
+  const exactBytes=readPinnedGitSourceBytes(root,sha,guardedFiles);
   const manifest=JSON.parse(exactBytes.get("ops/release-gates.json").toString("utf8"));
   const report=buildReadinessPack(manifest,sha);
   // These are source hashes only, not Docker digests, SBOM or deploy approval.

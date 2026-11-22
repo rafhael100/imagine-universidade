@@ -12,6 +12,10 @@ on:
       - scripts/qa-pg-backup-restore.sh
       - tests/Feature/PrivateUniversityResponseBoundaryTest.php
       - tests/Feature/SyntheticEditorialFixtureImportTest.php
+      - scripts/qa-staging-image-build.sh
+      - scripts/qa-staging-private-http.sh
+      - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-staging-pg-pre-migrate.php
 
 permissions:
   contents: read
@@ -73,4 +77,49 @@ jobs:
           grep -Fq 'The temp backup and clone DB were removed; production/VPS backup is NOT proven.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'PASS: synthetic PostgreSQL restore and verified disposal of QA containers, database volume and network.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
       - name: Confirm 13 independent gates still HOLD_NO_GO and real access denied
+        run: node ops/staging/check-release-gates.mjs
+
+  staging-private-http-and-rollback:
+    # A separate disposable runner so PostgreSQL restore cleanup is not
+    # accidentally reused as evidence of live private HTTP / image rollback.
+    needs: compose-restore-and-cleanup
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout exact isolated P0 draft without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 immutable
+        with:
+          persist-credentials: false
+      - name: Verify review-only source, local Docker context and zero secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.local && test ! -e .env.production
+          test ! -e .env.testing && test ! -e ops/staging/.env.staging
+          test -f composer.lock
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test -z "${DOCKER_TLS_VERIFY:-}" && test -z "${DOCKER_CERT_PATH:-}"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          for script in scripts/qa-staging-image-build.sh scripts/qa-staging-private-http.sh scripts/qa-staging-postgres-http.sh; do bash -n "$script"; done
+          php -l scripts/qa-staging-pg-pre-migrate.php
+      - name: Exercise isolated Nginx / PHP / PG18 with live SQL and image rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/qa-staging-image-build.sh | tee "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403.' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic 3-service staging PG18:' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+      - name: Reconfirm deny-all and all 13 gates pending after synthetic rollback
         run: node ops/staging/check-release-gates.mjs

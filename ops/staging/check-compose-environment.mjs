@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {pathToFileURL} from "node:url";
+import {fileURLToPath,pathToFileURL} from "node:url";
+import {isAbsolute,resolve} from "node:path";
 
 const appKeys=["APP_NAME","APP_KEY","APP_URL","APP_ENV","APP_DEBUG",
   "DB_CONNECTION","DB_HOST","DB_PORT","DB_DATABASE","DB_USERNAME","DB_PASSWORD",
@@ -14,6 +15,7 @@ const dbHealthCommand="PGPASSWORD=\"$POSTGRES_PASSWORD\" PGCONNECT_TIMEOUT=2 PGO
 // CMD-SHELL; Docker runtime is verified separately by the disposable health test.
 const resolvedDbHealthCommand=dbHealthCommand.replaceAll("$",()=>"$"+"$");
 const record=value=>value!==null&&typeof value==="object"&&!Array.isArray(value);
+const reviewedContext=resolve(fileURLToPath(new URL("../../",import.meta.url)));
 
 // Inspect Docker Compose's resolved model without starting any service.
 // All failures are fixed messages: never print configuration values/secrets.
@@ -26,6 +28,25 @@ export function validateComposeEnvironment(model){
   // Inspect the resolved model, not only the literal Compose YAML.
   assert.deepEqual(Object.keys(model.services).sort(),["app","db","web"],
     "Only the three reviewed private staging services are permitted");
+  // A resolved override could replace the reviewed build context or Dockerfile,
+  // inject build secrets, or swap the DB image while preserving safe runtime
+  // mounts, ports and healthchecks. Never build unreviewed sources in staging.
+  for(const [service,dockerfile] of [
+    [app,"ops/staging/Dockerfile.php"],[web,"ops/staging/Dockerfile.nginx"]
+  ]){
+    assert.ok(record(service.build)&&
+      Object.keys(service.build).sort().join(",")==="context,dockerfile"&&
+      typeof service.build.context==="string"&&isAbsolute(service.build.context)&&
+      resolve(service.build.context)===reviewedContext&&
+      service.build.dockerfile===dockerfile&&!Object.hasOwn(service,"image"),
+      "Application and web must build only reviewed source and Dockerfile");
+  }
+  assert.ok(db.image==="postgres:18"&&!Object.hasOwn(db,"build"),
+    "Database must use only reviewed image without a build override");
+  // Compose configs/secrets may mount unreviewed host material into a service
+  // even when environment variables, ports and named volumes are fenced.
+  assert.ok(!Object.hasOwn(model,"secrets")&&!Object.hasOwn(model,"configs"),
+    "Unreviewed top-level Compose secrets/configs are forbidden");
   for(const service of [app,db]){
     assert.ok(!Object.hasOwn(service,"ports"),
       "Application and database must not publish host ports");
@@ -36,11 +57,145 @@ export function validateComposeEnvironment(model){
     "Web must publish exactly one explicit loopback-only port");
   const exposed=web.ports[0],published=String(exposed.published??"");
   assert.ok(exposed.host_ip==="127.0.0.1"&&exposed.target===8080&&
-    exposed.protocol==="tcp"&&/^[0-9]{5}$/.test(published)&&
+    exposed.protocol==="tcp"&&exposed.mode==="ingress"&&/^[0-9]{5}$/.test(published)&&
     Number(published)>=18000&&Number(published)<=60000&&published!=="18081",
     "Resolved web port must be the one approved loopback TCP mapping");
+
+  // Prevent Compose overrides from silently attaching containers to shared,
+  // externally managed or non-internal networks. The DB must be isolated from
+  // the web tier; only app may bridge the two project-owned networks.
+  assert.ok(model.name==="imagine-universidade-staging","Unexpected Compose project");
+  assert.ok(record(model.networks),"Missing resolved Compose networks");
+  assert.deepEqual(Object.keys(model.networks).sort(),["university_database","university_front"],
+    "Only two dedicated staging networks are permitted");
+  assert.deepEqual(model.networks.university_front,{
+    name:"imagine-universidade-staging_university_front"
+  },"Front network must be project-owned, without external/driver/attachable overrides");
+  assert.deepEqual(model.networks.university_database,{
+    name:"imagine-universidade-staging_university_database",internal:true
+  },"Database network must remain project-owned and internal");
+  for(const [service,expected] of [
+    [app,["university_database","university_front"]],
+    [web,["university_front"]],
+    [db,["university_database"]]
+  ]){
+    assert.ok(record(service.networks),"Missing resolved service network attachments");
+    assert.deepEqual(Object.keys(service.networks).sort(),expected,
+      "Unexpected staging service network attachment");
+    assert.ok(Object.values(service.networks).every(value=>
+      value===null||(record(value)&&Object.keys(value).length===0)),
+      "Service network aliases, addresses and link overrides require independent review");
+  }
+  // The service mounts alone cannot prove isolation: an override can map an
+  // apparently private named volume onto a shared/external Docker volume.
+  // Require exactly the project-owned volumes from the reviewed Compose file.
+  assert.ok(record(model.volumes),"Missing resolved staging volumes");
+  const ownedVolumes=["university_cache","university_pgdata","university_storage"];
+  assert.deepEqual(Object.keys(model.volumes).sort(),ownedVolumes,
+    "Only the three reviewed staging volumes are permitted");
+  for(const name of ownedVolumes){
+    assert.deepEqual(model.volumes[name],{name:"imagine-universidade-staging_"+name},
+      "Staging volume must be project-owned with no external/driver/option overrides");
+  }
+  // Resource and restart limits must survive Compose override resolution.
+  // A private endpoint is not safe if one container can exhaust the host.
+  for(const [service,expectedMemory,notation,expectedPids] of [
+    [app,2147483648,"2g",160],
+    [web,268435456,"256m",64],
+    [db,4294967296,"4g",160]
+  ]){
+    assert.ok([expectedMemory,String(expectedMemory),notation].includes(service.mem_limit)&&
+      service.pids_limit===expectedPids&&service.restart==="no"&&
+      !Object.hasOwn(service,"deploy")&&!Object.hasOwn(service,"memswap_limit")&&
+      !Object.hasOwn(service,"oom_kill_disable"),
+      "Resolved resource limits, no-restart and no-deploy contract must remain fixed");
+  }
+  // Overrides can keep private ports and still escape confinement by adding
+  // privileges, host namespaces, or a bind mount of the Docker socket.
+  // Check the resolved Compose model, not only the reviewed YAML text.
+  for(const service of [app,web,db]){
+    // Preserve the reviewed image provenance, process lifecycle and resource
+    // startup semantics. A remote/never pull policy can select cached or
+    // unexpected images; aggressive shutdown or scale/ulimit overrides can
+    // invalidate the restoration and rollback candidate without changing ports.
+    for(const key of ["pull_policy","platform","working_dir","stop_signal","stop_grace_period","ulimits","scale","isolation","stdin_open","tty","oom_score_adj","cpu_shares"]){
+      assert.ok(!Object.hasOwn(service,key),
+        "Unreviewed image, process lifecycle or service resource override");
+    }
+    // Unreviewed container names can collide with sibling Imagine projects;
+    // remote logging and runtime/develop overrides can escape isolation.
+    for(const key of ["container_name","logging","sysctls","runtime",
+      "profiles","init","cgroup_parent","develop"]){
+      assert.ok(!Object.hasOwn(service,key),
+        "Unreviewed container identity, logging or runtime override");
+    }
+    assert.ok(!Object.hasOwn(service,"secrets")&&
+      !Object.hasOwn(service,"configs")&&
+      !Object.hasOwn(service,"credential_spec"),
+      "Unreviewed injected secrets, configs or credential providers are forbidden");
+    assert.ok(service.privileged!==true&&!Object.hasOwn(service,"cap_add")&&
+      !Object.hasOwn(service,"devices")&&!Object.hasOwn(service,"volumes_from")&&
+      !Object.hasOwn(service,"pid")&&!Object.hasOwn(service,"ipc")&&
+      !Object.hasOwn(service,"userns_mode"),
+      "Unsafe container privilege, device or host namespace override");
+  }
+  for(const service of [app,web]){
+    assert.ok(service.read_only===true&&
+      Array.isArray(service.cap_drop)&&service.cap_drop.length===1&&service.cap_drop[0]==="ALL"&&
+      Array.isArray(service.security_opt)&&service.security_opt.length===1&&
+      service.security_opt[0]==="no-new-privileges:true",
+      "Application and web must remain read-only without capabilities or new privileges");
+  }
+  assert.ok(!Object.hasOwn(db,"security_opt"),"Database security overrides require independent review");
+  for(const [service,expected] of [
+    [app,["university_cache:/var/www/html/bootstrap/cache",
+      "university_storage:/var/www/html/storage"]],
+    [web,[]],
+    [db,["university_pgdata:/var/lib/postgresql"]]
+  ]){
+    const mounts=service.volumes??[];
+    assert.ok(Array.isArray(mounts)&&mounts.every(record),"Invalid resolved service mounts");
+    const actual=mounts.map(mount=>mount.type==="volume"?
+      mount.source+":"+mount.target:"UNAPPROVED_MOUNT").sort();
+    assert.deepEqual(actual,expected,"Unexpected mount: bind, host path, or extra volume");
+    // Compose's long volume syntax can change which data appears at the
+    // reviewed source:target, without changing that textual pairing.
+    // Keep the harmless normalized defaults but reject subpaths, nocopy,
+    // read-only databases and unreviewed mount options.
+    for(const mount of mounts){
+      assert.ok(Object.keys(mount).every(key=>
+        ["type","source","target","read_only","volume"].includes(key)),
+        "Unexpected resolved volume mount option");
+      assert.ok(mount.read_only===undefined||mount.read_only===false,
+        "Reviewed staging volumes must remain writable");
+      assert.ok(mount.volume===undefined||
+        (record(mount.volume)&&Object.keys(mount.volume).length===0),
+        "Unreviewed named-volume subpath or copy option");
+    }
+  }
+  // Named volumes are not sufficient to prevent an override from mounting
+  // tmpfs over Laravel code, Nginx configuration or PostgreSQL data.
+  // Keep only the temporary write paths in the reviewed staging Compose.
+  for(const [service,reviewed] of [
+    [app,["/tmp:mode=1777"]],
+    [web,["/tmp:mode=1777","/var/cache/nginx:mode=1777","/var/run:mode=1777"]],
+    [db,[]]
+  ]){
+    const actual=service.tmpfs??[];
+    assert.ok(Array.isArray(actual)&&actual.every(value=>typeof value==="string"),
+      "Invalid resolved tmpfs mount shape");
+    assert.deepEqual([...actual].sort(),[...reviewed].sort(),
+      "Unreviewed tmpfs mount or option may hide application code, configuration or data");
+  }
   for(const service of [app,web,db]){
     assert.ok(!Object.hasOwn(service,"env_file"),"Service env_file is not allowed");
+    // A Compose override can redirect the fixed DB_HOST via /etc/hosts or DNS,
+    // or replace the trusted image startup with arbitrary code. The database
+    // credentials must never be sent to an override-controlled destination.
+    for(const key of ["extra_hosts","dns","dns_search","dns_opt","links",
+      "external_links","hostname","domainname","entrypoint","command","user"]){
+      assert.ok(!Object.hasOwn(service,key),"Unreviewed service identity, DNS or startup override");
+    }
   }
   // Validate the *resolved* Docker Compose health contract, not just YAML text.
   // Never use a private Student/Admin route as a health endpoint.
@@ -51,6 +206,40 @@ export function validateComposeEnvironment(model){
   ],"Web healthcheck must probe only local Laravel /up through Nginx");
   assert.deepEqual(db.healthcheck?.test,["CMD-SHELL",resolvedDbHealthCommand],
     "Resolved database health must use authenticated local TCP SELECT 1 with bounded timeout");
+  // A correct health command is insufficient if an override disables its
+  // schedule or starts services before PostgreSQL is ready.
+  const duration=(value,seconds)=>value===seconds*1_000_000_000||
+    value===String(seconds*1_000_000_000)||value===seconds+"s";
+  for(const [service,interval,timeout,retries,startPeriod] of [
+    [web,15,5,3,30],[db,5,3,15,null]
+  ]){
+    const health=service.healthcheck;
+    assert.ok(record(health)&&duration(health.interval,interval)&&
+      duration(health.timeout,timeout)&&health.retries===retries&&
+      health.disable!==true&&!Object.hasOwn(health,"start_interval"),
+      "Resolved health timing and retries must remain bounded");
+    if(startPeriod!==null){
+      assert.ok(duration(health.start_period,startPeriod),
+        "Web startup health grace must remain bounded");
+    }else{
+      assert.ok(!Object.hasOwn(health,"start_period"),
+        "Database startup grace override requires review");
+    }
+  }
+  for(const [service,target,condition] of [
+    [app,"db","service_healthy"],[web,"app","service_started"]
+  ]){
+    assert.ok(record(service.depends_on)&&
+      Object.keys(service.depends_on).length===1&&
+      record(service.depends_on[target]),"Private startup dependency missing");
+    const dep=service.depends_on[target];
+    assert.ok(dep.condition===condition&&dep.required!==false&&
+      dep.restart!==true&&Object.keys(dep).every(key=>
+        ["condition","required","restart"].includes(key)),
+      "Startup dependency condition changed");
+  }
+  assert.ok(!Object.hasOwn(db,"depends_on"),
+    "Database must not wait for unreviewed services");
   const application=app.environment,database=db.environment;
   assert.ok(record(application)&&record(database),"Missing explicit service environment");
   assert.ok(Object.keys(application).length===appKeys.length&&
@@ -80,14 +269,152 @@ export function checkEnvironmentRegressionCases(){
     SESSION_DRIVER:"database",SESSION_ENCRYPT:"true",SESSION_SECURE_COOKIE:"true",SESSION_HTTP_ONLY:"true",
     SESSION_SAME_SITE:"lax",SESSION_COOKIE:"imagine_universidade_staging_session",LOG_CHANNEL:"stderr",
     LOG_LEVEL:"warning",CACHE_STORE:"array",QUEUE_CONNECTION:"sync",MAIL_MAILER:"array"};
-  const fixture={services:{app:{environment},
-    web:{ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
-      healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"]}},
-    db:{environment:{
+  const safeRuntime={read_only:true,cap_drop:["ALL"],security_opt:["no-new-privileges:true"]};
+  const reviewedBuild=dockerfile=>({context:reviewedContext,dockerfile});
+  const fixture={name:"imagine-universidade-staging",networks:{
+    university_front:{name:"imagine-universidade-staging_university_front"},
+    university_database:{name:"imagine-universidade-staging_university_database",internal:true}},
+    volumes:{
+      university_cache:{name:"imagine-universidade-staging_university_cache"},
+      university_pgdata:{name:"imagine-universidade-staging_university_pgdata"},
+      university_storage:{name:"imagine-universidade-staging_university_storage"}
+    },
+    services:{app:{build:reviewedBuild("ops/staging/Dockerfile.php"),depends_on:{db:{condition:"service_healthy",required:true}},networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",tmpfs:["/tmp:mode=1777"],volumes:[
+      {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
+      {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
+    web:{build:reviewedBuild("ops/staging/Dockerfile.nginx"),depends_on:{app:{condition:"service_started",required:true}},networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",tmpfs:["/tmp:mode=1777","/var/cache/nginx:mode=1777","/var/run:mode=1777"],ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
+      healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"],interval:15_000_000_000,timeout:5_000_000_000,retries:3,start_period:30_000_000_000}},
+    db:{image:"postgres:18",networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
+    environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
-    healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand]}}}};
+    healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand],interval:5_000_000_000,timeout:3_000_000_000,retries:15}}}};
   assert.ok(validateComposeEnvironment(fixture));
+  // Compose may include empty volume metadata and an explicit false
+  // read_only default in the resolved JSON. Both remain safe.
+  const normalizedMounts=structuredClone(fixture);
+  for(const service of Object.values(normalizedMounts.services)){
+    for(const mount of service.volumes??[]){
+      mount.volume={};
+      mount.read_only=false;
+    }
+  }
+  assert.ok(validateComposeEnvironment(normalizedMounts));
   const invalid=[
+    model=>{model.services.db.pull_policy="never";},
+    model=>{model.services.db.platform="linux/amd64";},
+    model=>{model.services.db.stop_signal="SIGKILL";},
+    model=>{model.services.db.stop_grace_period="1s";},
+    model=>{model.services.app.working_dir="/etc";},
+    model=>{model.services.app.ulimits={nofile:4};},
+    model=>{model.services.app.scale=0;},
+    model=>{model.services.web.isolation="hyperv";},
+    model=>{model.services.web.stdin_open=true;},
+    model=>{model.services.web.tty=true;},
+    model=>{model.services.db.oom_score_adj=-999;},
+    model=>{model.services.db.cpu_shares=1000;},
+    model=>{model.services.app.build.dockerfile="Dockerfile.unreviewed";},
+    model=>{model.services.web.build.dockerfile="ops/staging/Dockerfile.php";},
+    model=>{model.services.app.build.context="/tmp/another-repository";},
+    model=>{model.services.web.build.context="../..";},
+    model=>{model.services.app.build.secrets=["local-secret"];},
+    model=>{model.services.web.build.network="host";},
+    model=>{model.services.app.build.args={INSTALL_TOKEN:"test-only"};},
+    model=>{model.services.web.build.ssh=["default"];},
+    model=>{model.services.db.image="untrusted.example/postgres:latest";},
+    model=>{model.services.db.build={context:reviewedContext,dockerfile:"Dockerfile"};},
+    model=>{model.services.app.image="unreviewed/app:latest";},
+    model=>{model.services.web.image="unreviewed/web:latest";},
+    model=>{model.services.web.container_name="imagine-portal-live";},
+    model=>{model.services.app.logging={driver:"syslog",options:{"syslog-address":"tcp://203.0.113.10:514"}};},
+    model=>{model.services.db.sysctls={"net.ipv4.ip_forward":"1"};},
+    model=>{model.services.app.runtime="nvidia";},
+    model=>{model.services.db.profiles=["hidden"];},
+    model=>{model.services.web.init=true;},
+    model=>{model.services.web.cgroup_parent="shared";},
+    model=>{model.services.web.develop={watch:[{action:"sync",path:"/shared",target:"/etc/nginx"}]};},
+    model=>{model.services.db.volumes[0].volume={subpath:"other"};},
+    model=>{model.services.app.volumes[0].volume={subpath:"uploads"};},
+    model=>{model.services.app.volumes[0].volume={nocopy:true};},
+    model=>{model.services.db.volumes[0].volume={nocopy:false};},
+    model=>{model.services.db.volumes[0].read_only=true;},
+    model=>{model.services.app.volumes[0].read_only=true;},
+    model=>{model.services.app.volumes[0].consistency="delegated";},
+    model=>{model.services.web.volumes=[{type:"volume",source:"university_storage",target:"/var/www/html",bind:{create_host_path:true}}];},
+    model=>{model.services.app.tmpfs=["/var/www/html:mode=1777"];},
+    model=>{model.services.web.tmpfs=["/etc/nginx:mode=1777"];},
+    model=>{model.services.db.tmpfs=["/var/lib/postgresql:mode=1777"];},
+    model=>{model.services.app.tmpfs.push("/var/www/html/storage:mode=1777");},
+    model=>{model.services.web.tmpfs=[];},
+    model=>{model.services.web.tmpfs=["/tmp:mode=1777","/var/cache/nginx:mode=0777","/var/run:mode=1777"];},
+    model=>{model.services.web.tmpfs={target:"/tmp"};},
+    model=>{model.services.app.tmpfs=["/tmp:mode=1777,exec"];},
+    model=>{model.services.app.tmpfs.push("/tmp:mode=1777");},
+    model=>{model.secrets={outside:{file:"/tmp/unreviewed-secret"}};},
+    model=>{model.configs={outside:{file:"/tmp/unreviewed-config"}};},
+    model=>{model.services.app.secrets=["outside"];},
+    model=>{model.services.web.secrets=[{source:"outside",target:"runtime_secret"}];},
+    model=>{model.services.db.secrets=["outside"];},
+    model=>{model.services.app.configs=["outside"];},
+    model=>{model.services.web.configs=[{source:"outside",target:"/etc/nginx/conf.d/default.conf"}];},
+    model=>{model.services.db.configs=["outside"];},
+    model=>{model.services.app.credential_spec={file:"/tmp/unreviewed-credential"};},
+    model=>{model.services.web.healthcheck.interval=86_400_000_000_000;},
+    model=>{delete model.services.web.healthcheck.timeout;},
+    model=>{model.services.web.healthcheck.retries=0;},
+    model=>{model.services.web.healthcheck.start_period="24h";},
+    model=>{model.services.db.healthcheck.interval="24h";},
+    model=>{model.services.db.healthcheck.timeout=0;},
+    model=>{model.services.db.healthcheck.retries=0;},
+    model=>{model.services.db.healthcheck.start_interval="2h";},
+    model=>{delete model.services.app.depends_on;},
+    model=>{model.services.app.depends_on={web:{condition:"service_started"}};},
+    model=>{model.services.app.depends_on.db.condition="service_started";},
+    model=>{model.services.web.depends_on.app.required=false;},
+    model=>{model.services.web.depends_on.app.restart=true;},
+    model=>{model.services.db.depends_on={app:{condition:"service_started"}};},
+    model=>{model.volumes.university_pgdata.external=true;},
+    model=>{model.volumes.university_storage.name="crm_live_storage";},
+    model=>{model.volumes.university_cache.driver_opts={device:"/var/lib/shared"};},
+    model=>{model.volumes.university_pgdata.driver="local";},
+    model=>{delete model.volumes.university_pgdata;},
+    model=>{model.volumes.university_other={external:true,name:"other"};},
+    model=>{model.name="unexpected-project";},
+    model=>{model.services.web.networks.university_database=null;},
+    model=>{model.services.db.networks.university_front=null;},
+    model=>{delete model.services.app.networks.university_database;},
+    model=>{model.services.app.networks.unreviewed_network=null;},
+    model=>{model.services.web.networks.university_front={aliases:["database"]};},
+    model=>{delete model.networks.university_database.internal;},
+    model=>{model.networks.university_database.internal=false;},
+    model=>{model.networks.university_front.external=true;},
+    model=>{model.networks.university_front.attachable=true;},
+    model=>{model.networks.university_database.name="shared_database";},
+    model=>{model.networks.unreviewed_network={external:true,name:"other_project"};},
+    model=>{model.services.app.mem_limit=0;},
+    model=>{model.services.web.mem_limit="0";},
+    model=>{delete model.services.db.mem_limit;},
+    model=>{model.services.app.pids_limit=0;},
+    model=>{delete model.services.web.pids_limit;},
+    model=>{model.services.db.restart="always";},
+    model=>{model.services.app.restart="unless-stopped";},
+    model=>{model.services.web.deploy={replicas:3};},
+    model=>{model.services.db.memswap_limit=-1;},
+    model=>{model.services.app.oom_kill_disable=true;},
+    model=>{model.services.app.privileged=true;},
+    model=>{model.services.web.privileged=true;},
+    model=>{model.services.db.privileged=true;},
+    model=>{model.services.app.cap_add=["SYS_ADMIN"];},
+    model=>{model.services.web.devices=["/dev/kvm"];},
+    model=>{model.services.db.pid="host";},
+    model=>{model.services.web.ipc="host";},
+    model=>{model.services.app.userns_mode="host";},
+    model=>{model.services.web.volumes_from=["app"];},
+    model=>{model.services.app.read_only=false;},
+    model=>{model.services.web.cap_drop=[];},
+    model=>{model.services.app.security_opt=["seccomp:unconfined"];},
+    model=>{model.services.db.security_opt=["seccomp:unconfined"];},
+    model=>{model.services.app.volumes.push({type:"bind",source:"/var/run/docker.sock",target:"/socket"});},
+    model=>{model.services.db.volumes.push({type:"volume",source:"unapproved_volume",target:"/tmp/extra"});},
     model=>{model.services.debug={ports:[{host_ip:"0.0.0.0",published:"5432",target:5432,protocol:"tcp"}]};},
     model=>{model.services.app.ports=[{host_ip:"0.0.0.0",published:"9000",target:9000,protocol:"tcp"}];},
     model=>{model.services.db.ports=[{host_ip:"127.0.0.1",published:"5432",target:5432,protocol:"tcp"}];},
@@ -97,6 +424,18 @@ export function checkEnvironmentRegressionCases(){
     model=>{delete model.services.web.ports[0].host_ip;},
     model=>{model.services.web.ports[0].target=80;},
     model=>{model.services.web.ports[0].protocol="udp";},
+    model=>{model.services.web.ports[0].mode="host";},
+    model=>{model.services.app.extra_hosts=["db:203.0.113.7"];},
+    model=>{model.services.app.dns=["203.0.113.7"];},
+    model=>{model.services.app.dns_search=["untrusted.invalid"];},
+    model=>{model.services.web.dns_opt=["ndots:0"];},
+    model=>{model.services.app.links=["web:db"];},
+    model=>{model.services.app.external_links=["other:db"];},
+    model=>{model.services.db.hostname="other-db";},
+    model=>{model.services.web.domainname="untrusted.invalid";},
+    model=>{model.services.app.entrypoint=["/bin/sh"];},
+    model=>{model.services.web.command=["sh","-c","echo unsafe"];},
+    model=>{model.services.db.user="root";},
     model=>{model.services.web.ports[0].published="18081";},
     model=>{model.services.web.ports[0].published="60001";},
     model=>{delete model.services.web.ports;},

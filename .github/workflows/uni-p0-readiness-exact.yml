@@ -6,6 +6,18 @@ on:
       - review/uni-p0-readiness-git-config-root-fence-2026-11-22
     paths:
       - .github/workflows/uni-p0-readiness-exact.yml
+      - .github/workflows/uni-p0-restore-compose-teardown.yml
+      - scripts/qa-pg-backup-restore.sh
+      - tests/Feature/PrivateUniversityResponseBoundaryTest.php
+      - tests/Feature/SyntheticEditorialFixtureImportTest.php
+      - scripts/qa-staging-pg-pre-migrate.php
+      - scripts/qa-staging-private-http-probe.php
+      - .dockerignore
+      - composer.json
+      - ops/staging/nginx.conf
+      - ops/qa/Dockerfile
+      - app/Providers/AppServiceProvider.php
+      - routes/web.php
       - scripts/build-university-readiness-pack.mjs
       - scripts/check-university-readiness-pack.mjs
       - scripts/check-qa-compose-teardown.mjs

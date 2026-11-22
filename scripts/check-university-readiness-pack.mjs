@@ -384,6 +384,24 @@ check("Docker context excludes ignored bootstrap PHP cache",()=>{
   const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
   assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");
 });
+check("source-readiness paths cover disposable QA and pinned release inputs on the same SHA",()=>{
+  // Prevent a newer PG18/HTTP QA run from lacking a source readiness artifact.
+  const source=readFileSync(new URL("../.github/workflows/uni-p0-readiness-exact.yml",import.meta.url),"utf8");
+  const qa=readFileSync(new URL("../.github/workflows/uni-p0-restore-compose-teardown.yml",import.meta.url),"utf8");
+  const triggers=(yaml)=>{
+    const block=yaml.match(/^    paths:\n((?:      - [^\n]+\n)+)/mu);
+    assert.ok(block,"A bounded paths trigger is required");
+    return new Set(block[1].trimEnd().split("\n").map(line=>line.replace(/^      - /u,"")));
+  };
+  const sourcePaths=triggers(source);
+  for(const path of new Set([
+    ...reviewedSourceFiles,...triggers(qa),
+    ".github/workflows/uni-p0-restore-compose-teardown.yml",
+    "app/Providers/AppServiceProvider.php","routes/web.php"
+  ])){
+    assert.ok(sourcePaths.has(path),"Missing source provenance trigger for: "+path);
+  }
+});
 check("release QA workflows verify actual reviewed source paths, not a stale count",()=>{
   const proof='assert.deepEqual(Object.keys(p.source_files_sha256).sort(), [...reviewedSourceFiles].sort());';
   for(const file of [

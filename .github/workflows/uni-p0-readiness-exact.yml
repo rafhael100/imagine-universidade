@@ -55,6 +55,7 @@ jobs:
           (cd "$RUNNER_TEMP/uni-p0-readiness" && sha256sum -c SHA256SUMS)
           node --input-type=module -e '
             import assert from "node:assert/strict";
+            import {reviewedSourceFiles} from "./scripts/build-university-readiness-pack.mjs";
             import {readFileSync} from "node:fs";
             import {join} from "node:path";
             const d=process.env.RUNNER_TEMP+"/uni-p0-readiness";
@@ -65,7 +66,7 @@ jobs:
             assert.equal(p.source_kind,"GIT_FILES_ONLY");
             assert.equal(p.runtime_image_digest_verified,false);
             assert.equal(p.production_approval,false);
-            assert.equal(Object.keys(p.source_files_sha256).length,5);
+            assert.deepEqual(Object.keys(p.source_files_sha256).sort(), [...reviewedSourceFiles].sort());
             assert.equal(r.release_decision,"HOLD_NO_GO");
             assert.equal(r.qa_status,"NOT_EVALUATED_BY_THIS_REPORT");
             assert.equal(r.gates_total,13);

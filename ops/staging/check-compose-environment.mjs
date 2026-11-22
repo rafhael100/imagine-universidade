@@ -126,6 +126,20 @@ export function validateComposeEnvironment(model){
     const actual=mounts.map(mount=>mount.type==="volume"?
       mount.source+":"+mount.target:"UNAPPROVED_MOUNT").sort();
     assert.deepEqual(actual,expected,"Unexpected mount: bind, host path, or extra volume");
+    // Compose's long volume syntax can change which data appears at the
+    // reviewed source:target, without changing that textual pairing.
+    // Keep the harmless normalized defaults but reject subpaths, nocopy,
+    // read-only databases and unreviewed mount options.
+    for(const mount of mounts){
+      assert.ok(Object.keys(mount).every(key=>
+        ["type","source","target","read_only","volume"].includes(key)),
+        "Unexpected resolved volume mount option");
+      assert.ok(mount.read_only===undefined||mount.read_only===false,
+        "Reviewed staging volumes must remain writable");
+      assert.ok(mount.volume===undefined||
+        (record(mount.volume)&&Object.keys(mount.volume).length===0),
+        "Unreviewed named-volume subpath or copy option");
+    }
   }
   // Named volumes are not sufficient to prevent an override from mounting
   // tmpfs over Laravel code, Nginx configuration or PostgreSQL data.
@@ -242,7 +256,25 @@ export function checkEnvironmentRegressionCases(){
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand],interval:5_000_000_000,timeout:3_000_000_000,retries:15}}}};
   assert.ok(validateComposeEnvironment(fixture));
+  // Compose may include empty volume metadata and an explicit false
+  // read_only default in the resolved JSON. Both remain safe.
+  const normalizedMounts=structuredClone(fixture);
+  for(const service of Object.values(normalizedMounts.services)){
+    for(const mount of service.volumes??[]){
+      mount.volume={};
+      mount.read_only=false;
+    }
+  }
+  assert.ok(validateComposeEnvironment(normalizedMounts));
   const invalid=[
+    model=>{model.services.db.volumes[0].volume={subpath:"other"};},
+    model=>{model.services.app.volumes[0].volume={subpath:"uploads"};},
+    model=>{model.services.app.volumes[0].volume={nocopy:true};},
+    model=>{model.services.db.volumes[0].volume={nocopy:false};},
+    model=>{model.services.db.volumes[0].read_only=true;},
+    model=>{model.services.app.volumes[0].read_only=true;},
+    model=>{model.services.app.volumes[0].consistency="delegated";},
+    model=>{model.services.web.volumes=[{type:"volume",source:"university_storage",target:"/var/www/html",bind:{create_host_path:true}}];},
     model=>{model.services.app.tmpfs=["/var/www/html:mode=1777"];},
     model=>{model.services.web.tmpfs=["/etc/nginx:mode=1777"];},
     model=>{model.services.db.tmpfs=["/var/lib/postgresql:mode=1777"];},

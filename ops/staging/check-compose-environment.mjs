@@ -65,6 +65,17 @@ export function validateComposeEnvironment(model){
       value===null||(record(value)&&Object.keys(value).length===0)),
       "Service network aliases, addresses and link overrides require independent review");
   }
+  // The service mounts alone cannot prove isolation: an override can map an
+  // apparently private named volume onto a shared/external Docker volume.
+  // Require exactly the project-owned volumes from the reviewed Compose file.
+  assert.ok(record(model.volumes),"Missing resolved staging volumes");
+  const ownedVolumes=["university_cache","university_pgdata","university_storage"];
+  assert.deepEqual(Object.keys(model.volumes).sort(),ownedVolumes,
+    "Only the three reviewed staging volumes are permitted");
+  for(const name of ownedVolumes){
+    assert.deepEqual(model.volumes[name],{name:"imagine-universidade-staging_"+name},
+      "Staging volume must be project-owned with no external/driver/option overrides");
+  }
   // Resource and restart limits must survive Compose override resolution.
   // A private endpoint is not safe if one container can exhaust the host.
   for(const [service,expectedMemory,notation,expectedPids] of [
@@ -160,6 +171,11 @@ export function checkEnvironmentRegressionCases(){
   const fixture={name:"imagine-universidade-staging",networks:{
     university_front:{name:"imagine-universidade-staging_university_front"},
     university_database:{name:"imagine-universidade-staging_university_database",internal:true}},
+    volumes:{
+      university_cache:{name:"imagine-universidade-staging_university_cache"},
+      university_pgdata:{name:"imagine-universidade-staging_university_pgdata"},
+      university_storage:{name:"imagine-universidade-staging_university_storage"}
+    },
     services:{app:{networks:{university_front:null,university_database:null},environment,...safeRuntime,mem_limit:2147483648,pids_limit:160,restart:"no",volumes:[
       {type:"volume",source:"university_storage",target:"/var/www/html/storage"},
       {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
@@ -171,6 +187,12 @@ export function checkEnvironmentRegressionCases(){
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand]}}}};
   assert.ok(validateComposeEnvironment(fixture));
   const invalid=[
+    model=>{model.volumes.university_pgdata.external=true;},
+    model=>{model.volumes.university_storage.name="crm_live_storage";},
+    model=>{model.volumes.university_cache.driver_opts={device:"/var/lib/shared"};},
+    model=>{model.volumes.university_pgdata.driver="local";},
+    model=>{delete model.volumes.university_pgdata;},
+    model=>{model.volumes.university_other={external:true,name:"other"};},
     model=>{model.name="unexpected-project";},
     model=>{model.services.web.networks.university_database=null;},
     model=>{model.services.db.networks.university_front=null;},

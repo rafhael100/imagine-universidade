@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync, mkdirSync, writeFileSync, realpathSync} from "node:fs";
-import {resolve, relative, sep, join} from "node:path";
+import {readFileSync, mkdirSync, writeFileSync, realpathSync, lstatSync} from "node:fs";
+import {resolve, relative, sep, join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
 import {execFileSync} from "node:child_process";
 import {createHash} from "node:crypto";
@@ -232,6 +232,20 @@ export function readPinnedGitSourceBytes(root,sha,names){
   return pinned;
 }
 
+// A lexical RUNNER_TEMP prefix is not an isolation guarantee: a pre-existing
+// symlink at the output path can redirect generated reports outside runner temp.
+// Only create a fresh, immediate child of the runner-owned temp directory.
+// mkdirSync without recursive follows this preflight with an atomic EEXIST
+// rejection if an unexpected entry appears before directory creation.
+export function requireFreshReadinessOutput(temp,destination){
+  const output=resolve(destination);
+  if(!temp || dirname(output)!==resolve(temp) ||
+    lstatSync(output,{throwIfNoEntry:false})!==undefined){
+    throw new Error("Refusing readiness package: output must be a fresh direct runner temp child");
+  }
+  return output;
+}
+
 const selfPath=fileURLToPath(import.meta.url);
 if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   const args=process.argv.slice(2);
@@ -248,7 +262,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
     || process.env.GITHUB_REF_TYPE!=="branch"
     || process.env.GITHUB_REPOSITORY!=="rafhael100/imagine-universidade"
     || !allowedBranch
-    || !temp || !dest.startsWith(resolve(temp)+sep)){
+    || !temp){
     throw new Error("Readiness package permitted only for a checked-out P0 review push within runner temp");
   }
   const checkout=execFileSync("git",["rev-parse","HEAD"],{
@@ -259,6 +273,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   if(!/^[a-f0-9]{40}$/iu.test(sha)||sha!==checkout){
     throw new Error("Refusing readiness package: checkout SHA does not match GitHub event SHA");
   }
+  requireFreshReadinessOutput(temp,dest);
   // Covers non-ignored additions and changes, beyond the pinned source hash list.
   requireCleanReleaseCheckout(fileURLToPath(new URL("../",import.meta.url)));
   // A matching HEAD alone does not attest the working tree. A previous CI
@@ -292,7 +307,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
     production_approval:false,
     source_files_sha256:sourceHashes
   };
-  mkdirSync(dest,{recursive:true});
+  mkdirSync(dest);
   writeFileSync(join(dest,"PENDENCIAS-LANCAMENTO.md"),report.markdown);
   writeFileSync(join(dest,"gates.csv"),report.csv);
   writeFileSync(join(dest,"readiness.json"),JSON.stringify(report.snapshot,null,2)+"\n");

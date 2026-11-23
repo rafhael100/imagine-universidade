@@ -1,10 +1,10 @@
 # C-62: candidate image for manual approved private staging only.
-FROM php:8.4-fpm-bookworm
+FROM php@sha256:e4b1eec29a5be22428aa93fb43da75a0e39006e403da0c3e93631dde92f067df
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libpq-dev libonig-dev libxml2-dev libsodium-dev unzip \
  && docker-php-ext-install -j"$(nproc)" pdo_pgsql mbstring dom xml bcmath sodium opcache \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+COPY --from=composer@sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93 /usr/bin/composer /usr/local/bin/composer
 WORKDIR /var/www/html
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --no-progress --prefer-dist --no-scripts --no-plugins --no-autoloader

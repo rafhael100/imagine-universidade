@@ -79,7 +79,7 @@ services:
     restart: 'no'
 
   db:
-    image: postgres:18
+    image: postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a
     environment:
       POSTGRES_DB: '${UNI_STAGING_DB:?official-staging-db-name-required}'
       POSTGRES_USER: '${UNI_STAGING_DB_OWNER:?separate-migration-owner-required}'

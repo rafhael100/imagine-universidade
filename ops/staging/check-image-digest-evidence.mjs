@@ -8,10 +8,10 @@ import {readFileSync, writeFileSync} from "node:fs";
 const root = path => readFileSync(new URL("../../" + path, import.meta.url));
 const digestOf = bytes => createHash("sha256").update(bytes).digest("hex");
 const expected = [
-  {source: "php:8.4-fpm-bookworm", repository: "php"},
-  {source: "composer:2", repository: "composer"},
-  {source: "nginx:stable-alpine", repository: "nginx"},
-  {source: "postgres:18", repository: "postgres"},
+  {source: "php:8.4-fpm-bookworm", repository: "php", digest: "sha256:e4b1eec29a5be22428aa93fb43da75a0e39006e403da0c3e93631dde92f067df"},
+  {source: "composer:2", repository: "composer", digest: "sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93"},
+  {source: "nginx:stable-alpine", repository: "nginx", digest: "sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3"},
+  {source: "postgres:18", repository: "postgres", digest: "sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"},
 ];
 const evidenceFiles = [
   "ops/staging/Dockerfile.php",
@@ -27,10 +27,10 @@ function checkSources() {
   const php = root("ops/staging/Dockerfile.php").toString("utf8");
   const nginx = root("ops/staging/Dockerfile.nginx").toString("utf8");
   const compose = root("ops/staging/compose.yaml").toString("utf8");
-  assert.match(php, /^FROM php:8\.4-fpm-bookworm$/mu);
-  assert.match(php, /^COPY --from=composer:2 /mu);
-  assert.match(nginx, /^FROM nginx:stable-alpine$/mu);
-  assert.match(compose, /^    image: postgres:18$/mu);
+  assert.equal(php.match(/^FROM .*$/mu)?.[0], "FROM " + expected[0].repository + "@" + expected[0].digest);
+  assert.equal(php.match(/^COPY --from=\S+ /mu)?.[0], "COPY --from=" + expected[1].repository + "@" + expected[1].digest + " ");
+  assert.equal(nginx.match(/^FROM .*$/mu)?.[0], "FROM " + expected[2].repository + "@" + expected[2].digest);
+  assert.equal(compose.match(/^    image: .*$/mu)?.[0], "    image: " + expected[3].repository + "@" + expected[3].digest);
   assert.equal((php.match(/^FROM /gmu) || []).length, 1);
   assert.equal((nginx.match(/^FROM /gmu) || []).length, 1);
   assert.equal((php.match(/^COPY --from=/gmu) || []).length, 1);
@@ -53,7 +53,8 @@ function validate(data, commit, hashes) {
     const image = data.images[i], spec = expected[i];
     assert.equal(image.source, spec.source);
     assert.match(image.digest, digestPattern);
-    assert.equal(image.pinned, spec.repository + "@" + image.digest);
+    assert.equal(image.digest, spec.digest, "image digest must equal the reviewed immutable source");
+    assert.equal(image.pinned, spec.repository + "@" + spec.digest);
     assert.doesNotMatch(image.pinned, /@.*@/u, "only one digest separator"); // sha256: HEX is valid
   }
   return true;
@@ -74,10 +75,8 @@ function test() {
     release_approval: false,
     gate: "HOLD_NO_GO",
     file_sha256: hashes,
-    images: expected.map((s, i) => {
-      const digest = "sha256:" + String(i + 1).repeat(64);
-      return {source: s.source, digest, pinned: s.repository + "@" + digest};
-    }),
+    images: expected.map(s => ({source: s.source, digest: s.digest,
+      pinned: s.repository + "@" + s.digest})),
   };
   assert.equal(validate(sample, commit, hashes), true);
   const mutation = edit => {
@@ -92,13 +91,15 @@ function test() {
   mutation(x => { x.file_sha256["composer.lock"] = "0".repeat(64); });
   mutation(x => { delete x.file_sha256["composer.lock"]; });
   mutation(x => { x.images[0].digest = "sha256:placeholder"; });
+  mutation(x => { x.images[0].digest = "sha256:" + "f".repeat(64); });
+  mutation(x => { x.images[3].pinned = "postgres:18"; });
   mutation(x => { x.images[1].pinned = "composer:2"; });
   mutation(x => { x.images[1].pinned += "@sha256:" + "f".repeat(64); });
   mutation(x => { x.images[0].pinned = "nginx@" + x.images[0].digest; });
   mutation(x => { x.images.reverse(); });
   mutation(x => { x.images.pop(); });
   mutation(x => { x.images.push(structuredClone(x.images[0])); });
-  console.log("PASS: release inventory validator + 13 negative mutations; HOLD_NO_GO.");
+  console.log("PASS: 15 negative mutations and four reviewed immutable registry source digests; HOLD_NO_GO.");
 }
 function assertEnvironment() {
   assert.equal(process.env.CI, "true");
@@ -123,14 +124,13 @@ function capture(outFile) {
   assert.ok(outFile && outFile.startsWith(process.env.RUNNER_TEMP + "/"),
     "only runner temp output is authorized");
   const images = expected.map(spec => {
+    const pinned = spec.repository + "@" + spec.digest;
+    // Read only the reviewed immutable manifest. Do NOT resolve a floating tag.
     const raw = execFileSync("docker",
-      ["buildx", "imagetools", "inspect", "--raw", spec.source],
+      ["buildx", "imagetools", "inspect", "--raw", pinned],
       {maxBuffer: 16 * 1024 * 1024, timeout: 120000});
     const digest = "sha256:" + digestOf(raw);
-    const pinned = spec.repository + "@" + digest;
-    // The registry must accept the *exact* immutable manifest digest again.
-    execFileSync("docker", ["buildx", "imagetools", "inspect", pinned],
-      {stdio: ["ignore", "pipe", "pipe"], timeout: 120000});
+    assert.equal(digest, spec.digest, "registry immutable manifest differs from reviewed digest");
     return {source: spec.source, digest, pinned};
   });
   const data = {

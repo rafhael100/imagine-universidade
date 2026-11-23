@@ -41,7 +41,7 @@ export function validateComposeEnvironment(model){
       service.build.dockerfile===dockerfile&&!Object.hasOwn(service,"image"),
       "Application and web must build only reviewed source and Dockerfile");
   }
-  assert.ok(db.image==="postgres:18"&&!Object.hasOwn(db,"build"),
+  assert.ok(db.image==="postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"&&!Object.hasOwn(db,"build"),
     "Database must use only reviewed image without a build override");
   // Compose configs/secrets may mount unreviewed host material into a service
   // even when environment variables, ports and named volumes are fenced.
@@ -284,7 +284,7 @@ export function checkEnvironmentRegressionCases(){
       {type:"volume",source:"university_cache",target:"/var/www/html/bootstrap/cache"}]},
     web:{build:reviewedBuild("ops/staging/Dockerfile.nginx"),depends_on:{app:{condition:"service_started",required:true}},networks:{university_front:null},...safeRuntime,mem_limit:268435456,pids_limit:64,restart:"no",tmpfs:["/tmp:mode=1777","/var/cache/nginx:mode=1777","/var/run:mode=1777"],ports:[{mode:"ingress",target:8080,published:"18123",protocol:"tcp",host_ip:"127.0.0.1"}],
       healthcheck:{test:["CMD-SHELL","wget -q -T 3 -O /dev/null http://127.0.0.1:8080/up"],interval:15_000_000_000,timeout:5_000_000_000,retries:3,start_period:30_000_000_000}},
-    db:{image:"postgres:18",networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
+    db:{image:"postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a",networks:{university_database:null},mem_limit:4294967296,pids_limit:160,restart:"no",volumes:[{type:"volume",source:"university_pgdata",target:"/var/lib/postgresql"}],
     environment:{
     POSTGRES_DB:"ci_database",POSTGRES_USER:"ci_owner",POSTGRES_PASSWORD:"CI_FAKE_OWNER"},
     healthcheck:{test:["CMD-SHELL",resolvedDbHealthCommand],interval:5_000_000_000,timeout:3_000_000_000,retries:15}}}};
@@ -320,6 +320,7 @@ export function checkEnvironmentRegressionCases(){
     model=>{model.services.web.build.network="host";},
     model=>{model.services.app.build.args={INSTALL_TOKEN:"test-only"};},
     model=>{model.services.web.build.ssh=["default"];},
+    model=>{model.services.db.image="postgres:18";},
     model=>{model.services.db.image="untrusted.example/postgres:latest";},
     model=>{model.services.db.build={context:reviewedContext,dockerfile:"Dockerfile"};},
     model=>{model.services.app.image="unreviewed/app:latest";},

@@ -33,6 +33,7 @@ on:
       - ops/staging/compose.yaml
       - ops/staging/Dockerfile.php
       - ops/staging/Dockerfile.nginx
+      - ops/staging/check-image-digest-evidence.mjs
 
 permissions:
   contents: read
@@ -45,7 +46,7 @@ jobs:
   source-provenance-only:
     if: github.repository == 'rafhael100/imagine-universidade'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - name: Checkout exact P0 review commit, without stored credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2, immutable
@@ -101,6 +102,28 @@ jobs:
             assert.equal(r.gates.filter(g=>g.status==="NOT_VERIFIED").length,13);
             console.log("PASS exact source provenance; 13 gates NOT_VERIFIED; no release approval");
           '
+      - name: Inventory immutable upstream base manifests from registry (NOT built release images)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Existing isolated digest inventory reused, not reimplemented.
+          # Read-only registry queries; no docker pull, build, push or deployment.
+          node --check ops/staging/check-image-digest-evidence.mjs
+          node ops/staging/check-image-digest-evidence.mjs --test
+          docker buildx version >/dev/null
+          file="$RUNNER_TEMP/uni-p0-readiness/registry-base-image-evidence.json"
+          node ops/staging/check-image-digest-evidence.mjs --capture "$file"
+          node ops/staging/check-image-digest-evidence.mjs --verify "$file"
+          (cd "$RUNNER_TEMP/uni-p0-readiness" &&
+            sha256sum registry-base-image-evidence.json >> SHA256SUMS &&
+            sha256sum -c SHA256SUMS)
+          if GITHUB_REF=refs/heads/main node ops/staging/check-image-digest-evidence.mjs --verify "$file" >/dev/null 2>&1; then
+            echo 'HOLD: base image evidence accepted from main' >&2; exit 2
+          fi
+          if GITHUB_SHA=0000000000000000000000000000000000000000 node ops/staging/check-image-digest-evidence.mjs --verify "$file" >/dev/null 2>&1; then
+            echo 'HOLD: base image evidence accepted wrong SHA' >&2; exit 2
+          fi
+          echo "PASS: 4 upstream registry base manifests matched the exact review checkout; runtime images NOT pinned, HOLD_NO_GO"
       - name: Reject wrong SHA, forbidden branch and non-CI execution
         shell: bash
         run: |

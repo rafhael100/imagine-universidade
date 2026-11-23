@@ -4,9 +4,15 @@ FROM php@sha256:e4b1eec29a5be22428aa93fb43da75a0e39006e403da0c3e93631dde92f067df
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libpq-dev libonig-dev libxml2-dev libsodium-dev unzip \
  && docker-php-ext-install -j"$(nproc)" pdo_pgsql mbstring dom xml bcmath sodium opcache \
- && apt-get purge -y linux-libc-dev libxml2-dev \
- && for package in linux-libc-dev libxml2-dev; do \
-      test "$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null || true)" != installed || exit 1; \
+ && apt-get purge -y linux-libc-dev libxml2-dev libpq-dev libonig-dev libsodium-dev libssl-dev \
+      dpkg-dev libc-dev-bin libcrypt-dev libgcc-12-dev libnsl-dev libtirpc-dev icu-devtools \
+ && installed_packages="$(dpkg-query -W -f='${Package}\t${db:Status-Status}\n')" \
+ && for package in linux-libc-dev libxml2-dev libpq-dev libonig-dev libsodium-dev libssl-dev \
+      dpkg-dev libc-dev-bin libcrypt-dev libgcc-12-dev libnsl-dev libtirpc-dev icu-devtools; do \
+      printf '%s\n' "$installed_packages" | awk -F '\t' -v pkg="$package" '$1 == pkg && $2 == "installed" { found=1 } END { exit found ? 1 : 0 }' || exit 1; \
+    done \
+ && for package in libpq5 libonig5 libsodium23 libssl3 libxml2; do \
+      test "$(dpkg-query -W -f='${db:Status-Status}' "$package")" = installed || exit 1; \
     done \
  && php -r 'foreach (["pdo_pgsql","mbstring","dom","xml","bcmath","sodium","Zend OPcache"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "Missing runtime extension: ".$ext.PHP_EOL); exit(1); } }' \
  && php-fpm -t \

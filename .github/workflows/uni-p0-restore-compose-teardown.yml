@@ -733,7 +733,7 @@ jobs:
             'PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403' \
             'PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.' \
             'PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403.'; do
-            grep -Fq "$marker" "$log" || { echo 'HOLD: rollback evidence missing' >&2; exit 2; }
+            grep -Fxq "$marker" "$log" || { echo 'HOLD: exact rollback evidence missing' >&2; exit 2; }
             printf '%s\n' "$marker" >> "$proof"
           done
           node --input-type=module <<'NODE'
@@ -795,8 +795,21 @@ jobs:
           assert.equal(triage.high_critical_total,
             scan.images.reduce((n,i)=>n+i.high_critical_count,0));
           const passMarkers=read("uni-p0-synthetic-rollback-proof.txt").toString("utf8").trimEnd().split("\n");
-          assert.equal(passMarkers.length,3);
-          assert.ok(passMarkers.every(p=>p.startsWith("PASS synthetic ")));
+          const expectedPassMarkers=[
+            "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403",
+            "PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.",
+            "PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403."
+          ];
+          const validatePassMarkers=lines=>assert.deepEqual(lines,expectedPassMarkers);
+          validatePassMarkers(passMarkers);
+          // An embedded marker, duplicated result, or reordered proof must not
+          // become a release-readiness claim even if its file hash is valid.
+          for(const spoofed of [
+            ["HOLD: "+expectedPassMarkers[0],...expectedPassMarkers.slice(1)],
+            [expectedPassMarkers[0]+" (failed)",...expectedPassMarkers.slice(1)],
+            [...expectedPassMarkers,expectedPassMarkers[0]],
+            [expectedPassMarkers[1],expectedPassMarkers[0],expectedPassMarkers[2]]
+          ]) assert.throws(()=>validatePassMarkers(spoofed));
           const fileHashes=Object.fromEntries(sourceFiles.map(f=>[f,hash(read(f))]));
           const handoff={
             schema_version:1,repository:env.GITHUB_REPOSITORY,source_sha:env.GITHUB_SHA,
@@ -857,7 +870,7 @@ jobs:
           }
           writeFileSync(join(tmp,"uni-p0-private-release-review-index.json"),
             JSON.stringify(handoff,null,2)+"\n",{flag:"wx",mode:0o600});
-          console.log("PASS exact-run review index: source SHA + Composer + OS scan + local image IDs + synthetic rollback; 11 negative mutations, 13 gates HOLD_NO_GO; NOT deployable");
+          console.log("PASS exact-run review index: source SHA + Composer + OS scan + local image IDs + synthetic rollback; 11 index tamper mutations + 4 forged rollback marker tests; 13 gates HOLD_NO_GO; NOT deployable");
           NODE
           (cd "$RUNNER_TEMP" &&
             sha256sum uni-p0-private-release-review-index.json uni-p0-synthetic-rollback-proof.txt > uni-p0-private-release-review-index.sha256 &&

@@ -730,7 +730,7 @@ jobs:
           umask 077
           : > "$proof"
           for marker in \
-            'PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403' \
+            'PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority.' \
             'PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.' \
             'PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403.'; do
             grep -Fxq "$marker" "$log" || { echo 'HOLD: exact rollback evidence missing' >&2; exit 2; }
@@ -796,7 +796,7 @@ jobs:
             scan.images.reduce((n,i)=>n+i.high_critical_count,0));
           const passMarkers=read("uni-p0-synthetic-rollback-proof.txt").toString("utf8").trimEnd().split("\n");
           const expectedPassMarkers=[
-            "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403",
+            "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority.",
             "PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.",
             "PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403."
           ];

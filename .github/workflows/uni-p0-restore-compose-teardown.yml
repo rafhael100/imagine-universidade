@@ -530,16 +530,49 @@ jobs:
               fixed_version_not_reported:findings.length-withFix,
               findings});
           }
-          const triage={schema:1,repository:env.GITHUB_REPOSITORY,
+          // Collapse package×advisory rows into distinct advisory review
+          // groups. Preserve every affected package; never infer risk approval.
+          const groupForAppSec=images=>{
+            const byId=new Map();
+            for(const group of images){
+              for(const f of group.findings){
+                if(!byId.has(f.id))byId.set(f.id,[]);
+                byId.get(f.id).push({
+                  role:group.role,package:f.package,
+                  installed_version:f.installed_version,
+                  fixed_version:f.fixed_version,severity:f.severity,
+                  vendor_status:f.vendor_status
+                });
+              }
+            }
+            return [...byId].map(([id,affected])=>({
+              advisory_id:id,
+              highest_severity:affected.some(f=>f.severity==="CRITICAL")?"CRITICAL":"HIGH",
+              package_occurrences:affected.length,
+              review_status:"PENDING_APPSEC",
+              affected:affected.sort((a,b)=>a.role.localeCompare(b.role) ||
+                a.package.localeCompare(b.package) ||
+                a.installed_version.localeCompare(b.installed_version))
+            })).sort((a,b)=>
+              Number(b.highest_severity==="CRITICAL")-Number(a.highest_severity==="CRITICAL") ||
+              b.package_occurrences-a.package_occurrences ||
+              a.advisory_id.localeCompare(b.advisory_id));
+          };
+          const reviewGroups=groupForAppSec(images);
+          assert.equal(reviewGroups.reduce((n,g)=>n+g.package_occurrences,0),
+            images.reduce((n,g)=>n+g.high_critical_count,0));
+          const triage={schema:2,repository:env.GITHUB_REPOSITORY,
             commit:env.GITHUB_SHA,workflow_run_id:env.GITHUB_RUN_ID,
             workflow_attempt:env.GITHUB_RUN_ATTEMPT,
             scan_provenance_sha256:sha(read("uni-p0-os-cve-scan-provenance.json")),
             high_critical_total:images.reduce((n,i)=>n+i.high_critical_count,0),
             vendor_fixed_version_known:images.reduce((n,i)=>n+i.vendor_fixed_version_known,0),
             fixed_version_not_reported:images.reduce((n,i)=>n+i.fixed_version_not_reported,0),
+            unique_advisory_ids_count:reviewGroups.length,review_groups:reviewGroups,
             images,appsec_signoff:false,risk_acceptance:false,
             release_decision:"HOLD_NO_GO"};
           const validate=t=>{
+            assert.equal(t.schema,2);
             assert.equal(t.repository,"rafhael100/imagine-universidade");
             assert.equal(t.commit,env.GITHUB_SHA);
             assert.equal(t.workflow_run_id,env.GITHUB_RUN_ID);
@@ -572,6 +605,14 @@ jobs:
             assert.equal(t.fixed_version_not_reported,
               t.images.reduce((n,i)=>n+i.fixed_version_not_reported,0));
             assert.equal(t.vendor_fixed_version_known+t.fixed_version_not_reported,t.high_critical_total);
+            // Reconstruct the human review groups from already verified exact
+            // scanner rows; a count-only review grouping is not trustworthy.
+            const expected=groupForAppSec(t.images);
+            assert.equal(t.unique_advisory_ids_count,expected.length);
+            assert.deepEqual(t.review_groups,expected);
+            assert.ok(t.review_groups.every(g=>g.review_status==="PENDING_APPSEC"));
+            assert.equal(t.review_groups.reduce((n,g)=>n+g.package_occurrences,0),
+              t.high_critical_total);
           };
           validate(triage);
           for(const mutate of [
@@ -583,6 +624,17 @@ jobs:
             t=>t.images[0].high_critical_count++,
             t=>t.images[0].image_id="sha256:"+"0".repeat(64),
             t=>t.vendor_fixed_version_known++,
+            t=>t.schema=1,
+            t=>t.unique_advisory_ids_count++,
+            t=>t.review_groups.push({advisory_id:"FORGED"}),
+            t=>{
+              if(t.review_groups.length)t.review_groups[0].review_status="APPROVED";
+              else t.review_groups.push({advisory_id:"FORGED"});
+            },
+            t=>{
+              if(t.review_groups.length)t.review_groups[0].affected[0].package+="-forged";
+              else t.review_groups.push({advisory_id:"FORGED"});
+            },
             t=>{
               const target=t.images.find(i=>i.findings.length);
               if(target) target.findings[0].id+="-forged";
@@ -611,7 +663,8 @@ jobs:
           console.log("PASS CVE triage: "+triage.high_critical_total+" HIGH/CRITICAL, "+
             triage.vendor_fixed_version_known+" with vendor fixed version, "+
             triage.fixed_version_not_reported+" without reported fix; "+
-            "11 tamper tests; risk unaccepted, 13 gates HOLD_NO_GO.");
+            triage.unique_advisory_ids_count+" distinct advisory IDs; "+
+            "16 tamper tests; every group PENDING_APPSEC; 13 gates HOLD_NO_GO.");
           NODE
           (cd "$RUNNER_TEMP" &&
             sha256sum uni-p0-os-cve-triage.json > uni-p0-os-cve-triage.sha256 &&

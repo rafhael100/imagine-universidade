@@ -707,6 +707,161 @@ jobs:
           (cd "$RUNNER_TEMP" &&
             sha256sum uni-p0-os-cve-triage.json > uni-p0-os-cve-triage.sha256 &&
             sha256sum -c uni-p0-os-cve-triage.sha256)
+      - name: Build exact-run private release review index (not a deployable image)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.production
+          (cd "$RUNNER_TEMP" &&
+            sha256sum -c uni-p0-composer-production-audit.sha256 &&
+            sha256sum -c uni-p0-local-built-image-identities.sha256 &&
+            sha256sum -c uni-p0-os-cve-scan.sha256 &&
+            sha256sum -c uni-p0-os-cve-triage.sha256)
+          # Only approved literal PASS markers are copied from the synthetic
+          # log. The raw Docker/Laravel log is NOT included in any artifact.
+          proof="$RUNNER_TEMP/uni-p0-synthetic-rollback-proof.txt"
+          test ! -e "$proof" && test ! -L "$proof"
+          log="$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          test -s "$log"
+          umask 077
+          : > "$proof"
+          for marker in \
+            'PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403' \
+            'PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.' \
+            'PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403.'; do
+            grep -Fq "$marker" "$log" || { echo 'HOLD: rollback evidence missing' >&2; exit 2; }
+            printf '%s\n' "$marker" >> "$proof"
+          done
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import {readFileSync,writeFileSync} from "node:fs";
+          import {createHash} from "node:crypto";
+          import {execFileSync} from "node:child_process";
+          import {join} from "node:path";
+          const env=process.env, tmp=env.RUNNER_TEMP;
+          const hash=bytes=>createHash("sha256").update(bytes).digest("hex");
+          const read=name=>readFileSync(join(tmp,name));
+          const parse=name=>JSON.parse(read(name).toString("utf8"));
+          const sourceFiles=[
+            "uni-p0-composer-production-audit.json",
+            "uni-p0-composer-production-audit-provenance.json",
+            "uni-p0-local-built-image-identities.json",
+            "uni-p0-os-cve-scan-provenance.json",
+            "uni-p0-os-cve-triage.json",
+            "uni-p0-synthetic-rollback-proof.txt"
+          ];
+          assert.match(env.GITHUB_SHA,/^[0-9a-f]{40}$/u);
+          assert.match(env.GITHUB_RUN_ID,/^[0-9]+$/u);
+          assert.match(env.GITHUB_RUN_ATTEMPT,/^[0-9]+$/u);
+          const gatesBytes=readFileSync("ops/release-gates.json");
+          const lockedGates=execFileSync("git",["show",
+            env.GITHUB_SHA+":ops/release-gates.json"],{timeout:5000});
+          assert.ok(gatesBytes.equals(lockedGates),"release gates differ from exact commit");
+          const gates=JSON.parse(gatesBytes.toString("utf8"));
+          assert.equal(gates.release_decision,"HOLD_NO_GO");
+          assert.equal(Object.keys(gates.blocking_evidence).length,13);
+          assert.ok(Object.values(gates.blocking_evidence).every(g=>
+            g.status==="NOT_VERIFIED" && g.evidence_ref===null));
+          const composer=parse("uni-p0-composer-production-audit-provenance.json");
+          const builds=parse("uni-p0-local-built-image-identities.json");
+          const scan=parse("uni-p0-os-cve-scan-provenance.json");
+          const triage=parse("uni-p0-os-cve-triage.json");
+          for(const p of [composer,builds,scan,triage]){
+            assert.equal(p.repository,env.GITHUB_REPOSITORY);
+            assert.equal(p.commit,env.GITHUB_SHA);
+            assert.equal(p.workflow_run_id,env.GITHUB_RUN_ID);
+            assert.equal(p.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
+            assert.equal(p.release_decision,"HOLD_NO_GO");
+          }
+          assert.equal(composer.advisory_count,0);
+          assert.equal(composer.abandoned_package_count,0);
+          assert.equal(composer.report_sha256,hash(read("uni-p0-composer-production-audit.json")));
+          assert.equal(composer.composer_lock_sha256,hash(readFileSync("composer.lock")));
+          assert.equal(builds.registry_published,false);
+          assert.equal(builds.release_image_digests_pinned,false);
+          assert.equal(builds.complete_sbom,false);
+          assert.equal(scan.appsec_signoff,false);
+          assert.equal(scan.build_evidence_sha256,hash(read("uni-p0-local-built-image-identities.json")));
+          assert.equal(triage.scan_provenance_sha256,hash(read("uni-p0-os-cve-scan-provenance.json")));
+          assert.equal(triage.appsec_signoff,false);
+          assert.equal(triage.risk_acceptance,false);
+          assert.equal(scan.images.length,2);
+          assert.deepEqual(scan.images.map(i=>i.role),["php","nginx"]);
+          for(const i of scan.images) assert.equal(i.image_id,builds[i.role+"_image_id"]);
+          assert.equal(triage.high_critical_total,
+            scan.images.reduce((n,i)=>n+i.high_critical_count,0));
+          const passMarkers=read("uni-p0-synthetic-rollback-proof.txt").toString("utf8").trimEnd().split("\n");
+          assert.equal(passMarkers.length,3);
+          assert.ok(passMarkers.every(p=>p.startsWith("PASS synthetic ")));
+          const fileHashes=Object.fromEntries(sourceFiles.map(f=>[f,hash(read(f))]));
+          const handoff={
+            schema_version:1,repository:env.GITHUB_REPOSITORY,source_sha:env.GITHUB_SHA,
+            workflow_run_id:env.GITHUB_RUN_ID,workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+            scope:"disposable_runner_only_not_deployable",
+            release_decision:"HOLD_NO_GO",gates_total:13,gates_unverified:13,
+            release_gates_sha256:hash(gatesBytes),
+            composer_prod_advisories:composer.advisory_count,
+            os_high_critical_occurrences:triage.high_critical_total,
+            os_unknown_occurrences:triage.unknown_severity_total,
+            local_image_ids:{php:builds.php_image_id,nginx:builds.nginx_image_id},
+            rollback_proof:"SYNTHETIC_LOCAL_IMAGES_ONLY",
+            portable_image_artifact:false,registry_published:false,
+            appsec_signoff:false,portal_access_approved:false,
+            staging_homologated:false,editorial_signoff:false,
+            source_files_sha256:fileHashes
+          };
+          const validate=h=>{
+            assert.equal(h.schema_version,1);
+            assert.equal(h.repository,env.GITHUB_REPOSITORY);
+            assert.equal(h.source_sha,env.GITHUB_SHA);
+            assert.equal(h.workflow_run_id,env.GITHUB_RUN_ID);
+            assert.equal(h.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
+            assert.equal(h.scope,"disposable_runner_only_not_deployable");
+            assert.equal(h.release_decision,"HOLD_NO_GO");
+            assert.equal(h.gates_total,13);
+            assert.equal(h.gates_unverified,13);
+            assert.equal(h.release_gates_sha256,hash(gatesBytes));
+            assert.equal(h.composer_prod_advisories,composer.advisory_count);
+            assert.equal(h.os_high_critical_occurrences,triage.high_critical_total);
+            assert.equal(h.os_unknown_occurrences,triage.unknown_severity_total);
+            assert.deepEqual(h.local_image_ids,
+              {php:builds.php_image_id,nginx:builds.nginx_image_id});
+            assert.equal(h.rollback_proof,"SYNTHETIC_LOCAL_IMAGES_ONLY");
+            for(const key of ["portable_image_artifact","registry_published",
+              "appsec_signoff","portal_access_approved","staging_homologated",
+              "editorial_signoff"])assert.equal(h[key],false,key);
+            assert.deepEqual(h.source_files_sha256,fileHashes);
+            assert.deepEqual(Object.keys(h.source_files_sha256).sort(),sourceFiles.sort());
+          };
+          validate(handoff);
+          for(const mutate of [
+            h=>h.source_sha="0".repeat(40),
+            h=>h.workflow_run_id="0",
+            h=>h.gates_unverified=0,
+            h=>h.release_decision="GO",
+            h=>h.local_image_ids.php="sha256:"+"0".repeat(64),
+            h=>h.source_files_sha256["uni-p0-os-cve-triage.json"]="0".repeat(64),
+            h=>h.os_unknown_occurrences=0,
+            h=>h.rollback_proof="REAL_VPS_RESTORED",
+            h=>h.portable_image_artifact=true,
+            h=>h.appsec_signoff=true,
+            h=>h.portal_access_approved=true
+          ]){
+            const changed=structuredClone(handoff);
+            mutate(changed);
+            assert.throws(()=>validate(changed));
+          }
+          writeFileSync(join(tmp,"uni-p0-private-release-review-index.json"),
+            JSON.stringify(handoff,null,2)+"\n",{flag:"wx",mode:0o600});
+          console.log("PASS exact-run review index: source SHA + Composer + OS scan + local image IDs + synthetic rollback; 11 negative mutations, 13 gates HOLD_NO_GO; NOT deployable");
+          NODE
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-private-release-review-index.json uni-p0-synthetic-rollback-proof.txt > uni-p0-private-release-review-index.sha256 &&
+            sha256sum -c uni-p0-private-release-review-index.sha256)
       - name: Preserve OS vulnerability reports for review, not AppSec approval
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -719,6 +874,9 @@ jobs:
             ${{ runner.temp }}/uni-p0-os-cve-scan.sha256
             ${{ runner.temp }}/uni-p0-os-cve-triage.json
             ${{ runner.temp }}/uni-p0-os-cve-triage.sha256
+            ${{ runner.temp }}/uni-p0-private-release-review-index.json
+            ${{ runner.temp }}/uni-p0-private-release-review-index.sha256
+            ${{ runner.temp }}/uni-p0-synthetic-rollback-proof.txt
           retention-days: 14
           if-no-files-found: ignore
       - name: Reconfirm deny-all and all 13 gates pending after synthetic rollback

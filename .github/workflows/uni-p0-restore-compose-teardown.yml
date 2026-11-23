@@ -206,7 +206,7 @@ jobs:
                 ["nginx","uni-p0-nginx-os-release.txt","alpine"],
               ]){
                 const obj=d.os_distribution[image];
-                assert.deepEqual(Object.keys(obj).sort(),["id","version_id","sha256"]);
+                assert.deepEqual(Object.keys(obj).sort(),["id","sha256","version_id"]);
                 assert.equal(obj.id,id);
                 assert.match(obj.version_id,/^[0-9][0-9A-Za-z._-]*$/u);
                 assert.match(obj.sha256,/^[a-f0-9]{64}$/u);

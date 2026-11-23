@@ -33,6 +33,34 @@ case "$*" in
     exit 0 ;;
   "volume rm uni-ci-pg-data-"*)
     rm -f "$UNI_FAKE_PG_VOLUME_MARKER"; exit 0 ;;
+  *"ps -aq --filter name=^/uni-ci-private-"*)
+    if [ "$UNI_FAKE_MODE" = "http_preflight_inspect_error" ]; then exit 45; fi
+    if [ "$UNI_FAKE_MODE" = "http_preexisting_app" ] ||
+       { [ "$UNI_FAKE_MODE" = "http_container_leak" ] && [ -e "$UNI_FAKE_HTTP_APP_MARKER" ]; }; then
+      echo synthetic-app
+    fi
+    exit 0 ;;
+  *"network ls -q --filter name=^uni-ci-private-net-"*)
+    if [ "$UNI_FAKE_MODE" = "http_preexisting_network" ] ||
+       [ -e "$UNI_FAKE_HTTP_NETWORK_MARKER" ]; then echo synthetic-network; fi
+    exit 0 ;;
+  "network create --internal --driver bridge uni-ci-private-net-"*)
+    touch "$UNI_FAKE_HTTP_NETWORK_MARKER"; exit 0 ;;
+  "run -d --name uni-ci-private-app-"*)
+    touch "$UNI_FAKE_HTTP_APP_MARKER"
+    [ "$UNI_FAKE_MODE" = "http_app_failed" ] && exit 37
+    exit 0 ;;
+  "run -d --name uni-ci-private-web-"*) exit 0 ;;
+  "run --rm -i --network uni-ci-private-net-"*)
+    cat >/dev/null
+    [ "$UNI_FAKE_MODE" = "http_probe_failed" ] && exit 38
+    exit 0 ;;
+  "rm -f uni-ci-private-web-"*)
+    if [ "$UNI_FAKE_MODE" != "http_container_leak" ]; then rm -f "$UNI_FAKE_HTTP_APP_MARKER"; fi
+    exit 0 ;;
+  "network rm uni-ci-private-net-"*)
+    if [ "$UNI_FAKE_MODE" != "http_network_leak" ]; then rm -f "$UNI_FAKE_HTTP_NETWORK_MARKER"; fi
+    exit 0 ;;
   "compose version") exit 0 ;;
   "context show")
     if [ "\${UNI_FAKE_MODE:-}" = "context_show_failed" ]; then exit 43; fi
@@ -210,6 +238,56 @@ exit 99
         mode+": no resource may be created on failed preflight");
     }
   }
+  // The older two-container private HTTP path must also refuse occupied
+  // resources and cannot emit PASS before verified cleanup.
+  const httpCases=[
+    ["http_success",0,true],
+    ["http_app_failed",37,false],
+    ["http_probe_failed",38,false],
+    ["http_network_leak",2,false],
+    ["http_container_leak",2,false],
+    ["http_preexisting_network",2,false],
+    ["http_preexisting_app",2,false],
+    ["http_preflight_inspect_error",2,false],
+  ];
+  for (const [mode,expected,pass] of httpCases) {
+    const networkMarker=join(fakeDir,mode+".http-network");
+    const appMarker=join(fakeDir,mode+".http-app");
+    const env={...process.env,
+      PATH:fakeDir+delimiter+(process.env.PATH||"/usr/bin:/bin"),
+      UNI_FAKE_MODE:mode,UNI_FAKE_HTTP_NETWORK_MARKER:networkMarker,
+      UNI_FAKE_HTTP_APP_MARKER:appMarker,
+      CI:"true",GITHUB_ACTIONS:"true",GITHUB_EVENT_NAME:"push",
+      GITHUB_REPOSITORY:"rafhael100/imagine-universidade",
+      GITHUB_REF:"refs/heads/review/uni-p0-readiness-git-config-root-fence-2026-11-22",
+      GITHUB_REF_NAME:"review/uni-p0-readiness-git-config-root-fence-2026-11-22",
+      GITHUB_RUN_ID:"900001",GITHUB_RUN_ATTEMPT:"1"};
+    for (const name of ["DOCKER_HOST","DOCKER_CONTEXT",
+      "DOCKER_TLS_VERIFY","DOCKER_CERT_PATH"])delete env[name];
+    const result=spawnSync("bash",[
+      "scripts/qa-staging-private-http.sh",
+      "uni-qa-stage-test-php","uni-qa-stage-test-nginx"],{
+      cwd:new URL("../",import.meta.url),encoding:"utf8",timeout:7000,env});
+    assert.ifError(result.error);
+    assert.equal(result.status,expected,mode+": "+result.stderr);
+    assert.equal(/PASS: private Docker network HTTP integration/u.test(result.stdout),
+      pass,mode+": PASS only after confirmed removal");
+    if(mode==="http_network_leak"||mode==="http_container_leak"){
+      assert.match(result.stderr,/verified teardown failed/u);
+    }
+    if(mode.startsWith("http_preexisting_")||mode==="http_preflight_inspect_error"){
+      assert.match(result.stderr,/disposable Docker resource/u);
+      assert.equal(existsSync(networkMarker),false,
+        mode+": refuse before creating or removing another run resource");
+    }else if(mode==="http_network_leak"){
+      assert.equal(existsSync(networkMarker),true);
+    }else{
+      assert.equal(existsSync(networkMarker),false);
+    }
+    assert.equal(existsSync(appMarker),mode==="http_container_leak",
+      mode+": container cleanup visibility");
+  }
+  console.log("PASS "+httpCases.length+" private HTTP ownership / verified teardown synthetic cases.");
   console.log("PASS 4 staging PG18 ownership / cleanup negatives with fake Docker.");
   console.log("PASS 21 existing Docker QA cases + "+remoteScriptCases+" remote-endpoint checks across four staging entrypoints; no real Docker.");
 } finally {

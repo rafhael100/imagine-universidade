@@ -39,9 +39,45 @@ suffix="${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
 network="uni-ci-private-net-$suffix"
 app="uni-ci-private-app-$suffix"
 web="uni-ci-private-web-$suffix"
+# Before installing the trap, refuse names that already belong to another run.
+# Never remove another CI resource when a name collides or inspection fails.
+assertDisposableNameFree() {
+  local found
+  if ! found="$("$@" 2>/dev/null)"; then
+    fail "cannot inspect disposable Docker resource ownership"
+  fi
+  [[ -z "$found" ]] || fail "disposable Docker resource name already exists"
+}
+for resource in "$web" "$app"; do
+  assertDisposableNameFree docker ps -aq --filter "name=^/$resource$"
+done
+assertDisposableNameFree docker network ls -q --filter "name=^$network$"
+
+# A successful HTTP probe does not prove cleanup. Verify that all names are
+# actually gone before producing PASS; preserve the original test exit code.
 cleanup(){
+  local originalExit=$? leftovers=0 found
+  trap - EXIT
   docker rm -f "$web" "$app" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
+  for resource in "$web" "$app"; do
+    if ! found="$(docker ps -aq --filter "name=^/$resource$" 2>/dev/null)" ||
+       [[ -n "$found" ]]; then
+      leftovers=1
+    fi
+  done
+  if ! found="$(docker network ls -q --filter "name=^$network$" 2>/dev/null)" ||
+     [[ -n "$found" ]]; then
+    leftovers=1
+  fi
+  if (( leftovers != 0 )); then
+    echo "HOLD synthetic HTTP pipeline: verified teardown failed" >&2
+    exit 2
+  fi
+  if (( originalExit == 0 )); then
+    echo "PASS: private Docker network HTTP integration, verified cleanup, no host ports."
+  fi
+  exit "$originalExit"
 }
 trap cleanup EXIT
 docker network create --internal --driver bridge "$network" >/dev/null
@@ -66,4 +102,3 @@ docker run --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   --env UNI_QA_EXPECT_DB_HEALTH_DOWN=1 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
-echo "PASS: private Docker network HTTP integration, automatic cleanup, no host ports."

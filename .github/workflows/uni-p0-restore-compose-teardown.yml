@@ -366,7 +366,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test ! -e .env && test ! -e .env.production
-          test -z "$DOCKER_HOST" && test -z "$DOCKER_CONTEXT"
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
           test "$(docker context show)" = default
           test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
           test -s "$RUNNER_TEMP/uni-p0-local-built-image-identities.json"

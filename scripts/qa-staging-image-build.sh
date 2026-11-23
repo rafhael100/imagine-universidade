@@ -115,7 +115,7 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "push" &&
       registry_published:false,release_image_digests_pinned:false,
       release_decision:"HOLD_NO_GO"};
     writeFileSync(join(env.RUNNER_TEMP,"uni-p0-local-built-image-identities.json"),
-      JSON.stringify(evidence,null,2)+"\\n",{flag:"wx",mode:0o600});
+      JSON.stringify(evidence,null,2)+"\n",{flag:"wx",mode:0o600});
   ' || fail "local built-image evidence could not be recorded safely"
   echo "PASS exact-run disposable image IDs recorded; not registry-pinned release images."
 fi

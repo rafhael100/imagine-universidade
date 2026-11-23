@@ -26,13 +26,48 @@ test ! -e ops/staging/.env.staging || fail "environment files forbidden"
 command -v timeout >/dev/null || fail "bounded probe required"
 docker compose version >/dev/null
 umask 077
+# A reused run ID cannot authorize teardown of an existing Compose project.
+# Query all three Compose resource classes BEFORE installing the EXIT trap.
+project="uni-p0-pghealth-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+for resource_kind in containers volumes networks; do
+  case "$resource_kind" in
+    containers) inspect_args=(ps -aq) ;;
+    volumes) inspect_args=(volume ls -q) ;;
+    networks) inspect_args=(network ls -q) ;;
+  esac
+  if ! existing="$(docker "${inspect_args[@]}" --filter "label=com.docker.compose.project=$project")"; then
+    fail "cannot verify unused disposable Compose project"
+  fi
+  [[ -z "$existing" ]] || fail "disposable Compose project already owns resources"
+done
 tempdir="$(mktemp -d)"
 fake="$tempdir/fake.env"
-project="uni-p0-pghealth-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
 cleanup(){
+  local originalExit=$? teardownFailed=0 leftovers=0 existing
+  trap - EXIT
   docker compose -p "$project" --env-file "$fake" -f ops/staging/compose.yaml \
-    down --volumes --remove-orphans -t 2 >/dev/null 2>&1 || true
+    down --volumes --remove-orphans -t 2 >/dev/null 2>&1 || teardownFailed=1
+  for resource_kind in containers volumes networks; do
+    case "$resource_kind" in
+      containers) inspect_args=(ps -aq) ;;
+      volumes) inspect_args=(volume ls -q) ;;
+      networks) inspect_args=(network ls -q) ;;
+    esac
+    if ! existing="$(docker "${inspect_args[@]}" --filter "label=com.docker.compose.project=$project" 2>/dev/null)" ||
+       [[ -n "$existing" ]]; then
+      leftovers=1
+    fi
+  done
   rm -rf "$tempdir"
+  if (( teardownFailed != 0 || leftovers != 0 )); then
+    echo "HOLD synthetic DB SQL readiness: verified Compose teardown failed" >&2
+    exit 2
+  fi
+  if (( originalExit == 0 )); then
+    echo "PASS: disposable PG18 Compose DB health healthy -> unhealthy (revoked fake password) -> healthy (recovered), verified cleanup."
+    echo "No migrations, Portal sessions/grants, private VPS or operational backup exercised. HOLD_NO_GO."
+  fi
+  exit "$originalExit"
 }
 trap cleanup EXIT
 cat > "$fake" <<'SYNTHETIC_ONLY'
@@ -86,5 +121,4 @@ query CI_FAKE_ROTATED_ONLY \
 wait_health healthy 40
 [[ "$(query CI_FAKE_NOT_SECRET 'SELECT 1')" == 1 ]] ||
   fail "health recovered but authenticated SQL did not"
-echo "PASS: disposable PG18 Compose DB health healthy -> unhealthy (revoked fake password) -> healthy (recovered)."
-echo "No migrations, Portal sessions/grants, private VPS or operational backup exercised. HOLD_NO_GO."
+# Report PASS only from the EXIT trap, after verified disposal.

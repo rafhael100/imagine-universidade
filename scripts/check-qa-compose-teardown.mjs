@@ -61,6 +61,25 @@ case "$*" in
   "network rm uni-ci-private-net-"*)
     if [ "$UNI_FAKE_MODE" != "http_network_leak" ]; then rm -f "$UNI_FAKE_HTTP_NETWORK_MARKER"; fi
     exit 0 ;;
+  # Separate DB-health Compose entrypoint: fail closed on reused resources.
+  *"ps -aq --filter label=com.docker.compose.project=uni-p0-pghealth-"*)
+    if [ "$UNI_FAKE_MODE" = "health_inspect_error" ]; then exit 45; fi
+    if [ "$UNI_FAKE_MODE" = "health_preexisting_container" ]; then echo synthetic-container; fi
+    exit 0 ;;
+  *"volume ls -q --filter label=com.docker.compose.project=uni-p0-pghealth-"*)
+    if [ "$UNI_FAKE_MODE" = "health_preexisting_volume" ] ||
+       { [ "$UNI_FAKE_MODE" = "health_leftover_volume" ] &&
+         [ -e "$UNI_FAKE_HEALTH_DOWN_MARKER" ]; }; then echo synthetic-volume; fi
+    exit 0 ;;
+  *"network ls -q --filter label=com.docker.compose.project=uni-p0-pghealth-"*)
+    exit 0 ;;
+  *"config --quiet") exit 0 ;;
+  *"up -d --no-build db")
+    touch "$UNI_FAKE_HEALTH_UP_MARKER"; exit 37 ;;
+  *"down --volumes --remove-orphans -t 2")
+    touch "$UNI_FAKE_HEALTH_DOWN_MARKER"
+    [ "$UNI_FAKE_MODE" = "health_down_failed" ] && exit 41
+    exit 0 ;;
   "compose version") exit 0 ;;
   "context show")
     if [ "\${UNI_FAKE_MODE:-}" = "context_show_failed" ]; then exit 43; fi
@@ -287,6 +306,47 @@ exit 99
     assert.equal(existsSync(appMarker),mode==="http_container_leak",
       mode+": container cleanup visibility");
   }
+  // DB-health standalone runner: ownership and verified cleanup regressions.
+  // PATH fixture only; no real daemon, SQL, network or migrations.
+  const dbHealthCases=[
+    ["health_up_failed",37,true],
+    ["health_down_failed",2,true],
+    ["health_leftover_volume",2,true],
+    ["health_preexisting_container",2,false],
+    ["health_preexisting_volume",2,false],
+    ["health_inspect_error",2,false],
+  ];
+  for(const [mode,expected,downExpected] of dbHealthCases){
+    const upMarker=join(fakeDir,mode+".health-up");
+    const downMarker=join(fakeDir,mode+".health-down");
+    const env={...process.env,
+      PATH:fakeDir+delimiter+(process.env.PATH||"/usr/bin:/bin"),
+      UNI_FAKE_MODE:mode,UNI_FAKE_HEALTH_UP_MARKER:upMarker,
+      UNI_FAKE_HEALTH_DOWN_MARKER:downMarker,
+      CI:"true",GITHUB_ACTIONS:"true",GITHUB_EVENT_NAME:"push",
+      GITHUB_REPOSITORY:"rafhael100/imagine-universidade",
+      GITHUB_REF_NAME:"review/uni-p0-pg-sql-health-contract-2026-11-20",
+      GITHUB_RUN_ID:"900001",GITHUB_RUN_ATTEMPT:"1"};
+    for(const name of ["DOCKER_HOST","DOCKER_CONTEXT",
+      "DOCKER_TLS_VERIFY","DOCKER_CERT_PATH"])delete env[name];
+    const result=spawnSync("bash",["scripts/qa-p0-db-compose-health.sh"],{
+      cwd:new URL("../",import.meta.url),encoding:"utf8",timeout:7000,env});
+    assert.ifError(result.error);
+    assert.equal(result.status,expected,mode+": "+result.stderr);
+    assert.doesNotMatch(result.stdout,/PASS: disposable PG18 Compose DB health/u,
+      mode+": PASS forbidden before verified teardown");
+    assert.equal(existsSync(downMarker),downExpected,
+      mode+": never teardown another CI project");
+    assert.equal(existsSync(upMarker),downExpected,
+      mode+": never start an occupied CI project");
+    if(mode==="health_down_failed"||mode==="health_leftover_volume"){
+      assert.match(result.stderr,/verified Compose teardown failed/u);
+    }
+    if(mode.startsWith("health_preexisting_")||mode==="health_inspect_error"){
+      assert.match(result.stderr,/disposable Compose project/u);
+    }
+  }
+  console.log("PASS "+dbHealthCases.length+" DB-health Compose ownership/cleanup negatives with fake Docker.");
   console.log("PASS "+httpCases.length+" private HTTP ownership / verified teardown synthetic cases.");
   console.log("PASS 4 staging PG18 ownership / cleanup negatives with fake Docker.");
   console.log("PASS 21 existing Docker QA cases + "+remoteScriptCases+" remote-endpoint checks across four staging entrypoints; no real Docker.");

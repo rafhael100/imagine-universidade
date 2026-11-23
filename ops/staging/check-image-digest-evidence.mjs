@@ -54,7 +54,7 @@ function validate(data, commit, hashes) {
     assert.equal(image.source, spec.source);
     assert.match(image.digest, digestPattern);
     assert.equal(image.pinned, spec.repository + "@" + image.digest);
-    assert.doesNotMatch(image.pinned, /:[a-zA-Z]|@.*@/u);
+    assert.doesNotMatch(image.pinned, /@.*@/u, "only one digest separator"); // sha256: HEX is valid
   }
   return true;
 }
@@ -93,11 +93,12 @@ function test() {
   mutation(x => { delete x.file_sha256["composer.lock"]; });
   mutation(x => { x.images[0].digest = "sha256:placeholder"; });
   mutation(x => { x.images[1].pinned = "composer:2"; });
+  mutation(x => { x.images[1].pinned += "@sha256:" + "f".repeat(64); });
   mutation(x => { x.images[0].pinned = "nginx@" + x.images[0].digest; });
   mutation(x => { x.images.reverse(); });
   mutation(x => { x.images.pop(); });
   mutation(x => { x.images.push(structuredClone(x.images[0])); });
-  console.log("PASS: release inventory validator + 10 negative mutations; HOLD_NO_GO.");
+  console.log("PASS: release inventory validator + 13 negative mutations; HOLD_NO_GO.");
 }
 function assertEnvironment() {
   assert.equal(process.env.CI, "true");

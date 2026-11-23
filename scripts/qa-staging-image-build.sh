@@ -31,6 +31,13 @@ fi
 test ! -e .env && test ! -e .env.production &&
   test ! -e ops/staging/.env.staging || fail "environment secrets in checkout"
 test -f composer.lock || fail "locked dependencies required"
+# Before any local Docker build, bind this run to the exact checkout and
+# reject a mutable registry tag in the reviewed staging Dockerfiles/Compose.
+[[ "${GITHUB_SHA:-}" =~ ^[a-f0-9]{40}$ &&
+   "$(git rev-parse HEAD 2>/dev/null)" == "$GITHUB_SHA" ]] ||
+  fail "Docker build source does not match exact review commit"
+node ops/staging/check-image-digest-evidence.mjs --test >/dev/null ||
+  fail "immutable upstream registry inputs not pinned to reviewed manifests"
 
 tag="uni-qa-stage-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
 docker build --file ops/staging/Dockerfile.php --tag "${tag}-php" .

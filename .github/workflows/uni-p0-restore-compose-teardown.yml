@@ -488,17 +488,14 @@ jobs:
           assert.equal(proof.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
           assert.equal(proof.appsec_signoff,false);
           assert.equal(proof.release_decision,"HOLD_NO_GO");
-          const images=[];
-          for(const role of ["php","nginx"]){
-            const source=proof.images.find(x=>x.role===role);
-            assert.ok(source,"missing exact-image scan provenance");
-            const bytes=read("uni-p0-"+role+"-os-cves.json");
-            assert.equal(sha(bytes),source.cve_report_sha256);
-            const report=JSON.parse(bytes);
-            const vulnerabilities=report.Results.filter(r=>r.Class==="os-pkgs")
-              .flatMap(r=>r.Vulnerabilities??[]);
-            assert.equal(vulnerabilities.length,source.vulnerability_count);
-            const findings=vulnerabilities.filter(v=>["HIGH","CRITICAL"].includes(v.Severity))
+          // Derive the queue from the signed-off *source bytes* at validation
+          // time too. Counts and a report checksum alone cannot detect a
+          // substituted CVE ID, package, version or vendor status in the queue.
+          const findingsFromScan=report=>{
+            assert.ok(Array.isArray(report.Results),"missing OS scan results");
+            return report.Results.filter(r=>r.Class==="os-pkgs")
+              .flatMap(r=>r.Vulnerabilities??[])
+              .filter(v=>["HIGH","CRITICAL"].includes(v.Severity))
               .map(v=>{
                 assert.ok(typeof v.VulnerabilityID==="string" && v.VulnerabilityID.length);
                 assert.ok(typeof v.PkgName==="string" && v.PkgName.length);
@@ -513,6 +510,18 @@ jobs:
                 (a.severity===b.severity ? 0 : a.severity==="CRITICAL" ? -1 : 1) ||
                 Number(b.fixed_version!==null)-Number(a.fixed_version!==null) ||
                 a.package.localeCompare(b.package) || a.id.localeCompare(b.id));
+          };
+          const images=[];
+          for(const role of ["php","nginx"]){
+            const source=proof.images.find(x=>x.role===role);
+            assert.ok(source,"missing exact-image scan provenance");
+            const bytes=read("uni-p0-"+role+"-os-cves.json");
+            assert.equal(sha(bytes),source.cve_report_sha256);
+            const report=JSON.parse(bytes);
+            const vulnerabilities=report.Results.filter(r=>r.Class==="os-pkgs")
+              .flatMap(r=>r.Vulnerabilities??[]);
+            assert.equal(vulnerabilities.length,source.vulnerability_count);
+            const findings=findingsFromScan(report);
             const withFix=findings.filter(f=>f.fixed_version!==null).length;
             assert.equal(findings.length,source.high_critical_count);
             images.push({role,image_id:source.image_id,cve_report_sha256:sha(bytes),
@@ -546,6 +555,11 @@ jobs:
               assert.equal(group.cve_report_sha256,source.cve_report_sha256);
               assert.equal(group.high_critical_count,source.high_critical_count);
               assert.equal(group.findings.length,group.high_critical_count);
+              // Exact ordered finding identity is as important as the counts.
+              // Refuse an unreviewed queue rewritten without changing the
+              // original scan, including an altered fixed-version assertion.
+              const originalScan=JSON.parse(read("uni-p0-"+group.role+"-os-cves.json"));
+              assert.deepEqual(group.findings,findingsFromScan(originalScan));
               assert.equal(group.vendor_fixed_version_known+group.fixed_version_not_reported,
                 group.high_critical_count);
               assert.equal(group.vendor_fixed_version_known,
@@ -568,7 +582,26 @@ jobs:
             t=>t.images[0].cve_report_sha256="0".repeat(64),
             t=>t.images[0].high_critical_count++,
             t=>t.images[0].image_id="sha256:"+"0".repeat(64),
-            t=>t.vendor_fixed_version_known++
+            t=>t.vendor_fixed_version_known++,
+            t=>{
+              const target=t.images.find(i=>i.findings.length);
+              if(target) target.findings[0].id+="-forged";
+              else t.images[0].findings.push({id:"CVE-FORGED",package:"fake",
+                installed_version:"0",fixed_version:null,severity:"HIGH",vendor_status:null});
+            },
+            t=>{
+              const target=t.images.find(i=>i.findings.length);
+              if(target) target.findings[0].installed_version+="-forged";
+              else t.images[0].findings.push({id:"CVE-FORGED",package:"fake",
+                installed_version:"0",fixed_version:null,severity:"HIGH",vendor_status:null});
+            },
+            t=>{
+              const target=t.images.find(i=>i.findings.length);
+              if(target) target.findings[0].vendor_status=
+                target.findings[0].vendor_status===null ? "forged" : null;
+              else t.images[0].findings.push({id:"CVE-FORGED",package:"fake",
+                installed_version:"0",fixed_version:null,severity:"HIGH",vendor_status:null});
+            }
           ]){
             const copy=structuredClone(triage);mutate(copy);
             assert.throws(()=>validate(copy));
@@ -578,7 +611,7 @@ jobs:
           console.log("PASS CVE triage: "+triage.high_critical_total+" HIGH/CRITICAL, "+
             triage.vendor_fixed_version_known+" with vendor fixed version, "+
             triage.fixed_version_not_reported+" without reported fix; "+
-            "8 tamper tests; risk unaccepted, 13 gates HOLD_NO_GO.");
+            "11 tamper tests; risk unaccepted, 13 gates HOLD_NO_GO.");
           NODE
           (cd "$RUNNER_TEMP" &&
             sha256sum uni-p0-os-cve-triage.json > uni-p0-os-cve-triage.sha256 &&

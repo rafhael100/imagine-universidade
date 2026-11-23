@@ -18,7 +18,7 @@ const evidenceFiles = [
   "ops/staging/Dockerfile.nginx",
   "ops/staging/compose.yaml",
 ];
-const shaPattern = /^[a-f0-9]{64}$/u;
+const shaPattern = /^[a-f0-9]{40}$/u; // Git commit SHA-1, distinct from 64-char image SHA-256
 const digestPattern = /^sha256:[a-f0-9]{64}$/u;
 
 // Deliberately tied to the actual staging candidate (including multistage COPY).
@@ -86,6 +86,7 @@ function test() {
     assert.throws(() => validate(modified, commit, hashes));
   };
   mutation(x => { x.commit = "b".repeat(40); });
+  mutation(x => { x.commit = "c".repeat(64); }); // image digest must not pass as Git SHA
   mutation(x => { x.gate = "GO"; });
   mutation(x => { x.release_approval = true; });
   mutation(x => { x.file_sha256["composer.lock"] = "0".repeat(64); });

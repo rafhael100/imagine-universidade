@@ -101,9 +101,28 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "push" &&
     fail "checked-out source SHA does not match the exact CI push"
   [[ -n "${RUNNER_TEMP:-}" && -d "$RUNNER_TEMP" ]] ||
     fail "runner-owned temporary evidence directory missing"
+  # Package inventory is read from the exact built image IDs, never from
+  # mutable tags. This is not a vulnerability scan, signed SBOM or release.
+  umask 077
+  phpPackages="$RUNNER_TEMP/uni-p0-php-os-packages.tsv"
+  nginxPackages="$RUNNER_TEMP/uni-p0-nginx-os-packages.txt"
+  [[ ! -e "$phpPackages" && ! -L "$phpPackages" &&
+     ! -e "$nginxPackages" && ! -L "$nginxPackages" ]] ||
+    fail "package inventory evidence path already exists"
+  docker run --rm --pull never --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --entrypoint dpkg-query \
+    "$phpBuiltId" -W '-f=${Package}\t${Version}\t${Architecture}\n' > "$phpPackages" ||
+    fail "PHP OS package inventory could not be read from built image"
+  docker run --rm --pull never --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --entrypoint apk \
+    "$nginxBuiltId" info -v > "$nginxPackages" ||
+    fail "Nginx OS package inventory could not be read from built image"
+  [[ -s "$phpPackages" && -s "$nginxPackages" ]] ||
+    fail "empty package inventory from a built image"
   UNI_QA_PHP_ID="$phpBuiltId" UNI_QA_NGINX_ID="$nginxBuiltId" node --input-type=module -e '
     import assert from "node:assert/strict";
-    import {writeFileSync} from "node:fs";
+    import {readFileSync,writeFileSync} from "node:fs";
+    import {createHash} from "node:crypto";
     import {isAbsolute,join} from "node:path";
     const env=process.env;
     assert.ok(isAbsolute(env.RUNNER_TEMP));
@@ -114,12 +133,28 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "push" &&
     assert.match(env.UNI_QA_PHP_ID,id);
     assert.match(env.UNI_QA_NGINX_ID,id);
     assert.notEqual(env.UNI_QA_PHP_ID,env.UNI_QA_NGINX_ID);
-    const evidence={schema:1,repository:env.GITHUB_REPOSITORY,
+    const readInventory=(name,format)=>{
+      const bytes=readFileSync(join(env.RUNNER_TEMP,name));
+      const value=bytes.toString("utf8");
+      assert.ok(value.endsWith("\n") && !value.includes("\r"));
+      const lines=value.trimEnd().split("\n");
+      assert.ok(lines.length >= 10, "unexpectedly small OS package inventory");
+      assert.equal(new Set(lines).size,lines.length,"duplicate OS package rows");
+      const syntax=format==="dpkg-query" ? /^[^\s\t]+\t[^\s\t]+\t[^\s\t]+$/u : /^[^\s]+$/u;
+      for(const line of lines) assert.match(line,syntax);
+      return {format,rows:lines.length,sha256:createHash("sha256").update(bytes).digest("hex")};
+    };
+    const inventories={
+      php:readInventory("uni-p0-php-os-packages.tsv","dpkg-query"),
+      nginx:readInventory("uni-p0-nginx-os-packages.txt","apk-info"),
+    };    const evidence={schema:1,repository:env.GITHUB_REPOSITORY,
       commit:env.GITHUB_SHA,workflow_run_id:env.GITHUB_RUN_ID,
       workflow_attempt:env.GITHUB_RUN_ATTEMPT,
       scope:"ephemeral_local_build_identity_only",
       php_image_id:env.UNI_QA_PHP_ID,nginx_image_id:env.UNI_QA_NGINX_ID,
       registry_published:false,release_image_digests_pinned:false,
+      os_package_inventory:inventories,complete_sbom:false,
+      vulnerability_assessment_completed:false,
       release_decision:"HOLD_NO_GO"};
     writeFileSync(join(env.RUNNER_TEMP,"uni-p0-local-built-image-identities.json"),
       JSON.stringify(evidence,null,2)+"\n",{flag:"wx",mode:0o600});

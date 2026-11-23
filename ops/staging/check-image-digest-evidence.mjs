@@ -12,6 +12,8 @@ const expected = [
   {source: "composer:2", repository: "composer", digest: "sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93"},
   {source: "nginx:stable-alpine", repository: "nginx", digest: "sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3"},
   {source: "postgres:18", repository: "postgres", digest: "sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"},
+  // QA-only PHP 8.3, distinct from the staging PHP 8.4 base.
+  {source: "php:8.3-cli-bookworm", repository: "php", digest: "sha256:cdb77e306d6bb99db40e513fbe036ecc6c53b575cbcb7e581387845fef26d755"},
 ];
 const evidenceFiles = [
   "ops/staging/Dockerfile.php",
@@ -19,6 +21,7 @@ const evidenceFiles = [
   "ops/staging/compose.yaml",
   "compose.qa.yml",
   "scripts/qa-staging-postgres-http.sh",
+  "ops/qa/Dockerfile",
 ];
 const shaPattern = /^[a-f0-9]{40}$/u; // Git commit SHA-1, distinct from 64-char image SHA-256
 const digestPattern = /^sha256:[a-f0-9]{64}$/u;
@@ -36,6 +39,16 @@ function checkQaPgImagePins(qaCompose, qaScript) {
   assert.deepEqual(scriptImages, [pinned], "HTTP/rollback PostgreSQL image must be digest pinned");
 }
 
+function checkQaDockerfile(qa) {
+  const base = expected[4].repository + "@" + expected[4].digest;
+  const composer = expected[1].repository + "@" + expected[1].digest;
+  // Both QA build inputs must be reviewed immutable references.
+  assert.equal(qa.match(/^FROM \S+$/mu)?.[0], "FROM " + base);
+  assert.equal(qa.match(/^COPY --from=\S+ /mu)?.[0], "COPY --from=" + composer + " ");
+  assert.equal((qa.match(/^FROM /gmu) || []).length, 1);
+  assert.equal((qa.match(/^COPY --from=/gmu) || []).length, 1);
+}
+
 function checkSources() {
   const php = root("ops/staging/Dockerfile.php").toString("utf8");
   const nginx = root("ops/staging/Dockerfile.nginx").toString("utf8");
@@ -50,6 +63,7 @@ function checkSources() {
   assert.equal((compose.match(/^\s+image:/gmu) || []).length, 1);
   checkQaPgImagePins(root("compose.qa.yml").toString("utf8"),
     root("scripts/qa-staging-postgres-http.sh").toString("utf8"));
+  checkQaDockerfile(root("ops/qa/Dockerfile").toString("utf8"));
 }
 
 function validate(data, commit, hashes) {
@@ -122,7 +136,16 @@ function test() {
   assert.throws(() => checkQaPgImagePins(qaCompose, qaScript.replace(pinnedPg, "postgres:18-alpine")));
   assert.throws(() => checkQaPgImagePins(qaCompose.replace(pinnedPg, "postgres@" + "sha256:" + "0".repeat(64)), qaScript));
   assert.throws(() => checkQaPgImagePins(qaCompose, qaScript.replace(pinnedPg, "postgres@" + "sha256:" + "f".repeat(64))));
-  console.log("PASS: 19 negative mutations, four immutable registry digests, both PG18 QA paths pinned; HOLD_NO_GO.");
+  const qaDockerfile = root("ops/qa/Dockerfile").toString("utf8");
+  const qaBase = expected[4].repository + "@" + expected[4].digest;
+  const qaComposer = expected[1].repository + "@" + expected[1].digest;
+  assert.throws(() => checkQaDockerfile(qaDockerfile.replace(qaBase, "php:8.3-cli-bookworm")));
+  assert.throws(() => checkQaDockerfile(qaDockerfile.replace(qaBase, "php@" + "sha256:" + "0".repeat(64))));
+  assert.throws(() => checkQaDockerfile(qaDockerfile.replace(qaComposer, "composer:2")));
+  assert.throws(() => checkQaDockerfile(qaDockerfile.replace(qaComposer, "composer@" + "sha256:" + "f".repeat(64))));
+  mutation(x => { x.file_sha256["ops/qa/Dockerfile"] = "0".repeat(64); });
+  mutation(x => { x.images[4].pinned = "php:8.3-cli-bookworm"; });
+  console.log("PASS: 25 negative mutations, five immutable registry digests, both PG18 QA paths and QA PHP/Composer pinned; HOLD_NO_GO.");
 }
 function assertEnvironment() {
   assert.equal(process.env.CI, "true");
@@ -173,7 +196,7 @@ function verify(path) {
   assert.ok(path && path.startsWith(process.env.RUNNER_TEMP + "/"));
   const data = JSON.parse(readFileSync(path, "utf8"));
   validate(data, process.env.GITHUB_SHA, currentHashes());
-  console.log("PASS: exact commit/lock/Dockerfiles/Compose/4 registry digests; NO-GO.");
+  console.log("PASS: exact commit/lock/Dockerfiles/Compose/5 registry digests; NO-GO.");
 }
 const [mode, arg] = process.argv.slice(2);
 try {

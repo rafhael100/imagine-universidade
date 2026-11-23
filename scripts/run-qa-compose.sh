@@ -36,6 +36,12 @@ if [[ ! -f compose.qa.yml || ! -f ops/qa/Dockerfile ]]; then
   echo "FAIL: QA-only Compose files are missing." >&2
   exit 2
 fi
+# Reject QA base-image drift before creating resources or running a build.
+# The registry manifest is also verified separately by the source CI workflow.
+if ! node ops/staging/check-image-digest-evidence.mjs --test >/dev/null; then
+  echo "FAIL: QA image source digest preflight rejected unreviewed inputs." >&2
+  exit 2
+fi
 
 PROJECT="imagine-uni-qa-$BASHPID"
 # A PID can be reused. Before registering any EXIT cleanup or starting Docker,

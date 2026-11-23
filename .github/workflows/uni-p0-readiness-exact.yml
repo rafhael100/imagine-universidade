@@ -124,7 +124,7 @@ jobs:
           if GITHUB_SHA=0000000000000000000000000000000000000000 node ops/staging/check-image-digest-evidence.mjs --verify "$file" >/dev/null 2>&1; then
             echo 'HOLD: base image evidence accepted wrong SHA' >&2; exit 2
           fi
-          echo "PASS: 4 upstream registry base manifests matched the exact review checkout; runtime images NOT pinned, HOLD_NO_GO"
+          echo "PASS: 5 upstream registry base manifests (including QA PHP) matched the exact review checkout; runtime images NOT pinned, HOLD_NO_GO"
       - name: Reject wrong SHA, forbidden branch and non-CI execution
         shell: bash
         run: |

@@ -138,6 +138,96 @@ jobs:
           for script in scripts/qa-staging-image-build.sh scripts/qa-staging-private-http.sh scripts/qa-staging-postgres-http.sh; do bash -n "$script"; done
           php -l scripts/qa-staging-pg-pre-migrate.php
           php -l scripts/qa-staging-private-http-probe.php
+      - name: Query Composer production lock advisories (read-only, no release approval)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Query public package advisories only; no tokens, app session or real data.
+          # A green audit is NOT an AppSec review and does NOT assess OS packages.
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test -f composer.json && test -f composer.lock
+          test ! -e .env && test ! -e .env.production
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          report="$RUNNER_TEMP/uni-p0-composer-production-audit.json"
+          manifest="$RUNNER_TEMP/uni-p0-composer-production-audit-provenance.json"
+          test ! -e "$report" && test ! -L "$report"
+          test ! -e "$manifest" && test ! -L "$manifest"
+          umask 077
+          # Immutable Composer image previously reviewed by source readiness.
+          # Only the two public locked-dependency files are mounted read-only.
+          # Outbound advisory query is isolated from Laravel and PostgreSQL.
+          audit_status=0
+          docker run --rm --pull always --network bridge --read-only \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --user 10001:10001 --tmpfs /tmp:mode=1777 \
+            --env COMPOSER_HOME=/tmp/composer \
+            --env COMPOSER_CACHE_DIR=/tmp/composer/cache \
+            --mount "type=bind,src=$PWD/composer.json,dst=/app/composer.json,readonly" \
+            --mount "type=bind,src=$PWD/composer.lock,dst=/app/composer.lock,readonly" \
+            --workdir /app --entrypoint composer \
+            composer@sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93 \
+            audit --locked --no-dev --format=json --no-interaction > "$report" || audit_status=$?
+          if test ! -s "$report"; then
+            echo 'HOLD: advisory source did not produce a nonempty JSON report' >&2
+            exit 2
+          fi
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import {readFileSync,writeFileSync} from "node:fs";
+            import {createHash} from "node:crypto";
+            import {join} from "node:path";
+            const env=process.env;
+            const sha=bytes=>createHash("sha256").update(bytes).digest("hex");
+            assert.match(env.GITHUB_SHA,/^[0-9a-f]{40}$/u);
+            assert.match(env.GITHUB_RUN_ID,/^[0-9]+$/u);
+            const bytes=readFileSync(join(env.RUNNER_TEMP,"uni-p0-composer-production-audit.json"));
+            const report=JSON.parse(bytes.toString("utf8"));
+            assert.ok(report && typeof report==="object" && "advisories" in report);
+            const a=report.advisories;
+            const findings=Array.isArray(a) ? a.length :
+              Object.values(a).reduce((n,v)=>n+(Array.isArray(v)?v.length:0),0);
+            const abandoned=report.abandoned ? Object.keys(report.abandoned).length : 0;
+            const data={schema:1,repository:env.GITHUB_REPOSITORY,
+              commit:env.GITHUB_SHA,workflow_run_id:env.GITHUB_RUN_ID,
+              workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+              source:"composer_audit_locked_prod_only",advisory_count:findings,
+              abandoned_package_count:abandoned,
+              composer_lock_sha256:sha(readFileSync("composer.lock")),
+              report_sha256:sha(bytes),os_cve_scan_completed:false,
+              appsec_signoff:false,release_decision:"HOLD_NO_GO"};
+            assert.equal(data.repository,"rafhael100/imagine-universidade");
+            assert.match(data.report_sha256,/^[0-9a-f]{64}$/u);
+            writeFileSync(join(env.RUNNER_TEMP,
+              "uni-p0-composer-production-audit-provenance.json"),
+              JSON.stringify(data,null,2)+"\n",{flag:"wx",mode:0o600});
+            console.log("Composer production advisory report captured; findings="+findings+
+              ", abandoned="+abandoned+"; AppSec/OS review pending; HOLD_NO_GO");
+          '
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-composer-production-audit.json uni-p0-composer-production-audit-provenance.json \
+              > uni-p0-composer-production-audit.sha256 &&
+            sha256sum -c uni-p0-composer-production-audit.sha256)
+          if test "$audit_status" -ne 0; then
+            echo 'HOLD: Composer reported advisories/abandonment or advisory query error; human review required.' >&2
+            exit 2
+          fi
+          echo 'PASS read-only Composer production advisory query only; no OS CVE review, no release approval.'
+      - name: Preserve Composer advisory evidence for private review (not AppSec signoff)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-composer-audit-NOT-APPSEC-APPROVED
+          path: |
+            ${{ runner.temp }}/uni-p0-composer-production-audit.json
+            ${{ runner.temp }}/uni-p0-composer-production-audit-provenance.json
+            ${{ runner.temp }}/uni-p0-composer-production-audit.sha256
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Exercise isolated Nginx / PHP / PG18 with live SQL and image rollback
         shell: bash
         run: |

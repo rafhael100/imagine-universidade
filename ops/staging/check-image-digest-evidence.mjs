@@ -46,7 +46,7 @@ function validate(data, commit, hashes) {
   assert.equal(data.release_approval, false);
   assert.equal(data.gate, "HOLD_NO_GO");
   assert.deepEqual(data.file_sha256, hashes);
-  assert.deepEqual(Object.keys(data.file_sha256).sort(), evidenceFiles.slice().sort());
+  assert.deepEqual(Object.keys(data.file_sha256).sort(), [...evidenceFiles, "composer.lock"].sort());
   assert.ok(Array.isArray(data.images));
   assert.equal(data.images.length, expected.length);
   for (let i = 0; i < expected.length; i++) {
@@ -90,6 +90,7 @@ function test() {
   mutation(x => { x.gate = "GO"; });
   mutation(x => { x.release_approval = true; });
   mutation(x => { x.file_sha256["composer.lock"] = "0".repeat(64); });
+  mutation(x => { delete x.file_sha256["composer.lock"]; });
   mutation(x => { x.images[0].digest = "sha256:placeholder"; });
   mutation(x => { x.images[1].pinned = "composer:2"; });
   mutation(x => { x.images[0].pinned = "nginx@" + x.images[0].digest; });

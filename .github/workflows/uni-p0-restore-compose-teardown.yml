@@ -357,5 +357,125 @@ jobs:
             ${{ runner.temp }}/uni-p0-nginx-os-release.txt
           retention-days: 14
           if-no-files-found: error
+      - name: Scan Debian and Alpine OS advisories from exact local built image IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.production
+          test -z "$DOCKER_HOST" && test -z "$DOCKER_CONTEXT"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          test -s "$RUNNER_TEMP/uni-p0-local-built-image-identities.json"
+          # Trivy v0.76.2 official Linux x64 archive SHA-256 verified using
+          # the GitHub release asset digest, not a moving tag. Local-only scanner;
+          # image archive and database cache never leave this disposable runner.
+          umask 077
+          scan_archive="$RUNNER_TEMP/uni-p0-trivy-0.76.2.tar.gz"
+          mkdir -m 700 "$RUNNER_TEMP/uni-p0-trivy-bin" "$RUNNER_TEMP/uni-p0-trivy-cache"
+          curl -fLSs --retry 2 --max-time 180 \
+            https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz \
+            -o "$scan_archive"
+          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  $scan_archive" | sha256sum -c -
+          tar -xzf "$scan_archive" -C "$RUNNER_TEMP/uni-p0-trivy-bin" trivy
+          trivy="$RUNNER_TEMP/uni-p0-trivy-bin/trivy"
+          "$trivy" --version
+          trap 'rm -f "$RUNNER_TEMP"/uni-p0-*-os-image.tar "$scan_archive"' EXIT
+          for role in php nginx; do
+            built_id="$(ROLE="$role" node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/uni-p0-local-built-image-identities.json")); process.stdout.write(m[process.env.ROLE+"_image_id"])')"
+            test "$(docker image inspect --format '{{.Id}}' "$built_id")" = "$built_id"
+            test "$(docker image inspect --format '{{.Id}}' "uni-qa-stage-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$role")" = "$built_id"
+            tarfile="$RUNNER_TEMP/uni-p0-$role-os-image.tar"
+            report="$RUNNER_TEMP/uni-p0-$role-os-cves.json"
+            test ! -e "$tarfile" && test ! -e "$report"
+            docker save "$built_id" -o "$tarfile"
+            "$trivy" --cache-dir "$RUNNER_TEMP/uni-p0-trivy-cache" image \
+              --input "$tarfile" --scanners vuln --pkg-types os \
+              --list-all-pkgs --format json --output "$report" \
+              --no-progress --timeout 8m --exit-code 0
+            test -s "$report"
+          done
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import {readFileSync,writeFileSync} from "node:fs";
+          import {createHash} from "node:crypto";
+          import {join} from "node:path";
+          const env=process.env,dir=env.RUNNER_TEMP;
+          const read=name=>readFileSync(join(dir,name));
+          const hash=bytes=>createHash("sha256").update(bytes).digest("hex");
+          const identity=JSON.parse(read("uni-p0-local-built-image-identities.json"));
+          assert.equal(identity.repository,env.GITHUB_REPOSITORY);
+          assert.equal(identity.commit,env.GITHUB_SHA);
+          assert.equal(identity.workflow_run_id,env.GITHUB_RUN_ID);
+          assert.equal(identity.release_decision,"HOLD_NO_GO");
+          assert.equal(identity.vulnerability_assessment_completed,false);
+          const images=[];
+          for(const [role,family] of [["php","debian"],["nginx","alpine"]]){
+            const bytes=read("uni-p0-"+role+"-os-cves.json");
+            const report=JSON.parse(bytes);
+            const validate=data=>{
+              assert.ok(data && data.SchemaVersion>=2);
+              assert.equal(data.ArtifactType,"container_image");
+              assert.equal(data.Metadata?.OS?.Family,family);
+              const os=data.Results?.filter(r=>r.Type===family && r.Class==="os-pkgs");
+              assert.ok(Array.isArray(os) && os.length>0,"missing OS advisory scan");
+              const pkgs=os.flatMap(r=>r.Packages??[]);
+              assert.ok(pkgs.length>=10,"empty OS inventory");
+              assert.ok(pkgs.every(p=>typeof p.Name==="string" && typeof p.Version==="string"));
+              const vulns=os.flatMap(r=>r.Vulnerabilities??[]);
+              assert.ok(vulns.every(v=>typeof v.VulnerabilityID==="string" && typeof v.PkgName==="string"));
+              return {packages:pkgs.length,findings:vulns.length,
+                high_critical:vulns.filter(v=>["HIGH","CRITICAL"].includes(v.Severity)).length};
+            };
+            const found=validate(report);
+            for(const mutate of [
+              d=>{d.Metadata.OS.Family="other";},
+              d=>{d.ArtifactType="filesystem";},
+              d=>{d.Results=[];},
+              d=>{d.Results=d.Results.map(r=>({...r,Packages:[]}));}
+            ]){
+              const tampered=structuredClone(report);mutate(tampered);
+              assert.throws(()=>validate(tampered));
+            }
+            assert.match(identity[role+"_image_id"],/^sha256:[a-f0-9]{64}$/u);
+            assert.equal(identity.os_distribution[role].id,family);
+            images.push({role,os:family,os_version:identity.os_distribution[role].version_id,
+              image_id:identity[role+"_image_id"],
+              image_tar_sha256:hash(read("uni-p0-"+role+"-os-image.tar")),
+              cve_report_sha256:hash(bytes),os_packages_scanned:found.packages,
+              vulnerability_count:found.findings,high_critical_count:found.high_critical});
+          }
+          const evidence={schema:1,source:"trivy_0.76.2_vendor_os_advisories",
+            trivy_archive_sha256:"bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf",
+            repository:env.GITHUB_REPOSITORY,commit:env.GITHUB_SHA,
+            workflow_run_id:env.GITHUB_RUN_ID,workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+            build_evidence_sha256:hash(read("uni-p0-local-built-image-identities.json")),
+            images,full_sbom_complete:false,appsec_signoff:false,
+            registry_published:false,release_decision:"HOLD_NO_GO"};
+          writeFileSync(join(dir,"uni-p0-os-cve-scan-provenance.json"),
+            JSON.stringify(evidence,null,2)+"\n",{flag:"wx",mode:0o600});
+          console.log("PASS OS advisory evidence: "+
+            images.map(i=>i.role+"="+i.vulnerability_count+" findings ("+i.high_critical_count+" HIGH/CRITICAL)").join("; ")+
+            "; human triage pending; HOLD_NO_GO");
+          NODE
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-php-os-cves.json uni-p0-nginx-os-cves.json \
+              uni-p0-os-cve-scan-provenance.json > uni-p0-os-cve-scan.sha256 &&
+            sha256sum -c uni-p0-os-cve-scan.sha256)
+      - name: Preserve OS vulnerability reports for review, not AppSec approval
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-os-CVE-NOT-APPSEC-APPROVED
+          path: |
+            ${{ runner.temp }}/uni-p0-php-os-cves.json
+            ${{ runner.temp }}/uni-p0-nginx-os-cves.json
+            ${{ runner.temp }}/uni-p0-os-cve-scan-provenance.json
+            ${{ runner.temp }}/uni-p0-os-cve-scan.sha256
+          retention-days: 14
+          if-no-files-found: ignore
       - name: Reconfirm deny-all and all 13 gates pending after synthetic rollback
         run: node ops/staging/check-release-gates.mjs

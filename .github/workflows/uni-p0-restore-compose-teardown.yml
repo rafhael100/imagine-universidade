@@ -181,7 +181,9 @@ jobs:
             }
             console.log("PASS exact CI+SHA and 2 disposable image IDs; 6 negative mutations; not release digests");
           '
-          sha256sum "$evidence" > "$RUNNER_TEMP/uni-p0-local-built-image-identities.sha256"
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-local-built-image-identities.json > uni-p0-local-built-image-identities.sha256 &&
+            sha256sum -c uni-p0-local-built-image-identities.sha256)
       - name: Keep final local build identity evidence for review (no deploy)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

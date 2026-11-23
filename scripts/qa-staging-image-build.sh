@@ -35,6 +35,13 @@ test -f composer.lock || fail "locked dependencies required"
 tag="uni-qa-stage-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
 docker build --file ops/staging/Dockerfile.php --tag "${tag}-php" .
 docker build --file ops/staging/Dockerfile.nginx --tag "${tag}-nginx" .
+# Keep immutable local image identities, not mutable QA tags, for evidence.
+# These are disposable Docker image IDs, NOT registry digests or release images.
+phpBuiltId="$(docker image inspect --format '{{.Id}}' "${tag}-php")" || fail "PHP build identity cannot be inspected"
+nginxBuiltId="$(docker image inspect --format '{{.Id}}' "${tag}-nginx")" || fail "Nginx build identity cannot be inspected"
+[[ "$phpBuiltId" =~ ^sha256:[a-f0-9]{64}$ &&
+   "$nginxBuiltId" =~ ^sha256:[a-f0-9]{64}$ &&
+   "$phpBuiltId" != "$nginxBuiltId" ]] || fail "invalid or ambiguous local image identities"
 
 # No open ports, no network or access to real data.
 docker run --rm --network none --read-only --cap-drop ALL \
@@ -73,4 +80,43 @@ docker run --rm --network none --add-host app:127.0.0.1 --read-only --cap-drop A
   "${tag}-nginx" nginx -t
 bash scripts/qa-staging-private-http.sh "${tag}-php" "${tag}-nginx"
 bash scripts/qa-staging-postgres-http.sh "${tag}-php" "${tag}-nginx"
+# Confirm the tags still identify the *same* locally built images after the
+# real private HTTP, SQL and rollback probes. No registry push or tag promotion.
+[[ "$(docker image inspect --format '{{.Id}}' "${tag}-php")" == "$phpBuiltId" &&
+   "$(docker image inspect --format '{{.Id}}' "${tag}-nginx")" == "$nginxBuiltId" ]] ||
+  fail "final disposable image tag identity changed during QA"
+# Existing release workflow can retain an exact-run source-to-built-ID mapping.
+# It must NEVER be mistaken for a deployable/published image digest.
+if [[ "${GITHUB_EVENT_NAME:-}" == "push" &&
+      "${GITHUB_REF:-}" == "refs/heads/review/uni-p0-readiness-git-config-root-fence-2026-11-22" ]]; then
+  [[ "${GITHUB_SHA:-}" =~ ^[a-f0-9]{40}$ &&
+     "$(git rev-parse HEAD 2>/dev/null)" == "$GITHUB_SHA" ]] ||
+    fail "checked-out source SHA does not match the exact CI push"
+  [[ -n "${RUNNER_TEMP:-}" && -d "$RUNNER_TEMP" ]] ||
+    fail "runner-owned temporary evidence directory missing"
+  UNI_QA_PHP_ID="$phpBuiltId" UNI_QA_NGINX_ID="$nginxBuiltId" node --input-type=module -e '
+    import assert from "node:assert/strict";
+    import {writeFileSync} from "node:fs";
+    import {isAbsolute,join} from "node:path";
+    const env=process.env;
+    assert.ok(isAbsolute(env.RUNNER_TEMP));
+    assert.match(env.GITHUB_RUN_ID,/^[0-9]+$/u);
+    assert.match(env.GITHUB_RUN_ATTEMPT,/^[0-9]+$/u);
+    assert.match(env.GITHUB_SHA,/^[a-f0-9]{40}$/u);
+    const id=/^sha256:[a-f0-9]{64}$/u;
+    assert.match(env.UNI_QA_PHP_ID,id);
+    assert.match(env.UNI_QA_NGINX_ID,id);
+    assert.notEqual(env.UNI_QA_PHP_ID,env.UNI_QA_NGINX_ID);
+    const evidence={schema:1,repository:env.GITHUB_REPOSITORY,
+      commit:env.GITHUB_SHA,workflow_run_id:env.GITHUB_RUN_ID,
+      workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+      scope:"ephemeral_local_build_identity_only",
+      php_image_id:env.UNI_QA_PHP_ID,nginx_image_id:env.UNI_QA_NGINX_ID,
+      registry_published:false,release_image_digests_pinned:false,
+      release_decision:"HOLD_NO_GO"};
+    writeFileSync(join(env.RUNNER_TEMP,"uni-p0-local-built-image-identities.json"),
+      JSON.stringify(evidence,null,2)+"\\n",{flag:"wx",mode:0o600});
+  ' || fail "local built-image evidence could not be recorded safely"
+  echo "PASS exact-run disposable image IDs recorded; not registry-pinned release images."
+fi
 echo "PASS candidate staging PHP/Nginx images build locally without deploy."

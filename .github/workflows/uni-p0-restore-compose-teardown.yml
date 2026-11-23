@@ -137,5 +137,59 @@ jobs:
           grep -Fq 'PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
           grep -Fq 'PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403.' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
           grep -Fq 'PASS synthetic 3-service staging PG18:' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+      - name: Verify local built-image IDs against exact source and CI run (NOT registry pins)
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/uni-p0-local-built-image-identities.json"
+          test -s "$evidence"
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import {readFileSync} from "node:fs";
+            import {join} from "node:path";
+            const e=JSON.parse(readFileSync(join(process.env.RUNNER_TEMP,
+              "uni-p0-local-built-image-identities.json"),"utf8"));
+            const validate=d=>{
+              assert.deepEqual(Object.keys(d).sort(),[
+                "schema","repository","commit","workflow_run_id","workflow_attempt",
+                "scope","php_image_id","nginx_image_id","registry_published",
+                "release_image_digests_pinned","release_decision"].sort());
+              assert.equal(d.schema,1);
+              assert.equal(d.repository,"rafhael100/imagine-universidade");
+              assert.equal(d.commit,process.env.GITHUB_SHA);
+              assert.equal(d.workflow_run_id,process.env.GITHUB_RUN_ID);
+              assert.equal(d.workflow_attempt,process.env.GITHUB_RUN_ATTEMPT);
+              assert.equal(d.scope,"ephemeral_local_build_identity_only");
+              assert.match(d.php_image_id,/^sha256:[a-f0-9]{64}$/u);
+              assert.match(d.nginx_image_id,/^sha256:[a-f0-9]{64}$/u);
+              assert.notEqual(d.php_image_id,d.nginx_image_id);
+              assert.equal(d.registry_published,false);
+              assert.equal(d.release_image_digests_pinned,false);
+              assert.equal(d.release_decision,"HOLD_NO_GO");
+            };
+            validate(e);
+            for (const mutation of [
+              x=>x.commit="0".repeat(40),
+              x=>x.php_image_id="not-an-image-id",
+              x=>x.nginx_image_id=x.php_image_id,
+              x=>x.registry_published=true,
+              x=>x.release_image_digests_pinned=true,
+              x=>x.release_decision="GO",
+            ]){
+              const wrong=structuredClone(e);mutation(wrong);
+              assert.throws(()=>validate(wrong));
+            }
+            console.log("PASS exact CI+SHA and 2 disposable image IDs; 6 negative mutations; not release digests");
+          '
+          sha256sum "$evidence" > "$RUNNER_TEMP/uni-p0-local-built-image-identities.sha256"
+      - name: Keep final local build identity evidence for review (no deploy)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-local-built-images-NOT-REGISTRY-PINNED
+          path: |
+            ${{ runner.temp }}/uni-p0-local-built-image-identities.json
+            ${{ runner.temp }}/uni-p0-local-built-image-identities.sha256
+          retention-days: 14
+          if-no-files-found: error
       - name: Reconfirm deny-all and all 13 gates pending after synthetic rollback
         run: node ops/staging/check-release-gates.mjs

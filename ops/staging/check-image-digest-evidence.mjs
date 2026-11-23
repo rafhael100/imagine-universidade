@@ -17,12 +17,25 @@ const evidenceFiles = [
   "ops/staging/Dockerfile.php",
   "ops/staging/Dockerfile.nginx",
   "ops/staging/compose.yaml",
+  "compose.qa.yml",
+  "scripts/qa-staging-postgres-http.sh",
 ];
 const shaPattern = /^[a-f0-9]{40}$/u; // Git commit SHA-1, distinct from 64-char image SHA-256
 const digestPattern = /^sha256:[a-f0-9]{64}$/u;
 
 // Deliberately tied to the actual staging candidate (including multistage COPY).
 // If a source is changed, the inventory must be reviewed and reissued.
+
+function checkQaPgImagePins(qaCompose, qaScript) {
+  const pinned = expected[3].repository + "@" + expected[3].digest;
+  // Both executable PG18 QA paths must use the SAME reviewed image as staging.
+  // No mutable tag may silently change SQL, volume or recovery behavior.
+  const composeImages = [...qaCompose.matchAll(/^\s+image:\s*(\S+)\s*$/gmu)].map(m => m[1]);
+  const scriptImages = [...qaScript.matchAll(/^\s+(postgres(?:@[^\s]+|:[^\s]+))\s+>\/dev\/null$/gmu)].map(m => m[1]);
+  assert.deepEqual(composeImages, [pinned], "Compose QA PostgreSQL image must be digest pinned");
+  assert.deepEqual(scriptImages, [pinned], "HTTP/rollback PostgreSQL image must be digest pinned");
+}
+
 function checkSources() {
   const php = root("ops/staging/Dockerfile.php").toString("utf8");
   const nginx = root("ops/staging/Dockerfile.nginx").toString("utf8");
@@ -35,6 +48,8 @@ function checkSources() {
   assert.equal((nginx.match(/^FROM /gmu) || []).length, 1);
   assert.equal((php.match(/^COPY --from=/gmu) || []).length, 1);
   assert.equal((compose.match(/^\s+image:/gmu) || []).length, 1);
+  checkQaPgImagePins(root("compose.qa.yml").toString("utf8"),
+    root("scripts/qa-staging-postgres-http.sh").toString("utf8"));
 }
 
 function validate(data, commit, hashes) {
@@ -99,7 +114,15 @@ function test() {
   mutation(x => { x.images.reverse(); });
   mutation(x => { x.images.pop(); });
   mutation(x => { x.images.push(structuredClone(x.images[0])); });
-  console.log("PASS: 15 negative mutations and four reviewed immutable registry source digests; HOLD_NO_GO.");
+
+  const qaCompose = root("compose.qa.yml").toString("utf8");
+  const qaScript = root("scripts/qa-staging-postgres-http.sh").toString("utf8");
+  const pinnedPg = expected[3].repository + "@" + expected[3].digest;
+  assert.throws(() => checkQaPgImagePins(qaCompose.replace(pinnedPg, "postgres:18-alpine"), qaScript));
+  assert.throws(() => checkQaPgImagePins(qaCompose, qaScript.replace(pinnedPg, "postgres:18-alpine")));
+  assert.throws(() => checkQaPgImagePins(qaCompose.replace(pinnedPg, "postgres@" + "sha256:" + "0".repeat(64)), qaScript));
+  assert.throws(() => checkQaPgImagePins(qaCompose, qaScript.replace(pinnedPg, "postgres@" + "sha256:" + "f".repeat(64))));
+  console.log("PASS: 19 negative mutations, four immutable registry digests, both PG18 QA paths pinned; HOLD_NO_GO.");
 }
 function assertEnvironment() {
   assert.equal(process.env.CI, "true");

@@ -106,7 +106,7 @@ docker run -d --name "$db" --network "$network" --network-alias db \
   --env POSTGRES_USER=uni_ci_migration_owner \
   --env POSTGRES_PASSWORD=FAKE_OWNER_CI_ONLY \
   --volume "$volume":/var/lib/postgresql \
-  postgres:18-alpine >/dev/null
+  postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a >/dev/null
 stagingPgStage=postgres_ready
 # The official entrypoint starts a temporary socket-only server during initdb.
 # pg_isready without a host can accept that server before the final TCP server

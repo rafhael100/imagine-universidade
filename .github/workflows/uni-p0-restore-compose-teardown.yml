@@ -18,6 +18,16 @@ on:
       - scripts/qa-p0-db-compose-health.sh
       - scripts/qa-staging-pg-pre-migrate.php
       - scripts/qa-staging-private-http-probe.php
+      - compose.qa.yml
+      - composer.json
+      - composer.lock
+      - .dockerignore
+      - ops/qa/Dockerfile
+      - ops/staging/Dockerfile.php
+      - ops/staging/Dockerfile.nginx
+      - ops/staging/compose.yaml
+      - ops/staging/nginx.conf
+      - ops/staging/check-image-digest-evidence.mjs
 
 permissions:
   contents: read

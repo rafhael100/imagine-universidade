@@ -30,6 +30,7 @@ on:
       - ops/staging/release-gate-policy.mjs
       - ops/staging/check-release-gates.mjs
       - composer.lock
+      - compose.qa.yml
       - ops/staging/compose.yaml
       - ops/staging/Dockerfile.php
       - ops/staging/Dockerfile.nginx

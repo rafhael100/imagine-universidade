@@ -119,6 +119,24 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "push" &&
     fail "Nginx OS package inventory could not be read from built image"
   [[ -s "$phpPackages" && -s "$nginxPackages" ]] ||
     fail "empty package inventory from a built image"
+  # The package-name/version lists alone cannot be matched to distribution
+  # advisories. Capture /etc/os-release from the exact same image IDs,
+  # offline and read-only, for an AppSec reviewer to select Debian/Alpine feeds.
+  phpOsRelease="$RUNNER_TEMP/uni-p0-php-os-release.txt"
+  nginxOsRelease="$RUNNER_TEMP/uni-p0-nginx-os-release.txt"
+  [[ ! -e "$phpOsRelease" && ! -L "$phpOsRelease" &&
+     ! -e "$nginxOsRelease" && ! -L "$nginxOsRelease" ]] ||
+    fail "OS release evidence path already exists"
+  docker run --rm --pull never --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --entrypoint cat \
+    "$phpBuiltId" /etc/os-release > "$phpOsRelease" ||
+    fail "PHP distribution identity could not be read from built image"
+  docker run --rm --pull never --network none --read-only --cap-drop ALL \
+    --security-opt no-new-privileges --entrypoint cat \
+    "$nginxBuiltId" /etc/os-release > "$nginxOsRelease" ||
+    fail "Nginx distribution identity could not be read from built image"
+  [[ -s "$phpOsRelease" && -s "$nginxOsRelease" ]] ||
+    fail "empty OS distribution identity"
   UNI_QA_PHP_ID="$phpBuiltId" UNI_QA_NGINX_ID="$nginxBuiltId" node --input-type=module -e '
     import assert from "node:assert/strict";
     import {readFileSync,writeFileSync} from "node:fs";
@@ -147,18 +165,42 @@ if [[ "${GITHUB_EVENT_NAME:-}" == "push" &&
     const inventories={
       php:readInventory("uni-p0-php-os-packages.tsv","dpkg-query"),
       nginx:readInventory("uni-p0-nginx-os-packages.txt","apk-info"),
-    };    const evidence={schema:1,repository:env.GITHUB_REPOSITORY,
+    };
+    const readDistribution=(filename,expectedId)=>{
+      const bytes=readFileSync(join(env.RUNNER_TEMP,filename));
+      assert.ok(bytes.length > 16 && bytes.length < 4096);
+      const value=bytes.toString("utf8");
+      assert.ok(value.endsWith("\n") && !value.includes("\r"));
+      const fields=new Map();
+      for(const line of value.trimEnd().split("\n")){
+        if(line.startsWith("#") || line==="") continue;
+        const match=line.match(/^([A-Z][A-Z0-9_]*)=(.*)$/u);
+        assert.ok(match,"invalid OS release entry");
+        assert.ok(!fields.has(match[1]),"duplicate OS release entry");
+        fields.set(match[1],match[2].replace(/^"|"$/gu,""));
+      }
+      assert.equal(fields.get("ID"),expectedId);
+      const version=fields.get("VERSION_ID");
+      assert.match(version,/^[0-9][0-9A-Za-z._-]*$/u);
+      return {id:expectedId,version_id:version,
+        sha256:createHash("sha256").update(bytes).digest("hex")};
+    };
+    const distributions={
+      php:readDistribution("uni-p0-php-os-release.txt","debian"),
+      nginx:readDistribution("uni-p0-nginx-os-release.txt","alpine"),
+    };
+    const evidence={schema:2,repository:env.GITHUB_REPOSITORY,
       commit:env.GITHUB_SHA,workflow_run_id:env.GITHUB_RUN_ID,
       workflow_attempt:env.GITHUB_RUN_ATTEMPT,
       scope:"ephemeral_local_build_identity_only",
       php_image_id:env.UNI_QA_PHP_ID,nginx_image_id:env.UNI_QA_NGINX_ID,
       registry_published:false,release_image_digests_pinned:false,
-      os_package_inventory:inventories,complete_sbom:false,
+      os_package_inventory:inventories,os_distribution:distributions,complete_sbom:false,
       vulnerability_assessment_completed:false,
       release_decision:"HOLD_NO_GO"};
     writeFileSync(join(env.RUNNER_TEMP,"uni-p0-local-built-image-identities.json"),
       JSON.stringify(evidence,null,2)+"\n",{flag:"wx",mode:0o600});
   ' || fail "local built-image evidence could not be recorded safely"
-  echo "PASS exact-run disposable image IDs recorded; not registry-pinned release images."
+  echo "PASS exact-run image IDs, OS package lists and distribution versions recorded; no vulnerability scan or registry release."
 fi
 echo "PASS candidate staging PHP/Nginx images build locally without deploy."

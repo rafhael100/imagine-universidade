@@ -11,6 +11,28 @@ const fakeDir=mkdtempSync(join(tmpdir(),"uni-compose-teardown-"));
 try {
   writeFileSync(join(fakeDir,"docker"), `#!/bin/sh
 case "$*" in
+  *"ps -aq --filter name=^/uni-ci-pg-http-"*)
+    [ "$UNI_FAKE_MODE" = "pg_preflight_inspect_error" ] && exit 45
+    exit 0 ;;
+  *"network ls -q --filter name=^uni-ci-pg-http-net-"*)
+    [ -e "$UNI_FAKE_PG_NETWORK_MARKER" ] && echo synthetic-network
+    exit 0 ;;
+  *"volume ls -q --filter name=^uni-ci-pg-data-"*)
+    if [ "$UNI_FAKE_MODE" = "pg_preexisting_volume" ] || [ -e "$UNI_FAKE_PG_VOLUME_MARKER" ]; then
+      echo synthetic-volume
+    fi
+    exit 0 ;;
+  "network create --internal --driver bridge uni-ci-pg-http-net-"*)
+    touch "$UNI_FAKE_PG_NETWORK_MARKER"; exit 0 ;;
+  "volume create uni-ci-pg-data-"*)
+    touch "$UNI_FAKE_PG_VOLUME_MARKER"; exit 0 ;;
+  "run -d --name uni-ci-pg-http-db-"*) exit 37 ;;
+  "rm -f uni-ci-pg-http-web-"*) exit 0 ;;
+  "network rm uni-ci-pg-http-net-"*)
+    if [ "$UNI_FAKE_MODE" != "pg_cleanup_leak" ]; then rm -f "$UNI_FAKE_PG_NETWORK_MARKER"; fi
+    exit 0 ;;
+  "volume rm uni-ci-pg-data-"*)
+    rm -f "$UNI_FAKE_PG_VOLUME_MARKER"; exit 0 ;;
   "compose version") exit 0 ;;
   "context show")
     if [ "\${UNI_FAKE_MODE:-}" = "context_show_failed" ]; then exit 43; fi
@@ -147,6 +169,48 @@ exit 99
       remoteScriptCases++;
     }
   }
+  // CI staging PG18 must refuse resource collisions and report failed disposal.
+  // Fake Docker only: no daemon, PostgreSQL, network or real image is used.
+  for (const [mode, expected] of [
+    ["pg_cleanup_ok",37],
+    ["pg_cleanup_leak",2],
+    ["pg_preexisting_volume",2],
+    ["pg_preflight_inspect_error",2],
+  ]) {
+    const networkMarker=join(fakeDir,mode+".pg-network");
+    const volumeMarker=join(fakeDir,mode+".pg-volume");
+    const env={...process.env,
+      PATH:fakeDir+delimiter+(process.env.PATH||"/usr/bin:/bin"),
+      UNI_FAKE_MODE:mode,UNI_FAKE_PG_NETWORK_MARKER:networkMarker,
+      UNI_FAKE_PG_VOLUME_MARKER:volumeMarker,
+      CI:"true",GITHUB_ACTIONS:"true",GITHUB_EVENT_NAME:"push",
+      GITHUB_REPOSITORY:"rafhael100/imagine-universidade",
+      GITHUB_REF:"refs/heads/review/uni-p0-readiness-git-config-root-fence-2026-11-22",
+      GITHUB_REF_NAME:"review/uni-p0-readiness-git-config-root-fence-2026-11-22",
+      GITHUB_RUN_ID:"900001",GITHUB_RUN_ATTEMPT:"1"};
+    for(const name of ["DOCKER_HOST","DOCKER_CONTEXT",
+      "DOCKER_TLS_VERIFY","DOCKER_CERT_PATH"])delete env[name];
+    const result=spawnSync("bash",[
+      "scripts/qa-staging-postgres-http.sh",
+      "uni-qa-stage-test-php","uni-qa-stage-test-nginx"],{
+      cwd:new URL("../",import.meta.url),encoding:"utf8",timeout:7000,env});
+    assert.ifError(result.error);
+    assert.equal(result.status,expected,mode+": "+result.stderr);
+    assert.doesNotMatch(result.stdout,/PASS synthetic 3-service staging PG18/u,
+      mode+": success must never appear before verified teardown");
+    if(mode==="pg_cleanup_ok"){
+      assert.equal(existsSync(networkMarker),false);
+      assert.equal(existsSync(volumeMarker),false);
+    } else if(mode==="pg_cleanup_leak"){
+      assert.match(result.stderr,/verified teardown failed/u);
+      assert.equal(existsSync(networkMarker),true);
+    } else {
+      assert.match(result.stderr,/disposable Docker resource/u);
+      assert.equal(existsSync(networkMarker),false,
+        mode+": no resource may be created on failed preflight");
+    }
+  }
+  console.log("PASS 4 staging PG18 ownership / cleanup negatives with fake Docker.");
   console.log("PASS 21 existing Docker QA cases + "+remoteScriptCases+" remote-endpoint checks across four staging entrypoints; no real Docker.");
 } finally {
   rmSync(fakeDir,{force:true,recursive:true});

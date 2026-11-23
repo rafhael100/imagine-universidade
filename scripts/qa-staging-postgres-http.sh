@@ -53,10 +53,47 @@ volume="uni-ci-pg-data-$suffix"
 db="uni-ci-pg-http-db-$suffix"
 app="uni-ci-pg-http-app-$suffix"
 web="uni-ci-pg-http-web-$suffix"
-cleanup(){
+# Refuse occupied CI-only resource names *before* installing the cleanup trap:
+# a failed network create must not delete someone else's existing network.
+assertDisposableNameFree() {
+  local found
+  if ! found="$("$@" 2>/dev/null)"; then
+    fail "cannot inspect disposable Docker resource ownership"
+  fi
+  [[ -z "$found" ]] || fail "disposable Docker resource name already exists"
+}
+for resource in "$web" "$app" "$db"; do
+  assertDisposableNameFree docker ps -aq --filter "name=^/$resource$"
+done
+assertDisposableNameFree docker network ls -q --filter "name=^$network$"
+assertDisposableNameFree docker volume ls -q --filter "name=^$volume$"
+
+cleanup() {
+  local originalExit=$? leftovers=0 found
+  trap - EXIT ERR
+  # Deletion errors alone cannot prove the resources are gone.
   docker rm -f "$web" "$app" "$db" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
   docker volume rm "$volume" >/dev/null 2>&1 || true
+  for resource in "$web" "$app" "$db"; do
+    if ! found="$(docker ps -aq --filter "name=^/$resource$" 2>/dev/null)" || [[ -n "$found" ]]; then
+      leftovers=1
+    fi
+  done
+  if ! found="$(docker network ls -q --filter "name=^$network$" 2>/dev/null)" || [[ -n "$found" ]]; then
+    leftovers=1
+  fi
+  if ! found="$(docker volume ls -q --filter "name=^$volume$" 2>/dev/null)" || [[ -n "$found" ]]; then
+    leftovers=1
+  fi
+  if (( leftovers != 0 )); then
+    echo "HOLD synthetic 3-container staging: verified teardown failed" >&2
+    exit 2
+  fi
+  if (( originalExit == 0 )); then
+    echo "PASS synthetic 3-service staging PG18: owner migrations, separate runtime role, private HTTP and session storage query; verified disposal of QA resources. No host ports."
+  fi
+  exit "$originalExit"
 }
 trap cleanup EXIT
 stagingPgStage=network
@@ -321,4 +358,4 @@ echo "PASS synthetic wrong-image detection and exact-image rollback; PG sessions
 
 
 
-echo "PASS synthetic 3-service staging PG18: owner migrations, separate runtime role, private HTTP and session storage query. No host ports."
+# Final PASS is emitted only by the EXIT trap after verified teardown.

@@ -156,6 +156,7 @@ jobs:
           node --input-type=module -e '
             import assert from "node:assert/strict";
             import {readFileSync} from "node:fs";
+            import {createHash} from "node:crypto";
             import {join} from "node:path";
             const e=JSON.parse(readFileSync(join(process.env.RUNNER_TEMP,
               "uni-p0-local-built-image-identities.json"),"utf8"));
@@ -163,7 +164,8 @@ jobs:
               assert.deepEqual(Object.keys(d).sort(),[
                 "schema","repository","commit","workflow_run_id","workflow_attempt",
                 "scope","php_image_id","nginx_image_id","registry_published",
-                "release_image_digests_pinned","release_decision"].sort());
+                "release_image_digests_pinned","os_package_inventory",
+                "complete_sbom","vulnerability_assessment_completed","release_decision"].sort());
               assert.equal(d.schema,1);
               assert.equal(d.repository,"rafhael100/imagine-universidade");
               assert.equal(d.commit,process.env.GITHUB_SHA);
@@ -176,6 +178,28 @@ jobs:
               assert.equal(d.registry_published,false);
               assert.equal(d.release_image_digests_pinned,false);
               assert.equal(d.release_decision,"HOLD_NO_GO");
+              assert.equal(d.complete_sbom,false);
+              assert.equal(d.vulnerability_assessment_completed,false);
+              assert.deepEqual(Object.keys(d.os_package_inventory).sort(),["nginx","php"]);
+              for(const [image,filename,format] of [
+                ["php","uni-p0-php-os-packages.tsv","dpkg-query"],
+                ["nginx","uni-p0-nginx-os-packages.txt","apk-info"],
+              ]){
+                const obj=d.os_package_inventory[image];
+                assert.deepEqual(Object.keys(obj).sort(),["format","rows","sha256"]);
+                assert.equal(obj.format,format);
+                assert.match(obj.sha256,/^[a-f0-9]{64}$/u);
+                const bytes=readFileSync(join(process.env.RUNNER_TEMP,filename));
+                const data=bytes.toString("utf8");
+                assert.ok(data.endsWith("\n") && !data.includes("\r"));
+                const lines=data.trimEnd().split("\n");
+                assert.ok(lines.length >= 10);
+                assert.equal(new Set(lines).size,lines.length);
+                const pattern=format==="dpkg-query" ? /^[^\s\t]+\t[^\s\t]+\t[^\s\t]+$/u : /^[^\s]+$/u;
+                for(const line of lines) assert.match(line,pattern);
+                assert.equal(obj.rows,lines.length);
+                assert.equal(obj.sha256,createHash("sha256").update(bytes).digest("hex"));
+              }
             };
             validate(e);
             for (const mutation of [
@@ -184,15 +208,19 @@ jobs:
               x=>x.nginx_image_id=x.php_image_id,
               x=>x.registry_published=true,
               x=>x.release_image_digests_pinned=true,
+              x=>x.os_package_inventory.php.sha256="0".repeat(64),
+              x=>x.os_package_inventory.nginx.rows=0,
+              x=>x.complete_sbom=true,
+              x=>x.vulnerability_assessment_completed=true,
               x=>x.release_decision="GO",
             ]){
               const wrong=structuredClone(e);mutation(wrong);
               assert.throws(()=>validate(wrong));
             }
-            console.log("PASS exact CI+SHA and 2 disposable image IDs; 6 negative mutations; not release digests");
+            console.log("PASS exact CI+SHA, 2 local image IDs and OS package manifest hashes; 10 negative mutations; not scanned or release digests");
           '
           (cd "$RUNNER_TEMP" &&
-            sha256sum uni-p0-local-built-image-identities.json > uni-p0-local-built-image-identities.sha256 &&
+            sha256sum uni-p0-local-built-image-identities.json uni-p0-php-os-packages.tsv uni-p0-nginx-os-packages.txt > uni-p0-local-built-image-identities.sha256 &&
             sha256sum -c uni-p0-local-built-image-identities.sha256)
       - name: Keep final local build identity evidence for review (no deploy)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -201,6 +229,8 @@ jobs:
           path: |
             ${{ runner.temp }}/uni-p0-local-built-image-identities.json
             ${{ runner.temp }}/uni-p0-local-built-image-identities.sha256
+            ${{ runner.temp }}/uni-p0-php-os-packages.tsv
+            ${{ runner.temp }}/uni-p0-nginx-os-packages.txt
           retention-days: 14
           if-no-files-found: error
       - name: Reconfirm deny-all and all 13 gates pending after synthetic rollback

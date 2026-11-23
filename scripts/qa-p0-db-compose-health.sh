@@ -3,9 +3,12 @@ set -euo pipefail
 # P0 synthetic-only candidate Compose DB-health check. No VPS, migrations or grants.
 fail(){ echo "HOLD synthetic DB SQL readiness: $1" >&2; exit 2; }
 [[ "${CI:-}" == true && "${GITHUB_ACTIONS:-}" == true ]] || fail "disposable CI only"
+# The current DRAFT successor is explicitly allowed for this disposable-only
+# positive SQL health drill; all other branches, including main, remain denied.
 [[ "${GITHUB_REPOSITORY:-}" == "rafhael100/imagine-universidade" &&
    "${GITHUB_EVENT_NAME:-}" == push &&
-   "${GITHUB_REF_NAME:-}" == "review/uni-p0-pg-sql-health-contract-2026-11-20" ]] ||
+   ( "${GITHUB_REF_NAME:-}" == "review/uni-p0-pg-sql-health-contract-2026-11-20" ||
+     "${GITHUB_REF_NAME:-}" == "review/uni-p0-readiness-git-config-root-fence-2026-11-22" ) ]] ||
   fail "isolated review branch only"
 # A context called "default" may still point to remote SSH/TCP or an
 # alternate Unix socket. Check the effective endpoint before build/run/cleanup.

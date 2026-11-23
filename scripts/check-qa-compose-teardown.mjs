@@ -191,7 +191,7 @@ exit 99
     ["scripts/qa-staging-image-build.sh","fix/uni-c108-private-flow-2026-11-17",["uni-qa-stage-test-php","uni-qa-stage-test-nginx"]],
     ["scripts/qa-staging-private-http.sh","fix/uni-c108-private-flow-2026-11-17",["uni-qa-stage-test-php","uni-qa-stage-test-nginx"]],
     ["scripts/qa-staging-postgres-http.sh","review/uni-p0-db-aware-health-2026-11-20",["uni-qa-stage-test-php","uni-qa-stage-test-nginx"]],
-    ["scripts/qa-p0-db-compose-health.sh","review/uni-p0-pg-sql-health-contract-2026-11-20",[]],
+    ["scripts/qa-p0-db-compose-health.sh","review/uni-p0-readiness-git-config-root-fence-2026-11-22",[]],
   ];
   let remoteScriptCases=0;
   for(const [file,branch,args] of entrypoints){
@@ -325,7 +325,7 @@ exit 99
       UNI_FAKE_HEALTH_DOWN_MARKER:downMarker,
       CI:"true",GITHUB_ACTIONS:"true",GITHUB_EVENT_NAME:"push",
       GITHUB_REPOSITORY:"rafhael100/imagine-universidade",
-      GITHUB_REF_NAME:"review/uni-p0-pg-sql-health-contract-2026-11-20",
+      GITHUB_REF_NAME:"review/uni-p0-readiness-git-config-root-fence-2026-11-22",
       GITHUB_RUN_ID:"900001",GITHUB_RUN_ATTEMPT:"1"};
     for(const name of ["DOCKER_HOST","DOCKER_CONTEXT",
       "DOCKER_TLS_VERIFY","DOCKER_CERT_PATH"])delete env[name];

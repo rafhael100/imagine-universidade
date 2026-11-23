@@ -15,6 +15,7 @@ on:
       - scripts/qa-staging-image-build.sh
       - scripts/qa-staging-private-http.sh
       - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-p0-db-compose-health.sh
       - scripts/qa-staging-pg-pre-migrate.php
       - scripts/qa-staging-private-http-probe.php
 
@@ -77,6 +78,19 @@ jobs:
           grep -Fq 'PASS QA PostgreSQL pre-migrate: effective Laravel config + live synthetic PG18 SQL checked' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'The temp backup and clone DB were removed; production/VPS backup is NOT proven.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'PASS: synthetic PostgreSQL restore and verified disposal of QA containers, database volume and network.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
+      - name: Prove live PG18 Compose SQL health revocation, recovery and verified cleanup
+        shell: bash
+        env:
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          # Database-only disposable Compose project; no application or migrations.
+          bash scripts/qa-p0-db-compose-health.sh | tee "$RUNNER_TEMP/uni-p0-db-health.log"
+          grep -Fq 'PASS: disposable PG18 Compose DB health healthy -> unhealthy (revoked fake password) -> healthy (recovered), verified cleanup.' "$RUNNER_TEMP/uni-p0-db-health.log"
+          grep -Fq 'No migrations, Portal sessions/grants, private VPS or operational backup exercised. HOLD_NO_GO.' "$RUNNER_TEMP/uni-p0-db-health.log"
       - name: Confirm 13 independent gates still HOLD_NO_GO and real access denied
         run: node ops/staging/check-release-gates.mjs
 

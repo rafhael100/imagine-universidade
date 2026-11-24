@@ -2,9 +2,14 @@
 FROM php@sha256:495ab94788034640ddd6fb313476e75570261622c42704e5ae02047b8d934ea0
 # Debian 13 candidate: keep the same PHP 8.4 line; no mixed apt suites.
 # Remove compiler-only headers after compilation; keep runtime libraries.
+# DSA-6650-1: upgrade the four installed Kerberos libraries together, exactly.
 RUN . /etc/os-release && test "$ID" = debian && test "$VERSION_CODENAME" = trixie \
  && apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libpq-dev libonig-dev libxml2-dev libsodium-dev unzip \
+ && krb5_fixed='1.21.3-5+deb13u2' \
+ && apt-get install -y --no-install-recommends --only-upgrade \
+      "libgssapi-krb5-2=$krb5_fixed" "libk5crypto3=$krb5_fixed" \
+      "libkrb5-3=$krb5_fixed" "libkrb5support0=$krb5_fixed" \
  && docker-php-ext-install -j"$(nproc)" pdo_pgsql mbstring dom xml bcmath sodium opcache \
  && dev_packages='linux-libc-dev libxml2-dev libpq-dev libonig-dev libsodium-dev libssl-dev dpkg-dev libc-dev-bin libcrypt-dev libgcc-14-dev libnsl-dev libtirpc-dev icu-devtools' \
  && installed_packages="$(dpkg-query -W -f='${Package}\t${db:Status-Status}\n')" \
@@ -20,6 +25,9 @@ RUN . /etc/os-release && test "$ID" = debian && test "$VERSION_CODENAME" = trixi
     done \
  && php -r 'foreach (["pdo_pgsql","mbstring","dom","xml","bcmath","sodium","Zend OPcache"] as $ext) { if (!extension_loaded($ext)) { fwrite(STDERR, "Missing runtime extension: ".$ext.PHP_EOL); exit(1); } }' \
  && php -r 'if (!extension_loaded("sqlite3") || !extension_loaded("pdo_sqlite") || version_compare(SQLite3::version()["versionString"], "3.42.0", "<")) { fwrite(STDERR, "SQLite runtime below review floor".PHP_EOL); exit(1); }' \
+ && for package in libgssapi-krb5-2 libk5crypto3 libkrb5-3 libkrb5support0; do \
+      test "$(dpkg-query -W -f='${db:Status-Status} ${Version}' "$package")" = "installed $krb5_fixed" || exit 1; \
+    done \
  && php-fpm -t \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=composer@sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93 /usr/bin/composer /usr/local/bin/composer

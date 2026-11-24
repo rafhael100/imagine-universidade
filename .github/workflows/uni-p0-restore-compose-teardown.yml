@@ -466,6 +466,10 @@ jobs:
                   members = archive.getmembers()
                   names = [m.name for m in members]
                   require(len(names) == len(set(names)), 'duplicate archive member')
+                  # Check even unreferenced members before any future transport/import.
+                  for m in members:
+                      require(m.isfile() or m.isdir(), 'unexpected archive member type')
+                      require(all(part not in ('', '.', '..') for part in m.name.split('/')), 'unsafe archive member path')
                   by_name = {m.name: m for m in members}
 
                   def member(name):
@@ -481,6 +485,8 @@ jobs:
                   manifest = json.loads(metadata('manifest.json'))
                   require(isinstance(manifest, list) and len(manifest) == 1, 'expected one saved image')
                   entry = manifest[0]
+                  # docker save by immutable image ID must not carry mutable RepoTags.
+                  require(entry.get('RepoTags') in (None, []), 'unexpected mutable image tags')
                   config_name = entry['Config']
                   hex_id = expected[7:]
                   require(config_name in (hex_id + '.json', 'blobs/sha256/' + hex_id), 'wrong config path')
@@ -541,7 +547,8 @@ jobs:
               zipped = gzip.compress(raw)
 
               def fixture(*, compressed=False, wrong_config=False, wrong_layer=False,
-                          dup=False, extra=False, bad_path=False, missing=False):
+                          dup=False, extra=False, bad_path=False, missing=False,
+                          extra_member=None, tagged=False, empty_tags=False):
                   cfg = json.dumps({'rootfs': {'type': 'layers', 'diff_ids': ['sha256:' + H(raw)]}}).encode()
                   cid = H(cfg)
                   data = zipped if compressed else raw
@@ -549,7 +556,8 @@ jobs:
                       data = b'bad'
                   ln = 'blobs/sha256/' + H(data) if compressed else 'a' * 64 + '/layer.tar'
                   cn = 'blobs/sha256/' + cid if compressed else cid + '.json'
-                  entry = {'Config': cn, 'Layers': ['../bad' if bad_path else ln], 'RepoTags': None}
+                  entry = {'Config': cn, 'Layers': ['../bad' if bad_path else ln],
+                           'RepoTags': ['synthetic:mutable'] if tagged else ([] if empty_tags else None)}
                   entries = [('manifest.json', json.dumps([entry, entry] if extra else [entry]).encode()),
                              (cn, b'bad' if wrong_config else cfg)]
                   if not missing:
@@ -561,6 +569,13 @@ jobs:
                           item = tarfile.TarInfo(name)
                           item.size = len(data)
                           tar.addfile(item, io.BytesIO(data))
+                      if extra_member is not None:
+                          name, kind = extra_member
+                          item = tarfile.TarInfo(name)
+                          item.type = kind
+                          if kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
+                              item.linkname = 'synthetic-target'
+                          tar.addfile(item)
                   return 'sha256:' + cid
 
               for compressed in [False, True]:
@@ -581,7 +596,24 @@ jobs:
                   pass
               else:
                   raise RuntimeError('accepted wrong image ID')
-              print('PASS saved-image archive verifier: 2 positive and 7 negative synthetic fixtures')
+              for options in [{'empty_tags': True}, {'extra_member': ('blobs', tarfile.DIRTYPE)}]:
+                  if verify(path, fixture(**options)) != 1:
+                      raise RuntimeError('wrong layer count for safe metadata')
+              for options in [
+                  {'tagged': True},
+                  {'extra_member': ('unused-symlink', tarfile.SYMTYPE)},
+                  {'extra_member': ('unused-hardlink', tarfile.LNKTYPE)},
+                  {'extra_member': ('unused-fifo', tarfile.FIFOTYPE)},
+                  {'extra_member': ('../unused', tarfile.REGTYPE)},
+                  {'extra_member': ('/unused', tarfile.REGTYPE)},
+              ]:
+                  try:
+                      verify(path, fixture(**options))
+                  except ValueError:
+                      pass
+                  else:
+                      raise RuntimeError('accepted unsafe archive metadata')
+              print('PASS saved-image archive verifier: 4 positive and 13 negative synthetic fixtures')
           PY
           # Consume only the exact single marker from the successful 3-service
           # SQL/HTTP run, never a freshly pulled replacement or an inferred tag.

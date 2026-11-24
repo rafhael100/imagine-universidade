@@ -9,6 +9,7 @@ on:
       - .github/workflows/uni-p0-restore-compose-teardown.yml
       - scripts/run-qa-compose.sh
       - scripts/check-qa-compose-teardown.mjs
+      - scripts/check-uni-image-transport.mjs
       - scripts/qa-pg-backup-restore.sh
       - tests/Feature/PrivateUniversityResponseBoundaryTest.php
       - tests/Feature/SyntheticEditorialFixtureImportTest.php
@@ -856,6 +857,10 @@ jobs:
             sha256sum uni-p0-php-os-cves.json uni-p0-nginx-os-cves.json uni-p0-pg-os-cves.json \
               uni-p0-os-cve-scan-provenance.json > uni-p0-os-cve-scan.sha256 &&
             sha256sum -c uni-p0-os-cve-scan.sha256)
+          # Read-only transport preflight while the three validated TARs still exist.
+          # This local anchor tests the mechanism, not independent transfer or import.
+          proof_sha="$(sha256sum "$RUNNER_TEMP/uni-p0-os-cve-scan-provenance.json" | cut -d' ' -f1)"
+          node scripts/check-uni-image-transport.mjs "$RUNNER_TEMP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha"
       - name: Create tamper-checked HIGH/CRITICAL remediation queue (not AppSec signoff)
         shell: bash
         run: |

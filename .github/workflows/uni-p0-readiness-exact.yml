@@ -21,6 +21,7 @@ on:
       - routes/web.php
       - scripts/build-university-readiness-pack.mjs
       - scripts/check-university-readiness-pack.mjs
+      - scripts/check-uni-image-transport.mjs
       - scripts/check-qa-compose-teardown.mjs
       - scripts/run-qa-compose.sh
       - scripts/qa-staging-image-build.sh

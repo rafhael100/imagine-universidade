@@ -22,6 +22,7 @@ const evidenceFiles = [
   "compose.qa.yml",
   "scripts/qa-staging-postgres-http.sh",
   "ops/qa/Dockerfile",
+  ".github/workflows/uni-p0-restore-compose-teardown.yml",
 ];
 const shaPattern = /^[a-f0-9]{40}$/u; // Git commit SHA-1, distinct from 64-char image SHA-256
 const digestPattern = /^sha256:[a-f0-9]{64}$/u;
@@ -42,6 +43,19 @@ function checkQaPgImagePins(qaCompose, qaScript) {
   const dbLaunches = [...qaScript.matchAll(/^docker run -d --name "\$db"[^\n]*\\\n(?:[^\n]*\\\n)*[^\n]+$/gmu)].map(m => m[0]);
   assert.equal(dbLaunches.length, 1, "one HTTP/rollback PostgreSQL launch required");
   assert.match(dbLaunches[0], /\n[ \t]+"\$pgPinnedRef" >\/dev\/null$/u, "HTTP/rollback PostgreSQL launch must use reviewed pin");
+}
+
+// The scan and review index must describe the same PG image as both QA paths.
+// Bind all three executable workflow literals, not merely the Compose reference.
+function checkPgScanWorkflowPins(workflow) {
+  const pinned = expected[3].repository + "@" + expected[3].digest;
+  const rows = workflow.split("\n").map(line => line.trim()).filter(line =>
+    /^(?:pg_ref=|assert\.equal\(env\.PG_PINNED_REF,|assert\.equal\(p\.upstream_ref,)/u.test(line));
+  assert.deepEqual(rows, [
+    "pg_ref='" + pinned + "'",
+    'assert.equal(env.PG_PINNED_REF,"' + pinned + '");',
+    'assert.equal(p.upstream_ref,"' + pinned + '");',
+  ], "PG scan and review index must use the reviewed immutable pin exactly once");
 }
 
 function checkQaDockerfile(qa) {
@@ -68,6 +82,7 @@ function checkSources() {
   assert.equal((compose.match(/^\s+image:/gmu) || []).length, 1);
   checkQaPgImagePins(root("compose.qa.yml").toString("utf8"),
     root("scripts/qa-staging-postgres-http.sh").toString("utf8"));
+  checkPgScanWorkflowPins(root(".github/workflows/uni-p0-restore-compose-teardown.yml").toString("utf8"));
   checkQaDockerfile(root("ops/qa/Dockerfile").toString("utf8"));
 }
 
@@ -149,6 +164,19 @@ function test() {
   assert.throws(() => checkQaPgImagePins(qaCompose, qaScript + '\nreadonly pgPinnedRef="' + pinnedPg + '"\n'));
   const dbLaunch = qaScript.match(/^docker run -d --name "\$db"[^\n]*\\\n(?:[^\n]*\\\n)*[^\n]+$/mu)[0];
   assert.throws(() => checkQaPgImagePins(qaCompose, qaScript + "\n" + dbLaunch + "\n"));
+  const pgWorkflow = root(".github/workflows/uni-p0-restore-compose-teardown.yml").toString("utf8");
+  const scanRef = "pg_ref='" + pinnedPg + "'";
+  const envRef = 'assert.equal(env.PG_PINNED_REF,"' + pinnedPg + '");';
+  const indexRef = 'assert.equal(p.upstream_ref,"' + pinnedPg + '");';
+  assert.throws(() => checkPgScanWorkflowPins(pgWorkflow.replace(scanRef, "pg_ref='postgres:18'")));
+  assert.throws(() => checkPgScanWorkflowPins(pgWorkflow.replace(envRef, envRef.replace(pinnedPg, "postgres@sha256:" + "0".repeat(64)))));
+  assert.throws(() => checkPgScanWorkflowPins(pgWorkflow.replace(indexRef, indexRef.replace(pinnedPg, "postgres:18"))));
+  assert.throws(() => checkPgScanWorkflowPins(pgWorkflow.replace(scanRef, 'pg_ref="$OTHER_IMAGE"')));
+  assert.throws(() => checkPgScanWorkflowPins(pgWorkflow.replace(indexRef, "")));
+  assert.throws(() => checkPgScanWorkflowPins(pgWorkflow + "\n" + scanRef + "\n"));
+  mutation(x => { delete x.file_sha256[".github/workflows/uni-p0-restore-compose-teardown.yml"]; });
+  mutation(x => { x.file_sha256[".github/workflows/uni-p0-restore-compose-teardown.yml"] = "0".repeat(64); });
+
   const qaDockerfile = root("ops/qa/Dockerfile").toString("utf8");
   const qaBase = expected[4].repository + "@" + expected[4].digest;
   const qaComposer = expected[1].repository + "@" + expected[1].digest;
@@ -158,7 +186,7 @@ function test() {
   assert.throws(() => checkQaDockerfile(qaDockerfile.replace(qaComposer, "composer@" + "sha256:" + "f".repeat(64))));
   mutation(x => { x.file_sha256["ops/qa/Dockerfile"] = "0".repeat(64); });
   mutation(x => { x.images[4].pinned = "php:8.3-cli-bookworm"; });
-  console.log("PASS: 32 negative mutations, five immutable registry digests, both PG18 QA paths and QA PHP/Composer pinned; HOLD_NO_GO.");
+  console.log("PASS: 40 negative mutations, five immutable registry digests, both PG18 QA paths, scan/index pins and QA PHP/Composer pinned; HOLD_NO_GO.");
 }
 function assertEnvironment() {
   assert.equal(process.env.CI, "true");

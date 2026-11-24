@@ -101,12 +101,20 @@ docker network create --internal --driver bridge "$network" >/dev/null
 stagingPgStage=volume
 docker volume create "$volume" >/dev/null
 stagingPgStage=postgres_start
+pgPinnedRef="postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
 docker run -d --name "$db" --network "$network" --network-alias db \
   --env POSTGRES_DB=uni_staging_ci_only \
   --env POSTGRES_USER=uni_ci_migration_owner \
   --env POSTGRES_PASSWORD=FAKE_OWNER_CI_ONLY \
   --volume "$volume":/var/lib/postgresql \
-  postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a >/dev/null
+  "$pgPinnedRef" >/dev/null
+# Bind the actually started DB container to the exact upstream digest and local
+# image ID before SQL, then reconfirm after all runtime and rollback probes.
+pgRuntimeId="$(docker inspect --format '{{.Image}}' "$db")"
+[[ "$pgRuntimeId" =~ ^sha256:[a-f0-9]{64}$ &&
+   "$(docker inspect --format '{{.Config.Image}}' "$db")" == "$pgPinnedRef" &&
+   "$(docker image inspect --format '{{.Id}}' "$pgPinnedRef")" == "$pgRuntimeId" ]] ||
+  fail "PostgreSQL runtime image does not match pinned input"
 stagingPgStage=postgres_ready
 # The official entrypoint starts a temporary socket-only server during initdb.
 # pg_isready without a host can accept that server before the final TCP server
@@ -358,4 +366,11 @@ echo "PASS synthetic wrong-image detection and exact-image rollback; PG sessions
 
 
 
+# Emit one allowlisted marker after SQL, outage/recovery and app rollback.
+# The workflow consumes the marker only if the verified cleanup also passes.
+[[ "$(docker inspect --format '{{.Image}}' "$db")" == "$pgRuntimeId" &&
+   "$(docker inspect --format '{{.Config.Image}}' "$db")" == "$pgPinnedRef" &&
+   "$(docker image inspect --format '{{.Id}}' "$pgPinnedRef")" == "$pgRuntimeId" ]] ||
+  fail "PostgreSQL runtime image changed during synthetic QA"
+printf 'PASS exact PG18 runtime image %s\n' "$pgRuntimeId"
 # Final PASS is emitted only by the EXIT trap after verified teardown.

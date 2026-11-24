@@ -861,6 +861,35 @@ jobs:
           # This local anchor tests the mechanism, not independent transfer or import.
           proof_sha="$(sha256sum "$RUNNER_TEMP/uni-p0-os-cve-scan-provenance.json" | cut -d' ' -f1)"
           node scripts/check-uni-image-transport.mjs "$RUNNER_TEMP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha"
+          # Rehearse preservation into independent files, not another daemon/host.
+          # No archive upload, Docker load, or release artifact is permitted.
+          (
+            set -euo pipefail
+            names=(uni-p0-os-cve-scan-provenance.json uni-p0-php-os-image.tar uni-p0-nginx-os-image.tar uni-p0-pg-os-image.tar)
+            required=0
+            for name in "${names[@]}"; do
+              test -f "$RUNNER_TEMP/$name"
+              test ! -L "$RUNNER_TEMP/$name"
+              required=$((required + $(stat -c %s -- "$RUNNER_TEMP/$name")))
+            done
+            available="$(df -PB1 "$RUNNER_TEMP" | awk 'END {print $4}')"
+            [[ "$available" =~ ^[0-9]+$ ]]
+            test "$available" -ge "$((required + 1073741824))"
+            copy_dir="$(mktemp -d "$RUNNER_TEMP/uni-p0-transfer-copy.XXXXXXXX")"
+            cleanup_copy() {
+              for name in "${names[@]}"; do rm -f -- "$copy_dir/$name" || return 2; done
+              rmdir -- "$copy_dir" && test ! -e "$copy_dir"
+            }
+            trap 'rc=$?; trap - EXIT; cleanup_copy || exit 2; exit "$rc"' EXIT
+            for name in "${names[@]}"; do
+              cp --no-dereference --reflink=never --sparse=never -- "$RUNNER_TEMP/$name" "$copy_dir/$name"
+              test "$(stat -c %d:%i -- "$RUNNER_TEMP/$name")" != "$(stat -c %d:%i -- "$copy_dir/$name")"
+            done
+            node scripts/check-uni-image-transport.mjs "$copy_dir" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha"
+            cleanup_copy
+            trap - EXIT
+            echo 'PASS same-runner byte preservation in four distinct files and verified cleanup; no import or independent host; HOLD_NO_GO'
+          )
       - name: Create tamper-checked HIGH/CRITICAL remediation queue (not AppSec signoff)
         shell: bash
         run: |

@@ -101,7 +101,7 @@ docker network create --internal --driver bridge "$network" >/dev/null
 stagingPgStage=volume
 docker volume create "$volume" >/dev/null
 stagingPgStage=postgres_start
-pgPinnedRef="postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
+readonly pgPinnedRef="postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
 docker run -d --name "$db" --network "$network" --network-alias db \
   --env POSTGRES_DB=uni_staging_ci_only \
   --env POSTGRES_USER=uni_ci_migration_owner \

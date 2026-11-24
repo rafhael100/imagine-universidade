@@ -10,6 +10,7 @@ on:
       - scripts/qa-pg-backup-restore.sh
       - tests/Feature/PrivateUniversityResponseBoundaryTest.php
       - tests/Feature/SyntheticEditorialFixtureImportTest.php
+      - tests/Feature/EditorialUnicodeTextFlowTest.php
       - scripts/qa-staging-pg-pre-migrate.php
       - scripts/qa-staging-private-http-probe.php
       - .dockerignore

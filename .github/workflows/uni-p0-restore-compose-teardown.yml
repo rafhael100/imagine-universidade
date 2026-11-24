@@ -461,13 +461,24 @@ jobs:
               return digest.hexdigest()
 
 
+          def strict_json(data):
+              def unique_object(pairs):
+                  result = {}
+                  for key, value in pairs:
+                      if key in result:
+                          raise ValueError('duplicate JSON object key')
+                      result[key] = value
+                  return result
+              return json.loads(data, object_pairs_hook=unique_object)
+
+
           def verify_oci(by_name, metadata, config_name, layers):
               present = ('oci-layout' in by_name, 'index.json' in by_name)
               require(present[0] == present[1], 'incomplete OCI metadata')
               if not present[0]:
                   return
-              require(json.loads(metadata('oci-layout')) == {'imageLayoutVersion': '1.0.0'}, 'invalid OCI layout')
-              index = json.loads(metadata('index.json'))
+              require(strict_json(metadata('oci-layout')) == {'imageLayoutVersion': '1.0.0'}, 'invalid OCI layout')
+              index = strict_json(metadata('index.json'))
               require(index.get('schemaVersion') == 2 and isinstance(index.get('manifests'), list)
                       and len(index['manifests']) == 1, 'expected one OCI image descriptor')
 
@@ -487,7 +498,7 @@ jobs:
               image_name = descriptor_path(image)
               image_bytes = metadata(image_name)
               require(hashlib.sha256(image_bytes).hexdigest() == image_name.rsplit('/', 1)[1], 'OCI manifest digest differs')
-              image_manifest = json.loads(image_bytes)
+              image_manifest = strict_json(image_bytes)
               require(image_manifest.get('schemaVersion') == 2, 'invalid OCI image schema')
               require(descriptor_path(image_manifest['config']) == config_name, 'OCI config differs from Docker manifest')
               descriptors = image_manifest.get('layers')
@@ -517,7 +528,7 @@ jobs:
                       require(len(data) <= 4 * 1024 * 1024, 'oversized archive metadata')
                       return data
 
-                  manifest = json.loads(metadata('manifest.json'))
+                  manifest = strict_json(metadata('manifest.json'))
                   require(isinstance(manifest, list) and len(manifest) == 1, 'expected one saved image')
                   entry = manifest[0]
                   # docker save by immutable image ID must not carry mutable RepoTags.
@@ -527,7 +538,7 @@ jobs:
                   require(config_name in (hex_id + '.json', 'blobs/sha256/' + hex_id), 'wrong config path')
                   config_bytes = metadata(config_name)
                   require(hashlib.sha256(config_bytes).hexdigest() == hex_id, 'wrong config bytes')
-                  root = json.loads(config_bytes)['rootfs']
+                  root = strict_json(config_bytes)['rootfs']
                   layers, diff_ids = entry['Layers'], root['diff_ids']
                   require(root['type'] == 'layers' and isinstance(layers, list) and isinstance(diff_ids, list)
                           and len(layers) == len(diff_ids) and len(layers) > 0, 'layer count differs')
@@ -584,8 +595,10 @@ jobs:
 
               def fixture(*, compressed=False, wrong_config=False, wrong_layer=False,
                           dup=False, extra=False, bad_path=False, missing=False,
-                          extra_member=None, tagged=False, empty_tags=False, oci=None):
+                          extra_member=None, tagged=False, empty_tags=False, oci=None, duplicate_json=None):
                   cfg = json.dumps({'rootfs': {'type': 'layers', 'diff_ids': ['sha256:' + H(raw)]}}).encode()
+                  if duplicate_json == 'config':
+                      cfg = b'{"rootfs":null,' + cfg[1:]
                   cid = H(cfg)
                   data = zipped if compressed else raw
                   if wrong_layer:
@@ -594,8 +607,10 @@ jobs:
                   cn = 'blobs/sha256/' + cid if compressed else cid + '.json'
                   entry = {'Config': cn, 'Layers': ['../bad' if bad_path else ln],
                            'RepoTags': ['synthetic:mutable'] if tagged else ([] if empty_tags else None)}
-                  entries = [('manifest.json', json.dumps([entry, entry] if extra else [entry]).encode()),
-                             (cn, b'bad' if wrong_config else cfg)]
+                  docker_manifest = json.dumps([entry, entry] if extra else [entry]).encode()
+                  if duplicate_json == 'docker_manifest':
+                      docker_manifest = b'[{"RepoTags":["synthetic:mutable"],' + docker_manifest[2:]
+                  entries = [('manifest.json', docker_manifest), (cn, b'bad' if wrong_config else cfg)]
                   if not missing:
                       entries.append((ln, data))
                   if oci is not None:
@@ -611,6 +626,8 @@ jobs:
                       if oci == 'size':
                           im['layers'][0]['size'] += 1
                       ib = json.dumps(im).encode()
+                      if duplicate_json == 'oci_manifest':
+                          ib = b'{"schemaVersion":1,' + ib[1:]
                       desc = {'digest': 'sha256:' + H(ib), 'size': len(ib),
                               'mediaType': 'application/vnd.oci.image.manifest.v1+json'}
                       if oci == 'type':
@@ -618,10 +635,16 @@ jobs:
                       if oci == 'docker':
                           desc['mediaType'] = 'application/vnd.docker.distribution.manifest.v2+json'
                       entries.append(('blobs/sha256/' + H(ib), b'x' * len(ib) if oci == 'digest' else ib))
-                      entries.append(('oci-layout', json.dumps({'imageLayoutVersion': '2.0.0' if oci == 'layout' else '1.0.0'}).encode()))
+                      layout = json.dumps({'imageLayoutVersion': '2.0.0' if oci == 'layout' else '1.0.0'}).encode()
+                      if duplicate_json == 'oci_layout':
+                          layout = b'{"imageLayoutVersion":"2.0.0",' + layout[1:]
+                      entries.append(('oci-layout', layout))
                       if oci != 'partial':
-                          entries.append(('index.json', json.dumps({'schemaVersion': 2,
-                                          'manifests': [desc, desc] if oci == 'multi' else [desc]}).encode()))
+                          index = json.dumps({'schemaVersion': 2,
+                                          'manifests': [desc, desc] if oci == 'multi' else [desc]}).encode()
+                          if duplicate_json == 'oci_index':
+                              index = b'{"schemaVersion":1,' + index[1:]
+                          entries.append(('index.json', index))
                   if dup:
                       entries.append((cn, cfg))
                   with tarfile.open(path, 'w') as tar:
@@ -683,7 +706,15 @@ jobs:
                       pass
                   else:
                       raise RuntimeError('accepted inconsistent OCI metadata: ' + oci)
-              print('PASS saved-image archive verifier: 6 positive and 21 negative synthetic fixtures')
+              for document in ['docker_manifest', 'config', 'oci_layout', 'oci_index', 'oci_manifest']:
+                  try:
+                      verify(path, fixture(compressed=True, oci='good', duplicate_json=document))
+                  except ValueError as error:
+                      if str(error) != 'duplicate JSON object key':
+                          raise
+                  else:
+                      raise RuntimeError('accepted ambiguous JSON metadata: ' + document)
+              print('PASS saved-image archive verifier: 6 positive and 26 negative synthetic fixtures')
           PY
           # Consume only the exact single marker from the successful 3-service
           # SQL/HTTP run, never a freshly pulled replacement or an inferred tag.

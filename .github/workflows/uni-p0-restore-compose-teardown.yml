@@ -462,6 +462,7 @@ jobs:
           assert.equal(identity.repository,env.GITHUB_REPOSITORY);
           assert.equal(identity.commit,env.GITHUB_SHA);
           assert.equal(identity.workflow_run_id,env.GITHUB_RUN_ID);
+          assert.equal(identity.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
           assert.equal(identity.release_decision,"HOLD_NO_GO");
           assert.equal(identity.vulnerability_assessment_completed,false);
           const images=[];
@@ -472,6 +473,11 @@ jobs:
               assert.ok(data && data.SchemaVersion>=2);
               assert.equal(data.ArtifactType,"container_image");
               assert.equal(data.Metadata?.OS?.Family,family);
+              // A same-distribution scan of another image must not be relabeled
+              // as evidence for this build, even with a freshly computed hash.
+              assert.match(identity[role+"_image_id"],/^sha256:[a-f0-9]{64}$/u);
+              assert.equal(data.Metadata?.ImageID,identity[role+"_image_id"],
+                "scanner image ID differs from exact local build");
               const os=data.Results?.filter(r=>r.Type===family && r.Class==="os-pkgs");
               assert.ok(Array.isArray(os) && os.length>0,"missing OS advisory scan");
               const pkgs=os.flatMap(r=>r.Packages??[]);
@@ -485,6 +491,9 @@ jobs:
             const found=validate(report);
             for(const mutate of [
               d=>{d.Metadata.OS.Family="other";},
+              d=>{d.Metadata.ImageID="sha256:"+"0".repeat(64);},
+              d=>{delete d.Metadata.ImageID;},
+              d=>{d.Metadata.ImageID=identity[(role==="php"?"nginx":"php")+"_image_id"];},
               d=>{d.ArtifactType="filesystem";},
               d=>{d.Results=[];},
               d=>{d.Results=d.Results.map(r=>({...r,Packages:[]}));}
@@ -511,7 +520,7 @@ jobs:
             JSON.stringify(evidence,null,2)+"\n",{flag:"wx",mode:0o600});
           console.log("PASS OS advisory evidence: "+
             images.map(i=>i.role+"="+i.vulnerability_count+" findings ("+i.high_critical_count+" HIGH/CRITICAL)").join("; ")+
-            "; human triage pending; HOLD_NO_GO");
+            "; exact scanner ImageID checked; 6 image-ID negative fixtures; human triage pending; HOLD_NO_GO");
           NODE
           (cd "$RUNNER_TEMP" &&
             sha256sum uni-p0-php-os-cves.json uni-p0-nginx-os-cves.json \
@@ -570,6 +579,9 @@ jobs:
             const bytes=read("uni-p0-"+role+"-os-cves.json");
             assert.equal(sha(bytes),source.cve_report_sha256);
             const report=JSON.parse(bytes);
+            assert.match(source.image_id,/^sha256:[a-f0-9]{64}$/u);
+            assert.equal(report.Metadata?.ImageID,source.image_id,
+              "scanner image ID differs from scan provenance");
             const vulnerabilities=report.Results.filter(r=>r.Class==="os-pkgs")
               .flatMap(r=>r.Vulnerabilities??[]);
             assert.equal(vulnerabilities.length,source.vulnerability_count);
@@ -658,6 +670,7 @@ jobs:
               // Refuse an unreviewed queue rewritten without changing the
               // original scan, including an altered fixed-version assertion.
               const originalScan=JSON.parse(read("uni-p0-"+group.role+"-os-cves.json"));
+              assert.equal(originalScan.Metadata?.ImageID,source.image_id);
               assert.deepEqual(group.findings,findingsFromScan(originalScan));
               assert.deepEqual(group.unknown_findings,findingsFromScan(originalScan,["UNKNOWN"]));
               assert.ok(group.unknown_findings.every(f=>f.severity==="UNKNOWN"));

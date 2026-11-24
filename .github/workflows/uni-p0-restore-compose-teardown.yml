@@ -344,6 +344,57 @@ jobs:
           (cd "$RUNNER_TEMP" &&
             sha256sum uni-p0-local-built-image-identities.json uni-p0-php-os-packages.tsv uni-p0-nginx-os-packages.txt uni-p0-php-os-release.txt uni-p0-nginx-os-release.txt > uni-p0-local-built-image-identities.sha256 &&
             sha256sum -c uni-p0-local-built-image-identities.sha256)
+      - name: Inspect PHP runtime linkage for AppSec triage (no risk acceptance)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.production
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test -z "${DOCKER_TLS_VERIFY:-}" && test -z "${DOCKER_CERT_PATH:-}"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          id="$(node -e 'const m=require(process.env.RUNNER_TEMP+"/uni-p0-local-built-image-identities.json");if(m.commit!==process.env.GITHUB_SHA||m.workflow_run_id!==process.env.GITHUB_RUN_ID||m.workflow_attempt!==process.env.GITHUB_RUN_ATTEMPT||!/^sha256:[a-f0-9]{64}$/.test(m.php_image_id))process.exit(2);process.stdout.write(m.php_image_id)')"
+          test "$(docker image inspect --format '{{.Id}}' "$id")" = "$id"
+          report="$RUNNER_TEMP/uni-p0-php-runtime-linkage.txt"
+          test ! -e "$report" && test ! -L "$report"
+          umask 077
+          printf 'commit=%s\nrun=%s\nattempt=%s\nphp_image_id=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$id" > "$report"
+          # No mounts, credentials, application calls, sockets or registry pulls.
+          docker run --rm --pull never --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --entrypoint sh "$id" -ec '
+            export LC_ALL=C
+            php -r "echo json_encode([\"php_version\"=>PHP_VERSION,\"pdo_drivers\"=>PDO::getAvailableDrivers(),\"sqlite3_loaded\"=>extension_loaded(\"sqlite3\"),\"pdo_sqlite_loaded\"=>extension_loaded(\"pdo_sqlite\"),\"sqlite3_version\"=>extension_loaded(\"sqlite3\")?SQLite3::version():null,\"libxml_version\"=>LIBXML_DOTTED_VERSION,\"zlib_version\"=>ZLIB_VERSION], JSON_THROW_ON_ERROR), PHP_EOL;"
+            dir=$(php -r "echo ini_get(\"extension_dir\");")
+            for binary in "$(command -v php)" "$(command -v php-fpm)" "$dir"/*.so; do
+              test -f "$binary"
+              printf "ELF %s\n" "$binary"
+              deps=$(ldd "$binary")
+              printf "%s\n" "$deps"
+              if printf "%s\n" "$deps" | grep -q "not found"; then exit 2; fi
+            done
+            printf "MINIZIP named library files (limited search)\n"
+            find /usr/lib /usr/local/lib -iname "*minizip*" -print
+            zlib=$(ldd "$(command -v php)" | awk "/libz[.]so[.]1 => / {print \$3; exit}")
+            if [ -n "$zlib" ] && [ -f "$zlib" ] && command -v nm >/dev/null 2>&1; then
+              printf "MINIZIP dynamic symbols in linked zlib (not full image coverage)\n"
+              symbols=$(nm -D --defined-only "$zlib")
+              printf "%s\n" "$symbols" | grep -E "[[:space:]](unz|zip)[A-Za-z0-9_]*(@.*)?$" || test "$?" -eq 1
+              printf "MINIZIP_SYMBOL_CHECK=performed\n"
+            else
+              printf "MINIZIP_SYMBOL_CHECK=unavailable\n"
+            fi
+            printf "APPSEC_SIGNOFF=false\n"
+          ' >> "$report"
+          test "$(wc -c < "$report")" -le 262144
+          grep -Fxq 'APPSEC_SIGNOFF=false' "$report"
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-php-runtime-linkage.txt >> uni-p0-local-built-image-identities.sha256 &&
+            sha256sum -c uni-p0-local-built-image-identities.sha256)
+          echo 'PASS offline PHP runtime linkage captured from exact built ID; no CVE applicability or risk acceptance asserted.'
       - name: Keep final local build identity evidence for review (no deploy)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -355,6 +406,7 @@ jobs:
             ${{ runner.temp }}/uni-p0-nginx-os-packages.txt
             ${{ runner.temp }}/uni-p0-php-os-release.txt
             ${{ runner.temp }}/uni-p0-nginx-os-release.txt
+            ${{ runner.temp }}/uni-p0-php-runtime-linkage.txt
           retention-days: 14
           if-no-files-found: error
       - name: Scan Debian and Alpine OS advisories from exact local built image IDs
@@ -750,6 +802,7 @@ jobs:
             "uni-p0-composer-production-audit.json",
             "uni-p0-composer-production-audit-provenance.json",
             "uni-p0-local-built-image-identities.json",
+            "uni-p0-php-runtime-linkage.txt",
             "uni-p0-os-cve-scan-provenance.json",
             "uni-p0-os-cve-triage.json",
             "uni-p0-synthetic-rollback-proof.txt"
@@ -768,6 +821,19 @@ jobs:
             g.status==="NOT_VERIFIED" && g.evidence_ref===null));
           const composer=parse("uni-p0-composer-production-audit-provenance.json");
           const builds=parse("uni-p0-local-built-image-identities.json");
+          const linkage=read("uni-p0-php-runtime-linkage.txt").toString("utf8").split("\n");
+          const validateLinkage=lines=>{
+            assert.deepEqual(lines.slice(0,4),[
+              "commit="+env.GITHUB_SHA,"run="+env.GITHUB_RUN_ID,
+              "attempt="+env.GITHUB_RUN_ATTEMPT,"php_image_id="+builds.php_image_id]);
+            assert.equal(lines.at(-2),"APPSEC_SIGNOFF=false");
+            assert.equal(lines.at(-1),"");
+            assert.ok(lines.some(l=>l.startsWith("ELF ")));
+          };
+          validateLinkage(linkage);
+          for(const i of [0,1,2,3,linkage.length-2]){
+            const wrong=[...linkage]; wrong[i]="FORGED"; assert.throws(()=>validateLinkage(wrong));
+          }
           const scan=parse("uni-p0-os-cve-scan-provenance.json");
           const triage=parse("uni-p0-os-cve-triage.json");
           for(const p of [composer,builds,scan,triage]){

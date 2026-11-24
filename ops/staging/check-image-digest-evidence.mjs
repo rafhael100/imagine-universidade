@@ -8,7 +8,7 @@ import {readFileSync, writeFileSync} from "node:fs";
 const root = path => readFileSync(new URL("../../" + path, import.meta.url));
 const digestOf = bytes => createHash("sha256").update(bytes).digest("hex");
 const expected = [
-  {source: "php:8.4-fpm-bookworm", repository: "php", digest: "sha256:e4b1eec29a5be22428aa93fb43da75a0e39006e403da0c3e93631dde92f067df"},
+  {source: "php:8.4.28-fpm-trixie", repository: "php", digest: "sha256:495ab94788034640ddd6fb313476e75570261622c42704e5ae02047b8d934ea0"},
   {source: "composer:2", repository: "composer", digest: "sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93"},
   {source: "nginx:stable-alpine", repository: "nginx", digest: "sha256:caf4e1e032a20f9c3c5e28fc7f25ffd768ad8677b4975c54193075997b3a97e3"},
   {source: "postgres:18", repository: "postgres", digest: "sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"},
@@ -119,6 +119,8 @@ function test() {
   mutation(x => { x.release_approval = true; });
   mutation(x => { x.file_sha256["composer.lock"] = "0".repeat(64); });
   mutation(x => { delete x.file_sha256["composer.lock"]; });
+  mutation(x => { x.images[0].source = "php:8.4-fpm-bookworm"; });
+  mutation(x => { x.images[0].digest = "sha256:e4b1eec29a5be22428aa93fb43da75a0e39006e403da0c3e93631dde92f067df"; x.images[0].pinned = "php@" + x.images[0].digest; });
   mutation(x => { x.images[0].digest = "sha256:placeholder"; });
   mutation(x => { x.images[0].digest = "sha256:" + "f".repeat(64); });
   mutation(x => { x.images[3].pinned = "postgres:18"; });
@@ -145,7 +147,7 @@ function test() {
   assert.throws(() => checkQaDockerfile(qaDockerfile.replace(qaComposer, "composer@" + "sha256:" + "f".repeat(64))));
   mutation(x => { x.file_sha256["ops/qa/Dockerfile"] = "0".repeat(64); });
   mutation(x => { x.images[4].pinned = "php:8.3-cli-bookworm"; });
-  console.log("PASS: 25 negative mutations, five immutable registry digests, both PG18 QA paths and QA PHP/Composer pinned; HOLD_NO_GO.");
+  console.log("PASS: 27 negative mutations, five immutable registry digests, both PG18 QA paths and QA PHP/Composer pinned; HOLD_NO_GO.");
 }
 function assertEnvironment() {
   assert.equal(process.env.CI, "true");

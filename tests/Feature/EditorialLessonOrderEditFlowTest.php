@@ -59,7 +59,8 @@ final class EditorialLessonOrderEditFlowTest extends TestCase
                     return PortalGrant::deny('access_denied');
                 }
                 $revision = $this->changeRevisionAfterTransaction && !$inside && $this->inside > 0 ? 2 : 1;
-                return PortalGrant::allow($identity[0], $identity[1], $identity[2], $revision, time() + 60);
+                // Leave margin below the 60s gate cap if verify crosses a wall-clock second.
+                return PortalGrant::allow($identity[0], $identity[1], $identity[2], $revision, time() + 30);
             }
         };
         $this->app->instance(PortalAuthority::class, $this->authority);
@@ -68,7 +69,7 @@ final class EditorialLessonOrderEditFlowTest extends TestCase
 
     private function grant(): PortalGrant
     {
-        return PortalGrant::allow('imagine-editorial', 'synthetic-order-edit-editor', PortalAccessGate::MANAGE, 1, time() + 60);
+        return PortalGrant::allow('imagine-editorial', 'synthetic-order-edit-editor', PortalAccessGate::MANAGE, 1, time() + 30);
     }
 
     /** @return array{course:int,version:int,ids:array<int,int>} */
@@ -132,6 +133,21 @@ final class EditorialLessonOrderEditFlowTest extends TestCase
         return $this->postJson('/universidade/private/admin/courses/'.$course['course'].'/lessons/reorder', [
             'lesson_id' => $course['ids'][1], 'direction' => 'up', 'expected_order' => $this->order($course['version']),
         ])->assertOk()->assertJsonPath('changed', true)->json('order');
+    }
+
+    public function test_synthetic_authority_has_margin_when_verification_crosses_an_epoch_second(): void
+    {
+        $gate = new PortalAccessGate($this->authority);
+        foreach ([
+            ['editor', 'imagine-editorial', PortalAccessGate::MANAGE],
+            ['student', 'order-edit-company', PortalAccessGate::VIEW],
+        ] as [$credential, $company, $permission]) {
+            $started = time() - 1;
+            $grant = $gate->authorize($credential, $company, $permission, $started);
+            self::assertTrue($grant->allowed, $grant->reasonCode);
+            self::assertLessThanOrEqual($started + 60, $grant->expiresAtEpoch);
+            self::assertGreaterThan($started + 1, $grant->expiresAtEpoch);
+        }
     }
 
     public function test_patch_omission_preserves_nonzero_order_and_the_existing_success_receipt(): void
@@ -310,8 +326,8 @@ final class EditorialLessonOrderEditFlowTest extends TestCase
             self::assertFalse($repository->updateLesson($grant, $course['ids'][0], $input));
             foreach ([
                 PortalGrant::deny('revoked'),
-                PortalGrant::allow('imagine-editorial', 'another-editor', PortalAccessGate::MANAGE, 1, time() + 60),
-                PortalGrant::allow('imagine-editorial', 'synthetic-order-edit-editor', PortalAccessGate::MANAGE, 2, time() + 60),
+                PortalGrant::allow('imagine-editorial', 'another-editor', PortalAccessGate::MANAGE, 1, time() + 30),
+                PortalGrant::allow('imagine-editorial', 'synthetic-order-edit-editor', PortalAccessGate::MANAGE, 2, time() + 30),
             ] as $fresh) {
                 self::assertFalse($repository->updateLesson($grant, $course['ids'][0], $input, static fn () => $fresh));
             }

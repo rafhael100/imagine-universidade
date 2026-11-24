@@ -12,6 +12,7 @@ on:
       - scripts/check-uni-image-transport.mjs
       - scripts/qa-pg-backup-restore.sh
       - tests/Feature/PrivateUniversityResponseBoundaryTest.php
+      - tests/Feature/EditorialLessonOrderEditFlowTest.php
       - tests/Feature/SyntheticEditorialFixtureImportTest.php
       - tests/Feature/EditorialUnicodeTextFlowTest.php
       - scripts/qa-staging-image-build.sh

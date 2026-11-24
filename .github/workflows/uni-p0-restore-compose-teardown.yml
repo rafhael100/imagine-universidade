@@ -461,6 +461,40 @@ jobs:
               return digest.hexdigest()
 
 
+          def verify_oci(by_name, metadata, config_name, layers):
+              present = ('oci-layout' in by_name, 'index.json' in by_name)
+              require(present[0] == present[1], 'incomplete OCI metadata')
+              if not present[0]:
+                  return
+              require(json.loads(metadata('oci-layout')) == {'imageLayoutVersion': '1.0.0'}, 'invalid OCI layout')
+              index = json.loads(metadata('index.json'))
+              require(index.get('schemaVersion') == 2 and isinstance(index.get('manifests'), list)
+                      and len(index['manifests']) == 1, 'expected one OCI image descriptor')
+
+              def descriptor_path(desc):
+                  digest = desc.get('digest')
+                  size = desc.get('size')
+                  require(isinstance(digest, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', digest), 'invalid OCI digest')
+                  name = 'blobs/sha256/' + digest[7:]
+                  require(name in by_name and by_name[name].isfile() and type(size) is int
+                          and size == by_name[name].size, 'OCI descriptor size/member differs')
+                  return name
+
+              image = index['manifests'][0]
+              image_types = ('application/vnd.oci.image.manifest.v1+json',
+                             'application/vnd.docker.distribution.manifest.v2+json')
+              require(image.get('mediaType') in image_types, 'unsupported OCI image descriptor')
+              image_name = descriptor_path(image)
+              image_bytes = metadata(image_name)
+              require(hashlib.sha256(image_bytes).hexdigest() == image_name.rsplit('/', 1)[1], 'OCI manifest digest differs')
+              image_manifest = json.loads(image_bytes)
+              require(image_manifest.get('schemaVersion') == 2, 'invalid OCI image schema')
+              require(descriptor_path(image_manifest['config']) == config_name, 'OCI config differs from Docker manifest')
+              descriptors = image_manifest.get('layers')
+              require(isinstance(descriptors, list) and [descriptor_path(d) for d in descriptors] == layers,
+                      'OCI layers differ from Docker manifest')
+
+
           def verify(path, expected):
               require(re.fullmatch(r'sha256:[0-9a-f]{64}', expected), 'invalid expected ID')
               with tarfile.open(path, 'r:') as archive:
@@ -513,6 +547,7 @@ jobs:
                               require(magic != b'\x28\xb5\x2f\xfd', 'unsupported zstd layer')
                               actual = sha(stream)
                       require('sha256:' + actual == diff_id, 'layer diff ID differs')
+                  verify_oci(by_name, metadata, config_name, layers)
                   return len(layers)
 
 
@@ -549,7 +584,7 @@ jobs:
 
               def fixture(*, compressed=False, wrong_config=False, wrong_layer=False,
                           dup=False, extra=False, bad_path=False, missing=False,
-                          extra_member=None, tagged=False, empty_tags=False):
+                          extra_member=None, tagged=False, empty_tags=False, oci=None):
                   cfg = json.dumps({'rootfs': {'type': 'layers', 'diff_ids': ['sha256:' + H(raw)]}}).encode()
                   cid = H(cfg)
                   data = zipped if compressed else raw
@@ -563,6 +598,30 @@ jobs:
                              (cn, b'bad' if wrong_config else cfg)]
                   if not missing:
                       entries.append((ln, data))
+                  if oci is not None:
+                      if not compressed:
+                          raise RuntimeError('OCI fixture requires blob paths')
+                      cd = {'digest': 'sha256:' + cid, 'size': len(cfg)}
+                      ld = {'digest': 'sha256:' + H(data), 'size': len(data)}
+                      im = {'schemaVersion': 2, 'config': dict(cd), 'layers': [dict(ld)]}
+                      if oci == 'config':
+                          im['config'] = ld
+                      if oci == 'layer':
+                          im['layers'] = [cd]
+                      if oci == 'size':
+                          im['layers'][0]['size'] += 1
+                      ib = json.dumps(im).encode()
+                      desc = {'digest': 'sha256:' + H(ib), 'size': len(ib),
+                              'mediaType': 'application/vnd.oci.image.manifest.v1+json'}
+                      if oci == 'type':
+                          desc['mediaType'] = 'application/vnd.oci.image.index.v1+json'
+                      if oci == 'docker':
+                          desc['mediaType'] = 'application/vnd.docker.distribution.manifest.v2+json'
+                      entries.append(('blobs/sha256/' + H(ib), b'x' * len(ib) if oci == 'digest' else ib))
+                      entries.append(('oci-layout', json.dumps({'imageLayoutVersion': '2.0.0' if oci == 'layout' else '1.0.0'}).encode()))
+                      if oci != 'partial':
+                          entries.append(('index.json', json.dumps({'schemaVersion': 2,
+                                          'manifests': [desc, desc] if oci == 'multi' else [desc]}).encode()))
                   if dup:
                       entries.append((cn, cfg))
                   with tarfile.open(path, 'w') as tar:
@@ -614,7 +673,17 @@ jobs:
                       pass
                   else:
                       raise RuntimeError('accepted unsafe archive metadata')
-              print('PASS saved-image archive verifier: 4 positive and 13 negative synthetic fixtures')
+              for oci in ['good', 'docker']:
+                  if verify(path, fixture(compressed=True, oci=oci)) != 1:
+                      raise RuntimeError('wrong layer count for OCI fixture')
+              for oci in ['config', 'layer', 'size', 'digest', 'type', 'multi', 'partial', 'layout']:
+                  try:
+                      verify(path, fixture(compressed=True, oci=oci))
+                  except ValueError:
+                      pass
+                  else:
+                      raise RuntimeError('accepted inconsistent OCI metadata: ' + oci)
+              print('PASS saved-image archive verifier: 6 positive and 21 negative synthetic fixtures')
           PY
           # Consume only the exact single marker from the successful 3-service
           # SQL/HTTP run, never a freshly pulled replacement or an inferred tag.

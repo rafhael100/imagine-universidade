@@ -780,14 +780,6 @@ jobs:
           log="$RUNNER_TEMP/uni-p0-private-http-rollback.log"
           test -s "$log"
           umask 077
-          : > "$proof"
-          for marker in \
-            'PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority.' \
-            'PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.' \
-            'PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403.'; do
-            grep -Fxq "$marker" "$log" || { echo 'HOLD: exact rollback evidence missing' >&2; exit 2; }
-            printf '%s\n' "$marker" >> "$proof"
-          done
           node --input-type=module <<'NODE'
           import assert from "node:assert/strict";
           import {readFileSync,writeFileSync} from "node:fs";
@@ -860,14 +852,27 @@ jobs:
           for(const i of scan.images) assert.equal(i.image_id,builds[i.role+"_image_id"]);
           assert.equal(triage.high_critical_total,
             scan.images.reduce((n,i)=>n+i.high_critical_count,0));
-          const passMarkers=read("uni-p0-synthetic-rollback-proof.txt").toString("utf8").trimEnd().split("\n");
           const expectedPassMarkers=[
             "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority.",
             "PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.",
             "PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403."
           ];
           const validatePassMarkers=lines=>assert.deepEqual(lines,expectedPassMarkers);
+          // Validate the original stream before writing the allowlisted proof:
+          // a loop over expected markers would silently reorder and deduplicate it.
+          const extractPassMarkers=raw=>{
+            const matches=raw.split("\n").filter(line=>expectedPassMarkers.some(marker=>line.includes(marker)));
+            assert.deepEqual(matches,expectedPassMarkers,"raw rollback log markers missing, altered, duplicated or out of order");
+            return matches;
+          };
+          const [a,b,c]=expectedPassMarkers;
+          assert.deepEqual(extractPassMarkers(["unrelated",a,"other",b,c,""].join("\n")),expectedPassMarkers);
+          for(const lines of [[a,c],[b,a,c],[a,b,c,a],["HOLD: "+a,b,c],
+            [a,b,c+" (failed)"],[a,"HOLD: "+a,b,c]])assert.throws(()=>extractPassMarkers(lines.join("\n")));
+          const passMarkers=extractPassMarkers(read("uni-p0-private-http-rollback.log").toString("utf8"));
           validatePassMarkers(passMarkers);
+          writeFileSync(join(tmp,"uni-p0-synthetic-rollback-proof.txt"),passMarkers.join("\n")+"\n",
+            {flag:"wx",mode:0o600});
           // An embedded marker, duplicated result, or reordered proof must not
           // become a release-readiness claim even if its file hash is valid.
           for(const spoofed of [
@@ -936,7 +941,7 @@ jobs:
           }
           writeFileSync(join(tmp,"uni-p0-private-release-review-index.json"),
             JSON.stringify(handoff,null,2)+"\n",{flag:"wx",mode:0o600});
-          console.log("PASS exact-run review index: source SHA + Composer + OS scan + local image IDs + synthetic rollback; 11 index tamper mutations + 4 forged rollback marker tests; 13 gates HOLD_NO_GO; NOT deployable");
+          console.log("PASS exact-run review index: source SHA + Composer + OS scan + local image IDs + synthetic rollback; 11 index tamper mutations + 4 forged rollback marker tests + 6 raw-log negative fixtures; 13 gates HOLD_NO_GO; NOT deployable");
           NODE
           (cd "$RUNNER_TEMP" &&
             sha256sum uni-p0-private-release-review-index.json uni-p0-synthetic-rollback-proof.txt > uni-p0-private-release-review-index.sha256 &&

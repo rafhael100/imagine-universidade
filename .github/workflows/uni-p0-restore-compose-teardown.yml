@@ -860,7 +860,8 @@ jobs:
           # Read-only transport preflight while the three validated TARs still exist.
           # This local anchor tests the mechanism, not independent transfer or import.
           proof_sha="$(sha256sum "$RUNNER_TEMP/uni-p0-os-cve-scan-provenance.json" | cut -d' ' -f1)"
-          node scripts/check-uni-image-transport.mjs "$RUNNER_TEMP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha"
+          source_receipt="$(node scripts/check-uni-image-transport.mjs "$RUNNER_TEMP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha")"
+          printf '%s\n' "$source_receipt"
           # Rehearse preservation into independent files, not another daemon/host.
           # No archive upload, Docker load, or release artifact is permitted.
           (
@@ -885,9 +886,13 @@ jobs:
               cp --no-dereference --reflink=never --sparse=never -- "$RUNNER_TEMP/$name" "$copy_dir/$name"
               test "$(stat -c %d:%i -- "$RUNNER_TEMP/$name")" != "$(stat -c %d:%i -- "$copy_dir/$name")"
             done
-            node scripts/check-uni-image-transport.mjs "$copy_dir" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha"
+            destination_receipt="$(node scripts/check-uni-image-transport.mjs "$copy_dir" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha")"
+            test "$source_receipt" = "$destination_receipt"
             cleanup_copy
             trap - EXIT
+            # Preserve only the bounded receipt after equality and verified cleanup.
+            proof="$RUNNER_TEMP/uni-p0-transport-preservation-proof.json"
+            (umask 077; set -o noclobber; printf '%s\n' "$destination_receipt" > "$proof")
             echo 'PASS same-runner byte preservation in four distinct files and verified cleanup; no import or independent host; HOLD_NO_GO'
           )
       - name: Create tamper-checked HIGH/CRITICAL remediation queue (not AppSec signoff)
@@ -1176,7 +1181,8 @@ jobs:
             "uni-p0-php-runtime-linkage.txt",
             "uni-p0-os-cve-scan-provenance.json",
             "uni-p0-os-cve-triage.json",
-            "uni-p0-synthetic-rollback-proof.txt"
+            "uni-p0-synthetic-rollback-proof.txt",
+            "uni-p0-transport-preservation-proof.json"
           ];
           assert.match(env.GITHUB_SHA,/^[0-9a-f]{40}$/u);
           assert.match(env.GITHUB_RUN_ID,/^[0-9]+$/u);
@@ -1301,6 +1307,24 @@ jobs:
             [...expectedPassMarkers,expectedPassMarkers[0]],
             [expectedPassMarkers[1],expectedPassMarkers[0],expectedPassMarkers[2]]
           ]) assert.throws(()=>validatePassMarkers(spoofed));
+          // Bind the same-runner copy receipt to the exact scan and all three archives.
+          // A valid receipt is not proof of independent host, import or deployability.
+          const anchor=hash(read("uni-p0-os-cve-scan-provenance.json"));
+          const expectedTransport={scope:'read_only_transport_bytes_only',source_sha:env.GITHUB_SHA,
+            workflow_run_id:env.GITHUB_RUN_ID,workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+            provenance_sha256:anchor,
+            images:scan.images.map(i=>({role:i.role,image_id:i.image_id,archive_sha256:i.image_tar_sha256,filename:'uni-p0-'+i.role+'-os-image.tar'})),
+            release_decision:'HOLD_NO_GO',import_executed:false,portable_image_artifact:false};
+          const validateTransport=p=>assert.deepEqual(p,expectedTransport);
+          validateTransport(parse("uni-p0-transport-preservation-proof.json"));
+          for(const mutate of [p=>p.source_sha='0'.repeat(40),p=>p.workflow_run_id='0',
+            p=>p.workflow_attempt=String(Number(env.GITHUB_RUN_ATTEMPT)+1),
+            p=>p.provenance_sha256='0'.repeat(64),p=>p.images[0].archive_sha256='0'.repeat(64),
+            p=>p.images[1].image_id=p.images[0].image_id,p=>p.images.reverse(),
+            p=>p.import_executed=true,p=>p.portable_image_artifact=true,p=>p.release_decision='GO']){
+            const changed=structuredClone(expectedTransport);mutate(changed);assert.throws(()=>validateTransport(changed));
+          }
+          console.log("PASS same-runner preservation receipt bound to exact scan, 10 negative cases; import not exercised");
           const fileHashes=Object.fromEntries(sourceFiles.map(f=>[f,hash(read(f))]));
           const handoff={
             schema_version:2,repository:env.GITHUB_REPOSITORY,source_sha:env.GITHUB_SHA,
@@ -1365,7 +1389,7 @@ jobs:
           console.log("PASS exact-run review index: source SHA + Composer + OS scan + local image IDs + synthetic rollback; 12 index tamper mutations + 3 PG runtime provenance negatives + 4 forged rollback marker tests + 6 raw-log negative fixtures; 13 gates HOLD_NO_GO; NOT deployable");
           NODE
           (cd "$RUNNER_TEMP" &&
-            sha256sum uni-p0-private-release-review-index.json uni-p0-synthetic-rollback-proof.txt > uni-p0-private-release-review-index.sha256 &&
+            sha256sum uni-p0-private-release-review-index.json uni-p0-synthetic-rollback-proof.txt uni-p0-transport-preservation-proof.json > uni-p0-private-release-review-index.sha256 &&
             sha256sum -c uni-p0-private-release-review-index.sha256)
       - name: Preserve OS vulnerability reports for review, not AppSec approval
         if: always()
@@ -1383,6 +1407,7 @@ jobs:
             ${{ runner.temp }}/uni-p0-private-release-review-index.json
             ${{ runner.temp }}/uni-p0-private-release-review-index.sha256
             ${{ runner.temp }}/uni-p0-synthetic-rollback-proof.txt
+            ${{ runner.temp }}/uni-p0-transport-preservation-proof.json
           retention-days: 14
           if-no-files-found: ignore
       - name: Reconfirm deny-all and all 13 gates pending after synthetic rollback

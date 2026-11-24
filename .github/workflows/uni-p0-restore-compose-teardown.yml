@@ -435,7 +435,154 @@ jobs:
           tar -xzf "$scan_archive" -C "$RUNNER_TEMP/uni-p0-trivy-bin" trivy
           trivy="$RUNNER_TEMP/uni-p0-trivy-bin/trivy"
           "$trivy" --version
-          trap 'rm -f "$RUNNER_TEMP"/uni-p0-*-os-image.tar "$scan_archive"' EXIT
+          trap 'rm -f "$RUNNER_TEMP"/uni-p0-*-os-image.tar "$RUNNER_TEMP"/uni-p0-*-archive-proof.json "$RUNNER_TEMP"/uni_p0_verify_saved_image.py "$scan_archive"' EXIT
+          # Verify the exact local docker-save bytes before the scanner reads them.
+          # No extraction, import, registry push or archive upload is authorized.
+          test ! -e "$RUNNER_TEMP/uni_p0_verify_saved_image.py"
+          cat > "$RUNNER_TEMP/uni_p0_verify_saved_image.py" <<'PY'
+          import gzip
+          import hashlib
+          import json
+          import re
+          import sys
+          import tarfile
+
+
+          def require(condition, message):
+              if not condition:
+                  raise ValueError(message)
+
+
+          def sha(stream):
+              digest = hashlib.sha256()
+              for block in iter(lambda: stream.read(1024 * 1024), b''):
+                  digest.update(block)
+              return digest.hexdigest()
+
+
+          def verify(path, expected):
+              require(re.fullmatch(r'sha256:[0-9a-f]{64}', expected), 'invalid expected ID')
+              with tarfile.open(path, 'r:') as archive:
+                  members = archive.getmembers()
+                  names = [m.name for m in members]
+                  require(len(names) == len(set(names)), 'duplicate archive member')
+                  by_name = {m.name: m for m in members}
+
+                  def member(name):
+                      require(name in by_name and by_name[name].isfile(), 'missing/nonregular archive member')
+                      return archive.extractfile(by_name[name])
+
+                  def metadata(name):
+                      with member(name) as stream:
+                          data = stream.read(4 * 1024 * 1024 + 1)
+                      require(len(data) <= 4 * 1024 * 1024, 'oversized archive metadata')
+                      return data
+
+                  manifest = json.loads(metadata('manifest.json'))
+                  require(isinstance(manifest, list) and len(manifest) == 1, 'expected one saved image')
+                  entry = manifest[0]
+                  config_name = entry['Config']
+                  hex_id = expected[7:]
+                  require(config_name in (hex_id + '.json', 'blobs/sha256/' + hex_id), 'wrong config path')
+                  config_bytes = metadata(config_name)
+                  require(hashlib.sha256(config_bytes).hexdigest() == hex_id, 'wrong config bytes')
+                  root = json.loads(config_bytes)['rootfs']
+                  layers, diff_ids = entry['Layers'], root['diff_ids']
+                  require(root['type'] == 'layers' and isinstance(layers, list) and isinstance(diff_ids, list)
+                          and len(layers) == len(diff_ids) and len(layers) > 0, 'layer count differs')
+                  for name, diff_id in zip(layers, diff_ids):
+                      require(isinstance(name, str) and re.fullmatch(r'(?:blobs/sha256/[0-9a-f]{64}|[0-9a-f]{64}/layer\.tar)', name), 'invalid layer path')
+                      require(isinstance(diff_id, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', diff_id), 'invalid diff ID')
+                      with member(name) as stream:
+                          magic = stream.read(4)
+                          stream.seek(0)
+                          if name.startswith('blobs/sha256/'):
+                              require(sha(stream) == name.rsplit('/', 1)[1], 'blob digest differs')
+                              stream.seek(0)
+                          if magic.startswith(b'\x1f\x8b'):
+                              with gzip.GzipFile(fileobj=stream) as raw:
+                                  actual = sha(raw)
+                          else:
+                              require(magic != b'\x28\xb5\x2f\xfd', 'unsupported zstd layer')
+                              actual = sha(stream)
+                      require('sha256:' + actual == diff_id, 'layer diff ID differs')
+                  return len(layers)
+
+
+          if __name__ == '__main__':
+              count = verify(sys.argv[1], sys.argv[2])
+              with open(sys.argv[1], 'rb') as stream:
+                  archive_sha = sha(stream)
+              print(json.dumps({'image_id': sys.argv[2], 'archive_sha256': archive_sha,
+                                'ordered_layer_count': count, 'scope': 'local_docker_save_only'}))
+          PY
+          PYTHONDONTWRITEBYTECODE=1 python3 - "$RUNNER_TEMP" <<'PY'
+          import gzip
+          import hashlib
+          import io
+          import json
+          import pathlib
+          import sys
+          import tarfile
+          import tempfile
+
+          sys.path.insert(0, sys.argv[1])
+          from uni_p0_verify_saved_image import verify
+
+          H = lambda data: hashlib.sha256(data).hexdigest()
+          with tempfile.TemporaryDirectory() as directory:
+              path = pathlib.Path(directory) / 'image.tar'
+              layer_io = io.BytesIO()
+              with tarfile.open(fileobj=layer_io, mode='w') as tar:
+                  item = tarfile.TarInfo('synthetic.txt')
+                  item.size = 3
+                  tar.addfile(item, io.BytesIO(b'abc'))
+              raw = layer_io.getvalue()
+              zipped = gzip.compress(raw)
+
+              def fixture(*, compressed=False, wrong_config=False, wrong_layer=False,
+                          dup=False, extra=False, bad_path=False, missing=False):
+                  cfg = json.dumps({'rootfs': {'type': 'layers', 'diff_ids': ['sha256:' + H(raw)]}}).encode()
+                  cid = H(cfg)
+                  data = zipped if compressed else raw
+                  if wrong_layer:
+                      data = b'bad'
+                  ln = 'blobs/sha256/' + H(data) if compressed else 'a' * 64 + '/layer.tar'
+                  cn = 'blobs/sha256/' + cid if compressed else cid + '.json'
+                  entry = {'Config': cn, 'Layers': ['../bad' if bad_path else ln], 'RepoTags': None}
+                  entries = [('manifest.json', json.dumps([entry, entry] if extra else [entry]).encode()),
+                             (cn, b'bad' if wrong_config else cfg)]
+                  if not missing:
+                      entries.append((ln, data))
+                  if dup:
+                      entries.append((cn, cfg))
+                  with tarfile.open(path, 'w') as tar:
+                      for name, data in entries:
+                          item = tarfile.TarInfo(name)
+                          item.size = len(data)
+                          tar.addfile(item, io.BytesIO(data))
+                  return 'sha256:' + cid
+
+              for compressed in [False, True]:
+                  if verify(path, fixture(compressed=compressed)) != 1:
+                      raise RuntimeError('wrong layer count')
+              for key in ['wrong_config', 'wrong_layer', 'dup', 'extra', 'bad_path', 'missing']:
+                  eid = fixture(**{key: True})
+                  try:
+                      verify(path, eid)
+                  except ValueError:
+                      pass
+                  else:
+                      raise RuntimeError('accepted malformed fixture: ' + key)
+              fixture()
+              try:
+                  verify(path, 'sha256:' + '0' * 64)
+              except ValueError:
+                  pass
+              else:
+                  raise RuntimeError('accepted wrong image ID')
+              print('PASS saved-image archive verifier: 2 positive and 7 negative synthetic fixtures')
+          PY
           # Consume only the exact single marker from the successful 3-service
           # SQL/HTTP run, never a freshly pulled replacement or an inferred tag.
           pg_ref='postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a'
@@ -472,6 +619,10 @@ jobs:
             report="$RUNNER_TEMP/uni-p0-$role-os-cves.json"
             test ! -e "$tarfile" && test ! -e "$report"
             docker save "$built_id" -o "$tarfile"
+            archive_proof="$RUNNER_TEMP/uni-p0-$role-archive-proof.json"
+            test ! -e "$archive_proof" && test ! -L "$archive_proof"
+            python3 "$RUNNER_TEMP/uni_p0_verify_saved_image.py" "$tarfile" "$built_id" > "$archive_proof"
+            test -s "$archive_proof"
             "$trivy" --cache-dir "$RUNNER_TEMP/uni-p0-trivy-cache" image \
               --input "$tarfile" --scanners vuln --pkg-types os \
               --list-all-pkgs --format json --output "$report" \
@@ -539,9 +690,17 @@ jobs:
             const version=role==="pg"?report.Metadata.OS.Name:identity.os_distribution[role].version_id;
             assert.match(version,/^[0-9][0-9A-Za-z._-]*$/u);
             if(role!=="pg")assert.equal(identity.os_distribution[role].id,family);
+            const archiveProof=JSON.parse(read("uni-p0-"+role+"-archive-proof.json"));
+            const archiveHash=hash(read("uni-p0-"+role+"-os-image.tar"));
+            assert.deepEqual(Object.keys(archiveProof).sort(),
+              ["archive_sha256","image_id","ordered_layer_count","scope"]);
+            assert.equal(archiveProof.image_id,identity[role+"_image_id"]);
+            assert.equal(archiveProof.archive_sha256,archiveHash);
+            assert.ok(Number.isSafeInteger(archiveProof.ordered_layer_count) && archiveProof.ordered_layer_count>0);
+            assert.equal(archiveProof.scope,"local_docker_save_only");
             images.push({role,os:family,os_version:version,
               image_id:identity[role+"_image_id"],
-              image_tar_sha256:hash(read("uni-p0-"+role+"-os-image.tar")),
+              image_tar_sha256:archiveHash,archive_verification:archiveProof,
               cve_report_sha256:hash(bytes),os_packages_scanned:found.packages,
               vulnerability_count:found.findings,high_critical_count:found.high_critical});
           }
@@ -903,6 +1062,28 @@ jobs:
           assert.equal(scan.schema,2);
           assert.equal(scan.images.length,3);
           assert.deepEqual(scan.images.map(i=>i.role),["php","nginx","pg"]);
+          const validateArchiveProof=i=>{
+            const p=i.archive_verification;
+            assert.deepEqual(Object.keys(p).sort(),["archive_sha256","image_id","ordered_layer_count","scope"]);
+            assert.equal(p.image_id,i.image_id);
+            assert.match(p.archive_sha256,/^[a-f0-9]{64}$/u);
+            assert.equal(p.archive_sha256,i.image_tar_sha256);
+            assert.ok(Number.isSafeInteger(p.ordered_layer_count) && p.ordered_layer_count>0);
+            assert.equal(p.scope,"local_docker_save_only");
+          };
+          for(const i of scan.images){
+            validateArchiveProof(i);
+            for(const mutate of [
+              p=>p.image_id="sha256:"+"0".repeat(64),
+              p=>p.archive_sha256="0".repeat(64),
+              p=>p.ordered_layer_count=0,
+              p=>p.scope="portable_release"
+            ]){
+              const changed=structuredClone(i);
+              mutate(changed.archive_verification);
+              assert.throws(()=>validateArchiveProof(changed));
+            }
+          }
           const pgRuntime=scan.postgres_runtime;
           const validatePgRuntime=p=>{
             assert.deepEqual(Object.keys(p).sort(),["image_id","scope","upstream_ref"]);

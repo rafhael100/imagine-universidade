@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync, mkdirSync, writeFileSync} from "node:fs";
-import {resolve, relative, sep, join} from "node:path";
+import {readFileSync, mkdirSync, writeFileSync, realpathSync, lstatSync} from "node:fs";
+import {resolve, relative, join, dirname} from "node:path";
 import {fileURLToPath} from "node:url";
 import {execFileSync} from "node:child_process";
 import {createHash} from "node:crypto";
@@ -131,6 +131,45 @@ export function requireCleanReleaseCheckout(root){
     // Never echo the override value, path, source name or credentials.
     throw new Error("Refusing readiness package: untrusted Git routing environment");
   }
+  // An attacker can set core.worktree in the repository's own .git/config,
+  // without any GIT_* environment override. Git status then inspects that
+  // alternate clean directory while the readiness package reads THIS root.
+  // Confirm the effective Git top-level is this exact canonical checkout.
+  let effectiveRoot;
+  let requestedRoot;
+  try{
+    const top=execFileSync("git",["rev-parse","--show-toplevel"],{
+      cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+      maxBuffer:8*1024*1024
+    }).trim();
+    requestedRoot=realpathSync(root);
+    effectiveRoot=realpathSync(top);
+  }catch{
+    throw new Error("Refusing readiness package: Git worktree root cannot be verified");
+  }
+  if(effectiveRoot!==requestedRoot){
+    throw new Error("Refusing readiness package: Git worktree root mismatch");
+  }
+  // On a case-sensitive runner, repository-local core.ignorecase=true can
+  // hide app/Trusted.php vs app/trusted.php from BOTH status and ls-files,
+  // while Docker COPY still includes both. Reject ambiguous Git semantics.
+  // Missing config uses Git's Linux default (false); unreadable/invalid config
+  // fails closed. Never include local Git configuration values in diagnostics.
+  let ignoreCase;
+  try{
+    ignoreCase=execFileSync("git",["config","--bool","--get","core.ignorecase"],{
+      cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
+      maxBuffer:1024
+    }).trim();
+  }catch(error){
+    if(error?.status!==1){
+      throw new Error("Refusing readiness package: Git case semantics cannot be verified");
+    }
+    ignoreCase="false";
+  }
+  if(ignoreCase!=="false"){
+    throw new Error("Refusing readiness package: unsafe Git core.ignorecase");
+  }
   const status=execFileSync("git",["status","--porcelain=v1","--untracked-files=all"],{
     cwd:root,encoding:"utf8",stdio:["ignore","pipe","ignore"],timeout:5000,
     maxBuffer:8*1024*1024
@@ -213,6 +252,20 @@ export function readPinnedGitSourceBytes(root,sha,names){
   return pinned;
 }
 
+// A lexical RUNNER_TEMP prefix is not an isolation guarantee: a pre-existing
+// symlink at the output path can redirect generated reports outside runner temp.
+// Only create a fresh, immediate child of the runner-owned temp directory.
+// mkdirSync without recursive follows this preflight with an atomic EEXIST
+// rejection if an unexpected entry appears before directory creation.
+export function requireFreshReadinessOutput(temp,destination){
+  const output=resolve(destination);
+  if(!temp || dirname(output)!==resolve(temp) ||
+    lstatSync(output,{throwIfNoEntry:false})!==undefined){
+    throw new Error("Refusing readiness package: output must be a fresh direct runner temp child");
+  }
+  return output;
+}
+
 const selfPath=fileURLToPath(import.meta.url);
 if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   const args=process.argv.slice(2);
@@ -229,7 +282,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
     || process.env.GITHUB_REF_TYPE!=="branch"
     || process.env.GITHUB_REPOSITORY!=="rafhael100/imagine-universidade"
     || !allowedBranch
-    || !temp || !dest.startsWith(resolve(temp)+sep)){
+    || !temp){
     throw new Error("Readiness package permitted only for a checked-out P0 review push within runner temp");
   }
   const checkout=execFileSync("git",["rev-parse","HEAD"],{
@@ -240,6 +293,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
   if(!/^[a-f0-9]{40}$/iu.test(sha)||sha!==checkout){
     throw new Error("Refusing readiness package: checkout SHA does not match GitHub event SHA");
   }
+  requireFreshReadinessOutput(temp,dest);
   // Covers non-ignored additions and changes, beyond the pinned source hash list.
   requireCleanReleaseCheckout(fileURLToPath(new URL("../",import.meta.url)));
   // A matching HEAD alone does not attest the working tree. A previous CI
@@ -273,7 +327,7 @@ if(process.argv[1]&&resolve(process.argv[1])===selfPath){
     production_approval:false,
     source_files_sha256:sourceHashes
   };
-  mkdirSync(dest,{recursive:true});
+  mkdirSync(dest);
   writeFileSync(join(dest,"PENDENCIAS-LANCAMENTO.md"),report.markdown);
   writeFileSync(join(dest,"gates.csv"),report.csv);
   writeFileSync(join(dest,"readiness.json"),JSON.stringify(report.snapshot,null,2)+"\n");

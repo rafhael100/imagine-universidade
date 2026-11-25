@@ -4,13 +4,33 @@ on:
   push:
     branches:
       - review/uni-p0-compose-teardown-proof-2026-11-21
+      - review/uni-p0-readiness-git-config-root-fence-2026-11-22
     paths:
       - .github/workflows/uni-p0-restore-compose-teardown.yml
       - scripts/run-qa-compose.sh
       - scripts/check-qa-compose-teardown.mjs
+      - scripts/check-uni-image-transport.mjs
       - scripts/qa-pg-backup-restore.sh
       - tests/Feature/PrivateUniversityResponseBoundaryTest.php
+      - tests/Feature/EditorialLessonOrderEditFlowTest.php
       - tests/Feature/SyntheticEditorialFixtureImportTest.php
+      - tests/Feature/EditorialUnicodeTextFlowTest.php
+      - scripts/qa-staging-image-build.sh
+      - scripts/qa-staging-private-http.sh
+      - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-p0-db-compose-health.sh
+      - scripts/qa-staging-pg-pre-migrate.php
+      - scripts/qa-staging-private-http-probe.php
+      - compose.qa.yml
+      - composer.json
+      - composer.lock
+      - .dockerignore
+      - ops/qa/Dockerfile
+      - ops/staging/Dockerfile.php
+      - ops/staging/Dockerfile.nginx
+      - ops/staging/compose.yaml
+      - ops/staging/nginx.conf
+      - ops/staging/check-image-digest-evidence.mjs
 
 permissions:
   contents: read
@@ -26,7 +46,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Checkout exact isolated review head without credentials
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 immutable
         with:
           persist-credentials: false
       - name: Verify zero production credentials and local Docker isolation
@@ -34,13 +54,23 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
-          test "$GITHUB_REF_NAME" = review/uni-p0-compose-teardown-proof-2026-11-21
+          case "$GITHUB_REF_NAME" in
+            review/uni-p0-compose-teardown-proof-2026-11-21|review/uni-p0-readiness-git-config-root-fence-2026-11-22) ;;
+            *) echo 'HOLD: unapproved review branch for Docker QA' >&2; exit 2 ;;
+          esac
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
           test ! -e .env && test ! -e .env.testing && test ! -e .env.local
           test ! -e .env.production && test ! -e ops/staging/.env.staging
           test -z "${DOCKER_HOST:-}"
           test "$(docker context show)" = default
           test -f composer.lock
+          test -f compose.qa.yml
+          test -f scripts/qa-pg-pre-migrate.php
+          test -f scripts/qa-compose-entrypoint.sh
+          test -f scripts/qa-pg-backup-restore.sh
+          # Validate the fully resolved disposable lab model before any mutation.
+          docker compose -f compose.qa.yml --profile manual-qa config --quiet
           ! grep -Eq '^[[:space:]]+ports:' compose.qa.yml
           ! grep -Fq /var/run/docker.sock compose.qa.yml
           bash -n scripts/run-qa-compose.sh
@@ -55,9 +85,1331 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # This live run exercises the HEAD's pre-migrate Laravel+SQL proof,
+          # migrations, private deny-all, snapshot/restore and verified teardown.
           bash scripts/run-qa-compose.sh | tee "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'PASS QA PostgreSQL pre-migrate: effective Laravel config + live synthetic PG18 SQL checked' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'The temp backup and clone DB were removed; production/VPS backup is NOT proven.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
           grep -Fq 'PASS: synthetic PostgreSQL restore and verified disposal of QA containers, database volume and network.' "$RUNNER_TEMP/uni-p0-disposable-restore.log"
+      - name: Prove live PG18 Compose SQL health revocation, recovery and verified cleanup
+        shell: bash
+        env:
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          # Database-only disposable Compose project; no application or migrations.
+          bash scripts/qa-p0-db-compose-health.sh | tee "$RUNNER_TEMP/uni-p0-db-health.log"
+          grep -Fq 'PASS: disposable PG18 Compose DB health healthy -> unhealthy (revoked fake password) -> healthy (recovered), verified cleanup.' "$RUNNER_TEMP/uni-p0-db-health.log"
+          grep -Fq 'No migrations, Portal sessions/grants, private VPS or operational backup exercised. HOLD_NO_GO.' "$RUNNER_TEMP/uni-p0-db-health.log"
       - name: Confirm 13 independent gates still HOLD_NO_GO and real access denied
+        run: node ops/staging/check-release-gates.mjs
+
+  staging-private-http-and-rollback:
+    # A separate disposable runner so PostgreSQL restore cleanup is not
+    # accidentally reused as evidence of live private HTTP / image rollback.
+    needs: compose-restore-and-cleanup
+    if: github.repository == 'rafhael100/imagine-universidade'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout exact isolated P0 draft without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 immutable
+        with:
+          persist-credentials: false
+      - name: Verify review-only source, local Docker context and zero secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.local && test ! -e .env.production
+          test ! -e .env.testing && test ! -e ops/staging/.env.staging
+          test -f composer.lock
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test -z "${DOCKER_TLS_VERIFY:-}" && test -z "${DOCKER_CERT_PATH:-}"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          for script in scripts/qa-staging-image-build.sh scripts/qa-staging-private-http.sh scripts/qa-staging-postgres-http.sh; do bash -n "$script"; done
+          php -l scripts/qa-staging-pg-pre-migrate.php
+          php -l scripts/qa-staging-private-http-probe.php
+      - name: Query Composer production lock advisories (read-only, no release approval)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Query public package advisories only; no tokens, app session or real data.
+          # A green audit is NOT an AppSec review and does NOT assess OS packages.
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test -f composer.json && test -f composer.lock
+          test ! -e .env && test ! -e .env.production
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          report="$RUNNER_TEMP/uni-p0-composer-production-audit.json"
+          manifest="$RUNNER_TEMP/uni-p0-composer-production-audit-provenance.json"
+          test ! -e "$report" && test ! -L "$report"
+          test ! -e "$manifest" && test ! -L "$manifest"
+          umask 077
+          # Immutable Composer image previously reviewed by source readiness.
+          # Only the two public locked-dependency files are mounted read-only.
+          # Outbound advisory query is isolated from Laravel and PostgreSQL.
+          audit_status=0
+          docker run --rm --pull always --network bridge --read-only \
+            --cap-drop ALL --security-opt no-new-privileges \
+            --user 10001:10001 --tmpfs /tmp:mode=1777 \
+            --env COMPOSER_HOME=/tmp/composer \
+            --env COMPOSER_CACHE_DIR=/tmp/composer/cache \
+            --mount "type=bind,src=$PWD/composer.json,dst=/app/composer.json,readonly" \
+            --mount "type=bind,src=$PWD/composer.lock,dst=/app/composer.lock,readonly" \
+            --workdir /app --entrypoint composer \
+            composer@sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93 \
+            audit --locked --no-dev --format=json --no-interaction > "$report" || audit_status=$?
+          if test ! -s "$report"; then
+            echo 'HOLD: advisory source did not produce a nonempty JSON report' >&2
+            exit 2
+          fi
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import {readFileSync,writeFileSync} from "node:fs";
+            import {createHash} from "node:crypto";
+            import {join} from "node:path";
+            const env=process.env;
+            const sha=bytes=>createHash("sha256").update(bytes).digest("hex");
+            assert.match(env.GITHUB_SHA,/^[0-9a-f]{40}$/u);
+            assert.match(env.GITHUB_RUN_ID,/^[0-9]+$/u);
+            const bytes=readFileSync(join(env.RUNNER_TEMP,"uni-p0-composer-production-audit.json"));
+            const report=JSON.parse(bytes.toString("utf8"));
+            assert.ok(report && typeof report==="object" && "advisories" in report);
+            const a=report.advisories;
+            const findings=Array.isArray(a) ? a.length :
+              Object.values(a).reduce((n,v)=>n+(Array.isArray(v)?v.length:0),0);
+            const abandoned=report.abandoned ? Object.keys(report.abandoned).length : 0;
+            const data={schema:1,repository:env.GITHUB_REPOSITORY,
+              commit:env.GITHUB_SHA,workflow_run_id:env.GITHUB_RUN_ID,
+              workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+              source:"composer_audit_locked_prod_only",advisory_count:findings,
+              abandoned_package_count:abandoned,
+              composer_lock_sha256:sha(readFileSync("composer.lock")),
+              report_sha256:sha(bytes),os_cve_scan_completed:false,
+              appsec_signoff:false,release_decision:"HOLD_NO_GO"};
+            assert.equal(data.repository,"rafhael100/imagine-universidade");
+            assert.match(data.report_sha256,/^[0-9a-f]{64}$/u);
+            writeFileSync(join(env.RUNNER_TEMP,
+              "uni-p0-composer-production-audit-provenance.json"),
+              JSON.stringify(data,null,2)+"\n",{flag:"wx",mode:0o600});
+            console.log("Composer production advisory report captured; findings="+findings+
+              ", abandoned="+abandoned+"; AppSec/OS review pending; HOLD_NO_GO");
+          '
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-composer-production-audit.json uni-p0-composer-production-audit-provenance.json \
+              > uni-p0-composer-production-audit.sha256 &&
+            sha256sum -c uni-p0-composer-production-audit.sha256)
+          if test "$audit_status" -ne 0; then
+            echo 'HOLD: Composer reported advisories/abandonment or advisory query error; human review required.' >&2
+            exit 2
+          fi
+          echo 'PASS read-only Composer production advisory query only; no OS CVE review, no release approval.'
+      - name: Preserve Composer advisory evidence for private review (not AppSec signoff)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-composer-audit-NOT-APPSEC-APPROVED
+          path: |
+            ${{ runner.temp }}/uni-p0-composer-production-audit.json
+            ${{ runner.temp }}/uni-p0-composer-production-audit-provenance.json
+            ${{ runner.temp }}/uni-p0-composer-production-audit.sha256
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Exercise isolated Nginx / PHP / PG18 with live SQL and image rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/qa-staging-image-build.sh | tee "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403.' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          grep -Fq 'PASS synthetic 3-service staging PG18:' "$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+      - name: Verify local built-image IDs against exact source and CI run (NOT registry pins)
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/uni-p0-local-built-image-identities.json"
+          test -s "$evidence"
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import {readFileSync} from "node:fs";
+            import {createHash} from "node:crypto";
+            import {join} from "node:path";
+            const e=JSON.parse(readFileSync(join(process.env.RUNNER_TEMP,
+              "uni-p0-local-built-image-identities.json"),"utf8"));
+            const validate=d=>{
+              assert.deepEqual(Object.keys(d).sort(),[
+                "schema","repository","commit","workflow_run_id","workflow_attempt",
+                "scope","php_image_id","nginx_image_id","registry_published",
+                "release_image_digests_pinned","os_package_inventory","os_distribution",
+                "complete_sbom","vulnerability_assessment_completed","release_decision"].sort());
+              assert.equal(d.schema,2);
+              assert.equal(d.repository,"rafhael100/imagine-universidade");
+              assert.equal(d.commit,process.env.GITHUB_SHA);
+              assert.equal(d.workflow_run_id,process.env.GITHUB_RUN_ID);
+              assert.equal(d.workflow_attempt,process.env.GITHUB_RUN_ATTEMPT);
+              assert.equal(d.scope,"ephemeral_local_build_identity_only");
+              assert.match(d.php_image_id,/^sha256:[a-f0-9]{64}$/u);
+              assert.match(d.nginx_image_id,/^sha256:[a-f0-9]{64}$/u);
+              assert.notEqual(d.php_image_id,d.nginx_image_id);
+              assert.equal(d.registry_published,false);
+              assert.equal(d.release_image_digests_pinned,false);
+              assert.equal(d.release_decision,"HOLD_NO_GO");
+              assert.equal(d.complete_sbom,false);
+              assert.equal(d.vulnerability_assessment_completed,false);
+              assert.deepEqual(Object.keys(d.os_package_inventory).sort(),["nginx","php"]);
+              for(const [image,filename,format] of [
+                ["php","uni-p0-php-os-packages.tsv","dpkg-query"],
+                ["nginx","uni-p0-nginx-os-packages.txt","apk-info"],
+              ]){
+                const obj=d.os_package_inventory[image];
+                assert.deepEqual(Object.keys(obj).sort(),["format","rows","sha256"]);
+                assert.equal(obj.format,format);
+                assert.match(obj.sha256,/^[a-f0-9]{64}$/u);
+                const bytes=readFileSync(join(process.env.RUNNER_TEMP,filename));
+                const data=bytes.toString("utf8");
+                assert.ok(data.endsWith("\n") && !data.includes("\r"));
+                const lines=data.trimEnd().split("\n");
+                assert.ok(lines.length >= 10);
+                assert.equal(new Set(lines).size,lines.length);
+                const pattern=format==="dpkg-query" ? /^[^\s\t]+\t[^\s\t]+\t[^\s\t]+$/u : /^[^\s]+$/u;
+                for(const line of lines) assert.match(line,pattern);
+                assert.equal(obj.rows,lines.length);
+                assert.equal(obj.sha256,createHash("sha256").update(bytes).digest("hex"));
+              }
+              assert.deepEqual(Object.keys(d.os_distribution).sort(),["nginx","php"]);
+              for(const [image,filename,id] of [
+                ["php","uni-p0-php-os-release.txt","debian"],
+                ["nginx","uni-p0-nginx-os-release.txt","alpine"],
+              ]){
+                const obj=d.os_distribution[image];
+                assert.deepEqual(Object.keys(obj).sort(),["id","sha256","version_id"]);
+                assert.equal(obj.id,id);
+                assert.match(obj.version_id,/^[0-9][0-9A-Za-z._-]*$/u);
+                assert.match(obj.sha256,/^[a-f0-9]{64}$/u);
+                const bytes=readFileSync(join(process.env.RUNNER_TEMP,filename));
+                assert.ok(bytes.length > 16 && bytes.length < 4096);
+                const value=bytes.toString("utf8");
+                assert.ok(value.endsWith("\n") && !value.includes("\r"));
+                const entries=new Map();
+                for(const line of value.trimEnd().split("\n")){
+                  if(line.startsWith("#") || line==="") continue;
+                  const m=line.match(/^([A-Z][A-Z0-9_]*)=(.*)$/u);
+                  assert.ok(m && !entries.has(m[1]));
+                  entries.set(m[1],m[2].replace(/^"|"$/gu,""));
+                }
+                assert.equal(entries.get("ID"),id);
+                assert.equal(entries.get("VERSION_ID"),obj.version_id);
+                assert.equal(obj.sha256,createHash("sha256").update(bytes).digest("hex"));
+              }
+            };
+            validate(e);
+            for (const mutation of [
+              x=>x.commit="0".repeat(40),
+              x=>x.php_image_id="not-an-image-id",
+              x=>x.nginx_image_id=x.php_image_id,
+              x=>x.registry_published=true,
+              x=>x.release_image_digests_pinned=true,
+              x=>x.os_package_inventory.php.sha256="0".repeat(64),
+              x=>x.os_package_inventory.nginx.rows=0,
+              x=>x.complete_sbom=true,
+              x=>x.vulnerability_assessment_completed=true,
+              x=>x.release_decision="GO",
+              x=>x.schema=1,
+              x=>x.os_distribution.php.id="alpine",
+              x=>x.os_distribution.nginx.id="debian",
+              x=>x.os_distribution.php.version_id="bad version",
+              x=>x.os_distribution.nginx.version_id="",
+              x=>x.os_distribution.php.sha256="0".repeat(64),
+              x=>x.os_distribution.nginx.sha256="0".repeat(64),
+            ]){
+              const wrong=structuredClone(e);mutation(wrong);
+              assert.throws(()=>validate(wrong));
+            }
+            console.log("PASS exact CI+SHA, built image IDs, OS inventories and Debian/Alpine distribution versions; 17 negative mutations; no CVE scan or release digests");
+          '
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-local-built-image-identities.json uni-p0-php-os-packages.tsv uni-p0-nginx-os-packages.txt uni-p0-php-os-release.txt uni-p0-nginx-os-release.txt > uni-p0-local-built-image-identities.sha256 &&
+            sha256sum -c uni-p0-local-built-image-identities.sha256)
+      - name: Inspect PHP runtime linkage for AppSec triage (no risk acceptance)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.production
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test -z "${DOCKER_TLS_VERIFY:-}" && test -z "${DOCKER_CERT_PATH:-}"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          id="$(node -e 'const m=require(process.env.RUNNER_TEMP+"/uni-p0-local-built-image-identities.json");if(m.commit!==process.env.GITHUB_SHA||m.workflow_run_id!==process.env.GITHUB_RUN_ID||m.workflow_attempt!==process.env.GITHUB_RUN_ATTEMPT||!/^sha256:[a-f0-9]{64}$/.test(m.php_image_id))process.exit(2);process.stdout.write(m.php_image_id)')"
+          test "$(docker image inspect --format '{{.Id}}' "$id")" = "$id"
+          report="$RUNNER_TEMP/uni-p0-php-runtime-linkage.txt"
+          test ! -e "$report" && test ! -L "$report"
+          umask 077
+          printf 'commit=%s\nrun=%s\nattempt=%s\nphp_image_id=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$id" > "$report"
+          # No mounts, credentials, application calls, sockets or registry pulls.
+          docker run --rm --pull never --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --entrypoint sh "$id" -ec '
+            export LC_ALL=C
+            php -r "echo json_encode([\"php_version\"=>PHP_VERSION,\"pdo_drivers\"=>PDO::getAvailableDrivers(),\"sqlite3_loaded\"=>extension_loaded(\"sqlite3\"),\"pdo_sqlite_loaded\"=>extension_loaded(\"pdo_sqlite\"),\"sqlite3_version\"=>extension_loaded(\"sqlite3\")?SQLite3::version():null,\"libxml_version\"=>LIBXML_DOTTED_VERSION,\"zlib_version\"=>ZLIB_VERSION], JSON_THROW_ON_ERROR), PHP_EOL;"
+            dir=$(php -r "echo ini_get(\"extension_dir\");")
+            for binary in "$(command -v php)" "$(command -v php-fpm)" "$dir"/*.so; do
+              test -f "$binary"
+              printf "ELF %s\n" "$binary"
+              deps=$(ldd "$binary")
+              printf "%s\n" "$deps"
+              if printf "%s\n" "$deps" | grep -q "not found"; then exit 2; fi
+            done
+            printf "MINIZIP named library files (limited search)\n"
+            find /usr/lib /usr/local/lib -iname "*minizip*" -print
+            zlib=$(ldd "$(command -v php)" | awk "/libz[.]so[.]1 => / {print \$3; exit}")
+            if [ -n "$zlib" ] && [ -f "$zlib" ] && command -v nm >/dev/null 2>&1; then
+              printf "MINIZIP dynamic symbols in linked zlib (not full image coverage)\n"
+              symbols=$(nm -D --defined-only "$zlib")
+              printf "%s\n" "$symbols" | grep -E "[[:space:]](unz|zip)[A-Za-z0-9_]*(@.*)?$" || test "$?" -eq 1
+              printf "MINIZIP_SYMBOL_CHECK=performed\n"
+            else
+              printf "MINIZIP_SYMBOL_CHECK=unavailable\n"
+            fi
+            printf "APPSEC_SIGNOFF=false\n"
+          ' >> "$report"
+          test "$(wc -c < "$report")" -le 262144
+          grep -Fxq 'APPSEC_SIGNOFF=false' "$report"
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-php-runtime-linkage.txt >> uni-p0-local-built-image-identities.sha256 &&
+            sha256sum -c uni-p0-local-built-image-identities.sha256)
+          echo 'PASS offline PHP runtime linkage captured from exact built ID; no CVE applicability or risk acceptance asserted.'
+      - name: Keep final local build identity evidence for review (no deploy)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-local-built-images-NOT-REGISTRY-PINNED
+          path: |
+            ${{ runner.temp }}/uni-p0-local-built-image-identities.json
+            ${{ runner.temp }}/uni-p0-local-built-image-identities.sha256
+            ${{ runner.temp }}/uni-p0-php-os-packages.tsv
+            ${{ runner.temp }}/uni-p0-nginx-os-packages.txt
+            ${{ runner.temp }}/uni-p0-php-os-release.txt
+            ${{ runner.temp }}/uni-p0-nginx-os-release.txt
+            ${{ runner.temp }}/uni-p0-php-runtime-linkage.txt
+          retention-days: 14
+          if-no-files-found: error
+      - name: Scan Debian and Alpine OS advisories from exact tested image IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.production
+          test -z "${DOCKER_HOST:-}" && test -z "${DOCKER_CONTEXT:-}"
+          test "$(docker context show)" = default
+          test "$(docker context inspect default --format '{{ (index .Endpoints "docker").Host }}')" = unix:///var/run/docker.sock
+          test -s "$RUNNER_TEMP/uni-p0-local-built-image-identities.json"
+          # Trivy v0.76.2 official Linux x64 archive SHA-256 verified using
+          # the GitHub release asset digest, not a moving tag. Local-only scanner;
+          # image archive and database cache never leave this disposable runner.
+          umask 077
+          scan_archive="$RUNNER_TEMP/uni-p0-trivy-0.76.2.tar.gz"
+          mkdir -m 700 "$RUNNER_TEMP/uni-p0-trivy-bin" "$RUNNER_TEMP/uni-p0-trivy-cache"
+          curl -fLSs --retry 2 --max-time 180 \
+            https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz \
+            -o "$scan_archive"
+          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  $scan_archive" | sha256sum -c -
+          tar -xzf "$scan_archive" -C "$RUNNER_TEMP/uni-p0-trivy-bin" trivy
+          trivy="$RUNNER_TEMP/uni-p0-trivy-bin/trivy"
+          "$trivy" --version
+          trap 'rm -f "$RUNNER_TEMP"/uni-p0-*-os-image.tar "$RUNNER_TEMP"/uni-p0-*-archive-proof.json "$RUNNER_TEMP"/uni_p0_verify_saved_image.py "$scan_archive"' EXIT
+          # Verify the exact local docker-save bytes before the scanner reads them.
+          # No extraction, import, registry push or archive upload is authorized.
+          test ! -e "$RUNNER_TEMP/uni_p0_verify_saved_image.py"
+          cat > "$RUNNER_TEMP/uni_p0_verify_saved_image.py" <<'PY'
+          import gzip
+          import hashlib
+          import json
+          import re
+          import sys
+          import tarfile
+
+
+          def require(condition, message):
+              if not condition:
+                  raise ValueError(message)
+
+
+          def sha(stream):
+              digest = hashlib.sha256()
+              for block in iter(lambda: stream.read(1024 * 1024), b''):
+                  digest.update(block)
+              return digest.hexdigest()
+
+
+          def strict_json(data):
+              def unique_object(pairs):
+                  result = {}
+                  for key, value in pairs:
+                      if key in result:
+                          raise ValueError('duplicate JSON object key')
+                      result[key] = value
+                  return result
+              return json.loads(data, object_pairs_hook=unique_object)
+
+
+          def verify_oci(by_name, metadata, config_name, layers):
+              present = ('oci-layout' in by_name, 'index.json' in by_name)
+              require(present[0] == present[1], 'incomplete OCI metadata')
+              if not present[0]:
+                  return
+              require(strict_json(metadata('oci-layout')) == {'imageLayoutVersion': '1.0.0'}, 'invalid OCI layout')
+              index = strict_json(metadata('index.json'))
+              require(index.get('schemaVersion') == 2 and isinstance(index.get('manifests'), list)
+                      and len(index['manifests']) == 1, 'expected one OCI image descriptor')
+
+              def descriptor_path(desc):
+                  digest = desc.get('digest')
+                  size = desc.get('size')
+                  require(isinstance(digest, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', digest), 'invalid OCI digest')
+                  name = 'blobs/sha256/' + digest[7:]
+                  require(name in by_name and by_name[name].isfile() and type(size) is int
+                          and size == by_name[name].size, 'OCI descriptor size/member differs')
+                  return name
+
+              image = index['manifests'][0]
+              image_types = ('application/vnd.oci.image.manifest.v1+json',
+                             'application/vnd.docker.distribution.manifest.v2+json')
+              require(image.get('mediaType') in image_types, 'unsupported OCI image descriptor')
+              image_name = descriptor_path(image)
+              image_bytes = metadata(image_name)
+              require(hashlib.sha256(image_bytes).hexdigest() == image_name.rsplit('/', 1)[1], 'OCI manifest digest differs')
+              image_manifest = strict_json(image_bytes)
+              require(image_manifest.get('schemaVersion') == 2, 'invalid OCI image schema')
+              require(descriptor_path(image_manifest['config']) == config_name, 'OCI config differs from Docker manifest')
+              descriptors = image_manifest.get('layers')
+              require(isinstance(descriptors, list) and [descriptor_path(d) for d in descriptors] == layers,
+                      'OCI layers differ from Docker manifest')
+
+
+          def verify(path, expected):
+              require(re.fullmatch(r'sha256:[0-9a-f]{64}', expected), 'invalid expected ID')
+              with tarfile.open(path, 'r:') as archive:
+                  members = archive.getmembers()
+                  names = [m.name for m in members]
+                  require(len(names) == len(set(names)), 'duplicate archive member')
+                  # Check even unreferenced members before any future transport/import.
+                  for m in members:
+                      require(m.isfile() or m.isdir(), 'unexpected archive member type')
+                      require(all(part not in ('', '.', '..') for part in m.name.split('/')), 'unsafe archive member path')
+                  by_name = {m.name: m for m in members}
+
+                  def member(name):
+                      require(name in by_name and by_name[name].isfile(), 'missing/nonregular archive member')
+                      return archive.extractfile(by_name[name])
+
+                  def metadata(name):
+                      with member(name) as stream:
+                          data = stream.read(4 * 1024 * 1024 + 1)
+                      require(len(data) <= 4 * 1024 * 1024, 'oversized archive metadata')
+                      return data
+
+                  manifest = strict_json(metadata('manifest.json'))
+                  require(isinstance(manifest, list) and len(manifest) == 1, 'expected one saved image')
+                  entry = manifest[0]
+                  # docker save by immutable image ID must not carry mutable RepoTags.
+                  require(entry.get('RepoTags') in (None, []), 'unexpected mutable image tags')
+                  config_name = entry['Config']
+                  hex_id = expected[7:]
+                  require(config_name in (hex_id + '.json', 'blobs/sha256/' + hex_id), 'wrong config path')
+                  config_bytes = metadata(config_name)
+                  require(hashlib.sha256(config_bytes).hexdigest() == hex_id, 'wrong config bytes')
+                  root = strict_json(config_bytes)['rootfs']
+                  layers, diff_ids = entry['Layers'], root['diff_ids']
+                  require(root['type'] == 'layers' and isinstance(layers, list) and isinstance(diff_ids, list)
+                          and len(layers) == len(diff_ids) and len(layers) > 0, 'layer count differs')
+                  for name, diff_id in zip(layers, diff_ids):
+                      require(isinstance(name, str) and re.fullmatch(r'(?:blobs/sha256/[0-9a-f]{64}|[0-9a-f]{64}/layer\.tar)', name), 'invalid layer path')
+                      require(isinstance(diff_id, str) and re.fullmatch(r'sha256:[0-9a-f]{64}', diff_id), 'invalid diff ID')
+                      with member(name) as stream:
+                          magic = stream.read(4)
+                          stream.seek(0)
+                          if name.startswith('blobs/sha256/'):
+                              require(sha(stream) == name.rsplit('/', 1)[1], 'blob digest differs')
+                              stream.seek(0)
+                          if magic.startswith(b'\x1f\x8b'):
+                              with gzip.GzipFile(fileobj=stream) as raw:
+                                  actual = sha(raw)
+                          else:
+                              require(magic != b'\x28\xb5\x2f\xfd', 'unsupported zstd layer')
+                              actual = sha(stream)
+                      require('sha256:' + actual == diff_id, 'layer diff ID differs')
+                  verify_oci(by_name, metadata, config_name, layers)
+                  return len(layers)
+
+
+          if __name__ == '__main__':
+              count = verify(sys.argv[1], sys.argv[2])
+              with open(sys.argv[1], 'rb') as stream:
+                  archive_sha = sha(stream)
+              print(json.dumps({'image_id': sys.argv[2], 'archive_sha256': archive_sha,
+                                'ordered_layer_count': count, 'scope': 'local_docker_save_only'}))
+          PY
+          PYTHONDONTWRITEBYTECODE=1 python3 - "$RUNNER_TEMP" <<'PY'
+          import gzip
+          import hashlib
+          import io
+          import json
+          import pathlib
+          import sys
+          import tarfile
+          import tempfile
+
+          sys.path.insert(0, sys.argv[1])
+          from uni_p0_verify_saved_image import verify
+
+          H = lambda data: hashlib.sha256(data).hexdigest()
+          with tempfile.TemporaryDirectory() as directory:
+              path = pathlib.Path(directory) / 'image.tar'
+              layer_io = io.BytesIO()
+              with tarfile.open(fileobj=layer_io, mode='w') as tar:
+                  item = tarfile.TarInfo('synthetic.txt')
+                  item.size = 3
+                  tar.addfile(item, io.BytesIO(b'abc'))
+              raw = layer_io.getvalue()
+              zipped = gzip.compress(raw)
+
+              def fixture(*, compressed=False, wrong_config=False, wrong_layer=False,
+                          dup=False, extra=False, bad_path=False, missing=False,
+                          extra_member=None, tagged=False, empty_tags=False, oci=None, duplicate_json=None):
+                  cfg = json.dumps({'rootfs': {'type': 'layers', 'diff_ids': ['sha256:' + H(raw)]}}).encode()
+                  if duplicate_json == 'config':
+                      cfg = b'{"rootfs":null,' + cfg[1:]
+                  cid = H(cfg)
+                  data = zipped if compressed else raw
+                  if wrong_layer:
+                      data = b'bad'
+                  ln = 'blobs/sha256/' + H(data) if compressed else 'a' * 64 + '/layer.tar'
+                  cn = 'blobs/sha256/' + cid if compressed else cid + '.json'
+                  entry = {'Config': cn, 'Layers': ['../bad' if bad_path else ln],
+                           'RepoTags': ['synthetic:mutable'] if tagged else ([] if empty_tags else None)}
+                  docker_manifest = json.dumps([entry, entry] if extra else [entry]).encode()
+                  if duplicate_json == 'docker_manifest':
+                      docker_manifest = b'[{"RepoTags":["synthetic:mutable"],' + docker_manifest[2:]
+                  entries = [('manifest.json', docker_manifest), (cn, b'bad' if wrong_config else cfg)]
+                  if not missing:
+                      entries.append((ln, data))
+                  if oci is not None:
+                      if not compressed:
+                          raise RuntimeError('OCI fixture requires blob paths')
+                      cd = {'digest': 'sha256:' + cid, 'size': len(cfg)}
+                      ld = {'digest': 'sha256:' + H(data), 'size': len(data)}
+                      im = {'schemaVersion': 2, 'config': dict(cd), 'layers': [dict(ld)]}
+                      if oci == 'config':
+                          im['config'] = ld
+                      if oci == 'layer':
+                          im['layers'] = [cd]
+                      if oci == 'size':
+                          im['layers'][0]['size'] += 1
+                      ib = json.dumps(im).encode()
+                      if duplicate_json == 'oci_manifest':
+                          ib = b'{"schemaVersion":1,' + ib[1:]
+                      desc = {'digest': 'sha256:' + H(ib), 'size': len(ib),
+                              'mediaType': 'application/vnd.oci.image.manifest.v1+json'}
+                      if oci == 'type':
+                          desc['mediaType'] = 'application/vnd.oci.image.index.v1+json'
+                      if oci == 'docker':
+                          desc['mediaType'] = 'application/vnd.docker.distribution.manifest.v2+json'
+                      entries.append(('blobs/sha256/' + H(ib), b'x' * len(ib) if oci == 'digest' else ib))
+                      layout = json.dumps({'imageLayoutVersion': '2.0.0' if oci == 'layout' else '1.0.0'}).encode()
+                      if duplicate_json == 'oci_layout':
+                          layout = b'{"imageLayoutVersion":"2.0.0",' + layout[1:]
+                      entries.append(('oci-layout', layout))
+                      if oci != 'partial':
+                          index = json.dumps({'schemaVersion': 2,
+                                          'manifests': [desc, desc] if oci == 'multi' else [desc]}).encode()
+                          if duplicate_json == 'oci_index':
+                              index = b'{"schemaVersion":1,' + index[1:]
+                          entries.append(('index.json', index))
+                  if dup:
+                      entries.append((cn, cfg))
+                  with tarfile.open(path, 'w') as tar:
+                      for name, data in entries:
+                          item = tarfile.TarInfo(name)
+                          item.size = len(data)
+                          tar.addfile(item, io.BytesIO(data))
+                      if extra_member is not None:
+                          name, kind = extra_member
+                          item = tarfile.TarInfo(name)
+                          item.type = kind
+                          if kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
+                              item.linkname = 'synthetic-target'
+                          tar.addfile(item)
+                  return 'sha256:' + cid
+
+              for compressed in [False, True]:
+                  if verify(path, fixture(compressed=compressed)) != 1:
+                      raise RuntimeError('wrong layer count')
+              for key in ['wrong_config', 'wrong_layer', 'dup', 'extra', 'bad_path', 'missing']:
+                  eid = fixture(**{key: True})
+                  try:
+                      verify(path, eid)
+                  except ValueError:
+                      pass
+                  else:
+                      raise RuntimeError('accepted malformed fixture: ' + key)
+              fixture()
+              try:
+                  verify(path, 'sha256:' + '0' * 64)
+              except ValueError:
+                  pass
+              else:
+                  raise RuntimeError('accepted wrong image ID')
+              for options in [{'empty_tags': True}, {'extra_member': ('blobs', tarfile.DIRTYPE)}]:
+                  if verify(path, fixture(**options)) != 1:
+                      raise RuntimeError('wrong layer count for safe metadata')
+              for options in [
+                  {'tagged': True},
+                  {'extra_member': ('unused-symlink', tarfile.SYMTYPE)},
+                  {'extra_member': ('unused-hardlink', tarfile.LNKTYPE)},
+                  {'extra_member': ('unused-fifo', tarfile.FIFOTYPE)},
+                  {'extra_member': ('../unused', tarfile.REGTYPE)},
+                  {'extra_member': ('/unused', tarfile.REGTYPE)},
+              ]:
+                  try:
+                      verify(path, fixture(**options))
+                  except ValueError:
+                      pass
+                  else:
+                      raise RuntimeError('accepted unsafe archive metadata')
+              for oci in ['good', 'docker']:
+                  if verify(path, fixture(compressed=True, oci=oci)) != 1:
+                      raise RuntimeError('wrong layer count for OCI fixture')
+              for oci in ['config', 'layer', 'size', 'digest', 'type', 'multi', 'partial', 'layout']:
+                  try:
+                      verify(path, fixture(compressed=True, oci=oci))
+                  except ValueError:
+                      pass
+                  else:
+                      raise RuntimeError('accepted inconsistent OCI metadata: ' + oci)
+              for document in ['docker_manifest', 'config', 'oci_layout', 'oci_index', 'oci_manifest']:
+                  try:
+                      verify(path, fixture(compressed=True, oci='good', duplicate_json=document))
+                  except ValueError as error:
+                      if str(error) != 'duplicate JSON object key':
+                          raise
+                  else:
+                      raise RuntimeError('accepted ambiguous JSON metadata: ' + document)
+              print('PASS saved-image archive verifier: 6 positive and 26 negative synthetic fixtures')
+          PY
+          # Consume only the exact single marker from the successful 3-service
+          # SQL/HTTP run, never a freshly pulled replacement or an inferred tag.
+          pg_ref='postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a'
+          export PG_PINNED_REF="$pg_ref"
+          export PG_IMAGE_ID="$(node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import {readFileSync} from "node:fs";
+            const extract=raw=>{
+              const prefix="PASS exact PG18 runtime image";
+              const rows=raw.split("\n").filter(l=>l.includes(prefix));
+              assert.equal(rows.length,1);
+              const m=rows[0].match(/^PASS exact PG18 runtime image (sha256:[a-f0-9]{64})$/u);
+              assert.ok(m);
+              return m[1];
+            };
+            const good="PASS exact PG18 runtime image sha256:"+"a".repeat(64);
+            assert.equal(extract("other\n"+good+"\n"),"sha256:"+"a".repeat(64));
+            for(const raw of ["",good+"\n"+good,"prefix "+good,good+" suffix",
+              good.replace("sha256:","sha512:")])assert.throws(()=>extract(raw));
+            process.stdout.write(extract(readFileSync(process.env.RUNNER_TEMP+
+              "/uni-p0-private-http-rollback.log","utf8")));
+          ')"
+          test -n "$PG_IMAGE_ID"
+          test "$(docker image inspect --format '{{.Id}}' "$pg_ref")" = "$PG_IMAGE_ID"
+          for role in php nginx pg; do
+            if [[ "$role" == pg ]]; then
+              built_id="$PG_IMAGE_ID"
+            else
+              built_id="$(ROLE="$role" node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/uni-p0-local-built-image-identities.json")); process.stdout.write(m[process.env.ROLE+"_image_id"])')"
+              test "$(docker image inspect --format '{{.Id}}' "uni-qa-stage-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$role")" = "$built_id"
+            fi
+            test "$(docker image inspect --format '{{.Id}}' "$built_id")" = "$built_id"
+            tarfile="$RUNNER_TEMP/uni-p0-$role-os-image.tar"
+            report="$RUNNER_TEMP/uni-p0-$role-os-cves.json"
+            test ! -e "$tarfile" && test ! -e "$report"
+            docker save "$built_id" -o "$tarfile"
+            archive_proof="$RUNNER_TEMP/uni-p0-$role-archive-proof.json"
+            test ! -e "$archive_proof" && test ! -L "$archive_proof"
+            python3 "$RUNNER_TEMP/uni_p0_verify_saved_image.py" "$tarfile" "$built_id" > "$archive_proof"
+            test -s "$archive_proof"
+            "$trivy" --cache-dir "$RUNNER_TEMP/uni-p0-trivy-cache" image \
+              --input "$tarfile" --scanners vuln --pkg-types os \
+              --list-all-pkgs --format json --output "$report" \
+              --no-progress --timeout 8m --exit-code 0
+            test -s "$report"
+          done
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import {readFileSync,writeFileSync} from "node:fs";
+          import {createHash} from "node:crypto";
+          import {join} from "node:path";
+          const env=process.env,dir=env.RUNNER_TEMP;
+          const read=name=>readFileSync(join(dir,name));
+          const hash=bytes=>createHash("sha256").update(bytes).digest("hex");
+          const identity=JSON.parse(read("uni-p0-local-built-image-identities.json"));
+          assert.equal(identity.repository,env.GITHUB_REPOSITORY);
+          assert.equal(identity.commit,env.GITHUB_SHA);
+          assert.equal(identity.workflow_run_id,env.GITHUB_RUN_ID);
+          assert.equal(identity.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
+          assert.equal(identity.release_decision,"HOLD_NO_GO");
+          assert.equal(identity.vulnerability_assessment_completed,false);
+          assert.equal(env.PG_PINNED_REF,"postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a");
+          assert.match(env.PG_IMAGE_ID,/^sha256:[a-f0-9]{64}$/u);
+          identity.pg_image_id=env.PG_IMAGE_ID;
+          assert.equal(new Set([identity.php_image_id,identity.nginx_image_id,identity.pg_image_id]).size,3);
+          const images=[];
+          for(const [role,family] of [["php","debian"],["nginx","alpine"],["pg","debian"]]){
+            const bytes=read("uni-p0-"+role+"-os-cves.json");
+            const report=JSON.parse(bytes);
+            const validate=data=>{
+              assert.ok(data && data.SchemaVersion>=2);
+              assert.equal(data.ArtifactType,"container_image");
+              assert.equal(data.Metadata?.OS?.Family,family);
+              // A same-distribution scan of another image must not be relabeled
+              // as evidence for this build, even with a freshly computed hash.
+              assert.match(identity[role+"_image_id"],/^sha256:[a-f0-9]{64}$/u);
+              assert.equal(data.Metadata?.ImageID,identity[role+"_image_id"],
+                "scanner image ID differs from exact local build");
+              const os=data.Results?.filter(r=>r.Type===family && r.Class==="os-pkgs");
+              assert.ok(Array.isArray(os) && os.length>0,"missing OS advisory scan");
+              const pkgs=os.flatMap(r=>r.Packages??[]);
+              assert.ok(pkgs.length>=10,"empty OS inventory");
+              assert.ok(pkgs.every(p=>typeof p.Name==="string" && typeof p.Version==="string"));
+              const vulns=os.flatMap(r=>r.Vulnerabilities??[]);
+              assert.ok(vulns.every(v=>typeof v.VulnerabilityID==="string" && typeof v.PkgName==="string"));
+              return {packages:pkgs.length,findings:vulns.length,
+                high_critical:vulns.filter(v=>["HIGH","CRITICAL"].includes(v.Severity)).length};
+            };
+            const found=validate(report);
+            for(const mutate of [
+              d=>{d.Metadata.OS.Family="other";},
+              d=>{d.Metadata.ImageID="sha256:"+"0".repeat(64);},
+              d=>{delete d.Metadata.ImageID;},
+              d=>{d.Metadata.ImageID=identity[(role==="php"?"nginx":"php")+"_image_id"];},
+              d=>{d.ArtifactType="filesystem";},
+              d=>{d.Results=[];},
+              d=>{d.Results=d.Results.map(r=>({...r,Packages:[]}));}
+            ]){
+              const tampered=structuredClone(report);mutate(tampered);
+              assert.throws(()=>validate(tampered));
+            }
+            assert.match(identity[role+"_image_id"],/^sha256:[a-f0-9]{64}$/u);
+            // PostgreSQL is an upstream pinned image, not a local build.
+            // Trivy supplies its OS version; no new inventory claim is inferred.
+            const version=role==="pg"?report.Metadata.OS.Name:identity.os_distribution[role].version_id;
+            assert.match(version,/^[0-9][0-9A-Za-z._-]*$/u);
+            if(role!=="pg")assert.equal(identity.os_distribution[role].id,family);
+            const archiveProof=JSON.parse(read("uni-p0-"+role+"-archive-proof.json"));
+            const archiveHash=hash(read("uni-p0-"+role+"-os-image.tar"));
+            assert.deepEqual(Object.keys(archiveProof).sort(),
+              ["archive_sha256","image_id","ordered_layer_count","scope"]);
+            assert.equal(archiveProof.image_id,identity[role+"_image_id"]);
+            assert.equal(archiveProof.archive_sha256,archiveHash);
+            assert.ok(Number.isSafeInteger(archiveProof.ordered_layer_count) && archiveProof.ordered_layer_count>0);
+            assert.equal(archiveProof.scope,"local_docker_save_only");
+            images.push({role,os:family,os_version:version,
+              image_id:identity[role+"_image_id"],
+              image_tar_sha256:archiveHash,archive_verification:archiveProof,
+              cve_report_sha256:hash(bytes),os_packages_scanned:found.packages,
+              vulnerability_count:found.findings,high_critical_count:found.high_critical});
+          }
+          const evidence={schema:2,source:"trivy_0.76.2_vendor_os_advisories",
+            trivy_archive_sha256:"bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf",
+            repository:env.GITHUB_REPOSITORY,commit:env.GITHUB_SHA,
+            workflow_run_id:env.GITHUB_RUN_ID,workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+            build_evidence_sha256:hash(read("uni-p0-local-built-image-identities.json")),
+            postgres_runtime:{upstream_ref:env.PG_PINNED_REF,image_id:env.PG_IMAGE_ID,
+              scope:"synthetic_3_service_runtime"},
+            images,full_sbom_complete:false,appsec_signoff:false,
+            registry_published:false,release_decision:"HOLD_NO_GO"};
+          writeFileSync(join(dir,"uni-p0-os-cve-scan-provenance.json"),
+            JSON.stringify(evidence,null,2)+"\n",{flag:"wx",mode:0o600});
+          console.log("PASS OS advisory evidence: "+
+            images.map(i=>i.role+"="+i.vulnerability_count+" findings ("+i.high_critical_count+" HIGH/CRITICAL)").join("; ")+
+            "; exact scanner ImageID checked; 9 image-ID negative fixtures and 5 PG marker negatives; human triage pending; HOLD_NO_GO");
+          NODE
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-php-os-cves.json uni-p0-nginx-os-cves.json uni-p0-pg-os-cves.json \
+              uni-p0-os-cve-scan-provenance.json > uni-p0-os-cve-scan.sha256 &&
+            sha256sum -c uni-p0-os-cve-scan.sha256)
+          # Read-only transport preflight while the three validated TARs still exist.
+          # This local anchor tests the mechanism, not independent transfer or import.
+          proof_sha="$(sha256sum "$RUNNER_TEMP/uni-p0-os-cve-scan-provenance.json" | cut -d' ' -f1)"
+          source_receipt="$(node scripts/check-uni-image-transport.mjs "$RUNNER_TEMP" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha")"
+          printf '%s\n' "$source_receipt"
+          # Rehearse preservation into independent files, not another daemon/host.
+          # No archive upload, Docker load, or release artifact is permitted.
+          (
+            set -euo pipefail
+            names=(uni-p0-os-cve-scan-provenance.json uni-p0-php-os-image.tar uni-p0-nginx-os-image.tar uni-p0-pg-os-image.tar)
+            required=0
+            for name in "${names[@]}"; do
+              test -f "$RUNNER_TEMP/$name"
+              test ! -L "$RUNNER_TEMP/$name"
+              required=$((required + $(stat -c %s -- "$RUNNER_TEMP/$name")))
+            done
+            available="$(df -PB1 "$RUNNER_TEMP" | awk 'END {print $4}')"
+            [[ "$available" =~ ^[0-9]+$ ]]
+            test "$available" -ge "$((required + 1073741824))"
+            copy_dir="$(mktemp -d "$RUNNER_TEMP/uni-p0-transfer-copy.XXXXXXXX")"
+            cleanup_copy() {
+              for name in "${names[@]}"; do rm -f -- "$copy_dir/$name" || return 2; done
+              rmdir -- "$copy_dir" && test ! -e "$copy_dir"
+            }
+            trap 'rc=$?; trap - EXIT; cleanup_copy || exit 2; exit "$rc"' EXIT
+            for name in "${names[@]}"; do
+              cp --no-dereference --reflink=never --sparse=never -- "$RUNNER_TEMP/$name" "$copy_dir/$name"
+              test "$(stat -c %d:%i -- "$RUNNER_TEMP/$name")" != "$(stat -c %d:%i -- "$copy_dir/$name")"
+            done
+            destination_receipt="$(node scripts/check-uni-image-transport.mjs "$copy_dir" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$proof_sha")"
+            test "$source_receipt" = "$destination_receipt"
+            cleanup_copy
+            trap - EXIT
+            # Preserve only the bounded receipt after equality and verified cleanup.
+            proof="$RUNNER_TEMP/uni-p0-transport-preservation-proof.json"
+            (umask 077; set -o noclobber; printf '%s\n' "$destination_receipt" > "$proof")
+            echo 'PASS same-runner byte preservation in four distinct files and verified cleanup; no import or independent host; HOLD_NO_GO'
+          )
+      - name: Create tamper-checked HIGH/CRITICAL remediation queue (not AppSec signoff)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          (cd "$RUNNER_TEMP" && sha256sum -c uni-p0-os-cve-scan.sha256)
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import {readFileSync,writeFileSync} from "node:fs";
+          import {createHash} from "node:crypto";
+          import {join} from "node:path";
+          const env=process.env,dir=env.RUNNER_TEMP;
+          const read=name=>readFileSync(join(dir,name));
+          const sha=bytes=>createHash("sha256").update(bytes).digest("hex");
+          const proof=JSON.parse(read("uni-p0-os-cve-scan-provenance.json"));
+          assert.equal(proof.repository,"rafhael100/imagine-universidade");
+          assert.equal(proof.commit,env.GITHUB_SHA);
+          assert.equal(proof.workflow_run_id,env.GITHUB_RUN_ID);
+          assert.equal(proof.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
+          assert.equal(proof.appsec_signoff,false);
+          assert.equal(proof.release_decision,"HOLD_NO_GO");
+          // Derive the queue from the signed-off *source bytes* at validation
+          // time too. Counts and a report checksum alone cannot detect a
+          // substituted CVE ID, package, version or vendor status in the queue.
+          const findingsFromScan=(report,severities=["HIGH","CRITICAL"])=>{
+            assert.ok(Array.isArray(report.Results),"missing OS scan results");
+            return report.Results.filter(r=>r.Class==="os-pkgs")
+              .flatMap(r=>r.Vulnerabilities??[])
+              .filter(v=>severities.includes(v.Severity))
+              .map(v=>{
+                assert.ok(typeof v.VulnerabilityID==="string" && v.VulnerabilityID.length);
+                assert.ok(typeof v.PkgName==="string" && v.PkgName.length);
+                assert.ok(typeof v.InstalledVersion==="string");
+                return {id:v.VulnerabilityID,package:v.PkgName,
+                  installed_version:v.InstalledVersion,
+                  fixed_version:typeof v.FixedVersion==="string" && v.FixedVersion.trim() ?
+                    v.FixedVersion : null,
+                  severity:v.Severity,
+                  vendor_status:typeof v.Status==="string" ? v.Status : null};
+              }).sort((a,b)=>
+                (a.severity===b.severity ? 0 : a.severity==="CRITICAL" ? -1 : 1) ||
+                Number(b.fixed_version!==null)-Number(a.fixed_version!==null) ||
+                a.package.localeCompare(b.package) || a.id.localeCompare(b.id));
+          };
+          const images=[];
+          for(const role of ["php","nginx","pg"]){
+            const source=proof.images.find(x=>x.role===role);
+            assert.ok(source,"missing exact-image scan provenance");
+            const bytes=read("uni-p0-"+role+"-os-cves.json");
+            assert.equal(sha(bytes),source.cve_report_sha256);
+            const report=JSON.parse(bytes);
+            assert.match(source.image_id,/^sha256:[a-f0-9]{64}$/u);
+            assert.equal(report.Metadata?.ImageID,source.image_id,
+              "scanner image ID differs from scan provenance");
+            const vulnerabilities=report.Results.filter(r=>r.Class==="os-pkgs")
+              .flatMap(r=>r.Vulnerabilities??[]);
+            assert.equal(vulnerabilities.length,source.vulnerability_count);
+            const findings=findingsFromScan(report);
+            // UNKNOWN is neither HIGH nor harmless: keep exact scanner rows
+            // in a separate pending queue, never upgrade or accept severity.
+            const unknownFindings=findingsFromScan(report,["UNKNOWN"]);
+            const withFix=findings.filter(f=>f.fixed_version!==null).length;
+            assert.equal(findings.length,source.high_critical_count);
+            images.push({role,image_id:source.image_id,cve_report_sha256:sha(bytes),
+              high_critical_count:findings.length,
+              unknown_severity_count:unknownFindings.length,
+              vendor_fixed_version_known:withFix,
+              fixed_version_not_reported:findings.length-withFix,
+              findings,unknown_findings:unknownFindings});
+          }
+          // Collapse package×advisory rows into distinct advisory review
+          // groups. Preserve every affected package; never infer risk approval.
+          const groupForAppSec=(images,reviewStatus="PENDING_APPSEC")=>{
+            const byId=new Map();
+            for(const group of images){
+              for(const f of group.findings){
+                if(!byId.has(f.id))byId.set(f.id,[]);
+                byId.get(f.id).push({
+                  role:group.role,package:f.package,
+                  installed_version:f.installed_version,
+                  fixed_version:f.fixed_version,severity:f.severity,
+                  vendor_status:f.vendor_status
+                });
+              }
+            }
+            return [...byId].map(([id,affected])=>({
+              advisory_id:id,
+              highest_severity:affected.some(f=>f.severity==="CRITICAL")?"CRITICAL":
+                affected.some(f=>f.severity==="HIGH")?"HIGH":"UNKNOWN",
+              package_occurrences:affected.length,
+              review_status:reviewStatus,
+              affected:affected.sort((a,b)=>a.role.localeCompare(b.role) ||
+                a.package.localeCompare(b.package) ||
+                a.installed_version.localeCompare(b.installed_version))
+            })).sort((a,b)=>
+              Number(b.highest_severity==="CRITICAL")-Number(a.highest_severity==="CRITICAL") ||
+              b.package_occurrences-a.package_occurrences ||
+              a.advisory_id.localeCompare(b.advisory_id));
+          };
+          const reviewGroups=groupForAppSec(images);
+          const unknownReviewGroups=groupForAppSec(
+            images.map(i=>({...i,findings:i.unknown_findings})),
+            "PENDING_APPSEC_UNRATED");
+          assert.equal(unknownReviewGroups.reduce((n,g)=>n+g.package_occurrences,0),
+            images.reduce((n,i)=>n+i.unknown_severity_count,0));
+          assert.equal(reviewGroups.reduce((n,g)=>n+g.package_occurrences,0),
+            images.reduce((n,g)=>n+g.high_critical_count,0));
+          const triage={schema:4,repository:env.GITHUB_REPOSITORY,
+            commit:env.GITHUB_SHA,workflow_run_id:env.GITHUB_RUN_ID,
+            workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+            scan_provenance_sha256:sha(read("uni-p0-os-cve-scan-provenance.json")),
+            high_critical_total:images.reduce((n,i)=>n+i.high_critical_count,0),
+            vendor_fixed_version_known:images.reduce((n,i)=>n+i.vendor_fixed_version_known,0),
+            fixed_version_not_reported:images.reduce((n,i)=>n+i.fixed_version_not_reported,0),
+            unique_advisory_ids_count:reviewGroups.length,review_groups:reviewGroups,
+            unknown_severity_total:images.reduce((n,i)=>n+i.unknown_severity_count,0),
+            unknown_advisory_ids_count:unknownReviewGroups.length,
+            unknown_review_groups:unknownReviewGroups,
+            images,appsec_signoff:false,risk_acceptance:false,
+            release_decision:"HOLD_NO_GO"};
+          const validate=t=>{
+            assert.equal(t.schema,4);
+            assert.equal(t.repository,"rafhael100/imagine-universidade");
+            assert.equal(t.commit,env.GITHUB_SHA);
+            assert.equal(t.workflow_run_id,env.GITHUB_RUN_ID);
+            assert.equal(t.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
+            assert.equal(t.scan_provenance_sha256,sha(read("uni-p0-os-cve-scan-provenance.json")));
+            assert.equal(t.release_decision,"HOLD_NO_GO");
+            assert.equal(t.appsec_signoff,false);
+            assert.equal(t.risk_acceptance,false);
+            assert.deepEqual(t.images.map(i=>i.role),["php","nginx","pg"]);
+            for(const group of t.images){
+              const source=proof.images.find(i=>i.role===group.role);
+              assert.equal(group.image_id,source.image_id);
+              assert.equal(group.cve_report_sha256,source.cve_report_sha256);
+              assert.equal(group.high_critical_count,source.high_critical_count);
+              assert.equal(group.findings.length,group.high_critical_count);
+              assert.equal(group.unknown_findings.length,group.unknown_severity_count);
+              // Exact ordered finding identity is as important as the counts.
+              // Refuse an unreviewed queue rewritten without changing the
+              // original scan, including an altered fixed-version assertion.
+              const originalScan=JSON.parse(read("uni-p0-"+group.role+"-os-cves.json"));
+              assert.equal(originalScan.Metadata?.ImageID,source.image_id);
+              assert.deepEqual(group.findings,findingsFromScan(originalScan));
+              assert.deepEqual(group.unknown_findings,findingsFromScan(originalScan,["UNKNOWN"]));
+              assert.ok(group.unknown_findings.every(f=>f.severity==="UNKNOWN"));
+              assert.equal(group.vendor_fixed_version_known+group.fixed_version_not_reported,
+                group.high_critical_count);
+              assert.equal(group.vendor_fixed_version_known,
+                group.findings.filter(f=>f.fixed_version!==null).length);
+              assert.ok(group.findings.every(f=>["HIGH","CRITICAL"].includes(f.severity)));
+            }
+            assert.equal(t.high_critical_total,t.images.reduce((n,i)=>n+i.high_critical_count,0));
+            assert.equal(t.vendor_fixed_version_known,
+              t.images.reduce((n,i)=>n+i.vendor_fixed_version_known,0));
+            assert.equal(t.fixed_version_not_reported,
+              t.images.reduce((n,i)=>n+i.fixed_version_not_reported,0));
+            assert.equal(t.vendor_fixed_version_known+t.fixed_version_not_reported,t.high_critical_total);
+            // Reconstruct the human review groups from already verified exact
+            // scanner rows; a count-only review grouping is not trustworthy.
+            const expected=groupForAppSec(t.images);
+            assert.equal(t.unique_advisory_ids_count,expected.length);
+            assert.deepEqual(t.review_groups,expected);
+            assert.ok(t.review_groups.every(g=>g.review_status==="PENDING_APPSEC"));
+            assert.equal(t.review_groups.reduce((n,g)=>n+g.package_occurrences,0),
+              t.high_critical_total);
+            const expectedUnknown=groupForAppSec(
+              t.images.map(i=>({...i,findings:i.unknown_findings})),
+              "PENDING_APPSEC_UNRATED");
+            assert.equal(t.unknown_severity_total,
+              t.images.reduce((n,i)=>n+i.unknown_severity_count,0));
+            assert.equal(t.unknown_advisory_ids_count,expectedUnknown.length);
+            assert.deepEqual(t.unknown_review_groups,expectedUnknown);
+            assert.ok(t.unknown_review_groups.every(g=>
+              g.review_status==="PENDING_APPSEC_UNRATED" && g.highest_severity==="UNKNOWN"));
+            assert.equal(t.unknown_review_groups.reduce((n,g)=>n+g.package_occurrences,0),
+              t.unknown_severity_total);
+          };
+          validate(triage);
+          for(const mutate of [
+            t=>t.commit="0".repeat(40),
+            t=>t.release_decision="GO",
+            t=>t.appsec_signoff=true,
+            t=>t.risk_acceptance=true,
+            t=>t.images[0].cve_report_sha256="0".repeat(64),
+            t=>t.images[0].high_critical_count++,
+            t=>t.images[0].image_id="sha256:"+"0".repeat(64),
+            t=>t.vendor_fixed_version_known++,
+            t=>t.schema=2,
+            t=>t.images.pop(),
+            t=>t.images[2].image_id=t.images[0].image_id,
+            t=>t.unknown_severity_total++,
+            t=>t.unknown_advisory_ids_count++,
+            t=>t.unknown_review_groups.push({advisory_id:"FORGED"}),
+            t=>t.images[0].unknown_severity_count++,
+            t=>{
+              const target=t.images.find(i=>i.unknown_findings.length);
+              if(target)target.unknown_findings[0].id+="-forged";
+              else t.images[0].unknown_findings.push({id:"FAKE",severity:"UNKNOWN"});
+            },
+            t=>t.unique_advisory_ids_count++,
+            t=>t.review_groups.push({advisory_id:"FORGED"}),
+            t=>{
+              if(t.review_groups.length)t.review_groups[0].review_status="APPROVED";
+              else t.review_groups.push({advisory_id:"FORGED"});
+            },
+            t=>{
+              if(t.review_groups.length)t.review_groups[0].affected[0].package+="-forged";
+              else t.review_groups.push({advisory_id:"FORGED"});
+            },
+            t=>{
+              const target=t.images.find(i=>i.findings.length);
+              if(target) target.findings[0].id+="-forged";
+              else t.images[0].findings.push({id:"CVE-FORGED",package:"fake",
+                installed_version:"0",fixed_version:null,severity:"HIGH",vendor_status:null});
+            },
+            t=>{
+              const target=t.images.find(i=>i.findings.length);
+              if(target) target.findings[0].installed_version+="-forged";
+              else t.images[0].findings.push({id:"CVE-FORGED",package:"fake",
+                installed_version:"0",fixed_version:null,severity:"HIGH",vendor_status:null});
+            },
+            t=>{
+              const target=t.images.find(i=>i.findings.length);
+              if(target) target.findings[0].vendor_status=
+                target.findings[0].vendor_status===null ? "forged" : null;
+              else t.images[0].findings.push({id:"CVE-FORGED",package:"fake",
+                installed_version:"0",fixed_version:null,severity:"HIGH",vendor_status:null});
+            }
+          ]){
+            const copy=structuredClone(triage);mutate(copy);
+            assert.throws(()=>validate(copy));
+          }
+          writeFileSync(join(dir,"uni-p0-os-cve-triage.json"),
+            JSON.stringify(triage,null,2)+"\n",{flag:"wx",mode:0o600});
+          console.log("PASS CVE triage: "+triage.high_critical_total+" HIGH/CRITICAL, "+
+            triage.vendor_fixed_version_known+" with vendor fixed version, "+
+            triage.fixed_version_not_reported+" without reported fix; "+
+            triage.unique_advisory_ids_count+" distinct HIGH/CRITICAL advisory IDs; "+
+            triage.unknown_severity_total+" UNKNOWN severity occurrences ("+
+            triage.unknown_advisory_ids_count+" IDs), separately PENDING_APPSEC_UNRATED; "+
+            "23 tamper tests; 13 gates HOLD_NO_GO.");
+          NODE
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-os-cve-triage.json > uni-p0-os-cve-triage.sha256 &&
+            sha256sum -c uni-p0-os-cve-triage.sha256)
+      - name: Build exact-run private release review index (not a deployable image)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-git-config-root-fence-2026-11-22
+          test "$GITHUB_REPOSITORY" = rafhael100/imagine-universidade
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test ! -e .env && test ! -e .env.production
+          (cd "$RUNNER_TEMP" &&
+            sha256sum -c uni-p0-composer-production-audit.sha256 &&
+            sha256sum -c uni-p0-local-built-image-identities.sha256 &&
+            sha256sum -c uni-p0-os-cve-scan.sha256 &&
+            sha256sum -c uni-p0-os-cve-triage.sha256)
+          # Only approved literal PASS markers are copied from the synthetic
+          # log. The raw Docker/Laravel log is NOT included in any artifact.
+          proof="$RUNNER_TEMP/uni-p0-synthetic-rollback-proof.txt"
+          test ! -e "$proof" && test ! -L "$proof"
+          log="$RUNNER_TEMP/uni-p0-private-http-rollback.log"
+          test -s "$log"
+          umask 077
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import {readFileSync,writeFileSync} from "node:fs";
+          import {createHash} from "node:crypto";
+          import {execFileSync} from "node:child_process";
+          import {join} from "node:path";
+          const env=process.env, tmp=env.RUNNER_TEMP;
+          const hash=bytes=>createHash("sha256").update(bytes).digest("hex");
+          const read=name=>readFileSync(join(tmp,name));
+          const parse=name=>JSON.parse(read(name).toString("utf8"));
+          const sourceFiles=[
+            "uni-p0-composer-production-audit.json",
+            "uni-p0-composer-production-audit-provenance.json",
+            "uni-p0-local-built-image-identities.json",
+            "uni-p0-php-runtime-linkage.txt",
+            "uni-p0-os-cve-scan-provenance.json",
+            "uni-p0-os-cve-triage.json",
+            "uni-p0-synthetic-rollback-proof.txt",
+            "uni-p0-transport-preservation-proof.json"
+          ];
+          assert.match(env.GITHUB_SHA,/^[0-9a-f]{40}$/u);
+          assert.match(env.GITHUB_RUN_ID,/^[0-9]+$/u);
+          assert.match(env.GITHUB_RUN_ATTEMPT,/^[0-9]+$/u);
+          const gatesBytes=readFileSync("ops/release-gates.json");
+          const lockedGates=execFileSync("git",["show",
+            env.GITHUB_SHA+":ops/release-gates.json"],{timeout:5000});
+          assert.ok(gatesBytes.equals(lockedGates),"release gates differ from exact commit");
+          const gates=JSON.parse(gatesBytes.toString("utf8"));
+          assert.equal(gates.release_decision,"HOLD_NO_GO");
+          assert.equal(Object.keys(gates.blocking_evidence).length,13);
+          assert.ok(Object.values(gates.blocking_evidence).every(g=>
+            g.status==="NOT_VERIFIED" && g.evidence_ref===null));
+          const composer=parse("uni-p0-composer-production-audit-provenance.json");
+          const builds=parse("uni-p0-local-built-image-identities.json");
+          const linkage=read("uni-p0-php-runtime-linkage.txt").toString("utf8").split("\n");
+          const validateLinkage=lines=>{
+            assert.deepEqual(lines.slice(0,4),[
+              "commit="+env.GITHUB_SHA,"run="+env.GITHUB_RUN_ID,
+              "attempt="+env.GITHUB_RUN_ATTEMPT,"php_image_id="+builds.php_image_id]);
+            assert.equal(lines.at(-2),"APPSEC_SIGNOFF=false");
+            assert.equal(lines.at(-1),"");
+            assert.ok(lines.some(l=>l.startsWith("ELF ")));
+          };
+          validateLinkage(linkage);
+          for(const i of [0,1,2,3,linkage.length-2]){
+            const wrong=[...linkage]; wrong[i]="FORGED"; assert.throws(()=>validateLinkage(wrong));
+          }
+          const scan=parse("uni-p0-os-cve-scan-provenance.json");
+          const triage=parse("uni-p0-os-cve-triage.json");
+          for(const p of [composer,builds,scan,triage]){
+            assert.equal(p.repository,env.GITHUB_REPOSITORY);
+            assert.equal(p.commit,env.GITHUB_SHA);
+            assert.equal(p.workflow_run_id,env.GITHUB_RUN_ID);
+            assert.equal(p.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
+            assert.equal(p.release_decision,"HOLD_NO_GO");
+          }
+          assert.equal(composer.advisory_count,0);
+          assert.equal(composer.abandoned_package_count,0);
+          assert.equal(composer.report_sha256,hash(read("uni-p0-composer-production-audit.json")));
+          assert.equal(composer.composer_lock_sha256,hash(readFileSync("composer.lock")));
+          assert.equal(builds.registry_published,false);
+          assert.equal(builds.release_image_digests_pinned,false);
+          assert.equal(builds.complete_sbom,false);
+          assert.equal(scan.appsec_signoff,false);
+          assert.equal(scan.build_evidence_sha256,hash(read("uni-p0-local-built-image-identities.json")));
+          assert.equal(triage.scan_provenance_sha256,hash(read("uni-p0-os-cve-scan-provenance.json")));
+          assert.equal(triage.appsec_signoff,false);
+          assert.equal(triage.risk_acceptance,false);
+          assert.equal(scan.schema,2);
+          assert.equal(scan.images.length,3);
+          assert.deepEqual(scan.images.map(i=>i.role),["php","nginx","pg"]);
+          const validateArchiveProof=i=>{
+            const p=i.archive_verification;
+            assert.deepEqual(Object.keys(p).sort(),["archive_sha256","image_id","ordered_layer_count","scope"]);
+            assert.equal(p.image_id,i.image_id);
+            assert.match(p.archive_sha256,/^[a-f0-9]{64}$/u);
+            assert.equal(p.archive_sha256,i.image_tar_sha256);
+            assert.ok(Number.isSafeInteger(p.ordered_layer_count) && p.ordered_layer_count>0);
+            assert.equal(p.scope,"local_docker_save_only");
+          };
+          for(const i of scan.images){
+            validateArchiveProof(i);
+            for(const mutate of [
+              p=>p.image_id="sha256:"+"0".repeat(64),
+              p=>p.archive_sha256="0".repeat(64),
+              p=>p.ordered_layer_count=0,
+              p=>p.scope="portable_release"
+            ]){
+              const changed=structuredClone(i);
+              mutate(changed.archive_verification);
+              assert.throws(()=>validateArchiveProof(changed));
+            }
+          }
+          const pgRuntime=scan.postgres_runtime;
+          const validatePgRuntime=p=>{
+            assert.deepEqual(Object.keys(p).sort(),["image_id","scope","upstream_ref"]);
+            assert.equal(p.upstream_ref,"postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a");
+            assert.equal(p.scope,"synthetic_3_service_runtime");
+            assert.match(p.image_id,/^sha256:[a-f0-9]{64}$/u);
+            const markers=read("uni-p0-private-http-rollback.log").toString("utf8")
+              .split("\n").filter(l=>l.includes("PASS exact PG18 runtime image"));
+            assert.deepEqual(markers,["PASS exact PG18 runtime image "+p.image_id]);
+            assert.equal(scan.images[2].image_id,p.image_id);
+            assert.equal(JSON.parse(read("uni-p0-pg-os-cves.json")).Metadata?.ImageID,p.image_id);
+          };
+          validatePgRuntime(pgRuntime);
+          for(const mutate of [p=>p.image_id=builds.php_image_id,
+            p=>p.upstream_ref="postgres:18",p=>p.scope="production"]){
+            const wrong=structuredClone(pgRuntime);mutate(wrong);assert.throws(()=>validatePgRuntime(wrong));
+          }
+          for(const i of scan.images.filter(i=>i.role!=="pg"))
+            assert.equal(i.image_id,builds[i.role+"_image_id"]);
+          assert.equal(triage.high_critical_total,
+            scan.images.reduce((n,i)=>n+i.high_critical_count,0));
+          const expectedPassMarkers=[
+            "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority.",
+            "PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied.",
+            "PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403."
+          ];
+          const validatePassMarkers=lines=>assert.deepEqual(lines,expectedPassMarkers);
+          // Validate the original stream before writing the allowlisted proof:
+          // a loop over expected markers would silently reorder and deduplicate it.
+          const extractPassMarkers=raw=>{
+            const matches=raw.split("\n").filter(line=>expectedPassMarkers.some(marker=>line.includes(marker)));
+            assert.deepEqual(matches,expectedPassMarkers,"raw rollback log markers missing, altered, duplicated or out of order");
+            return matches;
+          };
+          const [a,b,c]=expectedPassMarkers;
+          assert.deepEqual(extractPassMarkers(["unrelated",a,"other",b,c,""].join("\n")),expectedPassMarkers);
+          for(const lines of [[a,c],[b,a,c],[a,b,c,a],["HOLD: "+a,b,c],
+            [a,b,c+" (failed)"],[a,"HOLD: "+a,b,c]])assert.throws(()=>extractPassMarkers(lines.join("\n")));
+          const passMarkers=extractPassMarkers(read("uni-p0-private-http-rollback.log").toString("utf8"));
+          validatePassMarkers(passMarkers);
+          writeFileSync(join(tmp,"uni-p0-synthetic-rollback-proof.txt"),passMarkers.join("\n")+"\n",
+            {flag:"wx",mode:0o600});
+          // An embedded marker, duplicated result, or reordered proof must not
+          // become a release-readiness claim even if its file hash is valid.
+          for(const spoofed of [
+            ["HOLD: "+expectedPassMarkers[0],...expectedPassMarkers.slice(1)],
+            [expectedPassMarkers[0]+" (failed)",...expectedPassMarkers.slice(1)],
+            [...expectedPassMarkers,expectedPassMarkers[0]],
+            [expectedPassMarkers[1],expectedPassMarkers[0],expectedPassMarkers[2]]
+          ]) assert.throws(()=>validatePassMarkers(spoofed));
+          // Bind the same-runner copy receipt to the exact scan and all three archives.
+          // A valid receipt is not proof of independent host, import or deployability.
+          const anchor=hash(read("uni-p0-os-cve-scan-provenance.json"));
+          const expectedTransport={scope:'read_only_transport_bytes_only',source_sha:env.GITHUB_SHA,
+            workflow_run_id:env.GITHUB_RUN_ID,workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+            provenance_sha256:anchor,
+            images:scan.images.map(i=>({role:i.role,image_id:i.image_id,archive_sha256:i.image_tar_sha256,filename:'uni-p0-'+i.role+'-os-image.tar'})),
+            release_decision:'HOLD_NO_GO',import_executed:false,portable_image_artifact:false};
+          const validateTransport=p=>assert.deepEqual(p,expectedTransport);
+          validateTransport(parse("uni-p0-transport-preservation-proof.json"));
+          for(const mutate of [p=>p.source_sha='0'.repeat(40),p=>p.workflow_run_id='0',
+            p=>p.workflow_attempt=String(Number(env.GITHUB_RUN_ATTEMPT)+1),
+            p=>p.provenance_sha256='0'.repeat(64),p=>p.images[0].archive_sha256='0'.repeat(64),
+            p=>p.images[1].image_id=p.images[0].image_id,p=>p.images.reverse(),
+            p=>p.import_executed=true,p=>p.portable_image_artifact=true,p=>p.release_decision='GO']){
+            const changed=structuredClone(expectedTransport);mutate(changed);assert.throws(()=>validateTransport(changed));
+          }
+          console.log("PASS same-runner preservation receipt bound to exact scan, 10 negative cases; import not exercised");
+          const fileHashes=Object.fromEntries(sourceFiles.map(f=>[f,hash(read(f))]));
+          const handoff={
+            schema_version:2,repository:env.GITHUB_REPOSITORY,source_sha:env.GITHUB_SHA,
+            workflow_run_id:env.GITHUB_RUN_ID,workflow_attempt:env.GITHUB_RUN_ATTEMPT,
+            scope:"disposable_runner_only_not_deployable",
+            release_decision:"HOLD_NO_GO",gates_total:13,gates_unverified:13,
+            release_gates_sha256:hash(gatesBytes),
+            composer_prod_advisories:composer.advisory_count,
+            os_high_critical_occurrences:triage.high_critical_total,
+            os_unknown_occurrences:triage.unknown_severity_total,
+            local_image_ids:{php:builds.php_image_id,nginx:builds.nginx_image_id,pg:pgRuntime.image_id},
+            rollback_proof:"SYNTHETIC_LOCAL_IMAGES_ONLY",
+            portable_image_artifact:false,registry_published:false,
+            appsec_signoff:false,portal_access_approved:false,
+            staging_homologated:false,editorial_signoff:false,
+            source_files_sha256:fileHashes
+          };
+          const validate=h=>{
+            assert.equal(h.schema_version,2);
+            assert.equal(h.repository,env.GITHUB_REPOSITORY);
+            assert.equal(h.source_sha,env.GITHUB_SHA);
+            assert.equal(h.workflow_run_id,env.GITHUB_RUN_ID);
+            assert.equal(h.workflow_attempt,env.GITHUB_RUN_ATTEMPT);
+            assert.equal(h.scope,"disposable_runner_only_not_deployable");
+            assert.equal(h.release_decision,"HOLD_NO_GO");
+            assert.equal(h.gates_total,13);
+            assert.equal(h.gates_unverified,13);
+            assert.equal(h.release_gates_sha256,hash(gatesBytes));
+            assert.equal(h.composer_prod_advisories,composer.advisory_count);
+            assert.equal(h.os_high_critical_occurrences,triage.high_critical_total);
+            assert.equal(h.os_unknown_occurrences,triage.unknown_severity_total);
+            assert.deepEqual(h.local_image_ids,
+              {php:builds.php_image_id,nginx:builds.nginx_image_id,pg:pgRuntime.image_id});
+            assert.equal(h.rollback_proof,"SYNTHETIC_LOCAL_IMAGES_ONLY");
+            for(const key of ["portable_image_artifact","registry_published",
+              "appsec_signoff","portal_access_approved","staging_homologated",
+              "editorial_signoff"])assert.equal(h[key],false,key);
+            assert.deepEqual(h.source_files_sha256,fileHashes);
+            assert.deepEqual(Object.keys(h.source_files_sha256).sort(),sourceFiles.sort());
+          };
+          validate(handoff);
+          for(const mutate of [
+            h=>h.source_sha="0".repeat(40),
+            h=>h.workflow_run_id="0",
+            h=>h.gates_unverified=0,
+            h=>h.release_decision="GO",
+            h=>h.local_image_ids.php="sha256:"+"0".repeat(64),
+            h=>delete h.local_image_ids.pg,
+            h=>h.source_files_sha256["uni-p0-os-cve-triage.json"]="0".repeat(64),
+            h=>h.os_unknown_occurrences=0,
+            h=>h.rollback_proof="REAL_VPS_RESTORED",
+            h=>h.portable_image_artifact=true,
+            h=>h.appsec_signoff=true,
+            h=>h.portal_access_approved=true
+          ]){
+            const changed=structuredClone(handoff);
+            mutate(changed);
+            assert.throws(()=>validate(changed));
+          }
+          writeFileSync(join(tmp,"uni-p0-private-release-review-index.json"),
+            JSON.stringify(handoff,null,2)+"\n",{flag:"wx",mode:0o600});
+          console.log("PASS exact-run review index: source SHA + Composer + OS scan + local image IDs + synthetic rollback; 12 index tamper mutations + 3 PG runtime provenance negatives + 4 forged rollback marker tests + 6 raw-log negative fixtures; 13 gates HOLD_NO_GO; NOT deployable");
+          NODE
+          (cd "$RUNNER_TEMP" &&
+            sha256sum uni-p0-private-release-review-index.json uni-p0-synthetic-rollback-proof.txt uni-p0-transport-preservation-proof.json > uni-p0-private-release-review-index.sha256 &&
+            sha256sum -c uni-p0-private-release-review-index.sha256)
+      - name: Preserve OS vulnerability reports for review, not AppSec approval
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: imagine-universidade-P0-os-CVE-NOT-APPSEC-APPROVED
+          path: |
+            ${{ runner.temp }}/uni-p0-php-os-cves.json
+            ${{ runner.temp }}/uni-p0-nginx-os-cves.json
+            ${{ runner.temp }}/uni-p0-pg-os-cves.json
+            ${{ runner.temp }}/uni-p0-os-cve-scan-provenance.json
+            ${{ runner.temp }}/uni-p0-os-cve-scan.sha256
+            ${{ runner.temp }}/uni-p0-os-cve-triage.json
+            ${{ runner.temp }}/uni-p0-os-cve-triage.sha256
+            ${{ runner.temp }}/uni-p0-private-release-review-index.json
+            ${{ runner.temp }}/uni-p0-private-release-review-index.sha256
+            ${{ runner.temp }}/uni-p0-synthetic-rollback-proof.txt
+            ${{ runner.temp }}/uni-p0-transport-preservation-proof.json
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Reconfirm deny-all and all 13 gates pending after synthetic rollback
         run: node ops/staging/check-release-gates.mjs

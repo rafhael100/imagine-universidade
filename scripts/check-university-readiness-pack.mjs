@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSync,rmSync} from "node:fs";
+import {readFileSync,mkdtempSync,mkdirSync,writeFileSync,appendFileSync,unlinkSync,symlinkSync,rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {execFileSync} from "node:child_process";
-import {buildReadinessPack,requireCleanReleaseCheckout,reviewedSourceFiles,readPinnedGitSourceBytes} from "./build-university-readiness-pack.mjs";
+import {buildReadinessPack,requireCleanReleaseCheckout,requireFreshReadinessOutput,reviewedSourceFiles,readPinnedGitSourceBytes} from "./build-university-readiness-pack.mjs";
 
 const manifest=JSON.parse(readFileSync(new URL("../ops/release-gates.json",import.meta.url),"utf8"));
 const sha="a".repeat(40);
@@ -177,6 +177,39 @@ check("Git-ignored PHP inside Docker COPY source is denied",()=>{
     rmSync(root,{recursive:true,force:true});
   }
 });
+check("Git core.ignorecase cannot hide case-distinct untracked Docker PHP sources",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-ignorecase-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:5000
+  });
+  try{
+    git("init","-q");
+    mkdirSync(join(root,"app"));
+    writeFileSync(join(root,"app","Trusted.php"),"<?php // tracked synthetic source\\n");
+    git("add","app/Trusted.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    const head=git("rev-parse","HEAD").trim();
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    git("config","--local","core.ignorecase","true");
+    writeFileSync(join(root,"app","trusted.php"),"<?php // distinct untracked synthetic source\\n");
+    assert.equal(git("rev-parse","HEAD").trim(),head);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"",
+      "Unsafe case-insensitive Git setting must conceal the added Docker source");
+    assert.equal(git("ls-files","--others","--ignored","--exclude-standard","--","app"),"",
+      "Even the ignored-source guard is blind under core.ignorecase=true");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: unsafe Git core.ignorecase"&&
+      !error.message.includes("trusted.php"));
+    git("config","--local","core.ignorecase","false");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift");
+    unlinkSync(join(root,"app","trusted.php"));
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+  }
+});
 check("GIT_WORK_TREE cannot redirect provenance inspection to a clean directory",()=>{
   const root=mkdtempSync(join(tmpdir(),"uni-readiness-git-route-"));
   const other=mkdtempSync(join(tmpdir(),"uni-readiness-clean-alternate-"));
@@ -246,6 +279,66 @@ check("Git configuration/index overrides are rejected without disclosing values"
     rmSync(root,{recursive:true,force:true});
   }
 });
+check("repository-local core.worktree cannot redirect readiness Git inspection",()=>{
+  const root=mkdtempSync(join(tmpdir(),"uni-readiness-local-worktree-"));
+  const alternative=mkdtempSync(join(tmpdir(),"uni-readiness-clean-git-root-"));
+  const git=(...args)=>execFileSync("git",["-C",root,...args],{
+    encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:5000
+  });
+  try{
+    git("init","-q");
+    writeFileSync(join(root,"tracked.php"),"<?php // synthetic baseline\\n");
+    git("add","tracked.php");
+    git("-c","user.name=Synthetic QA","-c","user.email=qa@example.invalid",
+      "commit","-qm","synthetic baseline");
+    writeFileSync(join(alternative,"tracked.php"),"<?php // synthetic baseline\\n");
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+    const head=git("rev-parse","HEAD").trim();
+    writeFileSync(join(root,"injected.php"),"<?php // untracked source\\n");
+    assert.ok(git("status","--porcelain=v1","--untracked-files=all").includes("injected.php"));
+    // No GIT_WORK_TREE variable: the alternate checkout is selected only
+    // by the repository-local Git configuration (not versioned by HEAD).
+    git("config","--local","core.worktree",alternative);
+    assert.equal(git("rev-parse","HEAD").trim(),head);
+    assert.equal(git("status","--porcelain=v1","--untracked-files=all"),"",
+      "The original dirty source becomes hidden by the alternate Git worktree");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: Git worktree root mismatch"&&
+      !error.message.includes(alternative)&&!error.message.includes("injected.php"));
+    git("config","--local","--unset","core.worktree");
+    assert.throws(()=>requireCleanReleaseCheckout(root),error=>
+      error.message==="Refusing readiness package: tracked or untracked source drift");
+    unlinkSync(join(root,"injected.php"));
+    assert.doesNotThrow(()=>requireCleanReleaseCheckout(root));
+  }finally{
+    rmSync(root,{recursive:true,force:true});
+    rmSync(alternative,{recursive:true,force:true});
+  }
+});
+check("readiness output is fresh and cannot follow a runner-temp symlink",()=>{
+  const temp=mkdtempSync(join(tmpdir(),"uni-readiness-out-"));
+  const outside=mkdtempSync(join(tmpdir(),"uni-readiness-external-"));
+  const refusal="Refusing readiness package: output must be a fresh direct runner temp child";
+  try{
+    const fresh=join(temp,"fresh");
+    assert.equal(requireFreshReadinessOutput(temp,fresh),fresh);
+    const redirect=join(temp,"redirect");
+    symlinkSync(outside,redirect,"dir");
+    assert.throws(()=>requireFreshReadinessOutput(temp,redirect),
+      error=>error.message===refusal&&!error.message.includes(outside));
+    assert.throws(()=>requireFreshReadinessOutput(temp,join(redirect,"nested")),
+      error=>error.message===refusal&&!error.message.includes(outside));
+    const existing=join(temp,"already");
+    mkdirSync(existing);
+    assert.throws(()=>requireFreshReadinessOutput(temp,existing),
+      error=>error.message===refusal);
+    assert.throws(()=>requireFreshReadinessOutput(temp,join(temp,"sub","new")),
+      error=>error.message===refusal);
+  }finally{
+    rmSync(temp,{recursive:true,force:true});
+    rmSync(outside,{recursive:true,force:true});
+  }
+});
 check("source provenance includes reviewed Docker context and executable image inputs",()=>{
   assert.deepEqual([...reviewedSourceFiles],[
     ".dockerignore","composer.json","composer.lock","ops/release-gates.json",
@@ -290,5 +383,44 @@ check("pinned blob check detects local Docker context changes even at the same H
 check("Docker context excludes ignored bootstrap PHP cache",()=>{
   const ignore=readFileSync(new URL("../.dockerignore",import.meta.url),"utf8");
   assert.equal(ignore.trimEnd().split("\n").at(-1),"bootstrap/cache/*.php");
+});
+check("source-readiness paths cover disposable QA and pinned release inputs on the same SHA",()=>{
+  // Prevent a newer PG18/HTTP QA run from lacking a source readiness artifact.
+  const source=readFileSync(new URL("../.github/workflows/uni-p0-readiness-exact.yml",import.meta.url),"utf8");
+  const qa=readFileSync(new URL("../.github/workflows/uni-p0-restore-compose-teardown.yml",import.meta.url),"utf8");
+  const triggers=(yaml)=>{
+    const block=yaml.match(/^    paths:\n((?:      - [^\n]+\n)+)/mu);
+    assert.ok(block,"A bounded paths trigger is required");
+    return new Set(block[1].trimEnd().split("\n").map(line=>line.replace(/^      - /u,"")));
+  };
+  const sourcePaths=triggers(source);
+  for(const path of new Set([
+    ...reviewedSourceFiles,...triggers(qa),
+    ".github/workflows/uni-p0-restore-compose-teardown.yml",
+    "app/Providers/AppServiceProvider.php","routes/web.php"
+  ])){
+    assert.ok(sourcePaths.has(path),"Missing source provenance trigger for: "+path);
+  }
+});
+check("release QA workflows verify actual reviewed source paths, not a stale count",()=>{
+  const proof='assert.deepEqual(Object.keys(p.source_files_sha256).sort(), [...reviewedSourceFiles].sort());';
+  for(const file of [
+    ".github/workflows/uni-p0-readiness-exact.yml",
+    ".github/workflows/uni-p0-readiness-git-blobs.yml"
+  ]){
+    const yaml=readFileSync(new URL("../"+file,import.meta.url),"utf8");
+    assert.ok(yaml.includes('import {reviewedSourceFiles} from "./scripts/build-university-readiness-pack.mjs";'));
+    assert.ok(yaml.includes(proof));
+    assert.ok(!yaml.includes("assert.equal(Object.keys(p.source_files_sha256).length,5);"));
+  }
+});
+check("Git-blob negative QA matches the early fail-closed source-drift error",()=>{
+  const yaml=readFileSync(new URL("../.github/workflows/uni-p0-readiness-git-blobs.yml",import.meta.url),"utf8");
+  assert.ok(yaml.includes("if ! grep -Fq 'Refusing readiness package: tracked or untracked source drift'"),
+    "Negative drift QA must match the earliest Git worktree guard");
+  assert.ok(!yaml.includes("if ! grep -Fq 'Source file differs from exact checked-out Git commit:'"),
+    "The old blob-check error is unreachable for a dirty worktree");
+  assert.ok(!yaml.includes('cat "$RUNNER_TEMP/uni-drift-stderr.log" >&2'),
+    "Negative QA must not echo potentially sensitive diagnostics");
 });
 console.log("PASS readonly readiness pack: "+cases+" positive/negative scenarios; 13 operational gates remain unchanged.");

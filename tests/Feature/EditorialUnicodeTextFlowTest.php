@@ -39,7 +39,9 @@ final class EditorialUnicodeTextFlowTest extends TestCase
                 if ($identity === null || $identity[0] !== $companyId || $identity[2] !== $permission) {
                     return PortalGrant::deny('access_denied');
                 }
-                return PortalGrant::allow($identity[0], $identity[1], $identity[2], 1, time() + 60);
+                // The gate measures its 60-second ceiling from before verify().
+                // A synthetic grant must leave headroom for a wall-clock second rollover.
+                return PortalGrant::allow($identity[0], $identity[1], $identity[2], 1, time() + 30);
             }
         });
         $this->withSession(['portal_server_credential' => 'editor', 'portal_company_id' => 'imagine-editorial']);
@@ -114,6 +116,21 @@ final class EditorialUnicodeTextFlowTest extends TestCase
             ->assertJsonPath('lesson.id', $lesson)->assertJsonPath('lesson.course_id', $course)
             ->assertJsonPath('lesson.title', $lessonTitle)->assertJsonPath('lesson.body', $body);
         self::assertSame($beforeReads, $this->snapshot());
+    }
+
+    public function test_synthetic_portal_fixture_leaves_room_for_clock_second_rollover(): void
+    {
+        $gate = new PortalAccessGate($this->app->make(PortalAuthority::class));
+        foreach ([
+            ['editor', 'imagine-editorial', PortalAccessGate::MANAGE],
+            ['student', 'unicode-company', PortalAccessGate::VIEW],
+        ] as [$credential, $company, $permission]) {
+            // Model verification beginning in the previous wall-clock second.
+            $started = time() - 1;
+            $grant = $gate->authorize($credential, $company, $permission, $started);
+            self::assertTrue($grant->allowed, $grant->reasonCode);
+            self::assertLessThanOrEqual($started + 60, $grant->expiresAtEpoch);
+        }
     }
 
     public function test_unicode_upper_limits_round_trip_through_creation_publication_and_both_read_paths(): void

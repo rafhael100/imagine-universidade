@@ -1,5 +1,5 @@
 # Dedicated disposable QA image. Never deploy this image in production.
-FROM php:8.3-cli-bookworm
+FROM php@sha256:cdb77e306d6bb99db40e513fbe036ecc6c53b575cbcb7e581387845fef26d755
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -9,7 +9,7 @@ RUN apt-get update \
     mbstring pdo_pgsql pdo_sqlite dom xml xmlwriter bcmath sodium \
  && rm -rf /var/lib/apt/lists/*
 
-COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+COPY --from=composer@sha256:50ea4d33fdcde1adb0f045547295faa1548b33872e5f789dae5b02ce2fb5de93 /usr/bin/composer /usr/local/bin/composer
 
 RUN useradd --uid 10001 --create-home --shell /bin/bash uniqa \
  && mkdir -p /work/universidade/bootstrap/cache \

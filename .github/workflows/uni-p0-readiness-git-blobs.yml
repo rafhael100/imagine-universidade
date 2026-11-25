@@ -46,6 +46,7 @@ jobs:
           (cd "$RUNNER_TEMP/uni-p0-readiness" && sha256sum -c SHA256SUMS)
           node --input-type=module -e '
             import assert from "node:assert/strict";
+            import {reviewedSourceFiles} from "./scripts/build-university-readiness-pack.mjs";
             import {readFileSync} from "node:fs";
             const d=process.env.RUNNER_TEMP+"/uni-p0-readiness/";
             const p=JSON.parse(readFileSync(d+"source-provenance.json","utf8"));
@@ -55,12 +56,12 @@ jobs:
             assert.equal(p.source_kind,"GIT_FILES_ONLY");
             assert.equal(p.runtime_image_digest_verified,false);
             assert.equal(p.production_approval,false);
-            assert.equal(Object.keys(p.source_files_sha256).length,5);
+            assert.deepEqual(Object.keys(p.source_files_sha256).sort(), [...reviewedSourceFiles].sort());
             assert.equal(r.source_sha,process.env.GITHUB_SHA);
             assert.equal(r.gates_total,13);
             assert.equal(r.gates_unverified,13);
             assert.equal(r.release_decision,"HOLD_NO_GO");
-            console.log("PASS five Git-blob source hashes, 13 NOT_VERIFIED and HOLD_NO_GO; no Docker image digest");
+            console.log("PASS exact reviewed Git-blob sources, 13 NOT_VERIFIED and HOLD_NO_GO; no Docker image digest");
           '
       - name: Reject drift of gate manifest and generator before writing any package
         shell: bash
@@ -75,8 +76,7 @@ jobs:
               echo "FAIL: mutated source was accepted: $source" >&2
               exit 2
             fi
-            if ! grep -Fq 'Source file differs from exact checked-out Git commit:' "$RUNNER_TEMP/uni-drift-stderr.log"; then
-              cat "$RUNNER_TEMP/uni-drift-stderr.log" >&2
+            if ! grep -Fq 'Refusing readiness package: tracked or untracked source drift' "$RUNNER_TEMP/uni-drift-stderr.log"; then
               cp "$original" "$source"
               echo "FAIL: drift refusal not verified: $source" >&2
               exit 2

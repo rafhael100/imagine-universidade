@@ -3,17 +3,41 @@ on:
   push:
     branches:
       - review/uni-p0-readiness-exact-2026-11-21
+      - review/uni-p0-readiness-git-config-root-fence-2026-11-22
     paths:
       - .github/workflows/uni-p0-readiness-exact.yml
+      - .github/workflows/uni-p0-restore-compose-teardown.yml
+      - scripts/qa-pg-backup-restore.sh
+      - tests/Feature/PrivateUniversityResponseBoundaryTest.php
+      - tests/Feature/EditorialLessonOrderEditFlowTest.php
+      - tests/Feature/SyntheticEditorialFixtureImportTest.php
+      - tests/Feature/EditorialUnicodeTextFlowTest.php
+      - scripts/qa-staging-pg-pre-migrate.php
+      - scripts/qa-staging-private-http-probe.php
+      - .dockerignore
+      - composer.json
+      - ops/staging/nginx.conf
+      - ops/qa/Dockerfile
+      - app/Providers/AppServiceProvider.php
+      - routes/web.php
       - scripts/build-university-readiness-pack.mjs
       - scripts/check-university-readiness-pack.mjs
+      - scripts/check-uni-image-transport.mjs
+      - scripts/check-qa-compose-teardown.mjs
+      - scripts/run-qa-compose.sh
+      - scripts/qa-staging-image-build.sh
+      - scripts/qa-staging-private-http.sh
+      - scripts/qa-staging-postgres-http.sh
+      - scripts/qa-p0-db-compose-health.sh
       - ops/release-gates.json
       - ops/staging/release-gate-policy.mjs
       - ops/staging/check-release-gates.mjs
       - composer.lock
+      - compose.qa.yml
       - ops/staging/compose.yaml
       - ops/staging/Dockerfile.php
       - ops/staging/Dockerfile.nginx
+      - ops/staging/check-image-digest-evidence.mjs
 
 permissions:
   contents: read
@@ -26,10 +50,10 @@ jobs:
   source-provenance-only:
     if: github.repository == 'rafhael100/imagine-universidade'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       - name: Checkout exact P0 review commit, without stored credentials
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2, immutable
         with:
           persist-credentials: false
       - name: Enforce exact, secret-free, non-production checkout
@@ -38,7 +62,10 @@ jobs:
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = push
           test "$GITHUB_REF_TYPE" = branch
-          test "$GITHUB_REF_NAME" = review/uni-p0-readiness-exact-2026-11-21
+          case "$GITHUB_REF_NAME" in
+            review/uni-p0-readiness-exact-2026-11-21|review/uni-p0-readiness-git-config-root-fence-2026-11-22) ;;
+            *) echo 'HOLD: unexpected review branch' >&2; exit 2 ;;
+          esac
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test ! -e .env && test ! -e .env.local && test ! -e .env.production
           test ! -e ops/staging/.env.staging
@@ -49,12 +76,17 @@ jobs:
           set -euo pipefail
           node --check scripts/build-university-readiness-pack.mjs
           node scripts/check-university-readiness-pack.mjs
+          # PATH-only Docker fixtures: no daemon, pull, container or network operation.
+          for s in scripts/run-qa-compose.sh scripts/qa-staging-image-build.sh scripts/qa-staging-private-http.sh scripts/qa-staging-postgres-http.sh scripts/qa-p0-db-compose-health.sh; do bash -n "$s"; done
+          node --check scripts/check-qa-compose-teardown.mjs
+          node scripts/check-qa-compose-teardown.mjs
           node scripts/check-release-gate-policy.mjs
           node ops/staging/check-release-gates.mjs
           node scripts/build-university-readiness-pack.mjs --out "$RUNNER_TEMP/uni-p0-readiness"
           (cd "$RUNNER_TEMP/uni-p0-readiness" && sha256sum -c SHA256SUMS)
           node --input-type=module -e '
             import assert from "node:assert/strict";
+            import {reviewedSourceFiles} from "./scripts/build-university-readiness-pack.mjs";
             import {readFileSync} from "node:fs";
             import {join} from "node:path";
             const d=process.env.RUNNER_TEMP+"/uni-p0-readiness";
@@ -65,7 +97,7 @@ jobs:
             assert.equal(p.source_kind,"GIT_FILES_ONLY");
             assert.equal(p.runtime_image_digest_verified,false);
             assert.equal(p.production_approval,false);
-            assert.equal(Object.keys(p.source_files_sha256).length,5);
+            assert.deepEqual(Object.keys(p.source_files_sha256).sort(), [...reviewedSourceFiles].sort());
             assert.equal(r.release_decision,"HOLD_NO_GO");
             assert.equal(r.qa_status,"NOT_EVALUATED_BY_THIS_REPORT");
             assert.equal(r.gates_total,13);
@@ -74,6 +106,28 @@ jobs:
             assert.equal(r.gates.filter(g=>g.status==="NOT_VERIFIED").length,13);
             console.log("PASS exact source provenance; 13 gates NOT_VERIFIED; no release approval");
           '
+      - name: Inventory immutable upstream base manifests from registry (NOT built release images)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Existing isolated digest inventory reused, not reimplemented.
+          # Read-only registry queries; no docker pull, build, push or deployment.
+          node --check ops/staging/check-image-digest-evidence.mjs
+          node ops/staging/check-image-digest-evidence.mjs --test
+          docker buildx version >/dev/null
+          file="$RUNNER_TEMP/uni-p0-readiness/registry-base-image-evidence.json"
+          node ops/staging/check-image-digest-evidence.mjs --capture "$file"
+          node ops/staging/check-image-digest-evidence.mjs --verify "$file"
+          (cd "$RUNNER_TEMP/uni-p0-readiness" &&
+            sha256sum registry-base-image-evidence.json >> SHA256SUMS &&
+            sha256sum -c SHA256SUMS)
+          if GITHUB_REF=refs/heads/main node ops/staging/check-image-digest-evidence.mjs --verify "$file" >/dev/null 2>&1; then
+            echo 'HOLD: base image evidence accepted from main' >&2; exit 2
+          fi
+          if GITHUB_SHA=0000000000000000000000000000000000000000 node ops/staging/check-image-digest-evidence.mjs --verify "$file" >/dev/null 2>&1; then
+            echo 'HOLD: base image evidence accepted wrong SHA' >&2; exit 2
+          fi
+          echo "PASS: 5 upstream registry base manifests (including QA PHP) matched the exact review checkout; runtime images NOT pinned, HOLD_NO_GO"
       - name: Reject wrong SHA, forbidden branch and non-CI execution
         shell: bash
         run: |

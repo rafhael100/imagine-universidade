@@ -43,10 +43,54 @@ if ! docker_endpoint="$(docker context inspect default --format '{{ (index .Endp
   fail "exact local Docker Unix socket required"
 fi
 test ! -e .env && test ! -e ops/staging/.env.staging || fail "environment files prohibited"
-[[ "$#" == 2 && "$1" == uni-qa-stage-* && "$2" == uni-qa-stage-* ]] ||
-  fail "two locally built staging tags required"
+# Keep the normal CI upstream pin. The optional receiving-side QA uses
+# only independently anchored retained archives and locally loaded IDs.
+readonly pgPinnedRef="postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
+pgRunRef="$pgPinnedRef"
+pullArgs=()
+transportMode=0
+if [[ "$#" == 2 && "$1" == uni-qa-stage-* && "$2" == uni-qa-stage-* ]]; then
+  phpImage="$1"; nginxImage="$2"
+elif [[ "$#" == 6 && "$1" == --transport ]]; then
+  transportMode=1
+  [[ "${GITHUB_EVENT_NAME:-}" == push && "${GITHUB_SHA:-}" == "$3" &&
+     "$(git rev-parse HEAD)" == "$3" ]] || fail "transport requires exact push checkout"
+  receipt="$(node scripts/check-uni-image-transport.mjs "$2" "$3" "$4" "$5" "$6")" ||
+    fail "transport archive provenance rejected"
+  idsText="$(printf '%s' "$receipt" | node -e '
+    const p=JSON.parse(require("node:fs").readFileSync(0,"utf8"));
+    if(p.scope!=="read_only_transport_bytes_only"||p.release_decision!=="HOLD_NO_GO"||
+       p.import_executed!==false||p.portable_image_artifact!==false||
+       !Array.isArray(p.images)||p.images.length!==3||
+       p.images.some((x,i)=>x.role!==["php","nginx","pg"][i]||!/^sha256:[a-f0-9]{64}$/.test(x.image_id))||
+       new Set(p.images.map(x=>x.image_id)).size!==3)process.exit(2);
+    console.log(p.images.map(x=>x.image_id).join("\n"));
+  ')" || fail "transport image identities rejected"
+  mapfile -t ids <<< "$idsText"
+  [[ "${#ids[@]}" == 3 ]] || fail "transport image count rejected"
+  phpImage="${ids[0]}"; nginxImage="${ids[1]}"; pgRunRef="${ids[2]}"
+  # Separate approval/daemon exclusivity is still required. Inventory is
+  # a refusal check, not proof of daemon ownership or external isolation.
+  existingContainers="$(docker ps -aq)" || fail "transport container inventory unavailable"
+  existingVolumes="$(docker volume ls -q)" || fail "transport volume inventory unavailable"
+  [[ -z "$existingContainers" && -z "$existingVolumes" ]] ||
+    fail "transport daemon has existing containers or volumes"
+  networkNames="$(docker network ls --format '{{.Name}}' | LC_ALL=C sort)" ||
+    fail "transport network inventory unavailable"
+  [[ "$networkNames" == $'bridge\nhost\nnone' ]] || fail "transport daemon has non-native networks"
+  loadedIds="$(docker image ls --all --no-trunc --quiet | LC_ALL=C sort -u)" ||
+    fail "transport image inventory unavailable"
+  expectedIds="$(printf '%s\n' "${ids[@]}" | LC_ALL=C sort)"
+  [[ "$loadedIds" == "$expectedIds" ]] || fail "transport daemon image inventory differs"
+  for id in "${ids[@]}"; do
+    [[ "$(docker image inspect --format '{{.Id}}' "$id")" == "$id" ]] ||
+      fail "transport image ID unavailable"
+  done
+  pullArgs=(--pull=never)
+else
+  fail "two locally built staging tags or anchored transport arguments required"
+fi
 command -v timeout >/dev/null || fail "bounded readiness timer unavailable"
-phpImage="$1"; nginxImage="$2"
 suffix="${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
 network="uni-ci-pg-http-net-$suffix"
 volume="uni-ci-pg-data-$suffix"
@@ -101,19 +145,18 @@ docker network create --internal --driver bridge "$network" >/dev/null
 stagingPgStage=volume
 docker volume create "$volume" >/dev/null
 stagingPgStage=postgres_start
-readonly pgPinnedRef="postgres@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
-docker run -d --name "$db" --network "$network" --network-alias db \
+docker run "${pullArgs[@]}" -d --name "$db" --network "$network" --network-alias db \
   --env POSTGRES_DB=uni_staging_ci_only \
   --env POSTGRES_USER=uni_ci_migration_owner \
   --env POSTGRES_PASSWORD=FAKE_OWNER_CI_ONLY \
   --volume "$volume":/var/lib/postgresql \
-  "$pgPinnedRef" >/dev/null
+  "$pgRunRef" >/dev/null
 # Bind the actually started DB container to the exact upstream digest and local
 # image ID before SQL, then reconfirm after all runtime and rollback probes.
 pgRuntimeId="$(docker inspect --format '{{.Image}}' "$db")"
 [[ "$pgRuntimeId" =~ ^sha256:[a-f0-9]{64}$ &&
-   "$(docker inspect --format '{{.Config.Image}}' "$db")" == "$pgPinnedRef" &&
-   "$(docker image inspect --format '{{.Id}}' "$pgPinnedRef")" == "$pgRuntimeId" ]] ||
+   "$(docker inspect --format '{{.Config.Image}}' "$db")" == "$pgRunRef" &&
+   "$(docker image inspect --format '{{.Id}}' "$pgRunRef")" == "$pgRuntimeId" ]] ||
   fail "PostgreSQL runtime image does not match pinned input"
 stagingPgStage=postgres_ready
 # The official entrypoint starts a temporary socket-only server during initdb.
@@ -140,7 +183,7 @@ unset postgresProbe
 # Always inspect the Laravel-resolved connection AND authenticated SQL on
 # the disposable network BEFORE the first migration or any SQL DDL.
 stagingPgStage=laravel_sql_preflight
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
   --tmpfs /tmp:mode=1777 \
   --tmpfs /var/www/html/storage:mode=1777 \
@@ -157,7 +200,7 @@ docker run --rm -i --network "$network" --read-only --cap-drop ALL \
   < scripts/qa-staging-pg-pre-migrate.php
 
 stagingPgStage=migrations
-docker run --rm --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
   --tmpfs /tmp:mode=1777 \
   --tmpfs /var/www/html/storage:mode=1777 \
@@ -185,7 +228,7 @@ sed -e 's/uni_stage_runtime/uni_ci_runtime_only/g' \
 # Actual app must run with runtime SQL role, NOT migration owner.
 stagingPgStage=app_start
 start_app() {
-  docker run -d --name "$app" --network "$network" --network-alias app \
+  docker run "${pullArgs[@]}" -d --name "$app" --network "$network" --network-alias app \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   --tmpfs /tmp:mode=1777 --tmpfs /usr/local/var/run:mode=1777 \
   --tmpfs /var/www/html/storage:mode=1777 \
@@ -204,7 +247,7 @@ start_app() {
 }
 start_app
 stagingPgStage=web_start
-docker run -d --name "$web" --network "$network" --network-alias web \
+docker run "${pullArgs[@]}" -d --name "$web" --network "$network" --network-alias web \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   --tmpfs /var/cache/nginx:mode=1777 --tmpfs /var/run:mode=1777 \
   --tmpfs /tmp:mode=1777 \
@@ -213,10 +256,15 @@ docker run -d --name "$web" --network "$network" --network-alias web \
   --health-start-period 0s \
   "$nginxImage" nginx -g 'daemon off;' >/dev/null
 
+if [[ "$transportMode" == 1 ]]; then
+  [[ "$(docker inspect --format '{{.Image}}' "$app")" == "$phpImage" &&
+     "$(docker inspect --format '{{.Image}}' "$web")" == "$nginxImage" ]] ||
+    fail "transport application runtime image differs"
+fi
 # Full HTTP path through nginx -> PHP -> real PG18 sessions, with NO Portal
 # grants enabled. Probe only 403/health, never synthetic grants or payments.
 stagingPgStage=private_http
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
 
@@ -252,7 +300,7 @@ docker start "$app" >/dev/null
 wait_web_health healthy || fail "real Nginx/FPM/Laravel probe did not recover"
 # After recovery, forged Portal headers must still be denied by actual HTTP.
 stagingPgStage=post_recovery_deny_all
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
 echo "PASS synthetic health healthy -> unhealthy -> healthy; private routes remain 403 without Portal authority."
@@ -278,11 +326,11 @@ wait_web_health unhealthy || fail "Nginx health falsely stayed healthy with Post
 # The failing /up must not reveal SQL, environment or backtraces, even though
 # it is only a private Docker readiness endpoint.
 stagingPgStage=postgres_outage_health_response
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-p0-db-health-probe.php
 stagingPgStage=postgres_outage_private_deny
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-p0-db-outage-probe.php
 stagingPgStage=postgres_recovery
@@ -306,7 +354,7 @@ unset recoveredSql
 stagingPgStage=postgres_recovery_health_positive
 wait_web_health healthy || fail "Nginx health did not recover with PostgreSQL restored"
 stagingPgStage=postgres_recovery_private_deny
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
 echo "PASS synthetic PG outage -> recover: SQL session store intact; private HTTP remains denied."
@@ -330,7 +378,7 @@ stagingPgStage=release_wrong_image
 docker rm -f "$app" >/dev/null
 # nginxImage is intentionally not a PHP-FPM image: no executable on port 9000.
 # A running but WRONG candidate must fail readiness (not falsely return 200).
-docker run -d --name "$app" --network "$network" --network-alias app \
+docker run "${pullArgs[@]}" -d --name "$app" --network "$network" --network-alias app \
   --read-only --cap-drop ALL --security-opt no-new-privileges \
   "$nginxImage" sleep 120 >/dev/null
 [[ "$(docker inspect --format '{{.State.Running}}' "$app")" == true ]] ||
@@ -359,18 +407,27 @@ afterRollbackSessions="$(docker exec "$db" psql -X -U uni_ci_migration_owner \
 [[ "$afterRollbackSessions" == "$beforeRollbackSessions" ]] ||
   fail "rollback modified or lost the PostgreSQL session baseline"
 stagingPgStage=release_rollback_deny_all
-docker run --rm -i --network "$network" --read-only --cap-drop ALL \
+docker run "${pullArgs[@]}" --rm -i --network "$network" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --tmpfs /tmp:mode=1777 \
   "$phpImage" php < scripts/qa-staging-private-http-probe.php
 echo "PASS synthetic wrong-image detection and exact-image rollback; PG sessions retained and Cliente/Admin remain 403."
 
 
 
+if [[ "$transportMode" == 1 ]]; then
+  [[ "$(docker inspect --format '{{.Image}}' "$app")" == "$phpImage" &&
+     "$(docker inspect --format '{{.Image}}' "$web")" == "$nginxImage" ]] ||
+    fail "transport application runtime image differs"
+fi
 # Emit one allowlisted marker after SQL, outage/recovery and app rollback.
 # The workflow consumes the marker only if the verified cleanup also passes.
 [[ "$(docker inspect --format '{{.Image}}' "$db")" == "$pgRuntimeId" &&
-   "$(docker inspect --format '{{.Config.Image}}' "$db")" == "$pgPinnedRef" &&
-   "$(docker image inspect --format '{{.Id}}' "$pgPinnedRef")" == "$pgRuntimeId" ]] ||
+   "$(docker inspect --format '{{.Config.Image}}' "$db")" == "$pgRunRef" &&
+   "$(docker image inspect --format '{{.Id}}' "$pgRunRef")" == "$pgRuntimeId" ]] ||
   fail "PostgreSQL runtime image changed during synthetic QA"
-printf 'PASS exact PG18 runtime image %s\n' "$pgRuntimeId"
+if [[ "$transportMode" == 1 ]]; then
+  printf 'PASS transport PG18 runtime image %s (offline synthetic only)\n' "$pgRuntimeId"
+else
+  printf 'PASS exact PG18 runtime image %s\n' "$pgRuntimeId"
+fi
 # Final PASS is emitted only by the EXIT trap after verified teardown.

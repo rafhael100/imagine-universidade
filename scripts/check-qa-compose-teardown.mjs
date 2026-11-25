@@ -3,9 +3,10 @@
 // PATH stubs ONLY: no real Docker, PostgreSQL, migration, network, or credentials.
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
-import {mkdtempSync, writeFileSync, rmSync, existsSync} from "node:fs";
+import {mkdtempSync, writeFileSync, rmSync, existsSync, readFileSync} from "node:fs";
 import {join, delimiter} from "node:path";
 import {tmpdir} from "node:os";
+import {createHash} from "node:crypto";
 
 const fakeDir=mkdtempSync(join(tmpdir(),"uni-compose-teardown-"));
 try {
@@ -27,6 +28,20 @@ case "$*" in
   "volume create uni-ci-pg-data-"*)
     touch "$UNI_FAKE_PG_VOLUME_MARKER"; exit 0 ;;
   "run -d --name uni-ci-pg-http-db-"*) exit 37 ;;
+  "run --pull=never -d --name uni-ci-pg-http-db-"*)
+    for arg in "$@"; do last="$arg"; done
+    [ "$last" = "$UNI_FAKE_TRANSPORT_PG_ID" ] || exit 98
+    touch "$UNI_FAKE_TRANSPORT_RUN"; exit 37 ;;
+  "ps -aq")
+    [ "$UNI_FAKE_MODE" = transport_occupied ] && echo synthetic-container
+    exit 0 ;;
+  "volume ls -q") exit 0 ;;
+  "network ls --format {{.Name}}") printf 'host\\nbridge\\nnone\\n'; exit 0 ;;
+  "image ls --all --no-trunc --quiet")
+    printf '%s\\n' "$UNI_FAKE_TRANSPORT_IDS"
+    [ "$UNI_FAKE_MODE" = transport_extra ] && printf 'sha256:%064d\\n' 0
+    exit 0 ;;
+  "image inspect --format {{.Id}} sha256:"*) printf '%s\\n' "$5"; exit 0 ;;
   "rm -f uni-ci-pg-http-web-"*) exit 0 ;;
   "network rm uni-ci-pg-http-net-"*)
     if [ "$UNI_FAKE_MODE" != "pg_cleanup_leak" ]; then rm -f "$UNI_FAKE_PG_NETWORK_MARKER"; fi
@@ -256,6 +271,54 @@ exit 99
       assert.equal(existsSync(networkMarker),false,
         mode+": no resource may be created on failed preflight");
     }
+  }
+  // Transport QA: real transport verifier, synthetic archive bytes and
+  // PATH-stub Docker; abort at the first run, never execute a container.
+  const transportSource=readFileSync(new URL("./qa-staging-postgres-http.sh",import.meta.url),"utf8");
+  const calls=transportSource.split("\n").filter(line=>/^\s*docker run /u.test(line));
+  assert.ok(calls.length>0 && calls.every(line=>line.includes('docker run "${pullArgs[@]}" ')));
+  assert.match(transportSource,/pullArgs=\(--pull=never\)/u);
+  const checkout=spawnSync("git",["rev-parse","HEAD"],{cwd:new URL("../",import.meta.url),encoding:"utf8"});
+  assert.equal(checkout.status,0);
+  const origin=checkout.stdout.trim();
+  const digest=bytes=>createHash("sha256").update(bytes).digest("hex");
+  const images=["php","nginx","pg"].map((role,i)=>{
+    const bytes=Buffer.from("synthetic archive "+role);
+    const id="sha256:"+String(i+1).repeat(64), hash=digest(bytes);
+    writeFileSync(join(fakeDir,"uni-p0-"+role+"-os-image.tar"),bytes);
+    return {role,image_id:id,image_tar_sha256:hash,archive_verification:{
+      scope:"local_docker_save_only",image_id:id,archive_sha256:hash,ordered_layer_count:1}};
+  });
+  const proof=JSON.stringify({schema:2,repository:"rafhael100/imagine-universidade",commit:origin,
+    workflow_run_id:"900001",workflow_attempt:"1",release_decision:"HOLD_NO_GO",appsec_signoff:false,
+    registry_published:false,full_sbom_complete:false,images,
+    postgres_runtime:{scope:"synthetic_3_service_runtime",image_id:images[2].image_id}});
+  writeFileSync(join(fakeDir,"uni-p0-os-cve-scan-provenance.json"),proof);
+  for(const [mode,sha,anchor,expected,diagnostic,run] of [
+    ["transport_wrong_sha","0".repeat(40),digest(proof),2,/exact push checkout/u,false],
+    ["transport_bad_anchor",origin,"a".repeat(64),2,/transport archive provenance rejected/u,false],
+    ["transport_occupied",origin,digest(proof),2,/existing containers or volumes/u,false],
+    ["transport_extra",origin,digest(proof),2,/image inventory differs/u,false],
+    ["transport_valid",origin,digest(proof),37,/stage=postgres_start/u,true],
+  ]){
+    const marker=join(fakeDir,mode+".transport-run");
+    const networkMarker=join(fakeDir,mode+".pg-network"),volumeMarker=join(fakeDir,mode+".pg-volume");
+    const env={...process.env,PATH:fakeDir+delimiter+(process.env.PATH||"/usr/bin:/bin"),
+      CI:"true",GITHUB_ACTIONS:"true",GITHUB_EVENT_NAME:"push",GITHUB_REPOSITORY:"rafhael100/imagine-universidade",
+      GITHUB_REF:"refs/heads/review/uni-p0-readiness-git-config-root-fence-2026-11-22",
+      GITHUB_SHA:origin,GITHUB_RUN_ID:"900001",GITHUB_RUN_ATTEMPT:"1",UNI_FAKE_MODE:mode,
+      UNI_FAKE_TRANSPORT_RUN:marker,UNI_FAKE_TRANSPORT_PG_ID:images[2].image_id,UNI_FAKE_TRANSPORT_IDS:images.map(i=>i.image_id).join("\n"),
+      UNI_FAKE_PG_NETWORK_MARKER:networkMarker,UNI_FAKE_PG_VOLUME_MARKER:volumeMarker};
+    for(const name of ["DOCKER_HOST","DOCKER_CONTEXT","DOCKER_TLS_VERIFY","DOCKER_CERT_PATH"])delete env[name];
+    const res=spawnSync("bash",["scripts/qa-staging-postgres-http.sh","--transport",fakeDir,sha,"900001","1",anchor],
+      {cwd:new URL("../",import.meta.url),encoding:"utf8",timeout:7000,env});
+    assert.ifError(res.error);assert.equal(res.status,expected,res.stderr);
+    assert.match(res.stderr,diagnostic);
+    assert.doesNotMatch(res.stderr,/FAIL unrecognized synthetic Docker command/u);
+    assert.doesNotMatch(res.stdout,/PASS/u);
+    assert.equal(existsSync(marker),run);
+    assert.equal(existsSync(networkMarker),false);
+    assert.equal(existsSync(volumeMarker),false);
   }
   // The older two-container private HTTP path must also refuse occupied
   // resources and cannot emit PASS before verified cleanup.
